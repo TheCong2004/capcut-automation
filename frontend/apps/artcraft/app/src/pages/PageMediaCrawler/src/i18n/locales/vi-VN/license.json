@@ -1,0 +1,21 @@
+{
+  "title": "Thông báo sử dụng",
+  "warning": "Vui lòng đọc kỹ các điều khoản sau",
+  "content": {
+    "line1": "Dự án này chỉ dành cho mục đích học tập và nghiên cứu cá nhân",
+    "line2": "Nghiêm cấm sử dụng cho mục đích thương mại hoặc hoạt động kiếm lợi",
+    "line3": "Khi sử dụng dự án, bạn đồng ý tuân thủ mọi quy định pháp luật hiện hành",
+    "line4": "Người dùng chịu hoàn toàn trách nhiệm đối với hậu quả do sử dụng sai mục đích"
+  },
+  "license": "Xem giấy phép đầy đủ",
+  "github": "Mở kho mã nguồn GitHub",
+  "confirm": "Tôi đã hiểu và đồng ý với các điều khoản trên",
+  "decline": "Không đồng ý, thoát",
+  "author": {
+    "name": "Relakkes (A Giang)",
+    "tagline": "Tác giả mã nguồn mở hơn 40 nghìn sao",
+    "description": "Tác giả MediaCrawler, chuyên chia sẻ kỹ thuật thu thập dữ liệu và kiến thức AI Agent",
+    "support": "Nếu dự án hữu ích, hãy theo dõi tác giả trên mạng xã hội",
+    "slogan": "Làm mã nguồn mở không dễ, hãy tặng dự án một sao ⭐"
+  }
+}

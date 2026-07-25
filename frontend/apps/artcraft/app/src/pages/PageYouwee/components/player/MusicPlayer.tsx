@@ -1,0 +1,580 @@
+import {
+  ChevronDown,
+  Maximize2,
+  Pause,
+  Play,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  X,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { type PlayMode, usePlayer } from '@/contexts/PlayerContext';
+import { cn } from '@/lib/utils';
+
+function formatTime(secs: number): string {
+  if (!Number.isFinite(secs) || secs < 0) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
+const MINI_PLAYER_SIZE = 56;
+const MINI_PLAYER_MARGIN = 24;
+const MINI_PLAYER_DRAG_THRESHOLD = 4;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function MusicPlayer() {
+  const { t } = useTranslation('pages');
+  const {
+    currentEntry,
+    isPlaying,
+    duration,
+    currentTime,
+    volume,
+    playbackRate,
+    mode,
+    queue,
+    togglePlay,
+    playNext,
+    playPrev,
+    seek,
+    setVolume,
+    setPlaybackRate,
+    setMode,
+    close,
+  } = usePlayer();
+
+  const [thumbError, setThumbError] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const [seekPreviewTime, setSeekPreviewTime] = useState(0);
+  const [isVolumeDragging, setIsVolumeDragging] = useState(false);
+  const progressRef = useRef<HTMLDivElement | null>(null);
+  const volumeRef = useRef<HTMLDivElement | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMiniPlayerDragging, setIsMiniPlayerDragging] = useState(false);
+  const [miniPlayerBottom, setMiniPlayerBottom] = useState(MINI_PLAYER_MARGIN);
+  const miniPlayerDragRef = useRef({
+    active: false,
+    dragged: false,
+    startBottom: MINI_PLAYER_MARGIN,
+    startY: 0,
+  });
+
+  // Reset thumbnail error whenever the current track changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: we intentionally depend on the current entry id
+  useEffect(() => {
+    setThumbError(false);
+  }, [currentEntry?.id]);
+
+  const cycleMode = useCallback(() => {
+    const modes: PlayMode[] = ['sequence', 'repeat-one', 'shuffle'];
+    const next = modes[(modes.indexOf(mode) + 1) % modes.length];
+    setMode(next);
+  }, [mode, setMode]);
+
+  const cyclePlaybackRate = useCallback(() => {
+    const currentIndex = PLAYBACK_RATES.indexOf(playbackRate);
+    const nextRate = PLAYBACK_RATES[(currentIndex + 1) % PLAYBACK_RATES.length] ?? 1;
+    setPlaybackRate(nextRate);
+  }, [playbackRate, setPlaybackRate]);
+
+  const seekFromClientX = useCallback(
+    (clientX: number) => {
+      const rect = progressRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || duration <= 0) return currentTime;
+
+      const percent = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const nextTime = percent * duration;
+      setSeekPreviewTime(nextTime);
+      seek(nextTime);
+      return nextTime;
+    },
+    [currentTime, duration, seek],
+  );
+
+  const handleProgressPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (duration <= 0) return;
+
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setIsSeeking(true);
+      seekFromClientX(event.clientX);
+    },
+    [duration, seekFromClientX],
+  );
+
+  const handleProgressPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!isSeeking) return;
+
+      event.preventDefault();
+      seekFromClientX(event.clientX);
+    },
+    [isSeeking, seekFromClientX],
+  );
+
+  const handleProgressPointerEnd = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!isSeeking) return;
+
+      event.preventDefault();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      seekFromClientX(event.clientX);
+      setIsSeeking(false);
+    },
+    [isSeeking, seekFromClientX],
+  );
+
+  const handleProgressKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (duration <= 0) return;
+
+      const smallStep = 5;
+      const largeStep = 30;
+      let nextTime: number | null = null;
+
+      if (event.key === 'ArrowLeft') nextTime = currentTime - smallStep;
+      if (event.key === 'ArrowRight') nextTime = currentTime + smallStep;
+      if (event.key === 'PageDown') nextTime = currentTime - largeStep;
+      if (event.key === 'PageUp') nextTime = currentTime + largeStep;
+      if (event.key === 'Home') nextTime = 0;
+      if (event.key === 'End') nextTime = duration;
+
+      if (nextTime === null) return;
+
+      event.preventDefault();
+      seek(clamp(nextTime, 0, duration));
+    },
+    [currentTime, duration, seek],
+  );
+
+  const setVolumeFromClientX = useCallback(
+    (clientX: number) => {
+      const rect = volumeRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return volume;
+
+      const nextVolume = clamp((clientX - rect.left) / rect.width, 0, 1);
+      setVolume(nextVolume);
+      return nextVolume;
+    },
+    [setVolume, volume],
+  );
+
+  const handleVolumePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setIsVolumeDragging(true);
+      setVolumeFromClientX(event.clientX);
+    },
+    [setVolumeFromClientX],
+  );
+
+  const handleVolumePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!isVolumeDragging) return;
+
+      event.preventDefault();
+      setVolumeFromClientX(event.clientX);
+    },
+    [isVolumeDragging, setVolumeFromClientX],
+  );
+
+  const handleVolumePointerEnd = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!isVolumeDragging) return;
+
+      event.preventDefault();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      setVolumeFromClientX(event.clientX);
+      setIsVolumeDragging(false);
+    },
+    [isVolumeDragging, setVolumeFromClientX],
+  );
+
+  const handleVolumeKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const smallStep = 0.05;
+      const largeStep = 0.1;
+      let nextVolume: number | null = null;
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+        nextVolume = volume - smallStep;
+      }
+      if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+        nextVolume = volume + smallStep;
+      }
+      if (event.key === 'PageDown') nextVolume = volume - largeStep;
+      if (event.key === 'PageUp') nextVolume = volume + largeStep;
+      if (event.key === 'Home') nextVolume = 0;
+      if (event.key === 'End') nextVolume = 1;
+
+      if (nextVolume === null) return;
+
+      event.preventDefault();
+      setVolume(clamp(nextVolume, 0, 1));
+    },
+    [setVolume, volume],
+  );
+
+  const clampMiniPlayerBottom = useCallback((bottom: number) => {
+    if (typeof window === 'undefined') return bottom;
+    const maxBottom = Math.max(MINI_PLAYER_MARGIN, window.innerHeight - MINI_PLAYER_SIZE - 16);
+    return clamp(bottom, 16, maxBottom);
+  }, []);
+
+  const handleMiniPlayerPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      miniPlayerDragRef.current = {
+        active: true,
+        dragged: false,
+        startBottom: miniPlayerBottom,
+        startY: event.clientY,
+      };
+      setIsMiniPlayerDragging(true);
+    },
+    [miniPlayerBottom],
+  );
+
+  const handleMiniPlayerPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      const drag = miniPlayerDragRef.current;
+      if (!drag.active) return;
+
+      const deltaY = drag.startY - event.clientY;
+      if (Math.abs(deltaY) > MINI_PLAYER_DRAG_THRESHOLD) {
+        drag.dragged = true;
+      }
+      if (!drag.dragged) return;
+
+      event.preventDefault();
+      setMiniPlayerBottom(clampMiniPlayerBottom(drag.startBottom + deltaY));
+    },
+    [clampMiniPlayerBottom],
+  );
+
+  const handleMiniPlayerPointerEnd = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = miniPlayerDragRef.current;
+    if (!drag.active) return;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    drag.active = false;
+    setIsMiniPlayerDragging(false);
+  }, []);
+
+  const handleMiniPlayerClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    if (miniPlayerDragRef.current.dragged) {
+      event.preventDefault();
+      event.stopPropagation();
+      miniPlayerDragRef.current.dragged = false;
+      return;
+    }
+
+    setIsCollapsed(false);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setMiniPlayerBottom((bottom) => clampMiniPlayerBottom(bottom));
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [clampMiniPlayerBottom]);
+
+  if (!currentEntry) return null;
+
+  const displayTime = isSeeking ? seekPreviewTime : currentTime;
+  const progress = duration > 0 ? (displayTime / duration) * 100 : 0;
+  const volumeProgress = volume * 100;
+  const queueLabel =
+    queue.length > 1 ? t('player.trackCount', { count: queue.length }) : t('player.oneTrack');
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-50">
+      {!isCollapsed && (
+        <div className="absolute bottom-3 left-1/2 w-full max-w-fit -translate-x-1/2 px-3 sm:bottom-4">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-border bg-card p-1.5 shadow-none sm:gap-1.5">
+            {/* Track Info */}
+            <div className="flex items-center gap-2 pr-1 pl-1 sm:pl-1.5">
+              <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border bg-muted sm:h-10 sm:w-10">
+                {currentEntry.thumbnail && !thumbError ? (
+                  <img
+                    src={currentEntry.thumbnail.replace(/^http:\/\//, 'https://')}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={() => setThumbError(true)}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-primary/10">
+                    <Volume2 className="h-4 w-4 text-primary/60" />
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden min-w-[100px] max-w-[150px] flex-col sm:flex md:max-w-[180px]">
+                <p
+                  className="truncate text-sm leading-tight font-semibold text-foreground"
+                  title={currentEntry.title}
+                >
+                  {currentEntry.title}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{queueLabel}</p>
+              </div>
+            </div>
+
+            <div className="mx-0.5 hidden h-6 w-px bg-border sm:block" />
+
+            {/* Controls */}
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={playPrev}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+                title={t('player.prev')}
+              >
+                <SkipBack className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={togglePlay}
+                className={cn(
+                  'inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-150',
+                  isPlaying
+                    ? 'bg-primary/15 text-primary hover:bg-primary/25'
+                    : 'bg-primary text-primary-foreground hover:bg-primary/90',
+                )}
+                title={isPlaying ? t('player.pause') : t('player.play')}
+              >
+                {isPlaying ? (
+                  <Pause className="h-4 w-4 fill-current" />
+                ) : (
+                  <Play className="h-4 w-4 translate-x-px fill-current" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={playNext}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+                title={t('player.next')}
+              >
+                <SkipForward className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="hidden md:block w-px h-6 bg-border/60 mx-1" />
+
+            {/* Progress Bar */}
+            <div className="hidden md:flex items-center gap-3 w-[200px] lg:w-[280px]">
+              <span className="w-8 flex-shrink-0 text-right text-[11px] font-medium tabular-nums text-muted-foreground">
+                {formatTime(displayTime)}
+              </span>
+              <div
+                ref={progressRef}
+                className="group relative h-6 flex-1 cursor-pointer touch-none select-none flex items-center"
+                onPointerDown={handleProgressPointerDown}
+                onPointerMove={handleProgressPointerMove}
+                onPointerUp={handleProgressPointerEnd}
+                onPointerCancel={handleProgressPointerEnd}
+                onKeyDown={handleProgressKeyDown}
+                role="slider"
+                tabIndex={0}
+                aria-valuemin={0}
+                aria-valuemax={Math.round(duration || 0)}
+                aria-valuenow={Math.round(displayTime)}
+                aria-valuetext={`${formatTime(displayTime)} / ${formatTime(duration)}`}
+              >
+                <div className="absolute left-0 right-0 h-1 overflow-hidden rounded-sm bg-muted">
+                  <div
+                    className={cn(
+                      'h-full bg-primary',
+                      !isSeeking && 'transition-[width] duration-150',
+                    )}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <div
+                  className={cn(
+                    'absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-md border border-primary/50 bg-primary  transition-transform',
+                    isSeeking
+                      ? 'scale-125 border-primary shadow-md'
+                      : 'scale-0 opacity-0 group-hover:opacity-100 group-hover:scale-110',
+                  )}
+                  style={{ left: `${progress}%` }}
+                />
+              </div>
+              <span className="w-8 flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+                {formatTime(duration)}
+              </span>
+            </div>
+
+            <div className="hidden sm:block w-px h-6 bg-border/60 mx-1" />
+
+            {/* Right Controls */}
+            <div className="flex items-center gap-1 pr-1">
+              <button
+                type="button"
+                onClick={cycleMode}
+                className={cn(
+                  'inline-flex h-9 w-9 items-center justify-center rounded-md transition-all hover:bg-foreground/5',
+                  mode === 'sequence'
+                    ? 'text-muted-foreground hover:text-foreground'
+                    : 'text-primary bg-primary/5',
+                )}
+                title={
+                  mode === 'sequence'
+                    ? t('player.modeSequence')
+                    : mode === 'repeat-one'
+                      ? t('player.modeRepeatOne')
+                      : t('player.modeShuffle')
+                }
+              >
+                {mode === 'shuffle' ? (
+                  <Shuffle className="h-4 w-4" />
+                ) : mode === 'repeat-one' ? (
+                  <Repeat1 className="h-4 w-4" />
+                ) : (
+                  <Repeat className="h-4 w-4" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={cyclePlaybackRate}
+                className={cn(
+                  'hidden sm:inline-flex min-w-[36px] h-9 items-center justify-center rounded-md text-[11px] font-bold tabular-nums transition-all hover:bg-foreground/5',
+                  playbackRate !== 1
+                    ? 'text-primary bg-primary/5'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                title={t('player.playbackSpeed', { rate: playbackRate })}
+              >
+                {playbackRate}x
+              </button>
+
+              {/* Volume Control */}
+              <div className="hidden sm:flex items-center gap-1 sm:gap-2 pl-1 pr-1 sm:pr-2 group/vol">
+                <button
+                  type="button"
+                  onClick={() => setVolume(volume > 0 ? 0 : 1)}
+                  className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground hover:bg-foreground/5"
+                >
+                  {volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </button>
+                <div
+                  ref={volumeRef}
+                  className="relative h-6 w-12 sm:w-16 cursor-pointer touch-none select-none flex items-center opacity-70 group-hover/vol:opacity-100 transition-opacity"
+                  onPointerDown={handleVolumePointerDown}
+                  onPointerMove={handleVolumePointerMove}
+                  onPointerUp={handleVolumePointerEnd}
+                  onPointerCancel={handleVolumePointerEnd}
+                  onKeyDown={handleVolumeKeyDown}
+                  role="slider"
+                  tabIndex={0}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(volumeProgress)}
+                  aria-valuetext={`${Math.round(volumeProgress)}%`}
+                >
+                  <div className="absolute left-0 right-0 h-1 overflow-hidden rounded-sm bg-muted">
+                    <div
+                      className={cn('h-full bg-primary', !isVolumeDragging && 'transition-[width]')}
+                      style={{ width: `${volumeProgress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCollapsed(true)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-all hover:text-foreground hover:bg-foreground/5 ml-1"
+                title={t('player.minimize')}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={close}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10"
+                title={t('player.close')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collapsed Player (Mini) */}
+      {isCollapsed && (
+        <div
+          className={cn(
+            'pointer-events-none absolute right-4 sm:right-6',
+            !isMiniPlayerDragging &&
+              'transition-all duration-500 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]',
+          )}
+          style={{ bottom: miniPlayerBottom }}
+        >
+          <button
+            type="button"
+            onClick={handleMiniPlayerClick}
+            onPointerDown={handleMiniPlayerPointerDown}
+            onPointerMove={handleMiniPlayerPointerMove}
+            onPointerUp={handleMiniPlayerPointerEnd}
+            onPointerCancel={handleMiniPlayerPointerEnd}
+            className="group pointer-events-auto relative flex h-14 w-14 touch-none select-none items-center justify-center overflow-hidden rounded-md bg-muted border border-border transition-transform duration-150"
+            title={currentEntry.title}
+          >
+            {currentEntry.thumbnail && !thumbError ? (
+              <img
+                src={currentEntry.thumbnail.replace(/^http:\/\//, 'https://')}
+                alt=""
+                className="h-full w-full object-cover transition-all duration-700"
+                style={isPlaying ? { animation: 'spin 30s linear infinite' } : undefined}
+                referrerPolicy="no-referrer"
+                onError={() => setThumbError(true)}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-primary/10">
+                <Volume2 className="h-5 w-5 text-primary/60" />
+              </div>
+            )}
+
+            <div className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+              <Maximize2 className="h-5 w-5 text-white" />
+            </div>
+
+            {!isPlaying && (
+              <div className="absolute right-0 bottom-0 rounded-sm border border-border bg-card p-0.5">
+                <Pause className="h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

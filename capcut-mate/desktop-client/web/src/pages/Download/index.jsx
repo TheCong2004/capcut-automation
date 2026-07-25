@@ -1,0 +1,164 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "react-toastify";
+import electronService from "../../services/electronService";
+import ExternalWebpage from "../../components/ExternalWebpage";
+import Textarea from "../../components/Textarea";
+import Tabs from "../../components/Tabs";
+import DownloadControls from "../../components/DownloadControls";
+import DownloadButton from "../../components/DownloadButton";
+import LogModule from "../../components/LogModule";
+import { applyLogBatch } from "../../utils/downloadLog";
+
+import "./index.less";
+
+function MainPage() {
+  const [textareaValue, setTextareaValue] = useState("");
+  const [isDownloadOpen, setIsDownloadOpen] = useState(true);
+  const [logs, setLogs] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // 外层容器的ref，用于实现自动滚动
+  const downloadPageRef = useRef(null);
+  const pendingLogsRef = useRef([]);
+  const flushScheduledRef = useRef(false);
+
+  const flushLogQueue = useCallback(() => {
+    flushScheduledRef.current = false;
+    if (pendingLogsRef.current.length === 0) {
+      return;
+    }
+    const batch = pendingLogsRef.current.splice(0);
+    setLogs((prevLogs) => applyLogBatch(prevLogs, batch));
+    if (pendingLogsRef.current.length > 0) {
+      flushScheduledRef.current = true;
+      queueMicrotask(flushLogQueue);
+    }
+  }, []);
+
+  const enqueueLogEntry = useCallback(
+    (logEntry) => {
+      pendingLogsRef.current.push(logEntry);
+      if (!flushScheduledRef.current) {
+        flushScheduledRef.current = true;
+        queueMicrotask(flushLogQueue);
+      }
+    },
+    [flushLogQueue]
+  );
+
+  // 加载配置
+  useEffect(() => {
+    // 监听日志更新（支持按 id 更新草稿下载状态）
+    electronService.onFileOperationLog((logEntry) => {
+      enqueueLogEntry(logEntry);
+    });
+
+    return () => {
+      try {
+        electronService.removeAllFileOperationLogListeners();
+      } catch (error) {
+        console.error("取消订阅日志失败:", error);
+      }
+    };
+  }, [enqueueLogEntry]);
+
+  // 当日志更新时，将外层容器滚动到底部
+  useEffect(() => {
+    if (downloadPageRef.current) {
+      downloadPageRef.current.scrollTop = downloadPageRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  const handleDownload = async () => {
+    const trimmedValue = textareaValue.trim();
+    if (!trimmedValue) {
+      toast.warn("请输入草稿地址，多个使用回车换行分隔");
+      return;
+    }
+
+    const valArray = trimmedValue.split("\n").map((line) => line.trim());
+    setLogs([]);
+    for (const val of valArray) {
+      if (val) {
+        await saveFile(val);
+      }
+    }
+  };
+
+  const saveFile = async (value) => {
+    // 从URL中提取draft_id
+    const urlParams = new URLSearchParams(
+      value.includes("?") ? value.split("?")[1] : ""
+    );
+    const targetId = urlParams.get("draft_id");
+
+    if (!targetId) {
+      toast.warn(`${value} 中缺少 draft_id 参数`);
+      return;
+    }
+
+    try {
+      const jsonData = await electronService.getUrlJsonData(value);
+      if (jsonData?.code !== 0 || !jsonData?.files) {
+        toast.error("获取文件列表失败，请确保您输入的地址可正常访问");
+        return;
+      }
+
+      const matchedFiles = jsonData.files.filter((fileUrl) =>
+        fileUrl.includes(targetId)
+      );
+
+      if (matchedFiles.length === 0) {
+        toast.error("未找到包含 draft_id 的文件");
+        return;
+      }
+
+      await electronService.saveFile({
+        sourceUrl: value,
+        remoteFileUrls: matchedFiles,
+        targetId,
+        isOpenDir: isDownloadOpen,
+      });
+      toast.success(`获取草稿 ${targetId} 成功`);
+    } catch (error) {
+      toast.error("保存文件失败", error);
+    }
+  };
+
+  const handleClearLogs = () => setLogs([]);
+
+  return (
+    <div className="download-page" ref={downloadPageRef}>
+      <div className="container">
+        <ExternalWebpage />
+
+        <Textarea
+          value={textareaValue}
+          onChange={(val) => setTextareaValue(val)}
+        />
+
+        <Tabs
+          onTabChange={(content) => setTextareaValue(content)}
+          initialContent={textareaValue}
+        />
+
+        <DownloadControls
+          isOpen={isDownloadOpen}
+          isLoading={isLoading}
+          onToggle={setIsDownloadOpen}
+        />
+
+        <DownloadButton
+          onClick={handleDownload}
+          isLoading={isLoading}
+          setIsLoading={setIsLoading}
+          textValue={textareaValue}
+        />
+
+        <LogModule logs={logs} onClear={handleClearLogs} />
+      </div>
+    </div>
+  );
+}
+
+export default MainPage;

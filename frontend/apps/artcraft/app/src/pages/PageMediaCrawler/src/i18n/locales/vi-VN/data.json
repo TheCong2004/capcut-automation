@@ -1,0 +1,29 @@
+{
+  "dialog": {
+    "button": "QUẢN LÝ DỮ LIỆU",
+    "title": "TRÌNH KHÁM PHÁ DỮ LIỆU"
+  },
+  "explorer": {
+    "title": "DỮ LIỆU ĐÃ THU THẬP",
+    "records": "{{count}} BẢN GHI",
+    "rescan": "QUÉT LẠI",
+    "loading": "[ĐANG TẢI] Đang quét thư mục dữ liệu...",
+    "noData": "CHƯA CÓ DỮ LIỆU",
+    "noDataHint": "Hãy chạy trình thu thập để lấy dữ liệu. Kết quả sẽ xuất hiện tại đây sau khi hoàn tất.",
+    "allCategories": "TẤT CẢ"
+  },
+  "file": {
+    "entries": "{{count}} mục",
+    "extract": "TẢI XUỐNG",
+    "preview": "XEM TRƯỚC"
+  },
+  "preview": {
+    "title": "Xem trước dữ liệu",
+    "records": "{{count}} BẢN GHI",
+    "download": "TẢI XUỐNG",
+    "loading": "[ĐANG TẢI] Đang đọc dữ liệu...",
+    "error": "[LỖI] Không thể đọc dữ liệu",
+    "searchPlaceholder": "Tìm kiếm trong dữ liệu...",
+    "showing": "Đang hiển thị {{filtered}} trên {{total}} bản ghi"
+  }
+}

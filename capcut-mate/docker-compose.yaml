@@ -1,0 +1,51 @@
+services:
+  capcut-mate:
+    image: gogoshine/capcut-mate:latest
+    platform: linux/amd64
+    ports:
+      - "30000:30000"
+    volumes:
+      - ./html/output:/app/output
+      - ./logs:/app/logs
+      # - /etc/localtime:/etc/localtime:ro
+      # - /etc/timezone:/etc/timezone:ro
+    environment:
+      # 草稿下载URL
+      - DRAFT_URL=http://127.0.0.1/openapi/capcut-mate/v1/get_draft
+      # 用于将容器内部的文件路径转成URL，本质是将/app/替换成DOWNLOAD_URL得到下载路径
+      - DOWNLOAD_URL=http://127.0.0.1/
+      # 草稿提示URL
+      - TIP_URL=https://docs.jcaigc.cn
+      # 文件下载大小限制（字节），默认200MB（209715200）
+      - DOWNLOAD_FILE_SIZE_LIMIT=209715200
+    networks:
+      - capcut-mate-network
+    mem_limit: 1G
+    memswap_limit: 1G
+    cpus: '1' 
+    oom_score_adj: -500
+    restart: unless-stopped
+    container_name: capcut-mate
+  
+  nginx: # nginx服务器
+    image: gogoshine/nginx:latest
+    platform: linux/amd64
+    ports:
+      - "80:80"
+    environment:
+      - PROXY_PASS_URL_1=http://capcut-mate:30000/openapi/capcut-mate/
+      - PROXY_LOCATION_1=/openapi/capcut-mate/
+    volumes:
+      - ./html:/usr/share/nginx/html
+    networks:
+      - capcut-mate-network
+    mem_limit: 1G
+    memswap_limit: 1G
+    cpus: '1.0'
+    oom_score_adj: -500
+    restart: unless-stopped
+    container_name: nginx
+
+networks:
+  capcut-mate-network:
+    driver: bridge

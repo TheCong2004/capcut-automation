@@ -1,0 +1,55 @@
+{
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "../../common"
+    },
+    {
+      "path": "../../model-list"
+    },
+    {
+      "path": "../action-reminder-modal"
+    },
+    {
+      "path": "../toaster"
+    },
+    {
+      "path": "../gravatar"
+    },
+    {
+      "path": "../../api"
+    },
+    {
+      "path": "../../analytics/google-analytics"
+    },
+    {
+      "path": "../viewer-3d"
+    },
+    {
+      "path": "../loading-spinner"
+    },
+    {
+      "path": "../audio-player"
+    },
+    {
+      "path": "../../tauri-api"
+    },
+    {
+      "path": "../button"
+    },
+    {
+      "path": "../tooltip"
+    },
+    {
+      "path": "../modal"
+    },
+    {
+      "path": "./tsconfig.lib.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ],
+  "extends": "../../../tsconfig.base.json"
+}

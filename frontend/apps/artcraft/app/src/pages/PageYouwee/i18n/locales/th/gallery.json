@@ -1,0 +1,63 @@
+{
+  "title": "แกลเลอรี",
+  "page": {
+    "systemManagedOnly": "จัดการผ่านระบบเท่านั้น"
+  },
+  "missing": {
+    "title": "ต้องใช้ gallery-dl",
+    "checking": "กำลังตรวจสอบ gallery-dl ของระบบ...",
+    "description": "ติดตั้ง gallery-dl ในระบบของคุณเพื่อดาวน์โหลดแกลเลอรี คอลเลกชัน และฟีดของครีเอเตอร์",
+    "refresh": "รีเฟรชสถานะ",
+    "openDependencies": "เปิด Dependencies",
+    "installGuide": "คู่มือติดตั้ง"
+  },
+  "actions": {
+    "startDownload": "เริ่มดาวน์โหลด",
+    "stopDownload": "หยุดดาวน์โหลด",
+    "clearAll": "ล้างทั้งหมด"
+  },
+  "settings": {
+    "notSelected": "เลือกโฟลเดอร์",
+    "selectFolder": "เลือกโฟลเดอร์ปลายทาง",
+    "systemManagedOnly": "จัดการผ่านระบบเท่านั้น",
+    "advanced": "ขั้นสูง",
+    "more": "เพิ่มเติม",
+    "parallelDownloads": "ดาวน์โหลดพร้อมกัน",
+    "atATime": "ครั้งละ {{count}}",
+    "systemManagedHint": "หน้าจอนี้ของ Youwee ใช้เฉพาะ binary gallery-dl ของระบบเท่านั้น"
+  },
+  "queue": {
+    "title": "คิว",
+    "pending": "รออยู่ {{count}}",
+    "clearCompleted": "ล้างที่เสร็จแล้ว ({{count}})",
+    "openFolder": "เปิดโฟลเดอร์",
+    "remove": "ลบรายการ",
+    "status": {
+      "pending": "รอดำเนินการ",
+      "downloading": "กำลังดาวน์โหลด",
+      "completed": "เสร็จสิ้น",
+      "failed": "ล้มเหลว"
+    },
+    "empty": {
+      "title": "วาง URL แกลเลอรีเพื่อเริ่มต้น",
+      "description": "ใช้หน้าจอนี้สำหรับแกลเลอรีภาพ ฟีดศิลปิน ตอนมังงะ และแหล่งแบบคอลเลกชันอื่น ๆ ที่เหมาะกับ gallery-dl มากกว่า Universal",
+      "moreCount": "และอีกมากมาย",
+      "viewFullList": "ดูเว็บไซต์ที่รองรับ"
+    }
+  },
+  "urlInput": {
+    "single": "รายการเดียว",
+    "singleHint": "วาง URL แกลเลอรีหนึ่งรายการ",
+    "multiple": "หลายรายการ",
+    "multipleHint": "เพิ่มหลาย URL ของแกลเลอรี (หนึ่งบรรทัดต่อหนึ่งรายการ)",
+    "paste": "วาง",
+    "import": "นำเข้า",
+    "detectedMultiple": "ตรวจพบ URL {{count}} รายการ",
+    "placeholder": "วาง URL ของแกลเลอรี โพสต์ หรือครีเอเตอร์",
+    "placeholderMultiple": "หนึ่ง URL ต่อหนึ่งบรรทัด บรรทัดที่ขึ้นต้นด้วย # จะถูกละเว้น",
+    "urlCount": "{{count}} URL",
+    "urlCount_plural": "{{count}} URLs",
+    "clearInput": "ล้าง",
+    "addToQueue": "เพิ่ม"
+  }
+}

@@ -1,0 +1,1480 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { downloadDir, homeDir } from '@tauri-apps/api/path';
+import { open } from '@tauri-apps/plugin-dialog';
+import { readTextFile } from '@tauri-apps/plugin-fs';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { usePersistedDownloadQueue } from '@/hooks/usePersistedDownloadQueue';
+import {
+  extractBackendError,
+  localizeBackendError,
+  localizeProgressError,
+} from '@/lib/backend-error';
+import { buildDownloadDuplicateIdentity } from '@/lib/download-duplicates';
+import {
+  clampAutoRetryDelaySeconds,
+  clampAutoRetryMaxAttempts,
+  isNonRetryableError,
+  isRetryableError,
+  waitWithCancellation,
+} from '@/lib/download-retry';
+import { refreshItemPluginWorkflowSnapshots } from '@/lib/download-settings';
+import {
+  buildCookieProxyInvokeOptions,
+  loadCookieSettings,
+  loadProxySettings,
+} from '@/lib/network-config';
+import {
+  enqueuePluginWorkflowTrigger,
+  loadPluginWorkflowSnapshots,
+  loadPostDownloadWorkflowSteps,
+  refreshPluginWorkflowSnapshots,
+  refreshPostDownloadWorkflowSteps,
+} from '@/lib/post-download-plugins';
+import { parseUniversalUrls } from '@/lib/sources';
+import type {
+  AudioBitrate,
+  DownloadItem,
+  DownloadProgress,
+  ExternalEnqueueOptions,
+  ExternalEnqueueResult,
+  Format,
+  ItemUniversalSettings,
+  PostDownloadPluginPayload,
+  PreferredFps,
+  Quality,
+  VideoCodec,
+  VideoInfoResponse,
+  YtdlpAdvancedOption,
+} from '@/lib/types';
+import {
+  buildItemUniversalSettingsSnapshot,
+  createDefaultUniversalSettings,
+  resolveUniversalVideoCodec,
+  serializeUniversalSettings,
+  type UniversalSettings,
+} from '@/lib/universal-settings';
+import { sanitizeYtdlpAdvancedOptions } from '@/lib/ytdlp-advanced-options';
+import { useDownload } from './download-context';
+import { UniversalContext } from './universal-context';
+
+const STORAGE_KEY = 'youwee-universal-settings';
+const DOWNLOAD_STORAGE_KEY = 'youwee-settings';
+const DOWNLOAD_QUEUE_IDLE_GRACE_MS = 1000;
+
+// Format duration in seconds to HH:MM:SS or MM:SS
+function formatDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Check if path is absolute (cross-platform)
+const isAbsolutePath = (path: string): boolean => {
+  if (!path) return false;
+  if (path.startsWith('/')) return true;
+  if (/^[A-Za-z]:[\\/]/.test(path)) return true;
+  return false;
+};
+
+async function resolveDefaultOutputPath(): Promise<string> {
+  try {
+    let path = await downloadDir();
+
+    if (!isAbsolutePath(path)) {
+      const home = await homeDir();
+      if (home) {
+        path = `${home}Downloads`;
+      }
+    }
+
+    return isAbsolutePath(path) ? path : '';
+  } catch (error) {
+    console.error('Failed to get download directory:', error);
+    try {
+      const home = await homeDir();
+      const fallbackPath = home ? `${home}Downloads` : '';
+      return isAbsolutePath(fallbackPath) ? fallbackPath : '';
+    } catch (fallbackError) {
+      console.error('Failed to get home directory:', fallbackError);
+      return '';
+    }
+  }
+}
+
+// Load settings from localStorage
+function loadSavedSettings(): Partial<UniversalSettings> {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load saved settings:', e);
+  }
+  return {};
+}
+
+// Load embed settings from main download settings
+function loadEmbedSettings(): { embedMetadata: boolean; embedThumbnail: boolean } {
+  try {
+    const saved = localStorage.getItem(DOWNLOAD_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        embedMetadata: parsed.embedMetadata !== false, // Default true
+        embedThumbnail: parsed.embedThumbnail === true, // Default false (requires FFmpeg)
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load embed settings:', e);
+  }
+  return { embedMetadata: true, embedThumbnail: false };
+}
+
+// Load SponsorBlock settings from main download settings
+function loadSponsorBlockArgs(): { remove: string | null; mark: string | null } {
+  try {
+    const saved = localStorage.getItem(DOWNLOAD_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (!parsed.sponsorBlock) return { remove: null, mark: null };
+
+      if (parsed.sponsorBlockMode === 'remove') return { remove: 'all', mark: null };
+      if (parsed.sponsorBlockMode === 'mark') return { remove: null, mark: 'all' };
+
+      // Custom mode
+      const cats = parsed.sponsorBlockCategories || {};
+      const removeCats: string[] = [];
+      const markCats: string[] = [];
+      for (const [cat, action] of Object.entries(cats)) {
+        if (action === 'remove') removeCats.push(cat);
+        else if (action === 'mark') markCats.push(cat);
+      }
+      return {
+        remove: removeCats.length > 0 ? removeCats.join(',') : null,
+        mark: markCats.length > 0 ? markCats.join(',') : null,
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load sponsorblock settings:', e);
+  }
+  return { remove: null, mark: null };
+}
+
+function loadDownloadAdvancedSettings(): {
+  useAria2: boolean;
+  aria2Args: string;
+  ytdlpAdvancedOptionsEnabled: boolean;
+  ytdlpAdvancedOptions: YtdlpAdvancedOption[];
+} {
+  try {
+    const saved = localStorage.getItem(DOWNLOAD_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        useAria2: parsed.useAria2 === true,
+        aria2Args: typeof parsed.aria2Args === 'string' ? parsed.aria2Args : '',
+        ytdlpAdvancedOptionsEnabled: parsed.ytdlpAdvancedOptionsEnabled === true,
+        ytdlpAdvancedOptions: sanitizeYtdlpAdvancedOptions(parsed.ytdlpAdvancedOptions),
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load download advanced settings:', e);
+  }
+  return {
+    useAria2: false,
+    aria2Args: '',
+    ytdlpAdvancedOptionsEnabled: false,
+    ytdlpAdvancedOptions: [],
+  };
+}
+
+// Save settings to localStorage
+function saveSettings(settings: UniversalSettings) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeUniversalSettings(settings)));
+  } catch (e) {
+    console.error('Failed to save settings:', e);
+  }
+}
+
+export interface UniversalContextType {
+  items: DownloadItem[];
+  focusedItemId: string | null;
+  isDownloading: boolean;
+  settings: UniversalSettings;
+  addFromText: (text: string) => Promise<number>;
+  enqueueExternalUrl: (
+    url: string,
+    options?: ExternalEnqueueOptions,
+  ) => Promise<ExternalEnqueueResult>;
+  focusItem: (itemId: string) => void;
+  importFromFile: () => Promise<number>;
+  importFromClipboard: () => Promise<number>;
+  selectOutputFolder: () => Promise<void>;
+  removeItem: (id: string) => void;
+  clearAll: () => void;
+  clearCompleted: () => void;
+  startDownload: () => Promise<void>;
+  stopDownload: () => Promise<void>;
+  updateQuality: (quality: Quality) => void;
+  updateFormat: (format: Format) => void;
+  updateVideoCodec: (codec: VideoCodec) => void;
+  updateAudioBitrate: (bitrate: AudioBitrate) => void;
+  updatePreferredFps: (fps: PreferredFps) => void;
+  updateConcurrentDownloads: (concurrent: number) => void;
+  updateLiveFromStart: (enabled: boolean) => void;
+  updateSkipLive: (enabled: boolean) => void;
+  updateAutoRetry: (enabled: boolean, maxAttempts: number, delaySeconds: number) => void;
+  // Cookie error detection
+  cookieError: { show: boolean; itemId?: string; kind: 'db_locked' | 'fresh_cookies' } | null;
+  clearCookieError: () => void;
+  retryFailedDownload: (itemId: string) => void;
+  // Per-item time range
+  updateItemTimeRange: (id: string, start?: string, end?: string) => void;
+  selectItemOutputFolder: (id: string) => Promise<void>;
+  // Rename completed file
+  renameCompletedItem: (id: string, newName: string) => Promise<void>;
+}
+
+interface RenameDownloadedFileResult {
+  newFilepath: string;
+  newTitle: string;
+}
+
+export function UniversalProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('common');
+  const [items, setItems] = useState<DownloadItem[]>([]);
+  const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [cookieError, setCookieError] = useState<{
+    show: boolean;
+    itemId?: string;
+    kind: 'db_locked' | 'fresh_cookies';
+  } | null>(null);
+  const [pendingOutputPathUpdate, setPendingOutputPathUpdate] = useState<{
+    outputPath: string;
+    itemIds: string[];
+  } | null>(null);
+
+  // Load saved settings on init
+  const [settings, setSettings] = useState<UniversalSettings>(() => {
+    const saved = loadSavedSettings();
+    return createDefaultUniversalSettings(saved);
+  });
+
+  const isDownloadingRef = useRef(false);
+  const itemsRef = useRef<DownloadItem[]>([]);
+  const settingsRef = useRef<UniversalSettings>(settings);
+  const focusClearTimerRef = useRef<number | null>(null);
+  const { settings: downloadSettings, filterDownloadedDuplicateCandidates } = useDownload();
+
+  usePersistedDownloadQueue({
+    queueKind: 'universal',
+    enabled: downloadSettings.persistDownloadQueue,
+    items,
+    setItems,
+    logLabel: 'universal queue',
+  });
+
+  // Keep itemsRef in sync with items state
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  // Keep settingsRef in sync with settings state
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    refreshPostDownloadWorkflowSteps();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (focusClearTimerRef.current !== null) {
+        window.clearTimeout(focusClearTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Get default download path on mount (only if not saved)
+  useEffect(() => {
+    const getDefaultPath = async () => {
+      if (settings.outputPath) return;
+
+      const path = await resolveDefaultOutputPath();
+      if (path) {
+        setSettings((s) => {
+          const newSettings = { ...s, outputPath: path };
+          saveSettings(newSettings);
+          return newSettings;
+        });
+      }
+    };
+    getDefaultPath();
+  }, [settings.outputPath]);
+
+  // Listen for progress updates - use unique event for universal downloads
+  useEffect(() => {
+    const unlisten = listen<DownloadProgress>('download-progress', (event) => {
+      const progress = event.payload;
+
+      // Detect cookie error on Windows (lock error or DPAPI/App-Bound Encryption)
+      const cookieDbLockedPattern =
+        /could not copy.*cookie|permission denied.*cookies|cookie.*database|failed to.*cookie|failed to decrypt.*dpapi|app.bound.encryption/i;
+      if (progress.status === 'error' && progress.error_code === 'YT_FRESH_COOKIES_REQUIRED') {
+        setCookieError({ show: true, itemId: progress.id, kind: 'fresh_cookies' });
+      } else if (
+        progress.status === 'error' &&
+        ((progress.error_code && progress.error_code === 'YT_COOKIE_DB_LOCKED') ||
+          (progress.error_message && cookieDbLockedPattern.test(progress.error_message)))
+      ) {
+        setCookieError({ show: true, itemId: progress.id, kind: 'db_locked' });
+      }
+
+      setItems((currentItems) => {
+        if (progress.status === 'error' && progress.error_code === 'DOWNLOAD_CANCELLED') {
+          return currentItems.map((item) =>
+            item.id === progress.id
+              ? {
+                  ...item,
+                  status: 'pending',
+                  speed: '',
+                  eta: '',
+                  error: undefined,
+                  errorCode: undefined,
+                  retryState: undefined,
+                }
+              : item,
+          );
+        }
+
+        const status: DownloadItem['status'] =
+          progress.status === 'finished'
+            ? 'completed'
+            : progress.status === 'error'
+              ? 'error'
+              : 'downloading';
+        const nextItems = currentItems.map((item) =>
+          item.id === progress.id
+            ? {
+                ...item,
+                progress: progress.percent,
+                speed: progress.speed,
+                eta: progress.eta,
+                title: progress.title || item.title,
+                status,
+                error: localizeProgressError(
+                  progress.error_code,
+                  progress.error_message,
+                  progress.error_params,
+                ),
+                errorCode: progress.status === 'error' ? progress.error_code : undefined,
+                retryState: undefined,
+                downloadedSize: progress.downloaded_size,
+                elapsedTime: progress.elapsed_time,
+                // Auto-detect live stream if we receive downloaded_size (live stream format)
+                isLive: progress.downloaded_size ? true : item.isLive,
+                // Store completed info when finished
+                ...(progress.status === 'finished'
+                  ? {
+                      completedFilesize: progress.filesize,
+                      completedResolution: progress.resolution,
+                      completedFormat: progress.format_ext,
+                      completedFilepath: progress.filepath,
+                      completedHistoryId: progress.history_id,
+                    }
+                  : {}),
+              }
+            : item,
+        );
+        itemsRef.current = nextItems;
+        return nextItems;
+      });
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Fetch metadata for items in background (fire-and-forget)
+  const fetchMetadataForItems = useCallback((items: DownloadItem[]) => {
+    const cookieSettings = loadCookieSettings();
+    const proxySettings = loadProxySettings();
+    const networkOptions = buildCookieProxyInvokeOptions(cookieSettings, proxySettings);
+
+    for (const item of items) {
+      invoke<VideoInfoResponse>('get_video_info', {
+        url: item.url,
+        ...networkOptions,
+      })
+        .then((response) => {
+          const info = response.info;
+          const thumb = info.thumbnail?.replace(/^http:\/\//, 'https://') || null;
+          setItems((current) =>
+            current.map((i) =>
+              i.id === item.id
+                ? {
+                    ...i,
+                    thumbnail: thumb || i.thumbnail,
+                    title: info.title || i.title,
+                    duration: info.duration ? formatDuration(info.duration) : i.duration,
+                    extractor: info.extractor || i.extractor,
+                    channel: info.channel || i.channel,
+                  }
+                : i,
+            ),
+          );
+        })
+        .catch(() => {
+          // Mark extractor so isFetchingMeta becomes false and item exits loading state
+          setItems((current) =>
+            current.map((i) => (i.id === item.id ? { ...i, extractor: 'direct' } : i)),
+          );
+        });
+    }
+  }, []);
+
+  const enqueueQueuedWorkflowForItems = useCallback((queuedItems: DownloadItem[]) => {
+    for (const item of queuedItems) {
+      const itemSettings = item.settings as ItemUniversalSettings | undefined;
+      const workflowSnapshots = itemSettings?.pluginWorkflowSnapshots;
+      const timeRange =
+        itemSettings?.timeRangeStart && itemSettings?.timeRangeEnd
+          ? `${itemSettings.timeRangeStart}-${itemSettings.timeRangeEnd}`
+          : null;
+      const payload: PostDownloadPluginPayload = {
+        jobId: item.id,
+        source: item.extractor || null,
+        trigger: 'download.queued',
+        filepath: '',
+        filename: item.title || item.url,
+        directory: itemSettings?.outputPath ?? settingsRef.current.outputPath,
+        filesize: item.filesize ?? null,
+        format: itemSettings?.format ?? settingsRef.current.format,
+        quality: itemSettings?.quality ?? settingsRef.current.quality,
+        url: item.url,
+        title: item.title || null,
+        thumbnail: item.thumbnail || null,
+        historyId: null,
+        timeRange,
+        downloadKind: 'universal',
+        workflowRunId: null,
+        workflowStepIndex: null,
+        workflowStepPluginId: null,
+        chainState: null,
+      };
+      void enqueuePluginWorkflowTrigger('download.queued', payload, workflowSnapshots).catch(
+        (error) => {
+          console.error('Failed to enqueue universal download.queued workflow:', error);
+        },
+      );
+    }
+  }, []);
+
+  const enqueueFailedWorkflowForItem = useCallback(
+    (item: DownloadItem, itemSettings: ItemUniversalSettings | undefined) => {
+      const workflowSnapshots = itemSettings?.pluginWorkflowSnapshots;
+      const timeRange =
+        itemSettings?.timeRangeStart && itemSettings?.timeRangeEnd
+          ? `${itemSettings.timeRangeStart}-${itemSettings.timeRangeEnd}`
+          : null;
+      const payload: PostDownloadPluginPayload = {
+        jobId: item.id,
+        source: item.extractor || null,
+        trigger: 'download.failed',
+        filepath: '',
+        filename: item.title || item.url,
+        directory: itemSettings?.outputPath ?? settings.outputPath,
+        filesize: item.filesize ?? null,
+        format: itemSettings?.format ?? settings.format,
+        quality: itemSettings?.quality ?? settings.quality,
+        url: item.url,
+        title: item.title || null,
+        thumbnail: item.thumbnail || null,
+        historyId: null,
+        timeRange,
+        downloadKind: 'universal',
+        workflowRunId: null,
+        workflowStepIndex: null,
+        workflowStepPluginId: null,
+        chainState: null,
+      };
+      void enqueuePluginWorkflowTrigger('download.failed', payload, workflowSnapshots).catch(
+        (error) => {
+          console.error('Failed to enqueue universal download.failed workflow:', error);
+        },
+      );
+    },
+    [settings.format, settings.outputPath, settings.quality],
+  );
+
+  const addFromText = useCallback(
+    async (text: string): Promise<number> => {
+      const urls = parseUniversalUrls(text);
+      if (urls.length === 0) return 0;
+
+      const currentItems = itemsRef.current;
+      const currentSettings = settingsRef.current;
+      const advancedSettings = loadDownloadAdvancedSettings();
+      const workflowSnapshots = loadPluginWorkflowSnapshots();
+
+      // Snapshot current settings for these items
+      const settingsSnapshot = buildItemUniversalSettingsSnapshot(currentSettings, {
+        useAria2: advancedSettings.useAria2,
+        aria2Args: advancedSettings.aria2Args,
+        ytdlpAdvancedOptionsEnabled: advancedSettings.ytdlpAdvancedOptionsEnabled,
+        ytdlpAdvancedOptions: advancedSettings.ytdlpAdvancedOptions,
+        numberQueueItems: downloadSettings.numberQueueItems,
+        splitEmbeddedChapters: downloadSettings.splitEmbeddedChapters,
+        numberChapterFiles: downloadSettings.numberChapterFiles,
+        autoOrganizeCollections: downloadSettings.autoOrganizeCollections,
+        pluginWorkflowSnapshots: workflowSnapshots,
+        postDownloadWorkflowSteps: loadPostDownloadWorkflowSteps(),
+      });
+
+      const candidates = urls
+        .filter((url) => !currentItems.some((item) => item.url === url))
+        .map((url) => ({
+          url,
+          title: url,
+          duplicateIdentity: buildDownloadDuplicateIdentity(url),
+        }));
+      const filteredCandidates = await filterDownloadedDuplicateCandidates(candidates);
+      const currentItemsAfterReview = itemsRef.current;
+      const enqueueCandidates = filteredCandidates.filter(
+        (candidate) => !currentItemsAfterReview.some((item) => item.url === candidate.url),
+      );
+      const queueTotal = currentItemsAfterReview.length + enqueueCandidates.length;
+      const newItems: DownloadItem[] = enqueueCandidates.map((candidate, index) => ({
+        id: crypto.randomUUID(),
+        url: candidate.url,
+        title: candidate.title,
+        status: 'pending' as const,
+        progress: 0,
+        speed: '',
+        eta: '',
+        queueIndex: currentItemsAfterReview.length + index + 1,
+        queueTotal,
+        // Store settings snapshot
+        settings: settingsSnapshot,
+      }));
+
+      if (newItems.length > 0) {
+        setItems((prev) => {
+          const nextItems = [...prev, ...newItems];
+          itemsRef.current = nextItems;
+          return nextItems;
+        });
+        // Fetch metadata (thumbnail, title, duration) in background
+        fetchMetadataForItems(newItems);
+        enqueueQueuedWorkflowForItems(newItems);
+      }
+
+      return newItems.length;
+    },
+    [
+      downloadSettings.numberChapterFiles,
+      downloadSettings.autoOrganizeCollections,
+      downloadSettings.numberQueueItems,
+      downloadSettings.splitEmbeddedChapters,
+      enqueueQueuedWorkflowForItems,
+      filterDownloadedDuplicateCandidates,
+      fetchMetadataForItems,
+    ],
+  );
+
+  const focusItem = useCallback((itemId: string) => {
+    setFocusedItemId(itemId);
+
+    if (focusClearTimerRef.current !== null) {
+      window.clearTimeout(focusClearTimerRef.current);
+    }
+
+    focusClearTimerRef.current = window.setTimeout(() => {
+      setFocusedItemId((current) => (current === itemId ? null : current));
+      focusClearTimerRef.current = null;
+    }, 3000);
+  }, []);
+
+  const enqueueExternalUrl = useCallback(
+    async (url: string, options?: ExternalEnqueueOptions): Promise<ExternalEnqueueResult> => {
+      const normalizedUrl = url.trim();
+      if (!normalizedUrl) return { added: false, itemId: null };
+
+      const existingItem = itemsRef.current.find((item) => item.url === normalizedUrl);
+      if (existingItem) {
+        focusItem(existingItem.id);
+        return { added: false, itemId: existingItem.id };
+      }
+
+      const currentSettings = settingsRef.current;
+      let outputPath = options?.outputPath || currentSettings.outputPath;
+      if (!outputPath) {
+        outputPath = await resolveDefaultOutputPath();
+        if (outputPath) {
+          setSettings((s) => {
+            const newSettings = { ...s, outputPath };
+            settingsRef.current = newSettings;
+            saveSettings(newSettings);
+            return newSettings;
+          });
+        }
+      }
+      const mediaType = options?.mediaType === 'audio' ? 'audio' : 'video';
+      const videoQuality =
+        options?.quality && options.quality !== 'audio' ? options.quality : 'best';
+      const audioBitrate = options?.audioBitrate === '128' ? '128' : 'auto';
+      const advancedSettings = loadDownloadAdvancedSettings();
+      const workflowSnapshots = loadPluginWorkflowSnapshots();
+
+      const settingsSnapshot = buildItemUniversalSettingsSnapshot(currentSettings, {
+        useAria2: advancedSettings.useAria2,
+        aria2Args: advancedSettings.aria2Args,
+        ytdlpAdvancedOptionsEnabled: advancedSettings.ytdlpAdvancedOptionsEnabled,
+        ytdlpAdvancedOptions: advancedSettings.ytdlpAdvancedOptions,
+        numberQueueItems: downloadSettings.numberQueueItems,
+        splitEmbeddedChapters: downloadSettings.splitEmbeddedChapters,
+        numberChapterFiles: downloadSettings.numberChapterFiles,
+        autoOrganizeCollections: downloadSettings.autoOrganizeCollections,
+        pluginWorkflowSnapshots: workflowSnapshots,
+        postDownloadWorkflowSteps: loadPostDownloadWorkflowSteps(),
+        overrides: {
+          quality: mediaType === 'audio' ? 'audio' : videoQuality,
+          format: mediaType === 'audio' ? 'mp3' : 'mp4',
+          outputPath,
+          audioBitrate: mediaType === 'audio' ? audioBitrate : currentSettings.audioBitrate,
+          timeRangeStart: options?.timeRangeStart,
+          timeRangeEnd: options?.timeRangeEnd,
+          liveFromStart: options?.liveFromStart ?? currentSettings.liveFromStart,
+          skipLive: options?.skipLive ?? currentSettings.skipLive,
+        },
+      });
+
+      const newItem: DownloadItem = {
+        id: crypto.randomUUID(),
+        url: normalizedUrl,
+        title: normalizedUrl,
+        status: 'pending',
+        progress: 0,
+        speed: '',
+        eta: '',
+        queueIndex: itemsRef.current.length + 1,
+        queueTotal: itemsRef.current.length + 1,
+        settings: settingsSnapshot,
+      };
+
+      const nextItems = [...itemsRef.current, newItem];
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+      fetchMetadataForItems([newItem]);
+      focusItem(newItem.id);
+      enqueueQueuedWorkflowForItems([newItem]);
+      return { added: true, itemId: newItem.id };
+    },
+    [
+      downloadSettings.numberChapterFiles,
+      downloadSettings.autoOrganizeCollections,
+      downloadSettings.numberQueueItems,
+      downloadSettings.splitEmbeddedChapters,
+      enqueueQueuedWorkflowForItems,
+      fetchMetadataForItems,
+      focusItem,
+    ],
+  );
+
+  const importFromFile = useCallback(async (): Promise<number> => {
+    try {
+      const file = await open({
+        multiple: false,
+        filters: [{ name: 'Text files', extensions: ['txt'] }],
+        title: 'Import URLs from file',
+      });
+
+      if (!file) return 0;
+
+      const content = await readTextFile(file as string);
+      return addFromText(content);
+    } catch (error) {
+      console.error('Failed to import file:', error);
+      return 0;
+    }
+  }, [addFromText]);
+
+  const importFromClipboard = useCallback(async (): Promise<number> => {
+    try {
+      const text = await navigator.clipboard.readText();
+      return addFromText(text);
+    } catch (error) {
+      console.error('Failed to read clipboard:', error);
+      return 0;
+    }
+  }, [addFromText]);
+
+  const selectOutputFolder = useCallback(async () => {
+    try {
+      const folder = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Download Folder',
+        defaultPath: settings.outputPath || undefined,
+      });
+
+      if (folder) {
+        const outputPath = folder as string;
+        const itemsToUpdate = itemsRef.current.filter((item) => {
+          if (!item.settings || item.status === 'downloading' || item.status === 'completed') {
+            return false;
+          }
+          const itemSettings = item.settings as ItemUniversalSettings;
+          return itemSettings.outputPath !== outputPath;
+        });
+
+        setSettings((s) => {
+          const newSettings = { ...s, outputPath };
+          saveSettings(newSettings);
+          return newSettings;
+        });
+
+        if (itemsToUpdate.length > 0) {
+          setPendingOutputPathUpdate({
+            outputPath,
+            itemIds: itemsToUpdate.map((item) => item.id),
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to select folder:', error);
+    }
+  }, [settings.outputPath]);
+
+  const confirmQueuedOutputPathUpdate = useCallback(() => {
+    if (!pendingOutputPathUpdate) return;
+    const idsToUpdate = new Set(pendingOutputPathUpdate.itemIds);
+    const { outputPath } = pendingOutputPathUpdate;
+
+    setItems((items) => {
+      const nextItems = items.map((item) => {
+        if (
+          !idsToUpdate.has(item.id) ||
+          !item.settings ||
+          item.status === 'downloading' ||
+          item.status === 'completed'
+        ) {
+          return item;
+        }
+        const itemSettings = item.settings as ItemUniversalSettings;
+        return {
+          ...item,
+          settings: { ...itemSettings, outputPath },
+        };
+      });
+      itemsRef.current = nextItems;
+      return nextItems;
+    });
+    setPendingOutputPathUpdate(null);
+  }, [pendingOutputPathUpdate]);
+
+  const removeItem = useCallback((id: string) => {
+    setItems((items) => {
+      const nextItems = items.filter((item) => item.id !== id);
+      itemsRef.current = nextItems;
+      return nextItems;
+    });
+  }, []);
+
+  const updateItemTimeRange = useCallback((id: string, start?: string, end?: string) => {
+    setItems((items) => {
+      const nextItems = items.map((item) => {
+        if (item.id !== id || !item.settings) return item;
+        const settings = item.settings as ItemUniversalSettings;
+        return {
+          ...item,
+          settings: { ...settings, timeRangeStart: start, timeRangeEnd: end },
+        };
+      });
+      itemsRef.current = nextItems;
+      return nextItems;
+    });
+  }, []);
+
+  const updateItemOutputPath = useCallback((id: string, outputPath: string) => {
+    setItems((items) => {
+      const nextItems = items.map((item) => {
+        if (item.id !== id || !item.settings) return item;
+        const settings = item.settings as ItemUniversalSettings;
+        return {
+          ...item,
+          settings: { ...settings, outputPath },
+        };
+      });
+      itemsRef.current = nextItems;
+      return nextItems;
+    });
+  }, []);
+
+  const selectItemOutputFolder = useCallback(
+    async (id: string) => {
+      if (isDownloadingRef.current) return;
+
+      const item = itemsRef.current.find((i) => i.id === id);
+      if (!item || (item.status !== 'pending' && item.status !== 'error')) {
+        return;
+      }
+
+      const itemSettings = item.settings as ItemUniversalSettings | undefined;
+      const defaultPath = itemSettings?.outputPath || settingsRef.current.outputPath || undefined;
+
+      try {
+        const folder = await open({
+          directory: true,
+          multiple: false,
+          title: 'Select Download Folder',
+          defaultPath,
+        });
+
+        if (typeof folder === 'string' && folder) {
+          updateItemOutputPath(id, folder);
+        }
+      } catch (error) {
+        console.error('Failed to select item folder:', error);
+      }
+    },
+    [updateItemOutputPath],
+  );
+
+  const renameCompletedItem = useCallback(async (id: string, newName: string) => {
+    const item = itemsRef.current.find((i) => i.id === id);
+    if (!item || item.status !== 'completed') {
+      throw new Error('Only completed items can be renamed');
+    }
+
+    const filepath = item.completedFilepath;
+    if (!filepath) {
+      throw new Error('File path is not available for this item');
+    }
+
+    try {
+      const result = await invoke<RenameDownloadedFileResult>('rename_downloaded_file', {
+        filepath,
+        newName,
+        historyId: item.completedHistoryId || null,
+      });
+      if (item.completedHistoryId) {
+        await invoke('sync_history_renamed_entry', {
+          id: item.completedHistoryId,
+          filepath: result.newFilepath,
+          title: result.newTitle,
+        });
+      }
+
+      setItems((currentItems) =>
+        currentItems.map((currentItem) =>
+          currentItem.id === id
+            ? {
+                ...currentItem,
+                title: result.newTitle,
+                completedFilepath: result.newFilepath,
+              }
+            : currentItem,
+        ),
+      );
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
+  const clearAll = useCallback(() => {
+    itemsRef.current = [];
+    setItems([]);
+  }, []);
+
+  const clearCompleted = useCallback(() => {
+    setItems((items) => {
+      const nextItems = items.filter(
+        (item) => item.status !== 'completed' && item.status !== 'skipped',
+      );
+      itemsRef.current = nextItems;
+      return nextItems;
+    });
+  }, []);
+
+  const startDownload = useCallback(async () => {
+    const hasPendingItems = () =>
+      itemsRef.current.some((item) => item.status === 'pending' || item.status === 'error');
+
+    if (!hasPendingItems()) return;
+
+    setIsDownloading(true);
+    isDownloadingRef.current = true;
+
+    // Reset pending/error items
+    setItems((items) =>
+      items.map((item) => {
+        if (item.status === 'pending' || item.status === 'error') {
+          return {
+            ...item,
+            status: 'pending' as const,
+            progress: 0,
+            speed: '',
+            eta: '',
+            error: undefined,
+            retryState: undefined,
+          };
+        }
+        return item;
+      }),
+    );
+
+    const concurrentLimit = Math.max(1, settings.concurrentDownloads || 1);
+
+    const downloadItem = async (item: DownloadItem) => {
+      if (!isDownloadingRef.current) return;
+
+      // Use item's saved settings (snapshot from when it was added)
+      // Fallback to current global settings if not available
+      const itemSettings = item.settings as ItemUniversalSettings | undefined;
+      const logStderr = localStorage.getItem('youwee_log_stderr') !== 'false';
+      const cookieSettings = loadCookieSettings();
+      const proxySettings = loadProxySettings();
+      const networkOptions = buildCookieProxyInvokeOptions(cookieSettings, proxySettings);
+      const embedSettings = loadEmbedSettings();
+      const sponsorBlockArgs = loadSponsorBlockArgs();
+      const advancedSettings = loadDownloadAdvancedSettings();
+
+      const autoRetryEnabled = itemSettings?.autoRetryEnabled ?? settings.autoRetryEnabled;
+      const maxRetries = clampAutoRetryMaxAttempts(
+        itemSettings?.autoRetryMaxAttempts ?? settings.autoRetryMaxAttempts,
+      );
+      const retryDelaySeconds = clampAutoRetryDelaySeconds(
+        itemSettings?.autoRetryDelaySeconds ?? settings.autoRetryDelaySeconds,
+      );
+
+      let retryIndex = 0;
+
+      while (isDownloadingRef.current) {
+        setItems((items) =>
+          items.map((i) =>
+            i.id === item.id
+              ? {
+                  ...i,
+                  status: 'downloading',
+                  error: undefined,
+                  errorCode: undefined,
+                  retryState: undefined,
+                }
+              : i,
+          ),
+        );
+
+        try {
+          await invoke('download_video', {
+            id: item.id,
+            url: item.url,
+            outputPath: itemSettings?.outputPath || settings.outputPath,
+            quality: itemSettings?.quality ?? settings.quality,
+            format: itemSettings?.format ?? settings.format,
+            downloadPlaylist: false,
+            queueIndex: item.queueIndex ?? null,
+            queueTotal: item.queueTotal ?? null,
+            numberQueueItems: itemSettings?.numberQueueItems ?? false,
+            autoOrganizeCollections:
+              itemSettings?.autoOrganizeCollections ?? downloadSettings.autoOrganizeCollections,
+            playlistCollectionName: null,
+            videoCodec: resolveUniversalVideoCodec(itemSettings, settings),
+            preferredFps: itemSettings?.preferredFps ?? settings.preferredFps,
+            audioBitrate: itemSettings?.audioBitrate ?? settings.audioBitrate,
+            playlistLimit: null,
+            subtitleMode: 'off',
+            subtitleLangs: '',
+            subtitleEmbed: false,
+            subtitleFormat: 'srt',
+            // Logging settings
+            logStderr,
+            // Cookie settings
+            ...networkOptions,
+            // Post-processing settings (from main download settings)
+            embedMetadata: embedSettings.embedMetadata,
+            embedThumbnail: embedSettings.embedThumbnail,
+            splitEmbeddedChapters:
+              itemSettings?.splitEmbeddedChapters ?? downloadSettings.splitEmbeddedChapters,
+            numberChapterFiles:
+              itemSettings?.numberChapterFiles ?? downloadSettings.numberChapterFiles,
+            // Live stream settings
+            liveFromStart: itemSettings?.liveFromStart ?? settings.liveFromStart,
+            skipLive: itemSettings?.skipLive ?? false,
+            // Speed limit settings
+            speedLimit: settings.speedLimitEnabled
+              ? `${settings.speedLimitValue}${settings.speedLimitUnit}`
+              : null,
+            // External downloader settings (from item snapshot, fallback to global settings)
+            useAria2: itemSettings?.useAria2 ?? advancedSettings.useAria2,
+            aria2Args: itemSettings?.aria2Args ?? advancedSettings.aria2Args,
+            ytdlpAdvancedOptionsEnabled:
+              itemSettings?.ytdlpAdvancedOptionsEnabled ??
+              advancedSettings.ytdlpAdvancedOptionsEnabled,
+            ytdlpAdvancedOptions:
+              itemSettings?.ytdlpAdvancedOptions ?? advancedSettings.ytdlpAdvancedOptions,
+            // SponsorBlock settings
+            sponsorblockRemove: sponsorBlockArgs.remove,
+            sponsorblockMark: sponsorBlockArgs.mark,
+            // Download sections (time range)
+            downloadSections:
+              itemSettings?.timeRangeStart && itemSettings?.timeRangeEnd
+                ? `*${itemSettings.timeRangeStart}-${itemSettings.timeRangeEnd}`
+                : null,
+            // Title from video info fetch
+            title: item.title || null,
+            // Thumbnail from video info fetch (for non-YouTube sites)
+            thumbnail: item.thumbnail || null,
+            // Source/extractor from video info fetch (e.g. "BiliBili", "TikTok")
+            source: item.extractor || null,
+            pluginWorkflowSnapshots:
+              itemSettings?.pluginWorkflowSnapshots ?? loadPluginWorkflowSnapshots(),
+            postDownloadWorkflowSteps:
+              itemSettings?.postDownloadWorkflowSteps ?? loadPostDownloadWorkflowSteps(),
+            emitFailedWorkflow: false,
+            downloadKind: 'universal',
+          });
+
+          setItems((items) =>
+            items.map((i) =>
+              i.id === item.id
+                ? { ...i, status: 'completed', progress: 100, retryState: undefined }
+                : i,
+            ),
+          );
+          return;
+        } catch (error) {
+          if (itemsRef.current.some((i) => i.id === item.id && i.status === 'completed')) {
+            return;
+          }
+
+          const parsedError = extractBackendError(error);
+          const errorMessage = localizeBackendError(parsedError);
+          if (parsedError.code === 'DOWNLOAD_CANCELLED') {
+            setItems((items) =>
+              items.map((i) =>
+                i.id === item.id
+                  ? {
+                      ...i,
+                      status: 'pending',
+                      speed: '',
+                      eta: '',
+                      error: undefined,
+                      errorCode: undefined,
+                      retryState: undefined,
+                    }
+                  : i,
+              ),
+            );
+            return;
+          }
+
+          if (parsedError.code === 'YT_SKIPPED_LIVE' || parsedError.code === 'YT_SKIPPED_FILTER') {
+            setItems((items) =>
+              items.map((i) =>
+                i.id === item.id
+                  ? {
+                      ...i,
+                      status: 'skipped',
+                      progress: 0,
+                      error: errorMessage,
+                      errorCode: parsedError.code,
+                      retryState: undefined,
+                    }
+                  : i,
+              ),
+            );
+            return;
+          }
+          const canRetry =
+            isDownloadingRef.current &&
+            autoRetryEnabled &&
+            retryIndex < maxRetries &&
+            !isNonRetryableError(parsedError.message, parsedError.code) &&
+            isRetryableError(parsedError.message, parsedError.code, parsedError.retryable);
+
+          if (!canRetry) {
+            enqueueFailedWorkflowForItem(item, itemSettings);
+            setItems((items) =>
+              items.map((i) =>
+                i.id === item.id
+                  ? {
+                      ...i,
+                      status: 'error',
+                      error: errorMessage,
+                      errorCode: parsedError.code,
+                      retryState: undefined,
+                    }
+                  : i,
+              ),
+            );
+            return;
+          }
+
+          retryIndex += 1;
+          setItems((items) =>
+            items.map((i) =>
+              i.id === item.id
+                ? {
+                    ...i,
+                    status: 'pending',
+                    error: errorMessage,
+                    errorCode: parsedError.code,
+                    retryState: {
+                      retryIndex,
+                      maxRetries,
+                      delaySeconds: retryDelaySeconds,
+                      remainingSeconds: retryDelaySeconds,
+                    },
+                  }
+                : i,
+            ),
+          );
+
+          const shouldContinue = await waitWithCancellation(
+            retryDelaySeconds * 1000,
+            () => !isDownloadingRef.current,
+            (remainingSeconds) => {
+              setItems((items) =>
+                items.map((i) =>
+                  i.id === item.id && i.retryState
+                    ? {
+                        ...i,
+                        retryState: {
+                          ...i.retryState,
+                          remainingSeconds,
+                        },
+                      }
+                    : i,
+                ),
+              );
+            },
+          );
+
+          if (!shouldContinue) {
+            return;
+          }
+        }
+      }
+    };
+
+    try {
+      const claimedIds = new Set<string>();
+      const processedIds = new Set<string>();
+      let activeCount = 0;
+
+      const claimNextItem = (): DownloadItem | null => {
+        const next = itemsRef.current.find(
+          (candidate) =>
+            (candidate.status === 'pending' || candidate.status === 'error') &&
+            !claimedIds.has(candidate.id) &&
+            !processedIds.has(candidate.id),
+        );
+        if (!next) return null;
+        claimedIds.add(next.id);
+        return next;
+      };
+
+      const hasUnclaimedPendingItems = () =>
+        itemsRef.current.some(
+          (candidate) =>
+            (candidate.status === 'pending' || candidate.status === 'error') &&
+            !claimedIds.has(candidate.id) &&
+            !processedIds.has(candidate.id),
+        );
+
+      const processNext = async (): Promise<void> => {
+        while (isDownloadingRef.current) {
+          const item = claimNextItem();
+          if (!item) {
+            if (activeCount === 0 && !hasUnclaimedPendingItems()) {
+              await new Promise<void>((resolve) => {
+                window.setTimeout(resolve, DOWNLOAD_QUEUE_IDLE_GRACE_MS);
+              });
+              if (!isDownloadingRef.current || !hasUnclaimedPendingItems()) {
+                return;
+              }
+              continue;
+            }
+            await new Promise<void>((resolve) => {
+              window.setTimeout(resolve, 200);
+            });
+            continue;
+          }
+
+          activeCount += 1;
+          try {
+            await downloadItem(item);
+          } finally {
+            activeCount -= 1;
+            claimedIds.delete(item.id);
+            processedIds.add(item.id);
+          }
+        }
+      };
+
+      const workers = Array.from({ length: concurrentLimit }, () => processNext());
+      await Promise.all(workers);
+    } finally {
+      setIsDownloading(false);
+      isDownloadingRef.current = false;
+    }
+  }, [
+    downloadSettings.numberChapterFiles,
+    downloadSettings.autoOrganizeCollections,
+    downloadSettings.splitEmbeddedChapters,
+    enqueueFailedWorkflowForItem,
+    settings,
+  ]);
+
+  const stopDownload = useCallback(async () => {
+    try {
+      await invoke('stop_download');
+    } catch (error) {
+      console.error('Failed to stop download:', error);
+    }
+    setItems((items) => items.map((item) => ({ ...item, retryState: undefined })));
+    setIsDownloading(false);
+    isDownloadingRef.current = false;
+  }, []);
+
+  const updateQuality = useCallback((quality: Quality) => {
+    setSettings((s) => {
+      const newSettings = { ...s, quality };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updateFormat = useCallback((format: Format) => {
+    setSettings((s) => {
+      const newSettings = { ...s, format };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updateVideoCodec = useCallback((videoCodec: VideoCodec) => {
+    setSettings((s) => {
+      const newSettings = { ...s, videoCodec };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updateAudioBitrate = useCallback((audioBitrate: AudioBitrate) => {
+    setSettings((s) => {
+      const newSettings = { ...s, audioBitrate };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updatePreferredFps = useCallback((preferredFps: PreferredFps) => {
+    setSettings((s) => {
+      const newSettings = { ...s, preferredFps };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updateConcurrentDownloads = useCallback((concurrentDownloads: number) => {
+    const value = Math.max(1, Math.min(5, concurrentDownloads));
+    setSettings((s) => {
+      const newSettings = { ...s, concurrentDownloads: value };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updateLiveFromStart = useCallback((liveFromStart: boolean) => {
+    setSettings((s) => {
+      const newSettings = { ...s, liveFromStart };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updateSkipLive = useCallback((skipLive: boolean) => {
+    setSettings((s) => {
+      const newSettings = { ...s, skipLive };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
+
+  const updateAutoRetry = useCallback(
+    (autoRetryEnabled: boolean, autoRetryMaxAttempts: number, autoRetryDelaySeconds: number) => {
+      setSettings((s) => {
+        const newSettings = {
+          ...s,
+          autoRetryEnabled,
+          autoRetryMaxAttempts: clampAutoRetryMaxAttempts(autoRetryMaxAttempts),
+          autoRetryDelaySeconds: clampAutoRetryDelaySeconds(autoRetryDelaySeconds),
+        };
+        saveSettings(newSettings);
+        return newSettings;
+      });
+    },
+    [],
+  );
+
+  // Clear cookie error dialog
+  const clearCookieError = useCallback(() => {
+    setCookieError(null);
+  }, []);
+
+  // Retry a failed download (reset item and restart)
+  const retryFailedDownload = useCallback(
+    (itemId: string) => {
+      void (async () => {
+        const pluginWorkflowSnapshots = await refreshPluginWorkflowSnapshots();
+
+        // Reset item status to pending and treat retry as a fresh workflow run.
+        setItems((currentItems) =>
+          currentItems.map((item) =>
+            item.id === itemId
+              ? {
+                  ...item,
+                  status: 'pending',
+                  progress: 0,
+                  error: undefined,
+                  errorCode: undefined,
+                  retryState: undefined,
+                  settings: item.settings
+                    ? refreshItemPluginWorkflowSnapshots(item.settings, pluginWorkflowSnapshots)
+                    : item.settings,
+                }
+              : item,
+          ),
+        );
+        // Clear cookie error
+        setCookieError(null);
+        // Use a short delay to ensure state update before starting download
+        setTimeout(() => {
+          startDownload();
+        }, 100);
+      })();
+    },
+    [startDownload],
+  );
+
+  const value: UniversalContextType = useMemo(
+    () => ({
+      items,
+      focusedItemId,
+      isDownloading,
+      settings,
+      addFromText,
+      enqueueExternalUrl,
+      focusItem,
+      importFromFile,
+      importFromClipboard,
+      selectOutputFolder,
+      removeItem,
+      clearAll,
+      clearCompleted,
+      startDownload,
+      stopDownload,
+      updateQuality,
+      updateFormat,
+      updateVideoCodec,
+      updateAudioBitrate,
+      updatePreferredFps,
+      updateConcurrentDownloads,
+      updateLiveFromStart,
+      updateSkipLive,
+      updateAutoRetry,
+      // Cookie error detection
+      cookieError,
+      clearCookieError,
+      retryFailedDownload,
+      // Per-item time range
+      updateItemTimeRange,
+      selectItemOutputFolder,
+      renameCompletedItem,
+    }),
+    [
+      items,
+      focusedItemId,
+      isDownloading,
+      settings,
+      addFromText,
+      enqueueExternalUrl,
+      focusItem,
+      importFromFile,
+      importFromClipboard,
+      selectOutputFolder,
+      removeItem,
+      clearAll,
+      clearCompleted,
+      startDownload,
+      stopDownload,
+      updateQuality,
+      updateFormat,
+      updateVideoCodec,
+      updateAudioBitrate,
+      updatePreferredFps,
+      updateConcurrentDownloads,
+      updateLiveFromStart,
+      updateSkipLive,
+      updateAutoRetry,
+      cookieError,
+      clearCookieError,
+      retryFailedDownload,
+      updateItemTimeRange,
+      selectItemOutputFolder,
+      renameCompletedItem,
+    ],
+  );
+
+  return (
+    <UniversalContext.Provider value={value}>
+      {children}
+      <AlertDialog
+        open={Boolean(pendingOutputPathUpdate)}
+        onOpenChange={(open) => {
+          if (!open) setPendingOutputPathUpdate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('queueOutputPathUpdate.title')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('queueOutputPathUpdate.message', {
+                count: pendingOutputPathUpdate?.itemIds.length ?? 0,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('actions.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmQueuedOutputPathUpdate}>
+              {t('queueOutputPathUpdate.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </UniversalContext.Provider>
+  );
+}

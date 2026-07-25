@@ -1,0 +1,946 @@
+//! Youwee - Modern YouTube Video Downloader
+//!
+//! This is the main entry point for the Tauri application.
+//! The codebase is organized into the following modules:
+//!
+//! - `types`: Data structures (VideoInfo, DownloadProgress, etc.)
+//! - `database`: SQLite operations for logs and history
+//! - `utils`: Helper functions (format_size, parse_progress, etc.)
+//! - `services`: Core services (yt-dlp, FFmpeg, Deno runtime)
+//! - `commands`: Tauri commands exposed to the frontend
+
+pub mod commands;
+pub mod database;
+pub mod services;
+pub mod types;
+pub mod utils;
+
+use serde::{Deserialize, Serialize};
+use crate::embedded_system_commands::TrayDownloadStatus;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
+
+/// Whether to hide the dock icon when closing the window (macOS only)
+static HIDE_DOCK_ON_CLOSE: AtomicBool = AtomicBool::new(false);
+
+/// Current UI language for tray menu translations (default: "en")
+static TRAY_LANG: Mutex<String> = Mutex::new(String::new());
+
+/// Schedule status text for tray menu (empty = no schedule active)
+static TRAY_SCHEDULE_STATUS: Mutex<String> = Mutex::new(String::new());
+
+/// Download queue summary shown in the tray menu.
+static TRAY_DOWNLOAD_STATUS: Mutex<embedded_system_commands::TrayDownloadStatus> =
+    Mutex::new(embedded_system_commands::TrayDownloadStatus {
+    pending: 0,
+    downloading: 0,
+    completed: 0,
+    error: 0,
+    active: false,
+    });
+
+#[cfg(target_os = "linux")]
+fn configure_linux_webkit_env() {
+    // Work around WebKitGTK/GBM crashes seen on some Arch-based systems.
+    // Let advanced users override this manually if they want to re-enable GBM.
+    if std::env::var_os("WEBKIT_DMABUF_RENDERER_DISABLE_GBM").is_none() {
+        std::env::set_var("WEBKIT_DMABUF_RENDERER_DISABLE_GBM", "1");
+    }
+}
+
+/// Show the main window and restore dock icon if needed
+fn show_main_window(app_handle: &tauri::AppHandle) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = app_handle.set_activation_policy(tauri::ActivationPolicy::Regular);
+        }
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn dispatch_external_links(app_handle: &tauri::AppHandle, links: Vec<String>) {
+    if links.is_empty() {
+        return;
+    }
+
+    commands::enqueue_external_links(links.clone());
+    let _ = app_handle.emit(
+        "external-open-url",
+        commands::ExternalOpenUrlEventPayload { urls: links },
+    );
+    show_main_window(app_handle);
+}
+
+pub mod embedded_system_commands {
+    use super::*;
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct BackendHealth {
+        connected: bool,
+        version: &'static str,
+    }
+
+    #[tauri::command]
+    pub fn youwee_backend_health() -> BackendHealth {
+        BackendHealth {
+            connected: true,
+            version: env!("CARGO_PKG_VERSION"),
+        }
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct TrayDownloadStatus {
+        pub pending: u32,
+        pub downloading: u32,
+        pub completed: u32,
+        pub error: u32,
+        pub active: bool,
+    }
+
+    #[tauri::command]
+    pub fn set_hide_dock_on_close(hide: bool) {
+        HIDE_DOCK_ON_CLOSE.store(hide, Ordering::SeqCst);
+    }
+
+    #[tauri::command]
+    pub fn rebuild_tray_menu_cmd(app: tauri::AppHandle, lang: Option<String>) {
+        if let Some(l) = lang {
+            if let Ok(mut stored) = TRAY_LANG.lock() {
+                *stored = l;
+            }
+        }
+        rebuild_tray_menu(&app);
+    }
+
+    #[tauri::command]
+    pub fn update_tray_schedule(app: tauri::AppHandle, status: String) {
+        if let Ok(mut stored) = TRAY_SCHEDULE_STATUS.lock() {
+            *stored = status;
+        }
+        rebuild_tray_menu(&app);
+    }
+
+    #[tauri::command]
+    pub fn update_tray_download_status(app: tauri::AppHandle, status: TrayDownloadStatus) {
+        let mut should_rebuild = false;
+        if let Ok(mut stored) = TRAY_DOWNLOAD_STATUS.lock() {
+            if *stored != status {
+                *stored = status;
+                should_rebuild = true;
+            }
+        }
+        if should_rebuild {
+            rebuild_tray_menu(&app);
+        }
+    }
+}
+
+/// Initialize the Youwee services when its commands are hosted by Artcraft.
+///
+/// The standalone Youwee application normally performs this work in its own
+/// `setup` callback. Embedded mode shares Artcraft's Tauri process, so only the
+/// backend services are initialized here (no second window or system tray).
+pub fn initialize_embedded(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    database::init_database(&app.handle())
+        .map_err(|error| format!("Failed to initialize Youwee database: {error}"))?;
+    services::polling::start_polling(app.handle().clone());
+    Ok(())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg(feature = "standalone-app")]
+pub fn run() {
+    #[cfg(target_os = "linux")]
+    configure_linux_webkit_env();
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // Protocol-handler style links (youwee://download?...) embedded in argv.
+            let links = commands::extract_external_links_from_argv(&argv);
+            let has_links = !links.is_empty();
+            if has_links {
+                dispatch_external_links(app, links);
+            }
+
+            // CLI style invocation (youwee <url> [--quality ...]) while the app
+            // is already running.
+            if let Some(cli_request) = commands::build_cli_download_request_from_argv(&argv) {
+                let requests = vec![cli_request];
+                commands::enqueue_cli_download_requests(requests.clone());
+                let _ = app.emit(
+                    "external-cli-download",
+                    commands::ExternalCliDownloadEventPayload { requests },
+                );
+                if !has_links {
+                    return;
+                }
+            }
+            show_main_window(app);
+        }))
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_cli::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
+        .setup(|app| {
+            // Windows: remove native title bar so the frontend can render
+            // a custom one that transitions seamlessly with the app theme.
+            #[cfg(windows)]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_decorations(false);
+            }
+
+            // Queue deep links from cold-start arguments so frontend can consume on mount.
+            let argv: Vec<String> = std::env::args().collect();
+            let initial_links = commands::extract_external_links_from_argv(&argv);
+            let has_initial_links = !initial_links.is_empty();
+            if has_initial_links {
+                commands::enqueue_external_links(initial_links);
+            }
+
+            let app_handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                let urls = event
+                    .urls()
+                    .into_iter()
+                    .map(|url| url.to_string())
+                    .collect::<Vec<_>>();
+                let links = commands::extract_external_links_from_argv(&urls);
+                dispatch_external_links(&app_handle, links);
+            });
+
+            // CLI invocation (youwee <url> [--quality ...]) on cold start.
+            // Use the declared CLI schema when available, falling back to a
+            // raw argv parse otherwise.
+            let mut has_cli_request = false;
+            {
+                use tauri_plugin_cli::CliExt;
+                let cli_request = match app.cli().matches() {
+                    Ok(matches) => {
+                        let mut cli_args = commands::CliDownloadArgs::default();
+                        if let Some(data) = matches.args.get("source") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.url = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("url") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.url = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("quality") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.quality = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("output") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.output_path = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("target") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.target = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("audio") {
+                            cli_args.audio = data.value.as_bool().unwrap_or(false);
+                        }
+                        if let Some(data) = matches.args.get("queue-only") {
+                            cli_args.queue_only = data.value.as_bool().unwrap_or(false);
+                        }
+                        if let Some(data) = matches.args.get("skip-live") {
+                            cli_args.skip_live = data.value.as_bool().unwrap_or(false);
+                        }
+                        if let Some(data) = matches.args.get("playlist") {
+                            if data.value.as_bool().unwrap_or(false) {
+                                cli_args.download_playlist = Some(true);
+                            }
+                        }
+                        if let Some(data) = matches.args.get("no-playlist") {
+                            if data.value.as_bool().unwrap_or(false) {
+                                cli_args.download_playlist = Some(false);
+                            }
+                        }
+                        if let Some(data) = matches.args.get("subtitle-mode") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.subtitle_mode = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("subtitle-langs") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.subtitle_langs = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("subtitle-format") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.subtitle_format = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("embed-subs") {
+                            cli_args.subtitle_embed = data.value.as_bool().unwrap_or(false);
+                        }
+                        if let Some(data) = matches.args.get("download-sections") {
+                            if let Some(value) = data.value.as_str() {
+                                cli_args.download_sections = Some(value.to_string());
+                            }
+                        }
+                        if let Some(data) = matches.args.get("live-from-start") {
+                            cli_args.live_from_start = data.value.as_bool().unwrap_or(false);
+                        }
+                        commands::build_cli_download_request(&cli_args)
+                    }
+                    Err(_) => commands::build_cli_download_request_from_argv(&argv),
+                };
+                if let Some(request) = cli_request {
+                    has_cli_request = true;
+                    commands::enqueue_cli_download_requests(vec![request]);
+                }
+            }
+
+            // Initialize the database
+            if let Err(e) = database::init_database(&app.handle()) {
+                log::error!("Failed to initialize database: {}", e);
+            }
+
+            // Start background channel polling
+            services::polling::start_polling(app.handle().clone());
+
+            // Setup system tray
+            setup_tray(app)?;
+
+            if has_initial_links || !has_cli_request {
+                show_main_window(&app.handle());
+            }
+
+            if cfg!(debug_assertions) {
+                app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Info)
+                        .build(),
+                )?;
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Close-to-tray: hide window instead of quitting
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+
+                // macOS: optionally hide the dock icon too
+                #[cfg(target_os = "macos")]
+                if HIDE_DOCK_ON_CLOSE.load(Ordering::SeqCst) {
+                    let _ = window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
+                }
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            // Download commands
+            commands::download_video,
+            commands::stop_download,
+            commands::download_gallery,
+            commands::stop_gallery_download,
+            // Video info commands
+            commands::get_video_basic_info,
+            commands::get_video_info,
+            commands::get_playlist_entries,
+            commands::search_youtube_videos,
+            commands::get_available_subtitles,
+            commands::get_video_transcript,
+            // yt-dlp commands
+            commands::get_ytdlp_version,
+            commands::check_ytdlp_update,
+            commands::update_ytdlp,
+            // yt-dlp channel commands
+            commands::get_ytdlp_channel_cmd,
+            commands::get_ytdlp_source_cmd,
+            commands::set_ytdlp_source_cmd,
+            commands::set_ytdlp_channel_cmd,
+            commands::get_all_ytdlp_versions_cmd,
+            commands::check_ytdlp_channel_update,
+            commands::download_ytdlp_channel,
+            // FFmpeg commands
+            commands::check_ffmpeg,
+            commands::get_ffmpeg_source_cmd,
+            commands::set_ffmpeg_source_cmd,
+            commands::check_ffmpeg_update,
+            commands::download_ffmpeg,
+            commands::get_ffmpeg_path_for_ytdlp,
+            // Deno commands
+            commands::check_deno,
+            commands::check_deno_update,
+            commands::download_deno,
+            commands::check_gallerydl,
+            // Browser detection
+            commands::detect_installed_browsers,
+            commands::get_browser_profiles,
+            // Log commands
+            commands::get_logs,
+            commands::get_plugin_logs,
+            commands::clear_plugin_logs,
+            commands::add_log,
+            commands::clear_logs,
+            commands::export_logs,
+            // History commands
+            commands::add_history,
+            commands::get_history,
+            commands::get_history_entries_by_ids,
+            commands::find_duplicate_downloads,
+            commands::delete_history,
+            commands::clear_history,
+            commands::get_history_count,
+            commands::get_tags,
+            commands::get_collections,
+            commands::create_collection,
+            commands::rename_collection,
+            commands::delete_collection,
+            commands::assign_history_tags,
+            commands::assign_history_collections,
+            commands::remove_history_tag,
+            commands::remove_history_from_collection,
+            commands::open_file_location,
+            commands::check_file_exists,
+            // Asset scope & history helpers
+            commands::allow_asset_file,
+            commands::sync_asset_scope_paths,
+            commands::rename_downloaded_file,
+            commands::sync_history_renamed_entry,
+            commands::split_media_segments,
+            commands::update_summary,
+            commands::add_summary_only_history,
+            commands::open_macos_privacy_settings,
+            // AI commands
+            commands::save_ai_config,
+            commands::get_ai_config,
+            commands::test_ai_connection,
+            commands::generate_video_summary,
+            commands::generate_summary_with_options,
+            commands::cancel_summary_generation,
+            commands::generate_ai_response,
+            commands::get_ai_models,
+            commands::get_summary_languages,
+            // Processing commands
+            commands::get_video_metadata,
+            commands::detect_shot_changes,
+            commands::get_image_metadata,
+            commands::get_processing_attachment_info,
+            commands::generate_processing_command,
+            commands::generate_quick_action_command,
+            commands::execute_ffmpeg_command,
+            commands::execute_ffmpeg_batch,
+            commands::cancel_ffmpeg,
+            commands::get_processing_history,
+            commands::save_processing_job,
+            commands::update_processing_job,
+            commands::delete_processing_job,
+            commands::clear_processing_history,
+            commands::get_processing_presets,
+            commands::save_processing_preset,
+            commands::delete_processing_preset,
+            commands::generate_video_preview,
+            commands::generate_video_thumbnail,
+            commands::generate_audio_preview,
+            commands::check_preview_exists,
+            commands::cleanup_previews,
+            // Whisper commands
+            commands::transcribe_video_with_whisper,
+            commands::transcribe_url_with_whisper,
+            commands::generate_subtitles_with_whisper,
+            commands::download_subtitle_content,
+            // Metadata commands
+            commands::fetch_metadata,
+            commands::extract_data_rows,
+            commands::export_data_rows_sqlite,
+            // Plugin commands
+            commands::list_plugins,
+            commands::get_plugin_details,
+            commands::inspect_plugin_package,
+            commands::install_plugin_package,
+            commands::uninstall_plugin,
+            commands::attach_plugin_workspace,
+            commands::create_plugin_workspace,
+            commands::update_plugin_state,
+            commands::get_plugin_trigger_workflow,
+            commands::update_plugin_trigger_workflow,
+            commands::enqueue_plugin_workflow_trigger,
+            commands::approve_plugin_permissions,
+            commands::update_plugin_config_values,
+            commands::set_plugin_provider,
+            commands::set_plugin_timeout,
+            commands::open_plugin_directory,
+            commands::list_runtime_providers,
+            commands::get_runtime_provider_status,
+            commands::set_default_provider_for_language,
+            commands::set_plugin_runtime_locale,
+            commands::cancel_metadata_fetch,
+            commands::cancel_data_export,
+            // Channel commands
+            commands::get_channel_videos,
+            commands::get_channel_info,
+            commands::stop_channel_fetch,
+            commands::follow_channel,
+            commands::unfollow_channel,
+            commands::get_followed_channels,
+            commands::update_channel_settings,
+            commands::save_channel_videos,
+            commands::get_saved_channel_videos,
+            commands::get_saved_channel_videos_by_video_ids,
+            commands::update_channel_video_status,
+            commands::update_channel_video_status_by_video_id,
+            commands::get_new_videos_count,
+            commands::update_channel_last_checked,
+            commands::update_channel_info,
+            commands::set_polling_network_config,
+            commands::set_telegram_config,
+            commands::get_telegram_status,
+            commands::send_telegram_reply,
+            commands::load_download_queue,
+            commands::save_download_queue,
+            commands::clear_download_queue,
+            commands::is_flatpak_environment,
+            // External deep-link commands
+            commands::consume_pending_external_links,
+            commands::consume_pending_cli_download_requests,
+            // CLI shortcut commands
+            commands::get_cli_shortcut_status,
+            commands::install_cli_shortcut,
+            // System commands
+            embedded_system_commands::set_hide_dock_on_close,
+            embedded_system_commands::rebuild_tray_menu_cmd,
+            embedded_system_commands::update_tray_schedule,
+            embedded_system_commands::update_tray_download_status,
+            embedded_system_commands::youwee_backend_health,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            match event {
+                // macOS: user clicked dock icon while window is hidden → reopen
+                // (On Windows/Linux this event doesn't fire — users use the system tray instead)
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen {
+                    has_visible_windows,
+                    ..
+                } => {
+                    if !has_visible_windows {
+                        show_main_window(_app_handle);
+                    }
+                }
+                tauri::RunEvent::ExitRequested { .. } => {
+                    // Stop polling on exit
+                    services::polling::stop_polling();
+                }
+                _ => {}
+            }
+        });
+}
+
+/// Setup system tray icon and menu
+fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // Build a minimal initial menu (will be replaced by rebuild_tray_menu)
+    let show = MenuItemBuilder::with_id("show", "Open Youwee").build(app)?;
+    let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+    let menu = MenuBuilder::new(app)
+        .item(&show)
+        .separator()
+        .item(&quit)
+        .build()?;
+
+    #[cfg(target_os = "macos")]
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))
+        .expect("Failed to load tray icon");
+    #[cfg(not(target_os = "macos"))]
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))
+        .expect("Failed to load tray icon");
+
+    let app_handle = app.handle().clone();
+    let app_handle_menu = app.handle().clone();
+
+    let tray_builder = TrayIconBuilder::with_id("main-tray")
+        .icon(icon)
+        .tooltip("Youwee")
+        .menu(&menu)
+        .on_menu_event(move |_tray, event| {
+            let id = event.id().as_ref();
+            if let Some(channel_id) = id.strip_prefix("ch_") {
+                // Channel item clicked: open app and navigate to channel
+                show_main_window(&app_handle_menu);
+                let _ = app_handle_menu.emit("tray-open-channel", channel_id.to_string());
+            } else {
+                match id {
+                    "check_now" => {
+                        services::polling::stop_polling();
+                        services::polling::start_polling(app_handle_menu.clone());
+                    }
+                    "settings" => {
+                        show_main_window(&app_handle_menu);
+                        let _ = app_handle_menu.emit("tray-open-settings", ());
+                    }
+                    "check_update" => {
+                        show_main_window(&app_handle_menu);
+                        let _ = app_handle_menu.emit("tray-check-update", ());
+                    }
+                    "show" => {
+                        show_main_window(&app_handle_menu);
+                    }
+                    "browser_extension" => {
+                        show_main_window(&app_handle_menu);
+                        let _ = app_handle_menu.emit("tray-open-extension", ());
+                    }
+                    "quit" => {
+                        services::polling::stop_polling();
+                        app_handle_menu.exit(0);
+                    }
+                    _ => {}
+                }
+            }
+        })
+        .on_tray_icon_event(move |_tray, event| {
+            // Left-click tray icon -> show/focus window
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(&app_handle);
+            }
+        });
+
+    #[cfg(target_os = "macos")]
+    let tray_builder = tray_builder.icon_as_template(true);
+
+    tray_builder.build(app)?;
+
+    // Populate tray menu with channel info
+    rebuild_tray_menu(&app.handle());
+
+    Ok(())
+}
+
+/// Rebuild the system tray menu with current followed channels and new video counts.
+/// Called after follow/unfollow, polling finds new videos, or downloads complete.
+pub fn rebuild_tray_menu(app_handle: &tauri::AppHandle) {
+    if let Err(e) = rebuild_tray_menu_inner(app_handle) {
+        log::error!("Failed to rebuild tray menu: {}", e);
+    }
+}
+
+/// Get the stored tray language code
+fn get_tray_lang() -> String {
+    TRAY_LANG.lock().map(|l| l.clone()).unwrap_or_default()
+}
+
+/// Translate a tray menu key based on the current language
+fn tray_text(key: &str) -> &'static str {
+    let lang = get_tray_lang();
+    let lang = if lang.is_empty() || lang.starts_with("en") {
+        "en"
+    } else if lang.starts_with("vi") {
+        "vi"
+    } else if lang.starts_with("zh") {
+        "zh-CN"
+    } else if lang.starts_with("fr") {
+        "fr"
+    } else if lang.starts_with("ja") {
+        "ja"
+    } else if lang.starts_with("es") {
+        "es"
+    } else {
+        "en"
+    };
+
+    match (lang, key) {
+        // Vietnamese
+        ("vi", "followed_channels") => "Kênh đang theo dõi",
+        ("vi", "no_channels") => "Chưa theo dõi kênh nào",
+        ("vi", "new_suffix") => "mới",
+        ("vi", "download_queue") => "Hàng đợi tải xuống",
+        ("vi", "downloading") => "Đang tải",
+        ("vi", "pending") => "Chờ tải",
+        ("vi", "completed") => "Hoàn tất",
+        ("vi", "errors") => "Lỗi",
+        ("vi", "idle") => "Rảnh",
+        ("vi", "remote_download") => "Tải từ xa",
+        ("vi", "running") => "Đang chạy",
+        ("vi", "disabled") => "Đã tắt",
+        ("vi", "check_all") => "Kiểm tra kênh theo dõi ngay",
+        ("vi", "settings") => "Cài đặt",
+        ("vi", "check_update") => "Kiểm tra cập nhật...",
+        ("vi", "open") => "Mở Youwee",
+        ("vi", "browser_extension") => "Browser Extension",
+        ("vi", "quit") => "Thoát",
+        // Chinese
+        ("zh-CN", "followed_channels") => "已关注的频道",
+        ("zh-CN", "no_channels") => "尚未关注任何频道",
+        ("zh-CN", "new_suffix") => "个新视频",
+        ("zh-CN", "download_queue") => "下载队列",
+        ("zh-CN", "downloading") => "下载中",
+        ("zh-CN", "pending") => "等待中",
+        ("zh-CN", "completed") => "已完成",
+        ("zh-CN", "errors") => "错误",
+        ("zh-CN", "idle") => "空闲",
+        ("zh-CN", "remote_download") => "远程下载",
+        ("zh-CN", "running") => "运行中",
+        ("zh-CN", "disabled") => "已禁用",
+        ("zh-CN", "check_all") => "立即检查已关注频道",
+        ("zh-CN", "settings") => "设置",
+        ("zh-CN", "check_update") => "检查更新...",
+        ("zh-CN", "open") => "打开 Youwee",
+        ("zh-CN", "browser_extension") => "浏览器扩展",
+        ("zh-CN", "quit") => "退出",
+        // French
+        ("fr", "followed_channels") => "Chaines suivies",
+        ("fr", "no_channels") => "Aucune chaine suivie",
+        ("fr", "new_suffix") => "nouvelles",
+        ("fr", "download_queue") => "File de telechargement",
+        ("fr", "downloading") => "Telechargement",
+        ("fr", "pending") => "En attente",
+        ("fr", "completed") => "Termines",
+        ("fr", "errors") => "Erreurs",
+        ("fr", "idle") => "Inactif",
+        ("fr", "remote_download") => "Telechargement distant",
+        ("fr", "running") => "En cours",
+        ("fr", "disabled") => "Desactive",
+        ("fr", "check_all") => "Verifier les chaines suivies maintenant",
+        ("fr", "settings") => "Parametres",
+        ("fr", "check_update") => "Verifier les mises a jour...",
+        ("fr", "open") => "Ouvrir Youwee",
+        ("fr", "browser_extension") => "Extension navigateur",
+        ("fr", "quit") => "Quitter",
+        // Japanese
+        ("ja", "followed_channels") => "フォロー中のチャンネル",
+        ("ja", "no_channels") => "フォロー中のチャンネルはありません",
+        ("ja", "new_suffix") => "件の新着",
+        ("ja", "download_queue") => "ダウンロードキュー",
+        ("ja", "downloading") => "ダウンロード中",
+        ("ja", "pending") => "待機中",
+        ("ja", "completed") => "完了",
+        ("ja", "errors") => "エラー",
+        ("ja", "idle") => "待機中",
+        ("ja", "remote_download") => "リモートダウンロード",
+        ("ja", "running") => "実行中",
+        ("ja", "disabled") => "無効",
+        ("ja", "check_all") => "フォロー中チャンネルを今すぐチェック",
+        ("ja", "settings") => "設定",
+        ("ja", "check_update") => "更新をチェック...",
+        ("ja", "open") => "Youwee を開く",
+        ("ja", "browser_extension") => "ブラウザ拡張機能",
+        ("ja", "quit") => "終了",
+        // Spanish
+        ("es", "followed_channels") => "Canales seguidos",
+        ("es", "no_channels") => "No sigues ningún canal",
+        ("es", "new_suffix") => "nuevos",
+        ("es", "download_queue") => "Cola de descargas",
+        ("es", "downloading") => "Descargando",
+        ("es", "pending") => "Pendiente",
+        ("es", "completed") => "Completado",
+        ("es", "errors") => "Errores",
+        ("es", "idle") => "Inactivo",
+        ("es", "remote_download") => "Descarga remota",
+        ("es", "running") => "Ejecutándose",
+        ("es", "disabled") => "Deshabilitado",
+        ("es", "check_all") => "Comprobar canales seguidos ahora",
+        ("es", "settings") => "Ajustes",
+        ("es", "check_update") => "Buscar actualizaciones...",
+        ("es", "open") => "Abrir Youwee",
+        ("es", "browser_extension") => "Extensión de navegador",
+        ("es", "quit") => "Salir",
+        // English (default)
+        (_, "followed_channels") => "Followed Channels",
+        (_, "no_channels") => "No channels followed",
+        (_, "new_suffix") => "new",
+        (_, "download_queue") => "Download Queue",
+        (_, "downloading") => "Downloading",
+        (_, "pending") => "Pending",
+        (_, "completed") => "Completed",
+        (_, "errors") => "Errors",
+        (_, "idle") => "Idle",
+        (_, "remote_download") => "Remote Download",
+        (_, "running") => "Running",
+        (_, "disabled") => "Disabled",
+        (_, "check_all") => "Check Followed Channels Now",
+        (_, "settings") => "Settings",
+        (_, "check_update") => "Check for Updates...",
+        (_, "open") => "Open Youwee",
+        (_, "browser_extension") => "Browser Extension",
+        (_, "quit") => "Quit",
+        _ => "???",
+    }
+}
+
+fn tray_download_status() -> TrayDownloadStatus {
+    TRAY_DOWNLOAD_STATUS
+        .lock()
+        .map(|status| status.clone())
+        .unwrap_or(TrayDownloadStatus {
+            pending: 0,
+            downloading: 0,
+            completed: 0,
+            error: 0,
+            active: false,
+        })
+}
+
+fn tray_download_summary(status: &TrayDownloadStatus) -> String {
+    let total = status.pending + status.downloading + status.completed + status.error;
+    let activity = if status.active || status.downloading > 0 {
+        tray_text("downloading")
+    } else {
+        tray_text("idle")
+    };
+    format!("{} ({})", activity, total)
+}
+
+fn tray_remote_status_label() -> String {
+    let status = services::telegram::get_status();
+    let state = match status.state {
+        services::telegram::TelegramStatusState::Running => tray_text("running"),
+        services::telegram::TelegramStatusState::Disabled => tray_text("disabled"),
+        services::telegram::TelegramStatusState::Error => tray_text("errors"),
+    };
+
+    if let Some(message) = status.message.filter(|message| !message.trim().is_empty()) {
+        format!("{}: {}", state, message)
+    } else {
+        state.to_string()
+    }
+}
+
+fn rebuild_tray_menu_inner(
+    app_handle: &tauri::AppHandle,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let channels = database::get_followed_channels_db().unwrap_or_default();
+    let channel_count = channels.len();
+    let download_status = tray_download_status();
+
+    // Build channel submenu
+    let submenu_label = format!("{} ({})", tray_text("followed_channels"), channel_count);
+    let mut submenu = SubmenuBuilder::new(app_handle, &submenu_label);
+
+    if channels.is_empty() {
+        let item = MenuItemBuilder::with_id("no_channels", tray_text("no_channels"))
+            .enabled(false)
+            .build(app_handle)?;
+        submenu = submenu.item(&item);
+    } else {
+        for ch in &channels {
+            let count = database::get_new_videos_count_db(Some(ch.id.clone())).unwrap_or(0);
+            let label = if count > 0 {
+                format!("{} ({} {})", ch.name, count, tray_text("new_suffix"))
+            } else {
+                ch.name.clone()
+            };
+            let item_id = format!("ch_{}", ch.id);
+            let item = MenuItemBuilder::with_id(item_id, &label).build(app_handle)?;
+            submenu = submenu.item(&item);
+        }
+    }
+
+    let built_submenu = submenu.build()?;
+    let download_label = format!(
+        "{} - {}",
+        tray_text("download_queue"),
+        tray_download_summary(&download_status)
+    );
+    let download_status_item = MenuItemBuilder::with_id("download_status", &download_label)
+        .enabled(false)
+        .build(app_handle)?;
+    let download_pending_item = MenuItemBuilder::with_id(
+        "download_pending",
+        format!("{}: {}", tray_text("pending"), download_status.pending),
+    )
+    .enabled(false)
+    .build(app_handle)?;
+    let download_downloading_item = MenuItemBuilder::with_id(
+        "download_downloading",
+        format!(
+            "{}: {}",
+            tray_text("downloading"),
+            download_status.downloading
+        ),
+    )
+    .enabled(false)
+    .build(app_handle)?;
+    let download_completed_item = MenuItemBuilder::with_id(
+        "download_completed",
+        format!("{}: {}", tray_text("completed"), download_status.completed),
+    )
+    .enabled(false)
+    .build(app_handle)?;
+    let download_error_item = MenuItemBuilder::with_id(
+        "download_error",
+        format!("{}: {}", tray_text("errors"), download_status.error),
+    )
+    .enabled(false)
+    .build(app_handle)?;
+    let download_submenu = SubmenuBuilder::new(app_handle, tray_text("download_queue"))
+        .item(&download_status_item)
+        .separator()
+        .item(&download_downloading_item)
+        .item(&download_pending_item)
+        .item(&download_completed_item)
+        .item(&download_error_item)
+        .build()?;
+
+    let remote_status = MenuItemBuilder::with_id(
+        "remote_download_status",
+        format!(
+            "{} - {}",
+            tray_text("remote_download"),
+            tray_remote_status_label()
+        ),
+    )
+    .enabled(false)
+    .build(app_handle)?;
+
+    // Build full menu
+    let check_now =
+        MenuItemBuilder::with_id("check_now", tray_text("check_all")).build(app_handle)?;
+    let settings = MenuItemBuilder::with_id("settings", tray_text("settings")).build(app_handle)?;
+    let check_update =
+        MenuItemBuilder::with_id("check_update", tray_text("check_update")).build(app_handle)?;
+    let show = MenuItemBuilder::with_id("show", tray_text("open")).build(app_handle)?;
+    let browser_extension =
+        MenuItemBuilder::with_id("browser_extension", tray_text("browser_extension"))
+            .build(app_handle)?;
+    let quit = MenuItemBuilder::with_id("quit", tray_text("quit")).build(app_handle)?;
+
+    let menu = MenuBuilder::new(app_handle)
+        .item(&show)
+        .separator()
+        .item(&download_submenu)
+        .item(&remote_status)
+        .separator()
+        .item(&built_submenu)
+        .item(&check_now)
+        .separator()
+        .item(&settings)
+        .item(&browser_extension)
+        .separator()
+        .item(&check_update)
+        .separator()
+        .item(&quit)
+        .build()?;
+
+    if let Some(tray) = app_handle.tray_by_id("main-tray") {
+        tray.set_menu(Some(menu))?;
+    }
+
+    Ok(())
+}

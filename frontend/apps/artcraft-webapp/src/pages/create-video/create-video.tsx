@@ -1,0 +1,1831 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCircleInfo,
+  faClock,
+  faSparkles,
+  faWaveformLines,
+} from "@fortawesome/pro-solid-svg-icons";
+import { CharactersApi, FilterMediaClasses } from "@storyteller/api";
+import type { OmniGenVideoModelInfo } from "@storyteller/api";
+import { Button, ToggleButton } from "@storyteller/ui-button";
+import { PopoverMenu, type PopoverItem } from "@storyteller/ui-popover";
+import { SliderV2 } from "@storyteller/ui-sliderv2";
+import { Tooltip } from "@storyteller/ui-tooltip";
+import { GalleryModal, type GalleryItem } from "@storyteller/ui-gallery-modal";
+import {
+  PromptBox,
+  ImagePromptRow,
+  MediaReferenceRow,
+  CharactersModal,
+  useCharactersStore,
+  MobilePromptForm,
+  MobileSelectField,
+  MobileFieldButton,
+  MobileCountStepper,
+  SettingsDrawer,
+  DrawerOptionList,
+  DrawerSection,
+  getAudioDurationFromUrl,
+  getVideoDurationFromUrl,
+  type RefImage,
+  type RefVideo,
+  type RefAudio,
+  type MentionItem,
+} from "../../components/prompt-box";
+import {
+  GenerationGallery,
+  useGalleryData,
+  useGenerationJobs,
+  useAuthCheck,
+  usePromptHeight,
+  useLightboxNav,
+  CreateMediaPageShell,
+} from "../../components/generation-gallery";
+import { Lightbox } from "../../components/lightbox/lightbox";
+import { useCreateVideoStore } from "./create-video-store";
+import {
+  enqueueVideoGeneration,
+  startVideoPolling,
+} from "./generate-video-api";
+import {
+  AspectRatioIcon,
+  AutoIcon,
+} from "../create-image/components/AspectRatioIcon";
+import { GenerationCountPicker } from "../create-image/components/GenerationCountPicker";
+import { useVideoCostEstimate } from "../../lib/cost-estimate-api";
+import {
+  resolveModelOption,
+  resolveModelCount,
+} from "../../lib/resolve-model-setting";
+import {
+  useOmniGenVideoModels,
+  OMNI_GENERATE_OUTAGE_MESSAGE,
+} from "@storyteller/omni-gen";
+import {
+  effectivePromptMaxLength,
+  getCreatorIconPathForModelId,
+  getModelDescription,
+  getModelInfo,
+} from "@storyteller/model-list";
+import { useSignupCta } from "../../components/signup-cta-modal";
+import { useInsufficientCredits } from "../../components/insufficient-credits-modal";
+import { toast } from "../../components/toast/toast";
+
+// ── Constants ────────────────────────────────────────────────────────────
+
+const DEFAULT_MODEL_ID = "seedance_2p0";
+
+// Models where character @-mentions are intentionally held back in the UI for now,
+// even though the API reports character_references_supported. Remove an entry to enable.
+const CHARACTERS_DISABLED_MODEL_IDS = new Set([
+  "seedance_2p0_bp", // Seedance 2.0 Plus
+  "seedance_2p0_bp_fast", // Seedance 2.0 Plus Fast
+]);
+
+const VIDEO_FILTER = [FilterMediaClasses.VIDEO];
+
+const AUTO_RATIOS = new Set(["auto", "auto_2k", "auto_3k", "auto_4k"]);
+
+// ── Aspect ratio labels (shared with image page) ─────────────────────────
+
+const AR_LABELS: Record<string, string> = {
+  auto: "Auto",
+  square: "Square",
+  wide_five_by_four: "5:4 (Wide)",
+  wide_four_by_three: "4:3 (Wide)",
+  wide_three_by_two: "3:2 (Wide)",
+  wide_sixteen_by_nine: "16:9 (Wide)",
+  wide_twenty_one_by_nine: "21:9 (Wide)",
+  tall_four_by_five: "4:5 (Tall)",
+  tall_three_by_four: "3:4 (Tall)",
+  tall_two_by_three: "2:3 (Tall)",
+  tall_nine_by_sixteen: "9:16 (Tall)",
+  tall_nine_by_twenty_one: "9:21 (Tall)",
+  auto_2k: "Auto (2K)",
+  auto_3k: "Auto (3K)",
+  auto_4k: "Auto (4K)",
+  square_hd: "Square (HD)",
+  wide: "Wide",
+  tall: "Tall",
+};
+
+const RES_LABELS: Record<string, string> = {
+  half_k: "0.5K",
+  four_eighty_p: "480p",
+  seven_twenty_p: "720p",
+  one_k: "1K",
+  ten_eighty_p: "1080p",
+  two_k: "2K",
+  three_k: "3K",
+  four_k: "4K",
+};
+
+const LABEL_TO_RES: Record<string, string> = Object.fromEntries(
+  Object.entries(RES_LABELS).map(([k, v]) => [v, k]),
+);
+
+const BITRATE_LABELS: Record<string, string> = {
+  normal: "Normal",
+  high: "High",
+};
+
+const LABEL_TO_BITRATE: Record<string, string> = Object.fromEntries(
+  Object.entries(BITRATE_LABELS).map(([k, v]) => [v, k]),
+);
+
+// ── Model lookup ─────────────────────────────────────────────────────────
+
+// Placeholder entries shown in the picker as disabled "SOON" items. These are
+// UI-only — they are not in `_modelLookup`, so the click handler is a no-op
+// (the `disabled` flag also prevents the row from firing).
+const COMING_SOON_MODELS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: "seedance_2p1", label: "Seedance 2.5" },
+];
+
+let _modelLookup = new Map<string, OmniGenVideoModelInfo>();
+
+function buildModelPopoverItems(
+  models: OmniGenVideoModelInfo[],
+  selectedId: string,
+): PopoverItem[] {
+  _modelLookup = new Map(models.map((m) => [m.model, m]));
+  const apiItems: PopoverItem[] = models.map((model) => ({
+    label: model.full_name || model.model,
+    selected: model.model === selectedId,
+    description: getModelDescription(model.model, model.extra_info_short),
+    info: getModelInfo(model.model, model.extra_info) || undefined,
+    icon: (
+      <img
+        src={getCreatorIconPathForModelId(model.model)}
+        alt={`${model.model} logo`}
+        className="h-4 w-4 icon-auto-contrast"
+      />
+    ),
+    action: model.model,
+  }));
+  const comingSoonItems: PopoverItem[] = COMING_SOON_MODELS.map(
+    ({ id, label }) => ({
+      label,
+      selected: false,
+      disabled: true,
+      icon: (
+        <img
+          src={getCreatorIconPathForModelId(id)}
+          alt={`${id} logo`}
+          className="h-5 w-5 icon-auto-contrast"
+        />
+      ),
+      trailing: (
+        <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+          Soon
+        </span>
+      ),
+    }),
+  );
+  return [...apiItems, ...comingSoonItems];
+}
+
+function buildSizePopoverItems(
+  aspectRatioOptions: string[],
+  selectedValue: string,
+): PopoverItem[] {
+  return aspectRatioOptions.map((ar) => ({
+    label: AR_LABELS[ar] ?? ar,
+    selected: ar === selectedValue,
+    icon: AUTO_RATIOS.has(ar) ? (
+      <AutoIcon />
+    ) : (
+      <AspectRatioIcon commonAspectRatio={ar} />
+    ),
+    action: ar,
+  }));
+}
+
+// Effective max duration for the active input mode. Some models (e.g. Grok)
+// cap duration lower when image references are used — that's reference mode here.
+function maxDurationForMode(
+  model: OmniGenVideoModelInfo,
+  isReferenceMode: boolean,
+): number | null {
+  const imageRefMax = model.duration_seconds_max_with_image_references;
+  return isReferenceMode && imageRefMax != null
+    ? imageRefMax
+    : model.duration_seconds_max;
+}
+
+function resolveDurationForModel(
+  model: OmniGenVideoModelInfo,
+  current: number | null,
+  isReferenceMode: boolean,
+): number | null {
+  if (current == null) return model.duration_seconds_default ?? null;
+  const max = maxDurationForMode(model, isReferenceMode);
+  if (model.duration_seconds_min != null && max != null) {
+    // Clamp the user's chosen seconds into this model's range rather than
+    // resetting to the default — switching from a 15s model to a 10s-max model
+    // should land on 10s (closest available), not jump down to the minimum.
+    return Math.min(Math.max(current, model.duration_seconds_min), max);
+  }
+  if (model.duration_seconds_options?.length) {
+    const options = model.duration_seconds_options;
+    if (options.includes(current)) return current;
+    // Snap to the nearest supported option (ties → longer) instead of the
+    // default, so e.g. 15s on a 5s/10s model resolves to 10s, not 5s.
+    return options.reduce((best, o) => {
+      const dBest = Math.abs(best - current);
+      const dO = Math.abs(o - current);
+      return dO < dBest || (dO === dBest && o > best) ? o : best;
+    }, options[0]!);
+  }
+  return model.duration_seconds_default ?? null;
+}
+
+// ── Component ────────────────────────────────────────────────────────────
+
+export default function CreateVideo() {
+  const { user, authChecked } = useAuthCheck();
+  const { loggedIn, openSignupCta } = useSignupCta();
+  const openInsufficientCredits = useInsufficientCredits();
+  const { promptBoxRef, promptHeight } = usePromptHeight();
+
+  // Fetch models from API
+  const { models: apiModels } = useOmniGenVideoModels();
+
+  // UI state
+  const ui = useCreateVideoStore((s) => s.ui);
+  const setUi = useCreateVideoStore((s) => s.setUi);
+
+  const selectedModel = useMemo((): OmniGenVideoModelInfo | undefined => {
+    if (!apiModels.length) return undefined;
+    const model = ui.selectedModelId
+      ? (apiModels.find((m) => m.model === ui.selectedModelId) ??
+        apiModels.find((m) => m.model === DEFAULT_MODEL_ID) ??
+        apiModels[0])
+      : (apiModels.find((m) => m.model === DEFAULT_MODEL_ID) ?? apiModels[0]);
+
+    // Image-to-video-only models (API reports text_to_video_supported: false)
+    // require an image so pure text-to-video is blocked. A text prompt is still
+    // allowed (text_prompt_supported) — it just can't be the only input.
+    if (model && model.text_to_video_supported === false) {
+      return { ...model, starting_keyframe_required: true };
+    }
+    return model;
+  }, [apiModels, ui.selectedModelId]);
+
+  const requiresImageInput = selectedModel?.text_to_video_supported === false;
+
+  // Soft prompt limit from the API; undefined = unlimited. Seedance waives
+  // the limit (Infinity) when the prompt contains Chinese characters: the
+  // server counts CJK as more than one unit, so a client-side character
+  // count would false-positive.
+  const maxPromptLength = selectedModel
+    ? effectivePromptMaxLength(
+        selectedModel.model,
+        selectedModel.text_prompt_max_length ?? undefined,
+        ui.prompt,
+      )
+    : undefined;
+
+  const prompt = ui.prompt;
+  const setPrompt = useCallback((v: string) => setUi({ prompt: v }), [setUi]);
+
+  // Settings are sticky across model switches: the store keeps the user's
+  // chosen value untouched; we resolve an *effective* value against the current
+  // model here (keep when supported, else fall back to the model default for
+  // display + generation). See lib/resolve-model-setting.
+  const selectedSize =
+    resolveModelOption(
+      ui.selectedSize,
+      selectedModel?.aspect_ratio_options,
+      selectedModel?.aspect_ratio_default,
+    ) ?? ui.selectedSize;
+  const setSelectedSize = useCallback(
+    (v: string) => setUi({ selectedSize: v }),
+    [setUi],
+  );
+  const duration = ui.duration;
+  const setDuration = useCallback(
+    (v: number | null) => setUi({ duration: v }),
+    [setUi],
+  );
+  const resolution =
+    resolveModelOption(
+      ui.resolution ?? undefined,
+      selectedModel?.resolution_options,
+      selectedModel?.resolution_default,
+    ) ?? null;
+  const setResolution = useCallback(
+    (v: string | null) => setUi({ resolution: v }),
+    [setUi],
+  );
+  const bitrate =
+    resolveModelOption(
+      ui.bitrate ?? undefined,
+      selectedModel?.bitrate_options,
+      selectedModel?.bitrate_default,
+    ) ?? null;
+  const setBitrate = useCallback(
+    (v: string | null) => setUi({ bitrate: v }),
+    [setUi],
+  );
+  const generateWithSound = ui.generateWithSound;
+  const numVideos = resolveModelCount(
+    ui.numVideos,
+    selectedModel?.batch_size_options,
+    selectedModel?.batch_size_max,
+    selectedModel?.batch_size_default,
+  );
+  const setNumVideos = useCallback(
+    (v: number) => setUi({ numVideos: v }),
+    [setUi],
+  );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const isGeneratingRef = useRef(false);
+
+  // Reference media (persisted in store so refs survive navigation)
+  const refs = useCreateVideoStore((s) => s.refs);
+  const setRefs = useCreateVideoStore((s) => s.setRefs);
+  const { referenceImages, endFrameImage, referenceVideos, referenceAudios } =
+    refs;
+  const setReferenceImages = useCallback(
+    (v: RefImage[]) => setRefs({ referenceImages: v }),
+    [setRefs],
+  );
+  const setEndFrameImage = useCallback(
+    (v?: RefImage) => setRefs({ endFrameImage: v }),
+    [setRefs],
+  );
+  const setReferenceVideos = useCallback(
+    (v: RefVideo[]) => setRefs({ referenceVideos: v }),
+    [setRefs],
+  );
+  const setReferenceAudios = useCallback(
+    (v: RefAudio[]) => setRefs({ referenceAudios: v }),
+    [setRefs],
+  );
+  const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
+  const [isEndFramePickerOpen, setIsEndFramePickerOpen] = useState(false);
+  const [isVideoRefPickerOpen, setIsVideoRefPickerOpen] = useState(false);
+  const [isAudioRefPickerOpen, setIsAudioRefPickerOpen] = useState(false);
+  const [isCharactersModalOpen, setIsCharactersModalOpen] = useState(false);
+  const [isOutputDrawerOpen, setIsOutputDrawerOpen] = useState(false);
+  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
+  const [endFramePickerSelectedIds, setEndFramePickerSelectedIds] = useState<
+    string[]
+  >([]);
+  const [videoRefPickerSelectedIds, setVideoRefPickerSelectedIds] = useState<
+    string[]
+  >([]);
+  const [audioRefPickerSelectedIds, setAudioRefPickerSelectedIds] = useState<
+    string[]
+  >([]);
+
+  useEffect(() => {
+    if (isImagePickerOpen) setPickerSelectedIds([]);
+  }, [isImagePickerOpen]);
+
+  useEffect(() => {
+    if (isEndFramePickerOpen) setEndFramePickerSelectedIds([]);
+  }, [isEndFramePickerOpen]);
+
+  useEffect(() => {
+    if (isVideoRefPickerOpen) setVideoRefPickerSelectedIds([]);
+  }, [isVideoRefPickerOpen]);
+
+  useEffect(() => {
+    if (isAudioRefPickerOpen) setAudioRefPickerSelectedIds([]);
+  }, [isAudioRefPickerOpen]);
+
+  // Characters store for @-mentions
+  const storedCharacters = useCharactersStore((s) => s.characters);
+  const charactersLoaded = useCharactersStore((s) => s.loaded);
+  const storeSetCharacters = useCharactersStore((s) => s.setCharacters);
+  const storeSetLoaded = useCharactersStore((s) => s.setLoaded);
+
+  // Load characters on mount if not already loaded
+  useEffect(() => {
+    if (charactersLoaded) return;
+    const api = new CharactersApi();
+    api
+      .ListAllCharacters()
+      .then((res) => {
+        if (res.success && res.data) {
+          storeSetCharacters(
+            res.data.map((c) => ({
+              character_token: c.token,
+              name: c.name,
+              avatar_image_url: c.maybe_avatar?.cdn_url,
+            })),
+          );
+        }
+        storeSetLoaded(true);
+      })
+      .catch(() => storeSetLoaded(true));
+  }, [charactersLoaded, storeSetCharacters, storeSetLoaded]);
+
+  // Batch store (enqueue flow only)
+  const batches = useCreateVideoStore((s) => s.batches);
+  const startBatch = useCreateVideoStore((s) => s.startBatch);
+  const setBatchJobToken = useCreateVideoStore((s) => s.setBatchJobToken);
+  const completeBatch = useCreateVideoStore((s) => s.completeBatch);
+  const failBatch = useCreateVideoStore((s) => s.failBatch);
+  const dismissBatch = useCreateVideoStore((s) => s.dismissBatch);
+  const pollingCleanupsRef = useRef<Map<string, () => void>>(new Map());
+
+  // Derived model capabilities
+  const hasSizeOptions = (selectedModel?.aspect_ratio_options?.length ?? 0) > 0;
+  const hasResolutionOptions =
+    (selectedModel?.resolution_options?.length ?? 0) > 0;
+  const hasBitrateOptions = (selectedModel?.bitrate_options?.length ?? 0) > 0;
+  const hasSound = !!selectedModel?.show_generate_with_sound_toggle;
+  const supportsImagePrompts =
+    !!selectedModel?.starting_keyframe_supported ||
+    !!selectedModel?.starting_keyframe_required ||
+    !!selectedModel?.image_references_supported;
+  const supportsVideoRefs = !!selectedModel?.video_references_supported;
+  const supportsAudioRefs = !!selectedModel?.audio_references_supported;
+  const maxVideoRefs = selectedModel?.video_references_max ?? 3;
+  const maxVideoRefDuration =
+    selectedModel?.video_references_max_total_duration_seconds ?? 30;
+  const supportsRefMode =
+    !!selectedModel?.image_references_supported ||
+    supportsVideoRefs ||
+    supportsAudioRefs;
+  const inputMode = ui.inputMode;
+  const isReferenceMode = supportsRefMode && inputMode === "reference";
+  const hasEndFrame = !!(
+    selectedModel?.ending_keyframe_supported && !isReferenceMode
+  );
+  const needsImage =
+    !!selectedModel?.starting_keyframe_required && referenceImages.length === 0;
+
+  // Effective duration: keep the user's chosen seconds when the model supports
+  // them, else clamp/snap to this model's range for display + generation. The
+  // stored preference (ui.duration) stays untouched, so switching back restores
+  // it — same sticky behavior as the other settings.
+  const effectiveDuration = selectedModel
+    ? (resolveDurationForModel(selectedModel, duration, isReferenceMode) ??
+      selectedModel.duration_seconds_default ??
+      5)
+    : (duration ?? 5);
+
+  // Jobs + gallery
+  const jobs = useGenerationJobs({ mediaType: "video", enabled: !!user });
+  const gallery = useGalleryData({
+    username: user?.username ?? null,
+    filterMediaClasses: VIDEO_FILTER,
+    excludeUploads: true,
+  });
+
+  // Map job token → batch count so PendingCard can show "N videos generating"
+  const jobTokenToBatchCount = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const batch of batches) {
+      if (batch.jobToken && batch.batchCount && batch.batchCount > 1) {
+        map.set(batch.jobToken, batch.batchCount);
+      }
+    }
+    return map;
+  }, [batches]);
+
+  const enrichedInProgress = useMemo(
+    () =>
+      jobs.inProgress.map((job) => {
+        const batchCount = jobTokenToBatchCount.get(job.id);
+        return batchCount ? { ...job, batchCount } : job;
+      }),
+    [jobs.inProgress, jobTokenToBatchCount],
+  );
+
+  const newlyCompletedTokens = useMemo(
+    () => new Set(jobs.newlyCompleted.map((i) => i.id)),
+    [jobs.newlyCompleted],
+  );
+
+  // Lightbox
+  const flatItems = useMemo(() => {
+    const filtered = gallery.items.filter(
+      (i) => !newlyCompletedTokens.has(i.id),
+    );
+    return [...jobs.newlyCompleted, ...filtered];
+  }, [jobs.newlyCompleted, gallery.items, newlyCompletedTokens]);
+
+  const lightbox = useLightboxNav(flatItems);
+
+  // Cost estimate
+  const estimatedCredits = useVideoCostEstimate({
+    model: selectedModel?.model ?? "",
+    aspectRatio: selectedSize,
+    resolution,
+    bitrate,
+    duration: effectiveDuration,
+    numVideos,
+    hasStartFrame: !isReferenceMode && referenceImages.length > 0,
+    hasEndFrame: !isReferenceMode && hasEndFrame && !!endFrameImage,
+    isReferenceMode,
+    referenceImageCount: isReferenceMode ? referenceImages.length : 0,
+    generateAudio: hasSound ? generateWithSound : undefined,
+  });
+
+  // Character @-mentions are driven by the model's capability flag (set by the
+  // API), in both keyframe and reference input modes — except models we're
+  // intentionally holding back for now (see CHARACTERS_DISABLED_MODEL_IDS).
+  const supportsCharacters =
+    !!selectedModel?.character_references_supported &&
+    !CHARACTERS_DISABLED_MODEL_IDS.has(selectedModel?.model ?? "");
+  const activeCharacters = supportsCharacters ? storedCharacters : [];
+
+  // Popover items
+  const mentionItems = useMemo((): MentionItem[] => {
+    const refItems: MentionItem[] = isReferenceMode
+      ? [
+          ...referenceImages.map((img, i) => ({
+            label: `@Image${i + 1}`,
+            type: "image" as const,
+            preview: img.url,
+          })),
+          ...referenceVideos.map((vid, i) => ({
+            label: `@Video${i + 1}`,
+            type: "video" as const,
+            preview: vid.url,
+          })),
+          ...referenceAudios.map((_aud, i) => ({
+            label: `@Audio${i + 1}`,
+            type: "audio" as const,
+            preview: undefined,
+          })),
+        ]
+      : [];
+    const charItems: MentionItem[] = activeCharacters.map((char) => ({
+      label: `@${char.name}`,
+      type: "character" as const,
+      preview: char.avatar_image_url,
+    }));
+    return [...refItems, ...charItems];
+  }, [
+    isReferenceMode,
+    referenceImages,
+    referenceVideos,
+    referenceAudios,
+    activeCharacters,
+  ]);
+
+  const modelItems = useMemo(
+    () => buildModelPopoverItems(apiModels, selectedModel?.model ?? ""),
+    [apiModels, selectedModel?.model],
+  );
+  const sizeItems = useMemo(
+    () =>
+      buildSizePopoverItems(
+        selectedModel?.aspect_ratio_options ?? [],
+        selectedSize,
+      ),
+    [selectedModel?.aspect_ratio_options, selectedSize],
+  );
+  const durationRange = useMemo((): { min: number; max: number } | null => {
+    if (!selectedModel) return null;
+    const max = maxDurationForMode(selectedModel, isReferenceMode);
+    if (
+      selectedModel.duration_seconds_min != null &&
+      max != null &&
+      max > selectedModel.duration_seconds_min
+    ) {
+      return { min: selectedModel.duration_seconds_min, max };
+    }
+    if (
+      selectedModel.duration_seconds_options &&
+      selectedModel.duration_seconds_options.length > 1
+    ) {
+      const opts = [...selectedModel.duration_seconds_options].sort(
+        (a, b) => a - b,
+      );
+      return { min: opts[0]!, max: opts[opts.length - 1]! };
+    }
+    return null;
+  }, [selectedModel, isReferenceMode]);
+  const [localDuration, setLocalDuration] = useState(effectiveDuration);
+  const durationTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    clearTimeout(durationTimerRef.current);
+    setLocalDuration(effectiveDuration);
+    return () => clearTimeout(durationTimerRef.current);
+  }, [effectiveDuration]);
+  const handleDurationSlide = useCallback(
+    (v: number) => {
+      // Snap to a model-valid duration so the thumb and the chip never disagree
+      // (no-op for continuous-range models; snaps to the nearest option for
+      // models with sparse second options like 5s / 10s).
+      const snapped = selectedModel
+        ? (resolveDurationForModel(selectedModel, v, isReferenceMode) ?? v)
+        : v;
+      setLocalDuration(snapped);
+      clearTimeout(durationTimerRef.current);
+      durationTimerRef.current = setTimeout(() => setDuration(snapped), 300);
+    },
+    [setDuration, selectedModel, isReferenceMode],
+  );
+  const resolutionItems = useMemo(
+    (): PopoverItem[] | null =>
+      selectedModel?.resolution_options
+        ? selectedModel.resolution_options.map((r) => ({
+            label: RES_LABELS[r] ?? r,
+            selected: r === (resolution ?? selectedModel.resolution_default),
+          }))
+        : null,
+    [selectedModel, resolution],
+  );
+  const bitrateItems = useMemo(
+    (): PopoverItem[] | null =>
+      selectedModel?.bitrate_options
+        ? selectedModel.bitrate_options.map((b) => ({
+            label: BITRATE_LABELS[b] ?? b,
+            selected: b === (bitrate ?? selectedModel.bitrate_default),
+          }))
+        : null,
+    [selectedModel, bitrate],
+  );
+  const inputModeItems = useMemo(
+    (): PopoverItem[] | null =>
+      supportsRefMode
+        ? [
+            {
+              label: "Keyframe",
+              description: "First/Last frame",
+              selected: inputMode === "keyframe",
+            },
+            {
+              label: "Omni Reference",
+              description: "Multi-media ref",
+              selected: inputMode === "reference",
+            },
+          ]
+        : null,
+    [supportsRefMode, inputMode],
+  );
+
+  const hasContent =
+    jobs.inProgress.length > 0 ||
+    jobs.failed.length > 0 ||
+    jobs.newlyCompleted.length > 0 ||
+    gallery.items.length > 0 ||
+    gallery.isInitialLoading;
+
+  // ── Effects ──────────────────────────────────────────────────────────────
+
+  // Consume a pending recreate payload (set by the lightbox Recreate button)
+  // and populate the promptbox fields. Does NOT trigger generation. Subscribes
+  // to the store so it fires even when the user is already on this route.
+  //
+  // References must commit BEFORE the prompt so the mention highlighter (which
+  // builds its label regex from `referenceImages`/`referenceVideos`/etc.) knows
+  // about every `@ImageN` before the contentEditable does its DOM sync. Without
+  // this ordering, only the last reference's mention would end up colored.
+  const pendingRecreate = useCreateVideoStore((s) => s.pendingRecreate);
+  useEffect(() => {
+    if (!pendingRecreate) return;
+    const payload = useCreateVideoStore.getState().consumePendingRecreate();
+    if (!payload) return;
+
+    flushSync(() => {
+      setRefs({
+        referenceImages: payload.referenceImages,
+        endFrameImage: payload.endFrameImage,
+        referenceVideos: payload.referenceVideos ?? [],
+        referenceAudios: payload.referenceAudios ?? [],
+      });
+      setUi({
+        ...(payload.modelId ? { selectedModelId: payload.modelId } : {}),
+        ...(payload.inputMode ? { inputMode: payload.inputMode } : {}),
+      });
+    });
+
+    setUi({
+      prompt: payload.prompt,
+      ...(payload.aspectRatio ? { selectedSize: payload.aspectRatio } : {}),
+      ...(payload.resolution ? { resolution: payload.resolution } : {}),
+      ...(payload.durationSeconds != null
+        ? { duration: payload.durationSeconds }
+        : {}),
+      ...(payload.generateWithSound != null
+        ? { generateWithSound: payload.generateWithSound }
+        : {}),
+    });
+  }, [pendingRecreate, setUi]);
+
+  useEffect(() => {
+    const cleanups = pollingCleanupsRef.current;
+    const pendingBatches = useCreateVideoStore
+      .getState()
+      .batches.filter((b) => b.status === "pending" && b.jobToken);
+
+    for (const batch of pendingBatches) {
+      if (cleanups.has(batch.id)) continue;
+      const stop = startVideoPolling(
+        batch.jobToken!,
+        (video) => {
+          completeBatch(batch.id, video);
+          cleanups.delete(batch.id);
+          window.dispatchEvent(new Event("task-queue-update"));
+        },
+        (reason) => {
+          failBatch(batch.id, reason);
+          cleanups.delete(batch.id);
+          window.dispatchEvent(new Event("task-queue-update"));
+        },
+      );
+      cleanups.set(batch.id, stop);
+    }
+
+    return () => {
+      cleanups.forEach((stop) => stop());
+      cleanups.clear();
+    };
+  }, [completeBatch, failBatch]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
+  const handleModelChange = useCallback(
+    (item: PopoverItem) => {
+      const model = item.action ? _modelLookup.get(item.action) : undefined;
+      if (!model) return;
+      const currentState = useCreateVideoStore.getState().ui;
+
+      const newSupportsKeyframe =
+        !!model.starting_keyframe_supported ||
+        !!model.starting_keyframe_required;
+      const newSupportsRefs =
+        !!model.image_references_supported ||
+        !!model.video_references_supported ||
+        !!model.audio_references_supported;
+
+      const nextInputMode =
+        currentState.inputMode === "reference" && newSupportsRefs
+          ? "reference"
+          : "keyframe";
+
+      // Aspect ratio / resolution / count / duration / sound are preserved and
+      // resolved against the new model at read time, so the user's choices
+      // survive model switches. Only input mode (capability-bound) is recomputed.
+      setUi({
+        selectedModelId: model.model,
+        inputMode: nextInputMode,
+      });
+
+      // Only clear media that the new model can't use in any mode.
+      if (!newSupportsKeyframe && !model.image_references_supported) {
+        setReferenceImages([]);
+      }
+      if (!model.ending_keyframe_supported) {
+        setEndFrameImage(undefined);
+      }
+      if (!model.video_references_supported) {
+        setReferenceVideos([]);
+      }
+      if (!model.audio_references_supported) {
+        setReferenceAudios([]);
+      }
+    },
+    [setUi],
+  );
+
+  const handleSizeChange = useCallback(
+    (item: PopoverItem) => {
+      if (item.action) setSelectedSize(item.action);
+    },
+    [setSelectedSize],
+  );
+
+  const handleResolutionChange = useCallback(
+    (item: PopoverItem) =>
+      setResolution(LABEL_TO_RES[item.label] ?? item.label),
+    [setResolution],
+  );
+
+  const handleBitrateChange = useCallback(
+    (item: PopoverItem) =>
+      setBitrate(LABEL_TO_BITRATE[item.label] ?? item.label),
+    [setBitrate],
+  );
+
+  const handleInputModeChange = useCallback(
+    (item: PopoverItem) => {
+      const mode = item.label === "Omni Reference" ? "reference" : "keyframe";
+      if (mode === inputMode) return;
+      if (mode === "reference") {
+        // Some models (e.g. Grok) cap duration lower in image-reference mode.
+        const cap = selectedModel?.duration_seconds_max_with_image_references;
+        const clamped = cap != null && (duration ?? 0) > cap ? cap : undefined;
+        setUi({
+          inputMode: mode,
+          ...(clamped != null ? { duration: clamped } : {}),
+        });
+        setEndFrameImage(undefined);
+      } else {
+        setUi({ inputMode: mode });
+        setReferenceVideos([]);
+        setReferenceAudios([]);
+      }
+    },
+    [inputMode, duration, selectedModel, setUi],
+  );
+
+  const imagePickerMax = Math.max(
+    1,
+    (isReferenceMode ? (selectedModel?.image_references_max ?? 3) : 1) -
+      referenceImages.length,
+  );
+
+  const handlePickerSelect = useCallback(
+    (id: string) => {
+      setPickerSelectedIds((prev) => {
+        if (prev.includes(id)) return prev.filter((x) => x !== id);
+        if (prev.length >= imagePickerMax) {
+          return imagePickerMax === 1 ? [id] : prev;
+        }
+        return [...prev, id];
+      });
+    },
+    [imagePickerMax],
+  );
+
+  const handleEndFramePickerSelect = useCallback((id: string) => {
+    setEndFramePickerSelectedIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      // Single-select: auto-swap
+      return [id];
+    });
+  }, []);
+
+  const handleLibraryImageSelect = useCallback(
+    (items: GalleryItem[]) => {
+      const maxImages = isReferenceMode
+        ? (selectedModel?.image_references_max ?? 3)
+        : 1;
+      const availableSlots = Math.max(0, maxImages - referenceImages.length);
+      const newImages: RefImage[] = items
+        .slice(0, availableSlots)
+        .map((item) => ({
+          id: Math.random().toString(36).substring(7),
+          url: item.thumbnail || item.fullImage || "",
+          fullUrl: item.fullImage || undefined,
+          file: new File([], "library-image"),
+          mediaToken: item.id,
+        }));
+      setReferenceImages([...referenceImages, ...newImages]);
+      setIsImagePickerOpen(false);
+    },
+    [referenceImages, isReferenceMode, selectedModel],
+  );
+
+  const videoRefPickerMax = Math.max(1, maxVideoRefs - referenceVideos.length);
+
+  const handleVideoRefPickerSelect = useCallback(
+    (id: string) => {
+      setVideoRefPickerSelectedIds((prev) => {
+        if (prev.includes(id)) return prev.filter((x) => x !== id);
+        if (prev.length >= videoRefPickerMax) {
+          return videoRefPickerMax === 1 ? [id] : prev;
+        }
+        return [...prev, id];
+      });
+    },
+    [videoRefPickerMax],
+  );
+
+  const handleLibraryVideoSelect = useCallback(
+    async (items: GalleryItem[]) => {
+      setIsVideoRefPickerOpen(false);
+      const availableSlots = Math.max(0, maxVideoRefs - referenceVideos.length);
+      const picked = items.slice(0, availableSlots);
+
+      const added: RefVideo[] = [];
+      let total = referenceVideos.reduce((sum, v) => sum + v.duration, 0);
+      for (const item of picked) {
+        const url = item.fullImage;
+        if (!url) continue;
+        const duration = await getVideoDurationFromUrl(url);
+        if (duration <= 0) {
+          toast.error("Could not read video file");
+          continue;
+        }
+        if (total + duration > maxVideoRefDuration) {
+          toast.error(
+            `Video too long — max ${maxVideoRefDuration}s total (${maxVideoRefDuration - total}s remaining)`,
+          );
+          continue;
+        }
+        total += duration;
+        added.push({
+          id: Math.random().toString(36).substring(7),
+          url,
+          file: new File([], "library-video"),
+          mediaToken: item.id,
+          duration,
+        });
+      }
+      if (added.length > 0) {
+        setReferenceVideos([...referenceVideos, ...added]);
+      }
+    },
+    [referenceVideos, maxVideoRefs, maxVideoRefDuration, setReferenceVideos],
+  );
+
+  const maxAudioRefs = selectedModel?.audio_references_max ?? 2;
+  const maxAudioRefDurationTotal =
+    selectedModel?.audio_references_max_total_duration_seconds ?? 30;
+  const audioRefPickerMax = Math.max(1, maxAudioRefs - referenceAudios.length);
+
+  const handleAudioRefPickerSelect = useCallback(
+    (id: string) => {
+      setAudioRefPickerSelectedIds((prev) => {
+        if (prev.includes(id)) return prev.filter((x) => x !== id);
+        if (prev.length >= audioRefPickerMax) {
+          return audioRefPickerMax === 1 ? [id] : prev;
+        }
+        return [...prev, id];
+      });
+    },
+    [audioRefPickerMax],
+  );
+
+  const handleLibraryAudioSelect = useCallback(
+    async (items: GalleryItem[]) => {
+      setIsAudioRefPickerOpen(false);
+      const availableSlots = Math.max(0, maxAudioRefs - referenceAudios.length);
+      const picked = items.slice(0, availableSlots);
+
+      const added: RefAudio[] = [];
+      let total = referenceAudios.reduce((sum, a) => sum + a.duration, 0);
+      for (const item of picked) {
+        const url = item.fullImage;
+        if (!url) continue;
+        const duration =
+          item.durationMillis != null
+            ? Math.round(item.durationMillis / 1000)
+            : await getAudioDurationFromUrl(url);
+        if (duration <= 0) {
+          toast.error("Could not read audio file");
+          continue;
+        }
+        if (total + duration > maxAudioRefDurationTotal) {
+          toast.error(
+            `Audio too long — max ${maxAudioRefDurationTotal}s total (${maxAudioRefDurationTotal - total}s remaining)`,
+          );
+          continue;
+        }
+        total += duration;
+        added.push({
+          id: Math.random().toString(36).substring(7),
+          url,
+          file: new File([], "library-audio"),
+          mediaToken: item.id,
+          duration,
+        });
+      }
+      if (added.length > 0) {
+        setReferenceAudios([...referenceAudios, ...added]);
+      }
+    },
+    [
+      referenceAudios,
+      maxAudioRefs,
+      maxAudioRefDurationTotal,
+      setReferenceAudios,
+    ],
+  );
+
+  const handleEndFrameLibrarySelect = useCallback((items: GalleryItem[]) => {
+    const item = items[0];
+    if (!item) return;
+    setEndFrameImage({
+      id: Math.random().toString(36).substring(7),
+      url: item.thumbnail || item.fullImage || "",
+      fullUrl: item.fullImage || undefined,
+      file: new File([], "library-image"),
+      mediaToken: item.id,
+    });
+    setIsEndFramePickerOpen(false);
+  }, []);
+
+  const handleGenerate = useCallback(async () => {
+    if (!loggedIn) {
+      openSignupCta();
+      return;
+    }
+    if (needsImage) {
+      toast.error(
+        "Add a starting frame — this model can't generate from text alone.",
+      );
+      return;
+    }
+    if (!prompt.trim() || isGeneratingRef.current || !selectedModel) {
+      console.log("[generate-video] blocked", {
+        hasPrompt: !!prompt.trim(),
+        isGenerating: isGeneratingRef.current,
+        hasModel: !!selectedModel,
+      });
+      return;
+    }
+    if (maxPromptLength !== undefined && prompt.length > maxPromptLength) {
+      toast.error(
+        `Prompt exceeds the ${maxPromptLength} character limit for this model`,
+      );
+      return;
+    }
+    console.log("[generate-video] starting", {
+      model: selectedModel.model,
+      numVideos,
+      inputMode,
+      isReferenceMode,
+    });
+    isGeneratingRef.current = true;
+    setIsGenerating(true);
+
+    const startFrameToken =
+      !isReferenceMode && supportsImagePrompts && referenceImages.length > 0
+        ? referenceImages[0].mediaToken
+        : undefined;
+    const endFrameToken =
+      !isReferenceMode && hasEndFrame && endFrameImage?.mediaToken
+        ? endFrameImage.mediaToken
+        : undefined;
+    const referenceImageTokens =
+      isReferenceMode && referenceImages.length > 0
+        ? referenceImages
+            .map((img) => img.mediaToken)
+            .filter((t): t is string => typeof t === "string" && t.length > 0)
+        : undefined;
+    const referenceVideoTokens =
+      isReferenceMode && referenceVideos.length > 0
+        ? referenceVideos
+            .map((v) => v.mediaToken)
+            .filter((t): t is string => typeof t === "string" && t.length > 0)
+        : undefined;
+    const referenceAudioTokens =
+      isReferenceMode && referenceAudios.length > 0
+        ? referenceAudios
+            .map((a) => a.mediaToken)
+            .filter((t): t is string => typeof t === "string" && t.length > 0)
+        : undefined;
+
+    // Extract character tokens from @-mentions in the prompt. Match longest
+    // names first and require a non-word boundary after so `@Bob` doesn't
+    // false-match inside `@Bobby`, and only pick up characters that still
+    // exist in the current store (stale names are ignored).
+    const mentionedCharacters = (() => {
+      if (activeCharacters.length === 0) return [];
+      const sorted = [...activeCharacters].sort(
+        (a, b) => b.name.length - a.name.length,
+      );
+      const matched = new Set<string>();
+      for (const c of sorted) {
+        const escaped = c.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(`@${escaped}(?![\\w])`);
+        if (regex.test(prompt)) matched.add(c.character_token);
+      }
+      return activeCharacters.filter((c) => matched.has(c.character_token));
+    })();
+    const referenceCharacterTokens =
+      mentionedCharacters.length > 0
+        ? mentionedCharacters.map((c) => c.character_token)
+        : undefined;
+
+    const baseParams = {
+      prompt: prompt.trim(),
+      model: selectedModel.model,
+      numVideos,
+      aspectRatio: selectedSize,
+      duration: effectiveDuration,
+      resolution: hasResolutionOptions
+        ? (resolution ?? selectedModel.resolution_default ?? undefined)
+        : undefined,
+      bitrate: hasBitrateOptions
+        ? (bitrate ?? selectedModel.bitrate_default ?? undefined)
+        : undefined,
+      generateAudio: hasSound ? generateWithSound : undefined,
+      startFrameImageMediaToken: startFrameToken?.length
+        ? startFrameToken
+        : undefined,
+      endFrameImageMediaToken: endFrameToken?.length
+        ? endFrameToken
+        : undefined,
+      referenceImageMediaTokens: referenceImageTokens?.length
+        ? referenceImageTokens
+        : undefined,
+      referenceVideoMediaTokens: referenceVideoTokens?.length
+        ? referenceVideoTokens
+        : undefined,
+      referenceAudioMediaTokens: referenceAudioTokens?.length
+        ? referenceAudioTokens
+        : undefined,
+      referenceCharacterTokens,
+    };
+    console.log("[generate-video] params", baseParams);
+
+    const modelLabel = selectedModel.full_name ?? selectedModel.model;
+    const batchId = startBatch(
+      prompt,
+      modelLabel,
+      numVideos > 1 ? numVideos : undefined,
+    );
+
+    try {
+      console.log("[generate-video] enqueueing job...");
+      const result = await enqueueVideoGeneration(baseParams);
+      console.log("[generate-video] enqueue result", result);
+
+      if (!result.success || !result.jobToken) {
+        console.warn("[generate-video] enqueue failed", result.error);
+        // 402 Payment Required: the user is out of credits. Drop the pending
+        // card and surface the upgrade modal instead of a failed-card error.
+        if (result.errorCode === 402) {
+          dismissBatch(batchId);
+          openInsufficientCredits();
+        } else {
+          if (result.errorCode != null && result.errorCode >= 500) {
+            toast.error(OMNI_GENERATE_OUTAGE_MESSAGE);
+          }
+          failBatch(batchId, result.error ?? "Failed to start generation");
+        }
+      } else {
+        setBatchJobToken(batchId, result.jobToken);
+        console.log("[generate-video] polling started", {
+          jobToken: result.jobToken,
+        });
+
+        const stopPolling = startVideoPolling(
+          result.jobToken,
+          (video) => {
+            console.log("[generate-video] complete", {
+              batchId,
+              media_token: video.media_token,
+            });
+            completeBatch(batchId, video);
+            pollingCleanupsRef.current.delete(batchId);
+            window.dispatchEvent(new Event("task-queue-update"));
+          },
+          (reason) => {
+            console.warn("[generate-video] poll failed", { batchId, reason });
+            failBatch(batchId, reason);
+            pollingCleanupsRef.current.delete(batchId);
+            window.dispatchEvent(new Event("task-queue-update"));
+          },
+        );
+        pollingCleanupsRef.current.set(batchId, stopPolling);
+      }
+    } catch (err) {
+      console.error("[generate-video] unexpected error", err);
+      failBatch(batchId, "Network error - please try again");
+    }
+
+    window.dispatchEvent(new Event("credits-change"));
+    window.dispatchEvent(new Event("task-queue-update"));
+    console.log("[generate-video] done enqueuing");
+    setIsGenerating(false);
+    isGeneratingRef.current = false;
+  }, [
+    loggedIn,
+    openSignupCta,
+    openInsufficientCredits,
+    prompt,
+    needsImage,
+    isReferenceMode,
+    selectedModel,
+    maxPromptLength,
+    selectedSize,
+    numVideos,
+    effectiveDuration,
+    resolution,
+    bitrate,
+    generateWithSound,
+    hasResolutionOptions,
+    hasBitrateOptions,
+    hasSound,
+    supportsImagePrompts,
+    hasEndFrame,
+    referenceImages,
+    endFrameImage,
+    referenceVideos,
+    referenceAudios,
+    activeCharacters,
+    startBatch,
+    setBatchJobToken,
+    completeBatch,
+    failBatch,
+    dismissBatch,
+  ]);
+
+  // Video/audio reference row, shared by the mobile and desktop forms.
+  const mediaReferenceRow =
+    isReferenceMode && (supportsVideoRefs || supportsAudioRefs) ? (
+      <MediaReferenceRow
+        videoSupported={supportsVideoRefs}
+        audioSupported={supportsAudioRefs}
+        referenceVideos={referenceVideos}
+        onReferenceVideosChange={setReferenceVideos}
+        maxVideoCount={maxVideoRefs}
+        maxVideoRefDuration={maxVideoRefDuration}
+        onPickVideoFromLibrary={() => setIsVideoRefPickerOpen(true)}
+        referenceAudios={referenceAudios}
+        onReferenceAudiosChange={setReferenceAudios}
+        maxAudioCount={selectedModel?.audio_references_max ?? 2}
+        maxAudioRefDuration={
+          selectedModel?.audio_references_max_total_duration_seconds ?? 30
+        }
+        onPickAudioFromLibrary={() => setIsAudioRefPickerOpen(true)}
+      />
+    ) : undefined;
+
+  // ── Mobile form ───────────────────────────────────────────────────────
+
+  const activeResolutionLabel = resolutionItems?.find((i) => i.selected)?.label;
+  const activeBitrateLabel = bitrateItems?.find((i) => i.selected)?.label;
+  const outputSummary = [
+    `${effectiveDuration}s`,
+    activeResolutionLabel,
+    activeBitrateLabel,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const mobileForm = (
+    <MobilePromptForm
+      prompt={prompt}
+      onPromptChange={setPrompt}
+      onSubmit={handleGenerate}
+      isSubmitting={isGenerating}
+      credits={estimatedCredits}
+      placeholder="Describe the video you want to generate..."
+      mentionItems={mentionItems.length > 0 ? mentionItems : undefined}
+      autoAdvance={loggedIn && !!prompt.trim() && !isGenerating && !needsImage}
+      banner={
+        requiresImageInput ? (
+          <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-900/80 px-3.5 py-2.5 text-xs text-amber-100">
+            <FontAwesomeIcon
+              icon={faCircleInfo}
+              className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-400"
+            />
+            <span>
+              This model can&apos;t generate from text alone — add a starting
+              frame to animate your prompt.
+            </span>
+          </div>
+        ) : undefined
+      }
+      inputModeSelector={
+        inputModeItems ? (
+          <div className="grid grid-cols-2 gap-2">
+            {inputModeItems.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => handleInputModeChange(item)}
+                className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                  item.selected
+                    ? "border-primary bg-primary/15"
+                    : "border-ui-panel-border bg-ui-controls hover:bg-ui-controls/80"
+                }`}
+              >
+                <span className="block text-sm font-semibold text-base-fg">
+                  {item.label}
+                </span>
+                <span className="block text-xs text-base-fg/55">
+                  {item.description}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : undefined
+      }
+      modelField={
+        <MobileSelectField
+          label="Model"
+          title="Select Model"
+          items={modelItems}
+          onSelect={handleModelChange}
+        />
+      }
+      frames={
+        supportsImagePrompts ? (
+          <ImagePromptRow
+            maxImagePromptCount={
+              isReferenceMode ? (selectedModel?.image_references_max ?? 3) : 1
+            }
+            referenceImages={referenceImages}
+            setReferenceImages={setReferenceImages}
+            onPickFromLibrary={
+              supportsImagePrompts
+                ? () => setIsImagePickerOpen(true)
+                : undefined
+            }
+            isVideo
+            isReferenceMode={isReferenceMode}
+            endFrameImage={endFrameImage}
+            setEndFrameImage={setEndFrameImage}
+            showEndFrameSection={hasEndFrame}
+            onPickEndFrameFromLibrary={
+              hasEndFrame ? () => setIsEndFramePickerOpen(true) : undefined
+            }
+          />
+        ) : undefined
+      }
+      mediaRefs={mediaReferenceRow}
+      settingsFields={
+        <>
+          {hasSizeOptions && (
+            <MobileSelectField
+              label="Aspect ratio"
+              items={sizeItems}
+              onSelect={handleSizeChange}
+            />
+          )}
+          {hasSound && (
+            <div className="flex items-center justify-between rounded-xl border border-ui-panel-border bg-ui-controls px-3.5 py-2.5">
+              <span className="flex items-center gap-2 text-sm font-medium text-base-fg/70">
+                <FontAwesomeIcon icon={faWaveformLines} className="h-4 w-4" />
+                Audio
+              </span>
+              <ToggleButton
+                isActive={generateWithSound}
+                icon={faWaveformLines}
+                activeIcon={faWaveformLines}
+                label={generateWithSound ? "On" : "Off"}
+                onClick={() => setUi({ generateWithSound: !generateWithSound })}
+              />
+            </div>
+          )}
+          {(durationRange || resolutionItems || bitrateItems) && (
+            <>
+              <MobileFieldButton
+                label="Output"
+                icon={<FontAwesomeIcon icon={faClock} className="h-4 w-4" />}
+                value={outputSummary}
+                onClick={() => setIsOutputDrawerOpen(true)}
+              />
+              <SettingsDrawer
+                open={isOutputDrawerOpen}
+                onOpenChange={setIsOutputDrawerOpen}
+                title="Output"
+              >
+                {durationRange && (
+                  <DrawerSection label="Duration">
+                    <div className="px-3 pb-1 pt-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex-1">
+                          <SliderV2
+                            min={durationRange.min}
+                            max={durationRange.max}
+                            value={localDuration}
+                            onChange={handleDurationSlide}
+                            step={1}
+                            suffix="s"
+                            variant="filled"
+                          />
+                        </div>
+                        <span className="text-base-fg min-w-6 shrink-0 text-sm font-medium tabular-nums">
+                          {localDuration}s
+                        </span>
+                      </div>
+                      <div className="text-base-fg/40 mt-1.5 flex justify-between px-0.5 text-[11px] tabular-nums">
+                        <span>{durationRange.min}s</span>
+                        <span>{durationRange.max}s</span>
+                      </div>
+                    </div>
+                  </DrawerSection>
+                )}
+                {resolutionItems && (
+                  <DrawerSection label="Resolution">
+                    <DrawerOptionList
+                      items={resolutionItems}
+                      onSelect={handleResolutionChange}
+                    />
+                  </DrawerSection>
+                )}
+                {bitrateItems && (
+                  <DrawerSection label="Bitrate">
+                    <DrawerOptionList
+                      items={bitrateItems}
+                      onSelect={handleBitrateChange}
+                    />
+                  </DrawerSection>
+                )}
+              </SettingsDrawer>
+            </>
+          )}
+        </>
+      }
+      countField={
+        <MobileCountStepper
+          value={numVideos}
+          onChange={setNumVideos}
+          max={selectedModel?.batch_size_max ?? 4}
+          options={selectedModel?.batch_size_options}
+        />
+      }
+      extraActions={
+        supportsCharacters ? (
+          <button
+            type="button"
+            onClick={() => setIsCharactersModalOpen(true)}
+            className="flex h-11 items-center justify-center gap-1 rounded-xl border border-ui-controls-border bg-ui-controls px-3 text-sm font-medium text-base-fg transition-all hover:bg-ui-controls/80 active:scale-95"
+          >
+            @Characters
+          </button>
+        ) : undefined
+      }
+    />
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────
+
+  const videoGlowOrbs = (
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      <div className="absolute left-1/2 top-[-10%] h-[700px] w-[700px] -translate-x-1/2 rounded-full bg-gradient-to-br from-blue-700 via-blue-500 to-[#00AABA] opacity-[0.12] blur-[120px] transform-gpu" />
+      <div className="absolute bottom-[-15%] left-[-10%] h-[500px] w-[500px] rounded-full bg-gradient-to-br from-[#00AABA] via-blue-500 to-purple-600 opacity-[0.08] blur-[120px] transform-gpu" />
+      <div className="absolute bottom-[10%] right-[-10%] h-[400px] w-[400px] rounded-full bg-gradient-to-br from-blue-600 to-pink-500 opacity-[0.06] blur-[140px] transform-gpu" />
+    </div>
+  );
+
+  return (
+    <CreateMediaPageShell
+      title="Create Video - ArtCraft"
+      description="Generate stunning AI videos with ArtCraft"
+      authChecked={authChecked}
+      hasContent={hasContent}
+      emptyStateTitle="Create Video"
+      emptyStateSubtitle="Describe a scene. See it in motion."
+      emptyStateCta={
+        loggedIn ? undefined : (
+          <Button
+            variant="primary"
+            onClick={openSignupCta}
+            icon={faSparkles}
+            className="h-12 px-6 text-base font-semibold rounded-full"
+          >
+            Sign up to create
+          </Button>
+        )
+      }
+      bottomOffset={promptHeight + 24}
+      modelItems={modelItems}
+      onModelChange={handleModelChange}
+      glowOrbs={videoGlowOrbs}
+      promptForm={mobileForm}
+      gridContent={
+        <GenerationGallery
+          inProgressJobs={enrichedInProgress}
+          failedJobs={jobs.failed}
+          onDismissFailed={jobs.dismissFailed}
+          newlyCompletedItems={jobs.newlyCompleted}
+          galleryItems={gallery.items}
+          newlyCompletedTokens={newlyCompletedTokens}
+          hasMore={gallery.hasMore}
+          isLoading={gallery.isLoading}
+          isInitialLoading={gallery.isInitialLoading}
+          onLoadMore={gallery.loadMore}
+          onGalleryItemClick={lightbox.handleGalleryItemClick}
+        />
+      }
+      promptBox={
+        <div
+          ref={promptBoxRef}
+          className="animate-fade-in-up fixed bottom-2 sm:bottom-3 right-0 z-30 mx-auto max-w-5xl px-2 sm:px-4 transition-[left] duration-200 ease-linear"
+          style={{
+            animationDelay: "150ms",
+            left: "var(--ac-sidebar-offset, 0px)",
+          }}
+        >
+          {/* {selectedModel?.model === "seedance_2p0" && (
+            <div className="mb-2 flex items-start gap-2.5 rounded-lg border border-yellow-500/40 px-3.5 py-2.5 text-xs text-yellow-200 shadow-lg backdrop-blur-xl bg-yellow-800/60">
+              <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-yellow-400" />
+              <span>
+                Seedance 2.0 is in Early Alpha. Generations may be slow and may experience outages.
+                Seedance may reject safe inputs unexpectedly. Try several short generations before longer ones.
+              </span>
+            </div>
+          )} */}
+          {requiresImageInput && (
+            <div className="mb-2 flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-900/80 px-3.5 py-2.5 text-xs text-amber-100 shadow-lg backdrop-blur-sm">
+              <FontAwesomeIcon
+                icon={faCircleInfo}
+                className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-400"
+              />
+              <span>
+                This model can&apos;t generate from text alone — add a starting
+                frame to animate your prompt.
+              </span>
+            </div>
+          )}
+          <PromptBox
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            onSubmit={handleGenerate}
+            isSubmitting={isGenerating}
+            credits={estimatedCredits}
+            maxPromptLength={maxPromptLength}
+            placeholder="Describe the video you want to generate..."
+            supportsImagePrompts={supportsImagePrompts}
+            maxImagePromptCount={
+              isReferenceMode ? (selectedModel?.image_references_max ?? 3) : 1
+            }
+            referenceImages={referenceImages}
+            onReferenceImagesChange={setReferenceImages}
+            isVideo
+            isReferenceMode={isReferenceMode}
+            endFrameImage={endFrameImage}
+            onEndFrameImageChange={setEndFrameImage}
+            showEndFrameSection={hasEndFrame}
+            onPickFromLibrary={
+              supportsImagePrompts
+                ? () => setIsImagePickerOpen(true)
+                : undefined
+            }
+            onPickEndFrameFromLibrary={
+              hasEndFrame ? () => setIsEndFramePickerOpen(true) : undefined
+            }
+            modelSelector={
+              <Tooltip
+                content="Model"
+                position="top"
+                className="z-50"
+                closeOnClick
+              >
+                <PopoverMenu
+                  items={modelItems}
+                  onSelect={handleModelChange}
+                  mode="toggle"
+                  panelTitle="Select Model"
+                  panelClassName="w-[360px]"
+                  richList
+                  triggerIcon={
+                    <img
+                      src={getCreatorIconPathForModelId(
+                        selectedModel?.model ?? "",
+                      )}
+                      alt=""
+                      className="h-4 w-4 icon-auto-contrast"
+                    />
+                  }
+                />
+              </Tooltip>
+            }
+            onClearAllRefs={() =>
+              setRefs({
+                referenceImages: [],
+                endFrameImage: undefined,
+                referenceVideos: [],
+                referenceAudios: [],
+              })
+            }
+            mentionItems={mentionItems.length > 0 ? mentionItems : undefined}
+            videoRefsSupported={supportsVideoRefs}
+            referenceVideos={referenceVideos}
+            onReferenceVideosChange={setReferenceVideos}
+            maxVideoCount={maxVideoRefs}
+            maxVideoRefDuration={maxVideoRefDuration}
+            onPickVideoFromLibrary={
+              supportsVideoRefs
+                ? () => setIsVideoRefPickerOpen(true)
+                : undefined
+            }
+            audioRefsSupported={supportsAudioRefs}
+            referenceAudios={referenceAudios}
+            onReferenceAudiosChange={setReferenceAudios}
+            maxAudioCount={selectedModel?.audio_references_max ?? 2}
+            maxAudioRefDuration={
+              selectedModel?.audio_references_max_total_duration_seconds ?? 30
+            }
+            onPickAudioFromLibrary={
+              supportsAudioRefs
+                ? () => setIsAudioRefPickerOpen(true)
+                : undefined
+            }
+            rightToolbar={
+              <GenerationCountPicker
+                batchSizeMax={selectedModel?.batch_size_max ?? 4}
+                batchSizeOptions={selectedModel?.batch_size_options}
+                currentCount={numVideos}
+                handleCountChange={setNumVideos}
+                panelTitle="No. of videos"
+              />
+            }
+            leftToolbar={
+              <>
+                {hasSizeOptions && (
+                  <Tooltip
+                    content="Aspect Ratio"
+                    position="top"
+                    className="z-50"
+                    closeOnClick
+                  >
+                    <PopoverMenu
+                      items={sizeItems}
+                      onSelect={handleSizeChange}
+                      mode="toggle"
+                      panelTitle="Aspect Ratio"
+                      showIconsInList
+                      triggerIcon={
+                        AUTO_RATIOS.has(selectedSize) ? (
+                          <AutoIcon />
+                        ) : (
+                          <AspectRatioIcon commonAspectRatio={selectedSize} />
+                        )
+                      }
+                    />
+                  </Tooltip>
+                )}
+                {resolutionItems && (
+                  <Tooltip
+                    content="Resolution"
+                    position="top"
+                    className="z-50"
+                    closeOnClick
+                  >
+                    <PopoverMenu
+                      items={resolutionItems}
+                      onSelect={handleResolutionChange}
+                      mode="toggle"
+                      panelTitle="Resolution"
+                    />
+                  </Tooltip>
+                )}
+                {bitrateItems && (
+                  <Tooltip
+                    content="Bitrate"
+                    position="top"
+                    className="z-50"
+                    closeOnClick
+                  >
+                    <PopoverMenu
+                      items={bitrateItems}
+                      onSelect={handleBitrateChange}
+                      mode="toggle"
+                      panelTitle="Bitrate"
+                    />
+                  </Tooltip>
+                )}
+                {durationRange && (
+                  <Tooltip content="Duration" position="top" className="z-50">
+                    <PopoverMenu
+                      mode="default"
+                      panelTitle="Duration"
+                      triggerIcon={
+                        <FontAwesomeIcon
+                          icon={faClock}
+                          className="h-3.5 w-3.5"
+                        />
+                      }
+                      triggerLabel={`${effectiveDuration}s`}
+                    >
+                      <div className="w-[min(16rem,calc(100vw-2rem))] pb-0.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex-1">
+                            <SliderV2
+                              min={durationRange.min}
+                              max={durationRange.max}
+                              value={localDuration}
+                              onChange={handleDurationSlide}
+                              step={1}
+                              suffix="s"
+                              variant="filled"
+                            />
+                          </div>
+                          <span className="text-base-fg min-w-6 shrink-0 text-sm font-medium tabular-nums">
+                            {localDuration}s
+                          </span>
+                        </div>
+                        <div className="text-base-fg/40 mt-1.5 flex justify-between px-0.5 text-[11px] tabular-nums">
+                          <span>{durationRange.min}s</span>
+                          <span>{durationRange.max}s</span>
+                        </div>
+                      </div>
+                    </PopoverMenu>
+                  </Tooltip>
+                )}
+                {hasSound && (
+                  <Tooltip
+                    content={generateWithSound ? "Sound: ON" : "Sound: OFF"}
+                    position="top"
+                    className="z-50"
+                    delay={200}
+                  >
+                    <ToggleButton
+                      isActive={generateWithSound}
+                      icon={faWaveformLines}
+                      activeIcon={faWaveformLines}
+                      onClick={() =>
+                        setUi({ generateWithSound: !generateWithSound })
+                      }
+                      className={
+                        generateWithSound
+                          ? "bg-primary/40 hover:bg-primary/50 border-primary/30"
+                          : undefined
+                      }
+                    />
+                  </Tooltip>
+                )}
+                {inputModeItems && (
+                  <Tooltip
+                    content="Input Mode"
+                    position="top"
+                    className="z-50"
+                    closeOnClick
+                  >
+                    <PopoverMenu
+                      items={inputModeItems}
+                      onSelect={handleInputModeChange}
+                      mode="toggle"
+                      panelTitle="Input Mode"
+                    />
+                  </Tooltip>
+                )}
+                {supportsCharacters && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCharactersModalOpen(true)}
+                    className="flex h-9 items-center justify-center gap-1 rounded-lg border border-ui-controls-border bg-ui-controls px-3 text-sm font-medium text-base-fg shadow-sm transition-all duration-150 hover:bg-ui-controls/80 active:scale-95"
+                  >
+                    @Characters
+                  </button>
+                )}
+              </>
+            }
+          />
+        </div>
+      }
+      modals={
+        <>
+          <GalleryModal
+            mode="select"
+            isOpen={isImagePickerOpen}
+            onClose={() => setIsImagePickerOpen(false)}
+            selectedItemIds={pickerSelectedIds}
+            onSelectItem={handlePickerSelect}
+            maxSelections={imagePickerMax}
+            onUseSelected={handleLibraryImageSelect}
+            forceFilter="image"
+            hideFilter
+          />
+          <GalleryModal
+            mode="select"
+            isOpen={isEndFramePickerOpen}
+            onClose={() => setIsEndFramePickerOpen(false)}
+            selectedItemIds={endFramePickerSelectedIds}
+            onSelectItem={handleEndFramePickerSelect}
+            maxSelections={1}
+            onUseSelected={handleEndFrameLibrarySelect}
+            forceFilter="image"
+            hideFilter
+          />
+          <GalleryModal
+            mode="select"
+            isOpen={isVideoRefPickerOpen}
+            onClose={() => setIsVideoRefPickerOpen(false)}
+            selectedItemIds={videoRefPickerSelectedIds}
+            onSelectItem={handleVideoRefPickerSelect}
+            maxSelections={videoRefPickerMax}
+            onUseSelected={handleLibraryVideoSelect}
+            forceFilter="video"
+            hideFilter
+          />
+          <GalleryModal
+            mode="select"
+            isOpen={isAudioRefPickerOpen}
+            onClose={() => setIsAudioRefPickerOpen(false)}
+            selectedItemIds={audioRefPickerSelectedIds}
+            onSelectItem={handleAudioRefPickerSelect}
+            maxSelections={audioRefPickerMax}
+            onUseSelected={handleLibraryAudioSelect}
+            forceFilter="audio"
+            hideFilter
+          />
+          <CharactersModal
+            isOpen={isCharactersModalOpen}
+            onClose={() => setIsCharactersModalOpen(false)}
+            onSelectCharacter={(character) => {
+              const mention = `@${character.name}`;
+              const spaceBefore =
+                prompt.length > 0 && !prompt.endsWith(" ") ? " " : "";
+              setPrompt(prompt + spaceBefore + mention + " ");
+              setIsCharactersModalOpen(false);
+            }}
+          />
+          <Lightbox
+            isOpen={lightbox.lightboxOpen}
+            onClose={lightbox.closeLightbox}
+            mediaToken={lightbox.lightboxItem?.id}
+            cdnUrl={lightbox.lightboxItem?.fullImage}
+            mediaClass={lightbox.lightboxItem?.mediaClass}
+            batchImageToken={lightbox.lightboxItem?.batchImageToken}
+            showBatchCarousel={false}
+            onNavigatePrev={lightbox.navigatePrev}
+            onNavigateNext={lightbox.navigateNext}
+            onDeleted={gallery.removeItem}
+          />
+        </>
+      }
+    />
+  );
+}
