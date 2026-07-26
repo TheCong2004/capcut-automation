@@ -207,6 +207,10 @@ const resources = {
   },
 };
 
+// Ensure Vietnamese and unlisted locales fall back to English bundle to avoid undefined namespace reads
+(resources as Record<string, unknown>).vi = resources.en;
+(resources as Record<string, unknown>)['vi-VN'] = resources.en;
+
 const RTL_LANGUAGES = new Set(['ar']);
 
 function applyDocumentLanguage(language: string) {

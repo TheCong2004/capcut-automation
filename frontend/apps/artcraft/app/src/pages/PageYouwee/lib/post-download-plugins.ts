@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { isTauri } from './tauri';
 import type {
   PluginSummary,
   PluginTrigger,
@@ -107,15 +108,13 @@ export function savePluginWorkflowSnapshots(snapshots: PluginWorkflowSnapshotMap
 }
 
 export async function refreshPluginWorkflowSnapshots(): Promise<PluginWorkflowSnapshotMap> {
+  if (!isTauri) return loadPluginWorkflowSnapshots();
   try {
     const [plugins, workflows] = await Promise.all([
-      invoke<PluginSummary[]>('list_plugins'),
-      Promise.all(
-        DOWNLOAD_WORKFLOW_TRIGGERS.map((trigger) =>
-          invoke<PluginTriggerWorkflow>('get_plugin_trigger_workflow', { trigger }),
-        ),
-      ),
+      invoke<PluginSummary[]>('get_installed_plugins'),
+      invoke<PluginTriggerWorkflow[]>('get_plugin_workflows'),
     ]);
+
     const snapshots = buildWorkflowSnapshotMap(plugins, workflows);
     savePluginWorkflowSnapshots(snapshots);
     return snapshots;
@@ -146,13 +145,18 @@ export async function enqueuePluginWorkflowTrigger(
   payload: PostDownloadPluginPayload,
   snapshots?: PluginWorkflowSnapshotMap,
 ) {
+  if (!isTauri) return null;
   const workflowSnapshots = snapshots ?? loadPluginWorkflowSnapshots();
   const workflowSteps = workflowSnapshots[trigger] ?? [];
   if (workflowSteps.length === 0) return null;
 
-  return invoke<string | null>('enqueue_plugin_workflow_trigger', {
-    trigger,
-    payload,
-    workflowSteps,
-  });
+  try {
+    return await invoke<string | null>('enqueue_plugin_workflow_trigger', {
+      trigger,
+      payload,
+      workflowSteps,
+    });
+  } catch {
+    return null;
+  }
 }

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import { isTauri } from '@/lib/tauri';
 import type {
   ChannelVideo,
   DownloadProgress,
@@ -178,32 +179,39 @@ export async function updateChannelVideoStatus(input: {
   await invoke('update_channel_video_status', input);
 }
 
+const dummyUnlisten: UnlistenFn = () => {};
+
 export function onDownloadProgress(
   handler: (event: { payload: DownloadProgress }) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri) return Promise.resolve(dummyUnlisten);
   return listen<DownloadProgress>('download-progress', handler);
 }
 
 export function onChannelNewVideos(
   handler: (event: { payload: ChannelNewVideosEvent }) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri) return Promise.resolve(dummyUnlisten);
   return listen<ChannelNewVideosEvent>('channel-new-videos', handler);
 }
 
 export function onChannelFetchProgress<T>(
   handler: (event: { payload: T }) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri) return Promise.resolve(dummyUnlisten);
   return listen<T>('channel-fetch-progress', handler);
 }
 
 export function onTrayOpenChannel(
   handler: (event: { payload: string }) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri) return Promise.resolve(dummyUnlisten);
   return listen<string>('tray-open-channel', handler);
 }
 
 export function onChannelAutoDownload(
   handler: (event: { payload: ChannelAutoDownloadEvent }) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri) return Promise.resolve(dummyUnlisten);
   return listen<ChannelAutoDownloadEvent>('channel-auto-download', handler);
 }

@@ -47,12 +47,13 @@ export function useTrayEvents(
   }, [openSettingsPage]);
 
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen('tray-open-extension', () => {
       openSettingsPage('extension');
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn && fn()).catch(() => {});
     };
   }, [openSettingsPage]);
 }

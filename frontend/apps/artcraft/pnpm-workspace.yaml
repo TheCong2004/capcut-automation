@@ -1,0 +1,11 @@
+packages:
+  - '.'
+  - 'app/src/pages/freellmapi/server'
+  - 'app/src/pages/freellmapi/shared'
+  - 'app/src/pages/OmniRoute'
+
+allowBuilds:
+  core-js: true
+  esbuild: true
+  nx: true
+  unrs-resolver: true

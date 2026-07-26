@@ -5,6 +5,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isTauri } from '@/lib/tauri';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -398,6 +399,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
   // Get default download path on mount (only if not saved)
   useEffect(() => {
+    if (!isTauri) return;
     const getDefaultPath = async () => {
       // Only fetch default if no saved path
       if (settings.outputPath) return;
@@ -416,6 +418,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
   // Listen for progress updates from Rust backend - runs once at app start
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<DownloadProgress>('download-progress', (event) => {
       const progress = event.payload;
 

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import { isTauri } from '@/lib/tauri';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { openFileLocation } from '@/lib/open-file-location';
 import type {
@@ -55,6 +56,7 @@ export async function pickProcessingOutputDirectory(defaultPath?: string): Promi
 }
 
 export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
+  if (!isTauri) throw new Error('Tauri API is not available in web browser mode');
   return invoke<VideoMetadata>('get_video_metadata', { path });
 }
 

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { isTauri } from '@/lib/tauri';
 
 import { localizeUnknownError } from '@/lib/backend-error';
 import type {
@@ -473,6 +474,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }) {
 
   // Initialize on first mount - auto download Deno and yt-dlp stable if not installed
   useEffect(() => {
+    if (!isTauri) return;
     if (!initialized) {
       setInitialized(true);
       Promise.all([
@@ -565,6 +567,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }) {
 
   // Listen to download progress events
   useEffect(() => {
+    if (!isTauri) return;
     const unlisteners: UnlistenFn[] = [];
 
     // FFmpeg download progress

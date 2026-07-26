@@ -36,8 +36,9 @@ export function GalleryPage({ onNavigateToSettings }: GalleryPageProps) {
   } = useGalleryDl();
   const { galleryDlStatus, galleryDlLoading, galleryDlError, checkGalleryDl } = useDependencies();
 
-  const pendingCount = items.filter((i) => i.status !== 'completed').length;
-  const hasItems = items.length > 0;
+  const safeItems = Array.isArray(items) ? items : [];
+  const pendingCount = safeItems.filter((i) => i.status !== 'completed').length;
+  const hasItems = safeItems.length > 0;
   const isReady = galleryDlStatus?.installed === true;
 
   return (

@@ -194,7 +194,7 @@ export function CrawlerConfigPanel() {
                   <SelectValue placeholder={t('field.crawlTypePlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {options?.crawler_types.map((type) => (
+                  {options?.crawler_types?.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>
@@ -290,7 +290,7 @@ export function CrawlerConfigPanel() {
                 <SelectValue placeholder={t('field.loginMethodPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {options?.login_types.map((type) => (
+                {options?.login_types?.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     {type.label}
                   </SelectItem>
@@ -334,7 +334,7 @@ export function CrawlerConfigPanel() {
                 <SelectValue placeholder={t('field.saveFormatPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {options?.save_options.map((option) => (
+                {options?.save_options?.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

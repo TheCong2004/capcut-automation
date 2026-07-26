@@ -1,6 +1,7 @@
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { isTauri } from '@/lib/tauri';
 import type { ThemeMode, ThemeName } from '@/lib/themes';
 import { getTheme } from '@/lib/themes';
 
@@ -108,11 +109,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Sync native window appearance (title bar/traffic-light area) with app mode.
     // This keeps macOS title bar color consistent when users switch dark/light mode.
-    getCurrentWindow()
-      .setTheme(mode === 'dark' ? 'dark' : 'light')
-      .catch(() => {
-        // Ignore outside Tauri runtime.
-      });
+    if (isTauri) {
+      getCurrentWindow()
+        .setTheme(mode === 'dark' ? 'dark' : 'light')
+        .catch(() => {
+          // Ignore outside Tauri runtime.
+        });
+    }
   }, [theme, mode]);
 
   return (

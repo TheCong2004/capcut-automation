@@ -245,6 +245,7 @@ export function onImageDrop(
   callback: (item: GalleryItem, position: { x: number; y: number }) => void,
 ) {
   const handler = (e: any) => {
+    if (!e || !e.detail) return;
     callback(e.detail.item, e.detail.position);
   };
   window.addEventListener(IMAGE_DROP_EVENT, handler);
@@ -259,6 +260,7 @@ export function onFolderDrop(
   callback: (items: GalleryItem[], folderId: string) => void,
 ) {
   const handler = (e: any) => {
+    if (!e || !e.detail) return;
     callback(e.detail.items, e.detail.folderId);
   };
   window.addEventListener(FOLDER_DROP_EVENT, handler);

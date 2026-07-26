@@ -123,10 +123,9 @@ export const useCrawlerStore = create<CrawlerState>((set, get) => ({
 
   clearLogs: () => {
     const { logs } = get()
-    // 记录当前最大的 log id，清除后只显示比这个 id 大的日志
-    const maxLogId = logs.length > 0 ? Math.max(...logs.map(l => l.id)) : 0
+    const safeLogs = Array.isArray(logs) ? logs : []
+    const maxLogId = safeLogs.length > 0 ? Math.max(...safeLogs.map(l => l?.id || 0)) : 0
     set({ logs: [], clearedAfterLogId: maxLogId })
-    // 持久化到 localStorage
     saveClearedLogIdToStorage(maxLogId)
   },
 

@@ -567,10 +567,12 @@ export const PageOpenMontage = () => {
         requestJSON<ProjectSummary[]>("/api/projects"),
         requestJSON<PipelineOption[]>("/api/pipelines"),
       ]);
-      setProjects(projectData);
-      setPipelines(pipelineData);
+      setProjects(Array.isArray(projectData) ? projectData : []);
+      setPipelines(Array.isArray(pipelineData) ? pipelineData : []);
       setConnected(true);
     } catch {
+      setProjects([]);
+      setPipelines([]);
       setConnected(false);
     } finally {
       setLoading(false);
@@ -584,20 +586,26 @@ export const PageOpenMontage = () => {
       void loadLibrary();
     };
     events.onmessage = (message) => {
-      const payload = JSON.parse(message.data);
-      if (payload.type === "change") void loadLibrary();
+      try {
+        const payload = JSON.parse(message.data);
+        if (payload?.type === "change") void loadLibrary();
+      } catch {
+        /* ignore parse error */
+      }
     };
     return () => events.close();
   }, [loadLibrary]);
 
+  const safeProjects = Array.isArray(projects) ? projects : [];
+
   const completedProjects = useMemo(
     () =>
-      projects.filter(
+      safeProjects.filter(
         (project) =>
-          project.stage_states.length > 0 &&
-          project.completed_count === project.stage_states.length,
+          project?.stage_states?.length > 0 &&
+          project?.completed_count === project?.stage_states?.length,
       ).length,
-    [projects],
+    [safeProjects],
   );
 
   if (selectedProject) {
@@ -657,8 +665,8 @@ export const PageOpenMontage = () => {
       <main className="mx-auto max-w-7xl p-7">
         <div className="mb-7 grid gap-4 sm:grid-cols-3">
           {[
-            ["Tổng dự án", projects.length],
-            ["Đang hoạt động", projects.filter((item) => item.live).length],
+            ["Tổng dự án", safeProjects.length],
+            ["Đang hoạt động", safeProjects.filter((item) => item?.live).length],
             ["Đã hoàn thành", completedProjects],
           ].map(([label, value]) => (
             <div
@@ -697,9 +705,9 @@ export const PageOpenMontage = () => {
               Hãy chạy lại Artcraft bằng windows_capcut_dev.ps1.
             </p>
           </div>
-        ) : projects.length ? (
+        ) : safeProjects.length ? (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {projects.map((project) => (
+            {safeProjects.map((project) => (
               <ProjectCard
                 key={project.project_id}
                 project={project}

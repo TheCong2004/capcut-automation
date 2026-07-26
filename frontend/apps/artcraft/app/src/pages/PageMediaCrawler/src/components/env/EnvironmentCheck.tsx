@@ -31,8 +31,9 @@ export function EnvironmentCheck({ onCheckComplete }: EnvironmentCheckProps) {
     setResult(null)
     try {
       const response = await envApi.check()
-      setResult(response.data)
-      if (response.data.success) {
+      const data = response?.data || { success: false, message: 'Unknown environment' }
+      setResult(data)
+      if (data.success) {
         setStatus('success')
         // 存储到 localStorage
         localStorage.setItem(ENV_CHECK_KEY, 'true')

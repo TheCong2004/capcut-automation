@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { isTauri } from '@/lib/tauri';
 import { useHistory } from '@/contexts/HistoryContext';
 import { ensureAssetPathAccess } from '@/lib/asset-access';
 import { reconcilePlayableAudioQueue } from '@/lib/player-queue';
@@ -153,7 +154,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Commit queue/index only when this request is still the latest.
         commitQueueState(queueToUse, index);
 
-        const src = convertFileSrc(cleanPath);
+        const src = isTauri ? convertFileSrc(cleanPath) : cleanPath;
         latestAudio.pause();
         latestAudio.src = src;
         latestAudio.currentTime = 0;

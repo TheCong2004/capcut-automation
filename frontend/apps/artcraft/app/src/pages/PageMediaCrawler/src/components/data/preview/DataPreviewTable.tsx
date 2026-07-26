@@ -13,23 +13,25 @@ export function DataPreviewTable({ data, columns: propColumns }: DataPreviewTabl
   const { t } = useTranslation('data')
   const [searchTerm, setSearchTerm] = useState('')
 
+  const safeData = Array.isArray(data) ? data : []
+
   // 自动获取列名（JSON 可能没有 columns）
   const columns = useMemo(() => {
     if (propColumns && propColumns.length > 0) return propColumns
-    if (data.length === 0) return []
-    return Object.keys(data[0])
-  }, [data, propColumns])
+    if (safeData.length === 0) return []
+    return Object.keys(safeData[0] || {})
+  }, [safeData, propColumns])
 
   // 过滤数据
   const filteredData = useMemo(() => {
-    if (!searchTerm) return data
+    if (!searchTerm) return safeData
     const term = searchTerm.toLowerCase()
-    return data.filter(row =>
-      Object.values(row).some(value =>
+    return safeData.filter(row =>
+      row && typeof row === 'object' && Object.values(row).some(value =>
         String(value ?? '').toLowerCase().includes(term)
       )
     )
-  }, [data, searchTerm])
+  }, [safeData, searchTerm])
 
   // 格式化单元格值
   const formatCellValue = (value: unknown): string => {

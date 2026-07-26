@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
+import { isTauri } from "@/lib/tauri";
 import { useDownload } from "@/pages/PageYouwee/contexts/download-context";
 import type { Quality } from "@/pages/PageYouwee/lib/types";
 
@@ -83,6 +84,11 @@ export function DownloadPage() {
   };
 
   useEffect(() => {
+    if (!isTauri) {
+      setBackendStatus("error");
+      setLog((current) => `${current}\n[BE] Running in Web Browser mode`.trim());
+      return;
+    }
     void checkBackend();
   }, []);
 

@@ -2309,7 +2309,9 @@ export const GalleryModal = React.memo(
     // Folder drop listener
     useEffect(() => {
       const handler = (e: Event) => {
-        const { items, folderId } = (e as CustomEvent).detail;
+        const detail = (e as CustomEvent)?.detail;
+        if (!detail) return;
+        const { items, folderId } = detail;
         requestFolderDrop(
           items.map((i: GalleryItem) => i.id),
           folderId,

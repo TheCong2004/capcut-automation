@@ -5,6 +5,7 @@ import {
   sendNotification,
 } from '@tauri-apps/plugin-notification';
 import { useCallback, useEffect, useRef } from 'react';
+import { isTauri } from '@/lib/tauri';
 import { useToast } from '@/components/ui/toast';
 import { createPluginToastId, formatPluginToastText } from '@/lib/plugin-toast';
 import type { PluginExecutionOutputEvent, PluginExecutionStatusEvent } from '@/lib/types';
@@ -127,6 +128,7 @@ export function usePluginExecutionToasts() {
   );
 
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<PluginExecutionStatusEvent>('plugin-execution-status', (event) => {
       const {
         pluginId,
@@ -230,6 +232,7 @@ export function usePluginExecutionToasts() {
   }, [pushPluginToast]);
 
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<PluginExecutionOutputEvent>('plugin-execution-output', (event) => {
       const { pluginId, pluginName, runId, chunk, mediaTitle, filename, mediaUrl } = event.payload;
       if (pluginName) {

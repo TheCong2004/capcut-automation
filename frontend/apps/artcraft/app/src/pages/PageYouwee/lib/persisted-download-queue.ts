@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { isTauri } from './tauri';
 import type { DownloadItem } from './types';
 
 export type PersistedQueueKind = 'youtube' | 'universal' | 'gallery';
@@ -32,25 +33,36 @@ export function serializeDownloadQueueItems(items: DownloadItem[]): string {
 export async function loadPersistedDownloadQueue(
   queueKind: PersistedQueueKind,
 ): Promise<DownloadItem[]> {
-  const itemsJson = await invoke<string | null>('load_download_queue', { queueKind });
-  if (!itemsJson) return [];
+  if (!isTauri) return [];
+  try {
+    const itemsJson = await invoke<string | null>('load_download_queue', { queueKind });
+    if (!itemsJson) return [];
 
-  const parsed = JSON.parse(itemsJson) as unknown;
-  if (!Array.isArray(parsed)) return [];
+    const parsed = JSON.parse(itemsJson) as unknown;
+    if (!Array.isArray(parsed)) return [];
 
-  return normalizeDownloadQueueItems(parsed as DownloadItem[]);
+    return normalizeDownloadQueueItems(parsed as DownloadItem[]);
+  } catch {
+    return [];
+  }
 }
 
 export async function savePersistedDownloadQueueJson(
   queueKind: PersistedQueueKind,
   itemsJson: string,
 ): Promise<void> {
-  await invoke('save_download_queue', {
-    queueKind,
-    itemsJson,
-  });
+  if (!isTauri) return;
+  try {
+    await invoke('save_download_queue', {
+      queueKind,
+      itemsJson,
+    });
+  } catch {}
 }
 
 export async function clearPersistedDownloadQueue(queueKind: PersistedQueueKind): Promise<void> {
-  await invoke('clear_download_queue', { queueKind });
+  if (!isTauri) return;
+  try {
+    await invoke('clear_download_queue', { queueKind });
+  } catch {}
 }

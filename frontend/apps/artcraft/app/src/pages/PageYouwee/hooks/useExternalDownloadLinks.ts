@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react';
+import { isTauri } from '@/lib/tauri';
 import type { Page } from '@/components/layout';
 import { useDownload } from '@/contexts/download-context';
 import { useUniversal } from '@/contexts/universal-context';
@@ -323,6 +324,7 @@ export function useExternalDownloadLinks(
   }, [handleExternalLink]);
 
   useEffect(() => {
+    if (!isTauri) return;
     let unlisten: (() => void) | null = null;
 
     onOpenUrl((urls) => {
@@ -343,6 +345,7 @@ export function useExternalDownloadLinks(
   }, [handleExternalLink]);
 
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<ExternalCliDownloadEventPayload>('external-cli-download', (event) => {
       for (const request of event.payload?.requests ?? []) {
         void handleCliDownloadRequest(request);
@@ -355,6 +358,7 @@ export function useExternalDownloadLinks(
   }, [handleCliDownloadRequest]);
 
   useEffect(() => {
+    if (!isTauri) return;
     let cancelled = false;
 
     const consumeStartupExternalLinks = async () => {

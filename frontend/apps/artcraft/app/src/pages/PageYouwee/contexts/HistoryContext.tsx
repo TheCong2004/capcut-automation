@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { isTauri } from '@/lib/tauri';
 import {
   createContext,
   type ReactNode,
@@ -245,6 +246,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
 
   // Listen for download progress events for re-downloads
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<DownloadProgress>('download-progress', (event) => {
       const progress = event.payload;
 
@@ -687,6 +689,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
 
   // Refresh history whenever any download completes (including audio)
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<DownloadProgress>('download-progress', (event) => {
       if (event.payload.status === 'finished') {
         // Delay slightly to ensure Rust has finished writing the DB record

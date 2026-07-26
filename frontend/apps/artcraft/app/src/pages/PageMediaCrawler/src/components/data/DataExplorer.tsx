@@ -42,12 +42,16 @@ export function DataExplorer() {
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['dataFiles'],
     queryFn: async () => {
-      const { data } = await dataApi.getFiles()
-      return data.files
+      try {
+        const res = await dataApi.getFiles()
+        return Array.isArray(res?.data?.files) ? res.data.files : []
+      } catch {
+        return []
+      }
     },
   })
 
-  const files = data || []
+  const files = Array.isArray(data) ? data : []
 
   // 按类别分组文件
   const { categories, groupedFiles } = useMemo(() => {

@@ -78,7 +78,7 @@ export function PageVideoEditor() {
     });
     const editor = EditorCore.getInstance();
 
-    if (editor.project.getActive()?.metadata.id !== resolvedProjectId) {
+    if (editor.project.getActive()?.metadata?.id !== resolvedProjectId) {
       const project = buildBootstrapProject({ id: resolvedProjectId });
       editor.project.setActiveProject({ project });
       editor.scenes.initializeScenes({

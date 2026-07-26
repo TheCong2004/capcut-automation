@@ -1,0 +1,13 @@
+{
+  "name": "freellmapi",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm -C server dev\" \"pnpm -C client dev\"",
+    "test": "pnpm -C server test && pnpm -C client test --if-present",
+    "build": "pnpm -C server build && pnpm -C client build",
+    "build:server": "pnpm -C server build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

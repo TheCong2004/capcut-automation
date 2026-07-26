@@ -475,7 +475,10 @@ const PageDraw = ({
   // Listen for gallery drag and drop events
   useEffect(() => {
     const handleGallery2DDrop = async (event: CustomEvent) => {
-      const { item, canvasPosition } = event.detail;
+      if (!event || !event.detail) return;
+      const { item, canvasPosition, position } = event.detail;
+      const pos = canvasPosition || position;
+      if (!pos) return;
 
       const stage = stageRef.current;
       if (!stage) {
@@ -485,8 +488,8 @@ const PageDraw = ({
         return;
       }
       const stagePoint = {
-        x: (canvasPosition.x - stage.x()) / stage.scaleX(),
-        y: (canvasPosition.y - stage.y()) / stage.scaleY(),
+        x: (pos.x - stage.x()) / stage.scaleX(),
+        y: (pos.y - stage.y()) / stage.scaleY(),
       };
 
       if (item.mediaClass === "dimensional") {

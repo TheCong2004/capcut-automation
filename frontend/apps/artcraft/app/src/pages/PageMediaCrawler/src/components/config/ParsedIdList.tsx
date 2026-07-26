@@ -15,12 +15,13 @@ export function ParsedIdList({ value, platform, type, onRemove, disabled }: Pars
     return parseMultipleUrls(value, platform)
   }, [value, platform])
 
-  if (parsed.length === 0) return null
+  const safeParsed = Array.isArray(parsed) ? parsed : []
+  if (safeParsed.length === 0) return null
 
   const handleRemove = (index: number) => {
     if (disabled || !onRemove) return
 
-    const items = value
+    const items = (value || '')
       .split(/[,\n]+/)
       .map(s => s.trim())
       .filter(Boolean)
@@ -32,10 +33,10 @@ export function ParsedIdList({ value, platform, type, onRemove, disabled }: Pars
   return (
     <div className="space-y-1.5 mt-2">
       <div className="text-[10px] text-cyber-text-muted font-mono">
-        Đã nhận diện {parsed.length} {type === 'detail' ? 'bài viết/video' : 'nhà sáng tạo'}:
+        Đã nhận diện {safeParsed.length} {type === 'detail' ? 'bài viết/video' : 'nhà sáng tạo'}:
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {parsed.map((item, index) => (
+        {safeParsed.map((item, index) => (
           <ParsedIdTag
             key={`${item.id}-${index}`}
             item={item}
@@ -55,12 +56,10 @@ interface ParsedIdTagProps {
 }
 
 function ParsedIdTag({ item, expectedType, onRemove }: ParsedIdTagProps) {
-  // 检查类型是否匹配
   const typeMatch = item.type === 'unknown' ||
     (expectedType === 'detail' && item.type === 'video') ||
     (expectedType === 'creator' && item.type === 'creator')
 
-  // 警告状态：小红书需要xsec_token
   const needsWarning = !item.isValid || !typeMatch
 
   return (

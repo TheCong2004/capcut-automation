@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { isTauri } from '@/lib/tauri';
 import type { LogEntry, LogFilter } from '@/lib/types';
 
 interface LogContextType {
@@ -53,10 +54,14 @@ export function LogProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshLogs = useCallback(async () => {
-    setLoading(true);
+    if (!isTauri) {
+      setLoading(false);
+      return;
+    }
     try {
-      const filterParam = filter === 'all' ? null : filter;
-      const searchParam = search.trim() || null;
+      const filterParam = filter === 'all' ? undefined : filter;
+      const searchParam = search.trim() || undefined;
+
       const result = await invoke<LogEntry[]>('get_logs', {
         filter: filterParam,
         search: searchParam,
@@ -71,6 +76,7 @@ export function LogProvider({ children }: { children: ReactNode }) {
   }, [filter, search]);
 
   const clearLogs = useCallback(async () => {
+    if (!isTauri) return;
     try {
       await invoke('clear_logs');
       setLogs([]);
@@ -81,6 +87,7 @@ export function LogProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const exportLogs = useCallback(async () => {
+    if (!isTauri) return '';
     try {
       const json = await invoke<string>('export_logs');
       return json;
@@ -92,11 +99,13 @@ export function LogProvider({ children }: { children: ReactNode }) {
 
   // Fetch logs on mount and when filter/search changes
   useEffect(() => {
+    if (!isTauri) return;
     refreshLogs();
   }, [refreshLogs]);
 
   // Auto-refresh logs every 5 seconds when viewing
   useEffect(() => {
+    if (!isTauri) return;
     const interval = setInterval(() => {
       refreshLogs();
     }, 5000);

@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { downloadDir, homeDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isTauri } from '@/lib/tauri';
 import { localizeProgressError, localizeUnknownError } from '@/lib/backend-error';
 import { extractUrls } from '@/lib/sources';
 import { useDownload } from './download-context';
@@ -102,6 +103,7 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
 
   // Get default output path
   useEffect(() => {
+    if (!isTauri) return;
     const getDefaultPath = async () => {
       if (settings.outputPath) return;
 
@@ -129,6 +131,7 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
 
   // Listen for progress events
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<MetadataProgress>('metadata-progress', (event) => {
       const progress = event.payload;
 

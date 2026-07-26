@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { isTauri } from '@/lib/tauri';
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useAI } from '@/contexts/AIContext';
 import { useDownload } from '@/contexts/download-context';
@@ -81,6 +82,7 @@ export function SummarySessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!isTauri) return;
     const unlistenPromise = listen<SummaryProgressPayload>('summary-progress', (event) => {
       const progress = event.payload;
       if (progress.requestId !== backendSummaryRequestIdRef.current) {

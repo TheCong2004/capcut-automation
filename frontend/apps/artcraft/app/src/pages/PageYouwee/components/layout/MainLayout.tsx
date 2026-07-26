@@ -1,6 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { isTauri } from '@/lib/tauri';
 import type { Page } from './Sidebar';
 import { Sidebar } from './Sidebar';
 
@@ -12,6 +13,7 @@ function WindowControls() {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
+    if (!isTauri) return;
     const win = getCurrentWindow();
     win
       .isMaximized()
@@ -107,23 +109,23 @@ interface MainLayoutProps {
  * Page routing stays outside; this only frames content.
  */
 export function MainLayout({ children, currentPage, onPageChange }: MainLayoutProps) {
-  const titlebarOffset = isMacOS ? '2.5rem' : isWindows ? '2rem' : undefined;
+  const titlebarOffset = isTauri ? (isMacOS ? '2.5rem' : isWindows ? '2rem' : undefined) : undefined;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-foreground">
       {/* macOS: transparent drag region for overlay title bar */}
-      {isMacOS && (
+      {isMacOS && isTauri && (
         <div data-tauri-drag-region className="absolute top-0 left-0 right-0 z-30 h-10" />
       )}
 
       {/* Windows: custom title bar replacing native decorations */}
-      {isWindows && (
+      {isWindows && isTauri && (
         <div className="absolute top-0 left-0 right-0 z-30 h-8 flex border-b border-border bg-background">
           <div
             role="toolbar"
             data-tauri-drag-region
             className="flex-1 h-full flex items-center px-3"
-            onDoubleClick={() => getCurrentWindow().toggleMaximize()}
+            onDoubleClick={() => isTauri && getCurrentWindow().toggleMaximize()}
           >
             <span className="pointer-events-none select-none text-[11px] font-medium tracking-wide text-muted-foreground">
               Youwee

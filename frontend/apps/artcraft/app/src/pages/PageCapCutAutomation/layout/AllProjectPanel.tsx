@@ -136,10 +136,11 @@ export function AllProjectPanel() {
   }, [width, collapsed]);
 
   const filtered = useMemo(() => {
+    const list = Array.isArray(projects) ? projects : [];
     const q = search.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter((p) => {
-      const blob = `${p.name || ""} ${p.folder || ""} ${p.project || ""} ${p.root || ""}`.toLowerCase();
+    if (!q) return list;
+    return list.filter((p) => {
+      const blob = `${p?.name || ""} ${p?.folder || ""} ${p?.project || ""} ${p?.root || ""}`.toLowerCase();
       return blob.includes(q);
     });
   }, [projects, search]);
