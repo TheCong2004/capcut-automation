@@ -16,6 +16,7 @@ dependencies = [
     "cos-python-sdk-v5>=1.9.38",
     "oss2",
     "imageio>=2.37.3",
+    "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]

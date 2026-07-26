@@ -2,15 +2,8 @@
 // (TopBar, login + pricing modals, toaster, Tauri event listeners,
 // background refresh hooks) lives here, and a single tab-driven
 // switch picks the active page below it.
-//
-// The 3D editor (PageScene) is one of the 13 tab branches — it
-// genuinely mounts/unmounts as the user moves on/off the "3D" tab,
-// so the Three.js engine constructs on entry and tears down on exit
-// via the EngineProvider's React lifecycle. Other pages render as
-// siblings, never wrapped by EngineProvider, so they have no
-// dependency on the 3D engine being present.
 
-import { useEffect, useState } from "react";
+import React, { Component, useEffect, useState } from "react";
 import * as gpu from "detect-gpu";
 import { useSignals } from "@preact/signals-react/runtime";
 
@@ -35,16 +28,8 @@ import {
   ActionReminderModal,
 } from "@storyteller/ui-action-reminder-modal";
 import {
-  useFlashFileDownloadErrorEvent,
-  useFlashUserInputErrorEvent,
-  useGenerationCompleteEvent,
-  useGenerationEnqueueFailureEvent,
   useGenerationEnqueueSuccessEvent,
-  useGenerationFailedEvent,
-  useMediaFileDeletedEvent,
-  useTextToImageGenerationCompleteEvent,
 } from "@storyteller/tauri-events";
-import { SoundManager } from "@storyteller/soundboard";
 import { useStoryboardPageEnabled } from "@storyteller/ui-settings-modal";
 import { DomLevels, usePageSceneStore } from "@storyteller/ui-pagescene";
 
@@ -54,7 +39,6 @@ import { UsersApi } from "~/Classes/ApiManager";
 import { authentication } from "~/signals";
 import { AUTH_STATUS } from "~/enums";
 import { useTabStore } from "./Stores/TabState";
-import { useTextToImageStore } from "./PageImage/TextToImageStore";
 
 import { AppsIndexPage } from "./PageApps/AppsIndexPage";
 import PageDraw from "./PageDraw/PageDraw";
@@ -77,6 +61,8 @@ import { CapCutAutomation } from "./PageCapCutAutomation";
 import { Youwee } from "./PageYouwee";
 import { PageMediaCrawler } from "./PageMediaCrawler";
 import { PageOpenMontage } from "./PageOpenMontage";
+import { PageFreeLLMApi } from "./freellmapi";
+import { PageOmniRoute } from "./OmniRoute";
 import {
   topNavMediaId,
   topNavMediaUrl,
@@ -86,47 +72,52 @@ interface Props {
   sceneToken?: string;
 }
 
+class TabErrorBoundary extends Component<
+  { children: React.ReactNode; tabName: string },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error(`[TabErrorBoundary] Error in ${this.props.tabName}:`, error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-[calc(100vh-56px)] w-full flex-col items-center justify-center bg-[#121318] p-8 text-center text-slate-200">
+          <div className="rounded-2xl border border-red-500/20 bg-[#1c1e26] p-8 max-w-md space-y-4 shadow-xl">
+            <h3 className="text-xl font-bold text-white">
+              Ứng dụng {this.props.tabName} gặp sự cố
+            </h3>
+            <p className="text-xs text-red-400 font-mono bg-[#0e0f14] p-3 rounded-xl overflow-x-auto text-left">
+              {this.state.error?.message || "Lỗi không xác định"}
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition"
+            >
+              Thử lại
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export const MainApp = ({ sceneToken }: Props) => {
   useSignals();
 
-  // Background plumbing — should keep running regardless of which tab
-  // is active.
   useActiveJobs();
   useBackgroundLoadingMedia();
-
-  // Tauri event listeners. Must always be mounted so generation/upload
-  // completions are surfaced no matter which tab the user is on.
   useGenerationEnqueueSuccessEvent();
-  useGenerationEnqueueFailureEvent();
-  useGenerationCompleteEvent();
-  useGenerationFailedEvent();
 
-  const completeBatch = useTextToImageStore((s) => s.completeBatch);
-  useTextToImageGenerationCompleteEvent(async (event) => {
-    completeBatch(
-      event.generated_images || [],
-      event.maybe_frontend_subscriber_id,
-    );
-  });
-
-  useFlashUserInputErrorEvent(async (event) => {
-    console.log("Flash user input error event received:", event);
-    toast.error(event.message);
-  });
-
-  useFlashFileDownloadErrorEvent(async (event) => {
-    console.log("Flash file download error event received:", event);
-    toast.error(event.message || "File download failed");
-  });
-
-  useMediaFileDeletedEvent(async (event) => {
-    console.log("Media file deleted event received:", event);
-    await SoundManager.playFileDeleted();
-    toast.error("File deleted.");
-  });
-
-  // Session probe (runs once per shell mount) and GPU detection.
-  // Both are app-wide concerns, not 3D-only.
   useEffect(() => {
     const usersApi = new UsersApi();
     usersApi.GetSession().then((result) => {
@@ -217,153 +208,157 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
   const tabStore = useTabStore();
   const storyboardPageEnabled = useStoryboardPageEnabled();
 
-  // The 3D case stays unwrapped because Stage3DBody (lib) already
-  // returns a <div> wrapper. Every other page is a fragment whose
-  // top-level children may use position: fixed (e.g. PageDraw); the
-  // wrapping <div> scopes them so they don't stack as siblings of
-  // the TopBar at the MainApp root.
-  switch (tabStore.activeTabId) {
-    case "3D":
-      return <PageScene sceneToken={sceneToken} />;
-    case "APPS":
-      return (
-        <div>
-          <AppsIndexPage />
-        </div>
-      );
-    case "2D":
-      return (
-        <div>
-          <PageDrawWithGalleryDrop />
-        </div>
-      );
-    case "IMAGE":
-      return (
-        <div>
-          <TextToImage
-            imageMediaId={topNavMediaId.value}
-            imageUrl={topNavMediaUrl.value}
-          />
-        </div>
-      );
-    case "VIDEO":
-      return (
-        <div>
-          <ImageToVideo />
-        </div>
-      );
-    case "AUDIO":
-      return (
-        <div>
-          <CreateAudio />
-        </div>
-      );
-    case "VIDEO_FRAME_EXTRACTOR":
-      return (
-        <div>
-          <VideoFrameExtractor />
-        </div>
-      );
-    case "VIDEO_WATERMARK_REMOVAL":
-      return (
-        <div>
-          <VideoWatermarkRemover />
-        </div>
-      );
-    case "IMAGE_WATERMARK_REMOVAL":
-      return (
-        <div>
-          <ImageWatermarkRemover />
-        </div>
-      );
-    case "IMAGE_TO_3D_OBJECT":
-      return (
-        <div>
-          <ImageTo3DObject />
-        </div>
-      );
-    case "IMAGE_TO_3D_WORLD":
-      return (
-        <div>
-          <ImageTo3DWorld />
-        </div>
-      );
-    case "REMOVE_BACKGROUND":
-      return (
-        <div>
-          <RemoveBackground />
-        </div>
-      );
-    case "ANGLES":
-      return (
-        <div>
-          <Angles />
-        </div>
-      );
-    case "STORYBOARD":
-      return storyboardPageEnabled ? (
-        <div>
-          <Storyboard />
-        </div>
-      ) : null;
-    case "BACKGROUND_CHANGE":
-      return (
-        <div>
-          <PageBackgroundChange />
-        </div>
-      );
-    case "VIDEO_EDITOR":
-      return (
-        <div className="h-[calc(100vh-3rem)] w-full">
-          <PageVideoEditor />
-        </div>
-      );
-    case "MOODBOARD":
-      // The TopBar is fixed and 56px tall, so the board sits below it and fills
-      // the rest of the viewport. h-screen + pt-[56px] (border-box) makes the
-      // board area exactly viewport-minus-topbar, and overflow-hidden keeps
-      // sub-pixel 100vh rounding from spawning page scrollbars (which w-screen
-      // ancestors would turn into a horizontal scrollbar via the Windows
-      // scrollbar gutter).
-      return (
-        <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-          <PageMoodboard />
-        </div>
-      );
-    case "CAPCUT_AUTOMATION":
-      return (
-        <div>
-          <CapCutAutomation />
-        </div>
-      );
-    case "YOUWEE":
-      return (
-        <div>
-          <Youwee />
-        </div>
-      );
-    case "MEDIA_CRAWLER":
-      return (
-        <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-          <PageMediaCrawler />
-        </div>
-      );
-    case "OPEN_MONTAGE":
-      return (
-        <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-          <PageOpenMontage />
-        </div>
-      );
-    default:
-      return null;
-  }
+  const tabId = tabStore.activeTabId;
+
+  return (
+    <TabErrorBoundary tabName={tabId} key={tabId}>
+      {(() => {
+        switch (tabId) {
+          case "3D":
+            return <PageScene sceneToken={sceneToken} />;
+          case "APPS":
+            return (
+              <div>
+                <AppsIndexPage />
+              </div>
+            );
+          case "2D":
+            return (
+              <div>
+                <PageDrawWithGalleryDrop />
+              </div>
+            );
+          case "IMAGE":
+            return (
+              <div>
+                <TextToImage
+                  imageMediaId={topNavMediaId.value}
+                  imageUrl={topNavMediaUrl.value}
+                />
+              </div>
+            );
+          case "VIDEO":
+            return (
+              <div>
+                <ImageToVideo />
+              </div>
+            );
+          case "AUDIO":
+            return (
+              <div>
+                <CreateAudio />
+              </div>
+            );
+          case "VIDEO_FRAME_EXTRACTOR":
+            return (
+              <div>
+                <VideoFrameExtractor />
+              </div>
+            );
+          case "VIDEO_WATERMARK_REMOVAL":
+            return (
+              <div>
+                <VideoWatermarkRemover />
+              </div>
+            );
+          case "IMAGE_WATERMARK_REMOVAL":
+            return (
+              <div>
+                <ImageWatermarkRemover />
+              </div>
+            );
+          case "IMAGE_TO_3D_OBJECT":
+            return (
+              <div>
+                <ImageTo3DObject />
+              </div>
+            );
+          case "IMAGE_TO_3D_WORLD":
+            return (
+              <div>
+                <ImageTo3DWorld />
+              </div>
+            );
+          case "REMOVE_BACKGROUND":
+            return (
+              <div>
+                <RemoveBackground />
+              </div>
+            );
+          case "ANGLES":
+            return (
+              <div>
+                <Angles />
+              </div>
+            );
+          case "STORYBOARD":
+            return storyboardPageEnabled ? (
+              <div>
+                <Storyboard />
+              </div>
+            ) : null;
+          case "BACKGROUND_CHANGE":
+            return (
+              <div>
+                <PageBackgroundChange />
+              </div>
+            );
+          case "VIDEO_EDITOR":
+            return (
+              <div className="h-[calc(100vh-3rem)] w-full">
+                <PageVideoEditor />
+              </div>
+            );
+          case "MOODBOARD":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageMoodboard />
+              </div>
+            );
+          case "CAPCUT_AUTOMATION":
+            return (
+              <div>
+                <CapCutAutomation />
+              </div>
+            );
+          case "YOUWEE":
+            return (
+              <div>
+                <Youwee />
+              </div>
+            );
+          case "MEDIA_CRAWLER":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageMediaCrawler />
+              </div>
+            );
+          case "OPEN_MONTAGE":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageOpenMontage />
+              </div>
+            );
+          case "FREE_LLM_API":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageFreeLLMApi />
+              </div>
+            );
+          case "OMNI_ROUTE":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageOmniRoute />
+              </div>
+            );
+          default:
+            return null;
+        }
+      })()}
+    </TabErrorBoundary>
+  );
 };
 
-// Bridges gallery-modal's onImageDrop into PageDraw's existing
-// `gallery-2d-drop` window-event listener. Lives here (rather than
-// inside the pagedraw lib) so we don't have to add a gallery-modal
-// dep there. Mounted only when the 2D tab is active, so it doesn't
-// race the 3D-tab gallery handler.
 const PageDrawWithGalleryDrop = () => {
   useEffect(() => {
     const handler = onImageDrop(
@@ -371,27 +366,26 @@ const PageDrawWithGalleryDrop = () => {
         const canvasElement = document.querySelectorAll("canvas")[0];
         if (!canvasElement) return;
         const rect = canvasElement.getBoundingClientRect();
-        const canvasX = position.x - rect.left;
-        const canvasY = position.y - rect.top;
         if (
-          canvasX < 0 ||
-          canvasY < 0 ||
-          canvasX > rect.width ||
-          canvasY > rect.height
+          position.x >= rect.left &&
+          position.x <= rect.right &&
+          position.y >= rect.top &&
+          position.y <= rect.bottom
         ) {
-          return;
+          const dropEvent = new CustomEvent("gallery-2d-drop", {
+            detail: { item, position: { x: position.x - rect.left, y: position.y - rect.top } },
+          });
+          window.dispatchEvent(dropEvent);
         }
-        window.dispatchEvent(
-          new CustomEvent("gallery-2d-drop", {
-            detail: { item, canvasPosition: { x: canvasX, y: canvasY } },
-          }),
-        );
       },
     );
+
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (handler) removeImageDropListener(handler as any);
+      if (handler) {
+        removeImageDropListener(handler);
+      }
     };
   }, []);
+
   return <PageDraw />;
 };

@@ -5,25 +5,12 @@ Write-Host ""
 Write-Host "You'll need to launch the Rust dev server as a second script!"  -ForegroundColor red -BackgroundColor white
 Write-Host ""
 
-Push-Location -Path ".\frontend"
-
-$env:VITE_ENVIRONMENT_TYPE="production"
+Push-Location -Path ".\frontend\apps\artcraft"
 
 try
 {
-    Write-Host "Installing latest dependencies..."
-    Write-Host ""
-    Write-Host "You may need to run ./clean_modules.sh or manually clean up occasionally!"  -ForegroundColor red -BackgroundColor white
-    Write-Host ""
-
-    npm install --verbose
-
-    Write-Host "Running dev server..."
-    Write-Host ""
-    Write-Host "If this isn't running on port 5173, you may need to kill a zombie process!"  -ForegroundColor red -BackgroundColor white
-    Write-Host ""
-
-    npx nx dev artcraft
+    Write-Host "Running Vite dev server..." -ForegroundColor Cyan
+    pnpm run dev
 }
 finally
 {

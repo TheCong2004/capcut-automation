@@ -63,15 +63,8 @@ if ($LASTEXITCODE -ne 0) {
   throw "cargo tauri build failed (exit $LASTEXITCODE)"
 }
 
-# --- 4) Also copy BE next to bare ArtCraft.exe (portable folder) ---
+# --- 4) Also copy Unified BE next to bare ArtCraft.exe (portable folder) ---
 $releaseDir = Join-Path $ArtcraftRoot "target\release"
-$stageMate = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\capcut-mate"
-$stageSidecar = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\capcut-mate-server.exe"
-$mediaCrawlerSidecar = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\media-crawler\media-crawler-server.exe"
-$openMontageSidecar = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\openmontage\openmontage-server.exe"
-$mediaCrawlerResources = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\media-crawler"
-$openMontageResources = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\openmontage"
-
 $stageUnifiedSidecar = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\artcraft-server.exe"
 
 if (Test-Path $stageUnifiedSidecar) {
@@ -79,28 +72,6 @@ if (Test-Path $stageUnifiedSidecar) {
   Start-Sleep -Seconds 1
   Copy-Item $stageUnifiedSidecar -Destination (Join-Path $releaseDir "artcraft-server.exe") -Force
   Write-Host "Copied unified sidecar → $releaseDir\artcraft-server.exe"
-}
-if (Test-Path $stageMate) {
-  $destMate = Join-Path $releaseDir "capcut-mate"
-  if (Test-Path $destMate) { Remove-Item -Recurse -Force $destMate }
-  Copy-Item $stageMate -Destination $destMate -Recurse -Force
-  Write-Host "Copied capcut-mate → $destMate"
-}
-if (Test-Path $stageSidecar) {
-  Copy-Item $stageSidecar -Destination (Join-Path $releaseDir "capcut-mate-server.exe") -Force
-  Write-Host "Copied sidecar → $releaseDir\capcut-mate-server.exe"
-}
-if (Test-Path $mediaCrawlerSidecar) {
-  $mediaPortable = Join-Path $releaseDir "media-crawler"
-  if (Test-Path $mediaPortable) { Remove-Item -LiteralPath $mediaPortable -Recurse -Force }
-  Copy-Item $mediaCrawlerResources -Destination $mediaPortable -Recurse -Force
-  Write-Host "Copied MediaCrawler runtime -> $mediaPortable"
-}
-if (Test-Path $openMontageSidecar) {
-  $openMontagePortable = Join-Path $releaseDir "openmontage"
-  if (Test-Path $openMontagePortable) { Remove-Item -LiteralPath $openMontagePortable -Recurse -Force }
-  Copy-Item $openMontageResources -Destination $openMontagePortable -Recurse -Force
-  Write-Host "Copied OpenMontage runtime -> $openMontagePortable"
 }
 
 $nsisDir = Join-Path $ArtcraftRoot "target\release\bundle\nsis"

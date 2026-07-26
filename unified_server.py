@@ -81,6 +81,41 @@ except Exception as err:
     print(f"[UnifiedBE] Failed to mount MediaCrawler: {err}")
 
 
+# 4. Proxy FreeLLMAPI Node server (port 3001) through unified port 30000
+try:
+    import httpx
+    from fastapi import Request, Response
+
+    _freellm_client = httpx.AsyncClient(base_url="http://127.0.0.1:3001", timeout=60.0)
+
+    @app.api_route("/freellmapi_proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    @app.api_route("/v1/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    @app.api_route("/api/keys{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    @app.api_route("/api/health{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    @app.api_route("/api/fallback{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    @app.api_route("/api/analytics{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    @app.api_route("/api/settings{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    async def proxy_freellmapi(request: Request, path: str = ""):
+        url = request.url.path
+        if url.startswith("/freellmapi_proxy/"):
+            url = "/" + url[len("/freellmapi_proxy/"):]
+        headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
+        content = await request.body()
+        try:
+            resp = await _freellm_client.request(
+                method=request.method,
+                url=url,
+                headers=headers,
+                params=request.query_params,
+                content=content,
+            )
+            return Response(content=resp.content, status_code=resp.status_code, headers=dict(resp.headers))
+        except Exception as p_err:
+            return Response(content=f'{{"error": "{p_err}"}}', status_code=502, media_type="application/json")
+except Exception as err:
+    print(f"[UnifiedBE] Failed to mount FreeLLMAPI proxy: {err}")
+
+
 @app.get("/api/unified/health")
 async def unified_health():
     return {"status": "ok", "unified": True}

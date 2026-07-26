@@ -6,7 +6,12 @@ export default {
   presets: [mediaCrawlerTailwindConfig],
   content: [
     "./app/index.html",
-    "./app/src/**/*.{js,jsx,ts,tsx}",
+    "./app/src/pages/freellmapi/client/**/*.{js,jsx,ts,tsx}",
+    "./app/src/pages/PageCapCutAutomation/**/*.{js,jsx,ts,tsx}",
+    "./app/src/pages/PageMediaCrawler/**/*.{js,jsx,ts,tsx}",
+    "./app/src/pages/PageYouwee/**/*.{js,jsx,ts,tsx}",
+    "./app/src/components/**/*.{js,jsx,ts,tsx}",
+    "./app/src/config/**/*.{js,jsx,ts,tsx}",
     "./app/src/*.{js,jsx,ts,tsx}",
     "../../libs/components/**/*.{js,jsx,ts,tsx}",
   ],

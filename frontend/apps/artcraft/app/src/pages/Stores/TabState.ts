@@ -23,7 +23,9 @@ export type TabId =
   | "CAPCUT_AUTOMATION"
   | "YOUWEE"
   | "MEDIA_CRAWLER"
-  | "OPEN_MONTAGE";
+  | "OPEN_MONTAGE"
+  | "FREE_LLM_API"
+  | "OMNI_ROUTE";
 
 const DEFAULT_TAB: TabId = "APPS";
 

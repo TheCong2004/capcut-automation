@@ -25,6 +25,9 @@ export function EffectsPanel() {
   const [selected, setSelected] = useState<EffectItem[]>([]);
   const [activeSelectedId, setActiveSelectedId] = useState<string | null>(null);
   const [applyMode, setApplyMode] = useState<EffectsApplyMode>("all");
+  const [timingPlacement, setTimingPlacement] = useState<
+    "segment_start" | "segment_full" | "entire"
+  >("segment_start");
   const [replaceExisting, setReplaceExisting] = useState(true);
   const [applying, setApplying] = useState(false);
 

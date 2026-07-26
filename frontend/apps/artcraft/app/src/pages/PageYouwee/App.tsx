@@ -1,6 +1,8 @@
+import './i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isTauri } from '@/lib/tauri';
 import { DenoDialog } from './components/DenoDialog';
 import { DuplicateDownloadReviewHost } from '@/pages/PageYouwee/components/download';
 import { ErrorBoundary } from '@/pages/PageYouwee/components/ErrorBoundary';
@@ -46,7 +48,7 @@ import {
   SubtitlesPage,
   SummaryPage,
   UniversalPage,
-} from '@/pages';
+} from './pages';
 
 
 // Fixed: implicit any → interface OnNavigateToSettings
@@ -101,6 +103,7 @@ function AppContent() {
   });
 
   useEffect(() => {
+    if (!isTauri) return;
     const locale = i18n.resolvedLanguage || i18n.language || 'en';
     const direction =
       typeof document !== 'undefined' ? document.documentElement.dir || 'ltr' : 'ltr';
@@ -157,6 +160,7 @@ function AppContent() {
 
   // Sync UI language to system tray on mount
   useEffect(() => {
+    if (!isTauri) return;
     const lang = localStorage.getItem('i18nextLng') || 'en';
     invoke('rebuild_tray_menu_cmd', { lang }).catch(() => {});
 

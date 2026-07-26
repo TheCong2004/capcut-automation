@@ -22,10 +22,7 @@ def gen_video(draft_url: str, apiKey: str = None) -> str:
     logger.info(f"gen_video called with draft_url: {draft_url}, apiKey provided: {apiKey is not None}")
     
     try:
-        if config.ENABLE_APIKEY:
-            if apiKey == "": # 开启API密钥验证
-                raise CustomException(CustomError.INVALID_APIKEY)
-
+        if config.ENABLE_APIKEY and apiKey:
             # 查询用户积分
             user_points = get_user_points(apiKey)
         

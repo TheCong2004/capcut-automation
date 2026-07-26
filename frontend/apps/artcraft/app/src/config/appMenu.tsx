@@ -16,6 +16,7 @@ import {
   faClapperboardPlay,
   faCloudArrowDown,
   faSpider,
+  faKey,
 } from "@fortawesome/pro-solid-svg-icons";
 import { useMemo } from "react";
 import {
@@ -45,7 +46,8 @@ export type AppId =
   | "CAPCUT_AUTOMATION"
   | "YOUWEE"
   | "MEDIA_CRAWLER"
-  | "OPEN_MONTAGE";
+  | "OPEN_MONTAGE"
+  | "FREE_LLM_API";
 
 export interface AppDescriptor {
   id: AppId;
@@ -103,16 +105,9 @@ export interface FullAppItem {
   color?: string;
 }
 
-// Per-app card palette for the Apps page (webapp-home-style cards). Derived
-// from each app's Tailwind color family so the icon box, its border, and the
-// hover gradient all share a hue. Keyed by app id; falls back to a neutral
-// slate when an id is missing.
 interface AppCardPalette {
-  /** Hover gradient overlay, e.g. "from-blue-500/20 to-blue-500/0". */
   accent: string;
-  /** Icon box background + border, e.g. "bg-blue-500/20 border-blue-400/30". */
   iconBg: string;
-  /** Icon glyph color, e.g. "text-blue-300". */
   iconColor: string;
 }
 
@@ -197,6 +192,16 @@ const APP_CARD_PALETTES: Record<string, AppCardPalette> = {
     iconBg: "bg-sky-500/20 border-sky-400/30",
     iconColor: "text-sky-300",
   },
+  "free-llm-api": {
+    accent: "from-emerald-500/20 to-emerald-500/0",
+    iconBg: "bg-emerald-500/20 border-emerald-400/30",
+    iconColor: "text-emerald-300",
+  },
+  "omni-route": {
+    accent: "from-indigo-500/20 to-indigo-500/0",
+    iconBg: "bg-indigo-500/20 border-indigo-400/30",
+    iconColor: "text-indigo-300",
+  },
   "video-watermark-removal": {
     accent: "from-cyan-500/20 to-cyan-500/0",
     iconBg: "bg-cyan-500/20 border-cyan-400/30",
@@ -265,6 +270,16 @@ export const ALL_APPS: FullAppItem[] = [
     color: "bg-blue-500/40",
   },
   {
+    id: "free-llm-api",
+    label: "Free LLM API",
+    description: "Quản lý và xoay vòng API Key LLM miễn phí (Google, Groq, Mistral...)",
+    icon: faKey,
+    category: "generate",
+    action: "FREE_LLM_API",
+    color: "bg-emerald-500/40",
+    badge: "NEW",
+  },
+  {
     id: "edit-image",
     label: "Edit Image",
     description: "Change with inpainting",
@@ -319,7 +334,6 @@ export const ALL_APPS: FullAppItem[] = [
     color: "bg-lime-500/40",
     badge: "NEW",
   },
-
   {
     id: "storyboard",
     label: "Storyboard",
@@ -399,6 +413,26 @@ export const ALL_APPS: FullAppItem[] = [
     category: "edit",
     action: "OPEN_MONTAGE",
     color: "bg-violet-500/40",
+    badge: "NEW",
+  },
+  {
+    id: "free-llm-api",
+    label: "Free LLM API",
+    description: "Quản lý và điều phối các API Key LLM miễn phí",
+    icon: faKey,
+    category: "edit",
+    action: "FREE_LLM_API",
+    color: "bg-emerald-500/40",
+    badge: "NEW",
+  },
+  {
+    id: "omni-route",
+    label: "OmniRoute",
+    description: "Router 290+ Nhà cung cấp LLM, MCP Server & A2A Protocol",
+    icon: faGlobe,
+    category: "edit",
+    action: "OMNI_ROUTE",
+    color: "bg-indigo-500/40",
     badge: "NEW",
   },
   {
@@ -495,6 +529,8 @@ export const goToApp = (action?: string) => {
       "YOUWEE",
       "MEDIA_CRAWLER",
       "OPEN_MONTAGE",
+      "FREE_LLM_API",
+      "OMNI_ROUTE",
     ].includes(action)
   ) {
     if (action === "STORYBOARD") {

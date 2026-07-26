@@ -1,7 +1,8 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import CORS_ORIGIN_REGEX, CORS_ORIGINS, HOST, PORT
@@ -48,6 +49,15 @@ async def lifespan(app: FastAPI):
 app: FastAPI = FastAPI(title="CapCut Mate API", version="1.0", lifespan=lifespan)
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled exception on {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"code": 9998, "message": f"Internal server error: {exc}"},
+    )
+
+
 @app.get("/health", tags=["health"])
 async def health():
     """Smoke + engine flags — single project, pure Python."""
@@ -82,6 +92,52 @@ for _r in _wave2_optional:
         _LOCAL_ROUTERS.append(_r)
 for _r in _LOCAL_ROUTERS:
     app.include_router(router=_r, prefix="/openapi/capcut-mate", tags=["local-python"])
+
+# 2.5 FreeLLMAPI Reverse Proxy Routing (Maps port 30000 -> internal port 3001)
+import httpx
+from fastapi import Response
+
+FREELLM_UPSTREAM = "http://127.0.0.1:3001"
+_proxy_client = httpx.AsyncClient(timeout=120.0)
+
+async def _proxy_freellmapi(request: Request):
+    url = f"{FREELLM_UPSTREAM}{request.url.path}"
+    if request.url.query:
+        url += f"?{request.url.query}"
+    body = await request.body()
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    try:
+        res = await _proxy_client.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            content=body,
+        )
+        # Omit hop-by-hop headers
+        res_headers = {k: v for k, v in res.headers.items() if k.lower() not in ("content-length", "content-encoding", "transfer-encoding")}
+        return Response(
+            content=res.content,
+            status_code=res.status_code,
+            headers=res_headers,
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"error": {"message": f"FreeLLMAPI upstream proxy error: {exc}"}},
+        )
+
+@app.api_route("/api/keys{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/models{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/fallback{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/analytics{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/health{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/settings{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/ping", methods=["GET"])
+@app.api_route("/v1{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def freellm_proxy_dispatcher(request: Request, path: str = ""):
+    return await _proxy_freellmapi(request)
+
 
 # 3. 添加中间件（最后注册的 chạy outermost trước）
 # CORS: browser Vite :5173 gọi :30000 — không có CORS sẽ bị chặn
