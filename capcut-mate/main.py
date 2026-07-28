@@ -139,19 +139,26 @@ async def freellm_proxy_dispatcher(request: Request, path: str = ""):
     return await _proxy_freellmapi(request)
 
 
-# 3. 添加中间件（最后注册的 chạy outermost trước）
-# CORS: browser Vite :5173 gọi :30000 — không có CORS sẽ bị chặn
-app.add_middleware(middleware_class=PrepareMiddleware)
-app.add_middleware(middleware_class=ResponseMiddleware)
-app.add_middleware(middleware_class=TraceContextMiddleware)
+# 3. Middleware
+# CORS: allow Vite dev server, localhost, Tauri app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_origin_regex=CORS_ORIGIN_REGEX,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:30000",
+        "http://127.0.0.1:30000",
+        "tauri://localhost",
+        "https://tauri.localhost",
+    ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:[0-9]+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(middleware_class=PrepareMiddleware)
+app.add_middleware(middleware_class=ResponseMiddleware)
+app.add_middleware(middleware_class=TraceContextMiddleware)
 
 # 4. 打印所有路由
 for r in app.routes:

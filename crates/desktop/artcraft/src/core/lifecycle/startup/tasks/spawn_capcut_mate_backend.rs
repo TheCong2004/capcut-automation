@@ -18,12 +18,19 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use log::{info, warn};
-use tauri::{AppHandle, Manager};
+use log::{error, info, warn};
+use tauri::{AppHandle, Emitter, Manager};
 
 const DEFAULT_PORT: u16 = 30000;
 const SIDECAR_NAME: &str = "capcut-mate-server.exe";
 const MATE_DIR_NAME: &str = "capcut-mate";
+
+const READY_EVENT: &str = "backend://ready";
+const ERROR_EVENT: &str = "backend://error";
+/// Total time to wait for the BE to start LISTENing before giving up.
+const READY_DEADLINE: Duration = Duration::from_secs(30);
+/// Gap between port probes while waiting for the BE to come up.
+const READY_POLL_INTERVAL: Duration = Duration::from_millis(300);
 
 /// Managed Tauri state — killed when app process exits (Drop).
 pub struct CapcutMateProcess {
@@ -48,6 +55,44 @@ fn port_open(port: u16) -> bool {
     Err(_) => return false,
   };
   TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+}
+
+fn emit_backend_ready(app: &AppHandle, port: u16) {
+  info!("capcut-mate ready on :{port} — emitting {READY_EVENT}");
+  if let Err(e) = app.emit(READY_EVENT, serde_json::json!({ "port": port })) {
+    warn!("Failed to emit {READY_EVENT}: {e}");
+  }
+}
+
+fn emit_backend_error(app: &AppHandle, message: impl Into<String>) {
+  let message = message.into();
+  error!("capcut-mate error — emitting {ERROR_EVENT}: {message}");
+  if let Err(e) = app.emit(ERROR_EVENT, serde_json::json!({ "message": message })) {
+    warn!("Failed to emit {ERROR_EVENT}: {e}");
+  }
+}
+
+/// Poll the port until it LISTENs (emit ready) or the deadline passes (emit error).
+/// Safe to block here — this runs on the background startup thread, not the UI thread.
+fn wait_for_backend_ready(app: &AppHandle, port: u16) {
+  let deadline = std::time::Instant::now() + READY_DEADLINE;
+  loop {
+    if port_open(port) {
+      emit_backend_ready(app, port);
+      return;
+    }
+    if std::time::Instant::now() >= deadline {
+      emit_backend_error(
+        app,
+        format!(
+          "capcut-mate did not start listening on :{port} within {}s",
+          READY_DEADLINE.as_secs()
+        ),
+      );
+      return;
+    }
+    std::thread::sleep(READY_POLL_INTERVAL);
+  }
 }
 
 fn is_mate_dir(p: &Path) -> bool {
@@ -261,6 +306,7 @@ pub fn spawn_capcut_mate_backend(app: &AppHandle) {
   if port_open(DEFAULT_PORT) {
     info!("capcut-mate already listening on :{DEFAULT_PORT} — reuse (no spawn)");
     manage_empty(app);
+    emit_backend_ready(app, DEFAULT_PORT);
     return;
   }
 
@@ -278,7 +324,7 @@ pub fn spawn_capcut_mate_backend(app: &AppHandle) {
         app.manage(CapcutMateProcess {
           child: Mutex::new(Some(child)),
         });
-        std::thread::sleep(Duration::from_millis(1200));
+        wait_for_backend_ready(app, DEFAULT_PORT);
         return;
       }
       Err(e) => warn!("{e}"),
@@ -320,10 +366,11 @@ pub fn spawn_capcut_mate_backend(app: &AppHandle) {
       app.manage(CapcutMateProcess {
         child: Mutex::new(Some(child)),
       });
-      std::thread::sleep(Duration::from_millis(1200));
+      wait_for_backend_ready(app, DEFAULT_PORT);
     }
     Err(e) => {
       warn!("{e}");
+      emit_backend_error(app, e);
       manage_empty(app);
     }
   }

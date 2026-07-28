@@ -21,8 +21,20 @@ if (-not $env:LIBCLANG_PATH) {
 $env:TAURI_FRONTEND_PATH=".\frontend"
 $env:TAURI_APP_PATH=".\crates\desktop\artcraft"
 
-# Put SQLx into offline mode (no DB hits / migrations).
-$env:SQLX_OFFLINE = "true"
+# Ensure CapCut Python backend is started on port 30000
+$MateRoot = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path "capcut-mate"
+try {
+  $c = New-Object System.Net.Sockets.TcpClient
+  $c.Connect("127.0.0.1", 30000)
+  $c.Close()
+  Write-Host "CapCut Backend is online on :30000" -ForegroundColor Green
+} catch {
+  if (Test-Path (Join-Path $MateRoot "main.py")) {
+    Write-Host "Starting CapCut Backend on :30000 ..." -ForegroundColor Cyan
+    Start-Process -WorkingDirectory $MateRoot -FilePath "uv" -ArgumentList "run","main.py" -WindowStyle Minimized
+    Start-Sleep -Seconds 2
+  }
+}
 
 # The config file tells Tauri more instructions for the frontend build.
 cargo tauri dev --config ".\crates\desktop\artcraft\tauri-dev-hot-reload.conf.json"

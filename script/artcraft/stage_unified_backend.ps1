@@ -1,11 +1,11 @@
-# Stage and build unified Python backend (artcraft-server.exe) for packaging.
+# Stage and build capcut-mate Python backend (capcut-mate-server.exe) for packaging.
 # Merges CapCutMate, OpenMontage, and MediaCrawler into a single 50MB sidecar.
 
 $ErrorActionPreference = "Stop"
 
 $ArtcraftRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $StageRoot = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources"
-$SidecarOut = Join-Path $StageRoot "artcraft-server.exe"
+$SidecarOut = Join-Path $StageRoot "capcut-mate-server.exe"
 
 $CapcutMateRoot = Join-Path $ArtcraftRoot "capcut-mate"
 $OpenMontageRoot = Join-Path $ArtcraftRoot "OpenMontage"
@@ -61,7 +61,7 @@ try {
 
   & uv run @withArgs pyinstaller `
     --noconfirm --clean --onefile --noconsole `
-    --name artcraft-server `
+    --name capcut-mate-server `
     --distpath $StageRoot `
     --workpath (Join-Path $ArtcraftRoot "build\pyinstaller-work") `
     --specpath (Join-Path $ArtcraftRoot "build\pyinstaller-spec") `

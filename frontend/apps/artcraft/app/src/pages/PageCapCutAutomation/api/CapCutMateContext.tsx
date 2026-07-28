@@ -92,18 +92,60 @@ export function CapCutMateProvider({ children }: { children: ReactNode }) {
   const refreshOnline = useCallback(async () => {
     setChecking(true);
     try {
-      const ok = await api.pingBackend();
+      // Probe 1 phát (caller/loop tự lo lịch); pingBackend không throw nhưng
+      // bọc phòng xa để không bao giờ ném ra ngoài làm sập app.
+      const ok = await api.pingBackend({ retries: 0 });
       setOnline(ok);
+    } catch {
+      setOnline(false);
     } finally {
       setChecking(false);
     }
   }, []);
 
+  // Poll trạng thái BE: lúc offline retry NHANH với backoff (tới khi online)
+  // để bắt được thời điểm BE vừa lên; khi đã online thì giãn ra 30s.
   useEffect(() => {
-    void refreshOnline();
-    const t = window.setInterval(() => void refreshOnline(), 30_000);
-    return () => window.clearInterval(t);
-  }, [refreshOnline, baseUrl]);
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const FAST_BACKOFF_MS = [300, 900, 2000, 5000];
+    const ONLINE_POLL_MS = 30_000;
+    let offlineAttempt = 0;
+
+    const tick = async () => {
+      if (cancelled) return;
+      setChecking(true);
+      let ok = false;
+      try {
+        ok = await api.pingBackend({ retries: 0 });
+      } catch {
+        ok = false;
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+      if (cancelled) return;
+      setOnline(ok);
+
+      let delay: number;
+      if (ok) {
+        offlineAttempt = 0;
+        delay = ONLINE_POLL_MS;
+      } else {
+        delay =
+          FAST_BACKOFF_MS[Math.min(offlineAttempt, FAST_BACKOFF_MS.length - 1)];
+        offlineAttempt += 1;
+      }
+      timer = window.setTimeout(() => void tick(), delay);
+    };
+
+    void tick();
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [baseUrl]);
 
   const createProject = useCallback(async () => {
     setBusy(true);

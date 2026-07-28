@@ -5,7 +5,19 @@ packages:
   - 'app/src/pages/OmniRoute'
 
 allowBuilds:
+  '@parcel/watcher': set this to true or false
+  '@playwright/browser-chromium': set this to true or false
+  '@swc/core': set this to true or false
+  better-sqlite3: set this to true or false
+  bun: set this to true or false
   core-js: true
   esbuild: true
+  keytar: set this to true or false
+  koffi: set this to true or false
+  libxmljs2: set this to true or false
   nx: true
+  onnxruntime-node: set this to true or false
+  protobufjs: set this to true or false
+  sharp: set this to true or false
+  tls-client-node: set this to true or false
   unrs-resolver: true

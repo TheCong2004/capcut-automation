@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChevronDown,
@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import { useCapCutMate } from "../../api/CapCutMateContext";
 import * as api from "../../api/capcutBeClient";
 import * as local from "../../api/capcutLocalClient";
+import * as pipeline from "../../api/pipelineClient";
 import { requireLocalProject } from "../../api/localApplyHelpers";
 import { PanelGuide } from "../../shared/PanelGuide";
 import { PanelStatusAside } from "../../shared/PanelStatusAside";
@@ -31,6 +32,7 @@ type WorkflowAction =
   | "sync_timelines"
   | "export_srt"
   | "gen_video"
+  | "enqueue_pipeline"
   | "doctor"
   | "info"
   | "custom";
@@ -40,7 +42,8 @@ const DEFAULT_STEPS: WorkflowStep[] = [
   { id: "2", label: "Lint phụ đề & media", enabled: true, action: "lint" },
   { id: "3", label: "Sync timelines", enabled: true, action: "sync_timelines" },
   { id: "4", label: "Lưu draft mate", enabled: true, action: "save_draft" },
-  { id: "5", label: "Xuất video (gen_video)", enabled: false, action: "gen_video" },
+  { id: "5", label: "Tạo job Rust Pipeline (CommandDispatcher)", enabled: true, action: "enqueue_pipeline" },
+  { id: "6", label: "Xuất video (gen_video)", enabled: false, action: "gen_video" },
 ];
 
 export function WorkflowPanel() {
@@ -53,6 +56,38 @@ export function WorkflowPanel() {
 
   const append = (line: string) =>
     setLog((prev) => [...prev.slice(-80), line]);
+
+  useEffect(() => {
+    let unlistenStage: pipeline.UnlistenFn | undefined;
+    let unlistenComplete: pipeline.UnlistenFn | undefined;
+    let unlistenFailed: pipeline.UnlistenFn | undefined;
+
+    async function setupListeners() {
+      try {
+        unlistenStage = await pipeline.listenStageComplete((payload) => {
+          append(`[Event] Job ${payload.job_id} stage: ${payload.completed_stage} -> ${payload.next_stage}`);
+        });
+        unlistenComplete = await pipeline.listenJobComplete((payload) => {
+          append(`[Event] Job ${payload.job_id} COMPLETE! Video: ${payload.video_url}`);
+          toast.success(`Pipeline job completed!`);
+        });
+        unlistenFailed = await pipeline.listenJobFailed((payload) => {
+          append(`[Event] Job ${payload.job_id} FAILED at ${payload.failed_stage}: ${payload.error_message}`);
+          toast.error(`Pipeline job failed at ${payload.failed_stage}`);
+        });
+      } catch (err) {
+        // Ignored if non-tauri runtime
+      }
+    }
+
+    setupListeners();
+
+    return () => {
+      if (unlistenStage) unlistenStage();
+      if (unlistenComplete) unlistenComplete();
+      if (unlistenFailed) unlistenFailed();
+    };
+  }, []);
 
   const runAction = async (action: WorkflowAction, label: string) => {
     append(`▶ ${label} (${action})`);
@@ -87,15 +122,32 @@ export function WorkflowPanel() {
         return;
       }
       case "save_draft": {
-        const draftUrl = mate.ensureDraft();
-        await api.saveDraft(draftUrl);
+        let activeDraft = mate.draftUrl;
+        if (!activeDraft) {
+          append("▶ Tự động khởi tạo draft mate...");
+          const res = await api.createDraft(mate.width, mate.height);
+          activeDraft = res.draft_url;
+          mate.setDraftUrl(activeDraft);
+        }
+        await api.saveDraft(activeDraft);
         append("save_draft OK");
         return;
       }
       case "gen_video": {
-        const draftUrl = mate.ensureDraft();
-        await api.genVideo(draftUrl);
+        let activeDraft = mate.draftUrl;
+        if (!activeDraft) {
+          append("▶ Tự động khởi tạo draft mate...");
+          const res = await api.createDraft(mate.width, mate.height);
+          activeDraft = res.draft_url;
+          mate.setDraftUrl(activeDraft);
+        }
+        await api.genVideo(activeDraft);
         append("gen_video submitted");
+        return;
+      }
+      case "enqueue_pipeline": {
+        const jobId = await pipeline.enqueuePipelineJob(name || "Video prompt");
+        append(`enqueue_pipeline OK -> Job ID: ${jobId}`);
         return;
       }
       default:
@@ -278,6 +330,7 @@ export function WorkflowPanel() {
                     <option value="export_srt">export SRT</option>
                     <option value="doctor">doctor</option>
                     <option value="save_draft">save draft</option>
+                    <option value="enqueue_pipeline">enqueue pipeline</option>
                     <option value="gen_video">gen video</option>
                     <option value="custom">custom</option>
                   </select>

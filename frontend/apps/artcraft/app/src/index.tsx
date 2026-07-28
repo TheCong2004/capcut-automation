@@ -3,6 +3,8 @@ import { useSignals, useSignalEffect } from "@preact/signals-react/runtime";
 import { BrowserRouter } from "react-router-dom";
 import { MainApp } from "./pages/MainApp";
 import { GlobalFileDropHandler } from "./components/GlobalFileDropHandler/GlobalFileDropHandler";
+import { AppBootGate } from "./components/AppBootGate/AppBootGate";
+import { BackendErrorBoundary } from "./components/BackendErrorBoundary";
 import { createRoot } from "react-dom/client";
 import "./styles/normalize.css";
 import "./styles/tailwind.css";
@@ -105,10 +107,14 @@ createRoot(document.getElementById("root")!).render(
   <>
     <StrictMode>
       <BrowserRouter>
-        <GlobalSettingsManager env={ENV} />
-        <div className="topbar-spacer" data-tauri-drag-region={true} />
-        <MainApp />
-        <GlobalFileDropHandler />
+        <BackendErrorBoundary>
+          <AppBootGate>
+            <GlobalSettingsManager env={ENV} />
+            <div className="topbar-spacer" data-tauri-drag-region={true} />
+            <MainApp />
+            <GlobalFileDropHandler />
+          </AppBootGate>
+        </BackendErrorBoundary>
       </BrowserRouter>
     </StrictMode>
   </>,

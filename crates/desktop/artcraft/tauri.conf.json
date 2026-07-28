@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../../../frontend/apps/artcraft/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "nx run artcraft:dev",
-    "beforeBuildCommand": "npx nx run artcraft:build"
+    "beforeDevCommand": "npx nx run artcraft:dev",
+    "beforeBuildCommand": "pnpm --filter artcraft build"
   },
   "app": {
     "withGlobalTauri": true,
@@ -138,8 +138,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "resources/artcraft-server.exe",
       "resources/capcut-mate",
+      "resources/capcut-mate-server.exe",
       "resources/media-crawler",
       "resources/openmontage"
     ]

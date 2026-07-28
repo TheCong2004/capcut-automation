@@ -27,8 +27,8 @@ try {
   Push-Location -Path ".\frontend"
 
   Write-Host "Installing frontend dependencies..." -ForegroundColor Cyan
-  npm install --verbose
-  if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE)" }
+  pnpm install
+  if ($LASTEXITCODE -ne 0) { throw "pnpm install failed (exit $LASTEXITCODE)" }
 }
 finally {
   Pop-Location
@@ -63,15 +63,15 @@ if ($LASTEXITCODE -ne 0) {
   throw "cargo tauri build failed (exit $LASTEXITCODE)"
 }
 
-# --- 4) Also copy Unified BE next to bare ArtCraft.exe (portable folder) ---
+# --- 4) Also copy capcut-mate BE next to bare ArtCraft.exe (portable folder) ---
 $releaseDir = Join-Path $ArtcraftRoot "target\release"
-$stageUnifiedSidecar = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\artcraft-server.exe"
+$stageSidecar = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\capcut-mate-server.exe"
 
-if (Test-Path $stageUnifiedSidecar) {
-  Stop-Process -Name "artcraft-server" -Force -ErrorAction SilentlyContinue
+if (Test-Path $stageSidecar) {
+  Stop-Process -Name "capcut-mate-server" -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 1
-  Copy-Item $stageUnifiedSidecar -Destination (Join-Path $releaseDir "artcraft-server.exe") -Force
-  Write-Host "Copied unified sidecar → $releaseDir\artcraft-server.exe"
+  Copy-Item $stageSidecar -Destination (Join-Path $releaseDir "capcut-mate-server.exe") -Force
+  Write-Host "Copied capcut-mate sidecar → $releaseDir\capcut-mate-server.exe"
 }
 
 $nsisDir = Join-Path $ArtcraftRoot "target\release\bundle\nsis"

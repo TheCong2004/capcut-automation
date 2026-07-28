@@ -32,6 +32,8 @@ import type {
 export const SIDE_NAV: SideNavItem[] = [
   { id: "materials", label: "Nguyên liệu", icon: faBoxOpen },
   { id: "local-draft", label: "Draft local", icon: faHardDrive },
+  { id: "workflow", label: "Quy trình (Workflow)", icon: faDiagramProject, badge: "Vip" },
+  { id: "auto-render", label: "Xuất video", icon: faRobot, badge: "Vip" },
   { id: "sync", label: "Đồng bộ", icon: faArrowsLeftRight },
   { id: "caption", label: "Phụ đề", icon: faClosedCaptioning },
   { id: "effects", label: "Hiệu ứng", icon: faWandMagicSparkles },
@@ -42,8 +44,6 @@ export const SIDE_NAV: SideNavItem[] = [
   { id: "sounds", label: "Âm thanh", icon: faVolumeHigh },
   { id: "media", label: "Media / Mask", icon: faPhotoFilm },
   { id: "keyframe", label: "Keyframe", icon: faDiamond },
-  { id: "workflow", label: "Quy trình", icon: faDiagramProject, badge: "Vip" },
-  { id: "auto-render", label: "Xuất video", icon: faRobot, badge: "Vip" },
   { id: "adjustment", label: "Chỉnh màu", icon: faSliders, badge: "Soon" },
   { id: "ai-generate", label: "AI tạo", icon: faSparkles, badge: "Soon" },
   { id: "extension", label: "Tiện ích", icon: faPuzzlePiece, badge: "Soon" },

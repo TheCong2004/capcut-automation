@@ -1,0 +1,10 @@
+packages:
+  - 'apps/artcraft'
+  - 'libs/**'
+
+allowBuilds:
+  '@swc/core': true
+  core-js: true
+  esbuild: true
+  nx: true
+  unrs-resolver: set this to true or false

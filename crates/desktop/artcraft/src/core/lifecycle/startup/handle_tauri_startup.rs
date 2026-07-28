@@ -8,13 +8,14 @@ use crate::core::lifecycle::startup::tasks::spawn_discord_presence_thread::spawn
 use crate::core::lifecycle::startup::tasks::spawn_main_window_thread::spawn_main_window_thread;
 use crate::core::lifecycle::startup::tasks::spawn_sora_task_polling_thread::spawn_sora_task_polling_thread;
 use crate::core::lifecycle::startup::tasks::spawn_storyteller_threads::spawn_storyteller_threads;
-use crate::core::lifecycle::startup::tasks::spawn_unified_backend::spawn_unified_backend;
 use crate::core::providers::credentials::provider_credential_loading_cache::ProviderCredentialLoadingCache;
 use crate::core::state::app_env_configs::app_env_configs::AppEnvConfigs;
 use crate::core::state::artcraft_platform_info::ArtcraftPlatformInfo;
 use crate::core::state::artcraft_usage_tracker::artcraft_usage_tracker::ArtcraftUsageTracker;
 use crate::core::state::data_dir::app_data_root::AppDataRoot;
 use crate::core::threads::third_party_task_polling_thread::third_party_task_polling_thread::third_party_task_polling_thread;
+use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
+use crate::services::pipeline::threads::pipeline_worker_thread::pipeline_worker_thread;
 use crate::services::grok::state::grok_credential_manager::GrokCredentialManager;
 use crate::services::grok::state::grok_image_prompt_queue::GrokImagePromptQueue;
 use crate::services::grok::threads::grok_image_websocket_thread::grok_image_websocket_thread::grok_image_websocket_thread;
@@ -45,6 +46,7 @@ pub async fn handle_tauri_startup(
   worldlabs_bearer_bridge: WorldlabsBearerBridge,
   worldlabs_creds_manager: WorldlabsCredentialManager,
   credential_cache: ProviderCredentialLoadingCache,
+  command_dispatcher: CommandDispatcher,
 ) -> AnyhowResult<()> {
 
   set_app_log_level(
@@ -52,10 +54,19 @@ pub async fn handle_tauri_startup(
     &root,
   )?;
 
-  // Unified Python Backend sidecar (CapCutMate + OpenMontage + MediaCrawler)
-  spawn_unified_backend(&app);
-  spawn_capcut_mate_backend(&app);
-  spawn_auxiliary_backends(&app);
+  // Python backend: capcut-mate owns :30000 (the single always-on Python port).
+  // (artcraft-server.exe / spawn_unified_backend removed — it fought capcut-mate
+  //  for :30000 and its 15s blocking wait was the startup black-screen cause.)
+  //
+  // Spawning the sidecars blocks (sidecar startup sleep) — run it off the setup
+  // thread so the WebView can render immediately instead of showing a black screen.
+  {
+    let app_for_backends = app.clone();
+    std::thread::spawn(move || {
+      spawn_capcut_mate_backend(&app_for_backends);
+      spawn_auxiliary_backends(&app_for_backends);
+    });
+  }
 
   let task_database =
       bootstrap_task_database(&app, &root).await?;
@@ -134,6 +145,15 @@ pub async fn handle_tauri_startup(
     task_database.clone(),
     storyteller_creds_manager.clone(),
     credential_cache,
+  ));
+
+  // Pipeline orchestrator worker: drives multi-stage pipeline jobs
+  // (script generation -> video assembly) gated by the CommandDispatcher.
+  tauri::async_runtime::spawn(pipeline_worker_thread(
+    app.clone(),
+    root.clone(),
+    task_database.clone(),
+    command_dispatcher,
   ));
 
   spawn_discord_presence_thread()?;

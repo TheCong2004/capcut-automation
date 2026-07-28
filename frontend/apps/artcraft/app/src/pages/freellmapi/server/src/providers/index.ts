@@ -148,6 +148,27 @@ register(new OpenAICompatProvider({
 // $0.0, please pay with fiat or send tao". The "free" tier requires a
 // non-zero balance, which conflicts with the project's no-card criterion.
 
+// Self-hosted OpenAI-compatible reverse-proxy LLMs (chatgpt2api / grok2api /
+// gemini2api). Each runs at a user-chosen host, so the base URL comes from an
+// env var and the provider is only registered when that var is set — otherwise
+// the router would try to dispatch to a dead URL. timeoutMs is bumped to 120s
+// because these session-scraping proxies are slow, like Ollama Cloud above.
+const PROXY_ENDPOINTS: Array<{ platform: Platform; name: string; env: string }> = [
+  { platform: 'chatgpt2api', name: 'ChatGPT2API', env: 'CHATGPT2API_URL' },
+  { platform: 'grok2api', name: 'Grok2API', env: 'GROK2API_URL' },
+  { platform: 'gemini2api', name: 'Gemini2API', env: 'GEMINI2API_URL' },
+];
+for (const proxy of PROXY_ENDPOINTS) {
+  const baseUrl = process.env[proxy.env];
+  if (!baseUrl) continue;
+  register(new OpenAICompatProvider({
+    platform: proxy.platform,
+    name: proxy.name,
+    baseUrl,
+    timeoutMs: 120000,
+  }));
+}
+
 export function getProvider(platform: Platform): BaseProvider | undefined {
   return providers.get(platform);
 }

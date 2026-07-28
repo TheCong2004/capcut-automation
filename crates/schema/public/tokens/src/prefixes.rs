@@ -69,6 +69,7 @@ pub(crate) enum TokenPrefix {
 #[cfg_attr(test, derive(EnumIter, EnumCount))]
 pub(crate) enum TauriTokenPrefix {
   Task,
+  PipelineJob,
 }
 
 /// These are old-style prefixes that end in colon (:).
@@ -163,6 +164,7 @@ impl PrefixGenerator for TauriTokenPrefix {
   fn prefix(self) -> &'static str {
     match self {
       TauriTokenPrefix::Task => "task_",
+      TauriTokenPrefix::PipelineJob => "pipeline_job_",
     }
   }
 }

@@ -33,6 +33,10 @@ use crate::core::commands::providers::provider_set_api_key_command::provider_set
 use crate::core::commands::task_queue::get_task_queue_command::get_task_queue_command;
 use crate::core::commands::task_queue::mark_task_as_dismissed_command::mark_task_as_dismissed_command;
 use crate::core::commands::task_queue::tasks_nuke_all_command::tasks_nuke_all_command;
+use crate::core::commands::pipeline::enqueue_pipeline_job_command::enqueue_pipeline_job_command;
+use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
+use crate::core::commands::pipeline::cancel_pipeline_job_command::cancel_pipeline_job_command;
+use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use crate::core::lifecycle::startup::handle_tauri_startup::handle_tauri_startup;
 use crate::core::lifecycle::startup::setup_main_window::setup_main_window;
 use crate::core::state::app_env_configs::app_env_configs::AppEnvConfigs;
@@ -140,6 +144,13 @@ pub fn run() {
   let artcraft_usage_tracker = ArtcraftUsageTracker::new();
   let artcraft_usage_tracker_2 = artcraft_usage_tracker.clone();
 
+  // Pipeline orchestrator: CommandDispatcher gates CPU/GPU-bound stages.
+  // CPU pool covers light stages (script gen); GPU pool covers heavy render.
+  const DEFAULT_CPU_PERMITS: usize = 4;
+  const DEFAULT_GPU_PERMITS: usize = 1;
+  let command_dispatcher = CommandDispatcher::new(DEFAULT_CPU_PERMITS, DEFAULT_GPU_PERMITS);
+  let command_dispatcher_2 = command_dispatcher.clone();
+
   println!("Initializing backend runtime...");
 
   let builder = tauri::Builder::default()
@@ -172,6 +183,7 @@ pub fn run() {
       let storyteller_creds = storyteller_creds_manager_2.clone();
       let sora_creds = sora_creds_manager_2.clone();
       let sora_tasks = sora_task_queue_2.clone();
+      let dispatcher = command_dispatcher_2.clone();
 
       tauri::async_runtime::block_on(async move {
         let result = setup_main_window(&app).await;
@@ -191,6 +203,7 @@ pub fn run() {
           worldlabs_bearer_bridge_2,
           worldlabs_creds_manager_2,
           provider_credential_cache_2,
+          dispatcher,
         ).await;
 
         if let Err(err) = result {
@@ -214,6 +227,7 @@ pub fn run() {
     .manage(storyteller_creds_manager_3)
     .manage(worldlabs_bearer_bridge)
     .manage(provider_credential_cache)
+    .manage(command_dispatcher)
     .manage(worldlabs_creds_manager);
 
   // TODO: Break this out into another module, because RustRover/IntelliJ lags with these macros.
@@ -265,6 +279,9 @@ pub fn run() {
     storyteller_open_subscription_purchase_command,
     storyteller_purge_credentials_command,
     tasks_nuke_all_command,
+    enqueue_pipeline_job_command,
+    list_pipeline_jobs_command,
+    cancel_pipeline_job_command,
     update_app_preferences_command,
     worldlabs_clear_credentials_command,
     worldlabs_get_credential_info_command,

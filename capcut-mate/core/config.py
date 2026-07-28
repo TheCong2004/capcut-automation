@@ -13,7 +13,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # HTTP
-HOST = os.getenv("BE_HOST", "0.0.0.0")
+HOST = os.getenv("BE_HOST", "127.0.0.1")
 PORT = int(os.getenv("BE_PORT", "30000"))
 
 # Draft storage (Mate engine default; same relative path as root config.DRAFT_DIR)

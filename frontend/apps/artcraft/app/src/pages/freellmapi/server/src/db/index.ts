@@ -49,6 +49,7 @@ export function initDb(dbPath?: string): Database.Database {
   migrateModelsV12(db);
   migrateModelsV13(db);
   migrateModelsV14(db);
+  migrateModelsV15(db);
   ensureUnifiedKey(db);
 
   console.log(`Database initialized at ${resolvedPath}`);
@@ -1261,6 +1262,43 @@ function migrateModelsV14(db: Database.Database) {
      WHERE platform = 'cerebras'
        AND model_id IN ('qwen-3-235b-a22b-instruct-2507', 'llama3.1-8b')
   `).run();
+}
+
+// Self-hosted OpenAI-compatible LLM proxies (chatgpt2api / grok2api / gemini2api).
+// Base URLs come from env at register time (providers/index.ts); these rows only
+// give the router a model to pick. Router still needs an enabled api_keys row per
+// platform before it will route — a placeholder token is fine for keyless proxies.
+function migrateModelsV15(db: Database.Database) {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const newModels: Array<[string, string, string, number, number, string, number | null, number | null, number | null, number | null, string, number | null]> = [
+    ['chatgpt2api', 'gpt-4o', 'GPT-4o (ChatGPT2API)', 1, 7, 'Frontier', null, null, null, null, 'self-hosted', 128000],
+    ['grok2api', 'grok-3', 'Grok 3 (Grok2API)', 2, 7, 'Frontier', null, null, null, null, 'self-hosted', 131072],
+    ['gemini2api', 'gemini-2.5-pro', 'Gemini 2.5 Pro (Gemini2API)', 1, 8, 'Frontier', null, null, null, null, 'self-hosted', 1048576],
+  ];
+
+  const apply = db.transaction(() => {
+    for (const m of newModels) insert.run(...m);
+
+    // Ensure every model has a fallback_config row (new inserts + any orphans)
+    const missing = db.prepare(`
+      SELECT m.id FROM models m
+      LEFT JOIN fallback_config f ON m.id = f.model_db_id
+      WHERE f.id IS NULL
+      ORDER BY m.intelligence_rank ASC
+    `).all() as { id: number }[];
+    if (missing.length > 0) {
+      const maxPriority = (db.prepare('SELECT COALESCE(MAX(priority), 0) AS mx FROM fallback_config').get() as { mx: number }).mx;
+      const addFallback = db.prepare('INSERT INTO fallback_config (model_db_id, priority, enabled) VALUES (?, ?, 1)');
+      for (let i = 0; i < missing.length; i++) {
+        addFallback.run(missing[i].id, maxPriority + i + 1);
+      }
+    }
+  });
+  apply();
 }
 
 function ensureUnifiedKey(db: Database.Database) {

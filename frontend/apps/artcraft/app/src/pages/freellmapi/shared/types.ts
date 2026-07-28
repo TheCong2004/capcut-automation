@@ -21,7 +21,10 @@ export type Platform =
   | 'kilo'
   | 'pollinations'
   | 'llm7'
-  | 'huggingface';
+  | 'huggingface'
+  | 'chatgpt2api'
+  | 'grok2api'
+  | 'gemini2api';
 
 export interface Model {
   id: number;

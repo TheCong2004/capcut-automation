@@ -60,7 +60,13 @@ crates/lib/sqlite_queries/target/
 /build/pyinstaller-spec/
 /capcut-mate/config/sticker.json
 /capcut-mate/tools/ffprobe
-/crates/desktop/artcraft/resources/artcraft-server.exe
+/crates/desktop/artcraft/resources/capcut-mate-server.exe
+/crates/desktop/artcraft/resources/media-crawler/media-crawler-server.exe
+/crates/desktop/artcraft/resources/openmontage/openmontage-server.exe
+
+# SQLite runtime WAL/SHM sidecar files (not source)
+freeapi.db-shm
+freeapi.db-wal
 
 # Nested standalone repo kept out of the root repository
 /OpenMontage/

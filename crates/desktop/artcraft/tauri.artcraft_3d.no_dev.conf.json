@@ -4,6 +4,6 @@
     "frontendDist": "../../../frontend/apps/artcraft/dist",
     "devUrl": null,
     "beforeDevCommand": "",
-    "beforeBuildCommand": "npx nx run artcraft:build"
+    "beforeBuildCommand": "pnpm --filter artcraft build"
   }
 }

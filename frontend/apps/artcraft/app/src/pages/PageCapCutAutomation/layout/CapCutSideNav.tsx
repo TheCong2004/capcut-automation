@@ -104,14 +104,18 @@ const NAV_ACCENT: Record<
 export function CapCutSideNav({ activeId, onSelect }: CapCutSideNavProps) {
   return (
     <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-r border-white/8 bg-[#141518]">
-      <div className="flex items-center gap-2 px-4 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 text-sm font-black text-white">
-          C
-        </div>
+      <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/5">
+        <img
+          src="/resources/images/services/artcraft.svg"
+          alt="ArtCraft Logo"
+          className="h-8 w-8 object-contain drop-shadow-[0_0_8px_rgba(0,242,254,0.6)]"
+        />
         <div className="leading-tight">
-          <div className="text-[13px] font-bold tracking-wide">CAPCUT</div>
-          <div className="text-[10px] font-semibold tracking-wide text-white/50">
-            TỰ ĐỘNG HÓA
+          <div className="text-[14px] font-extrabold tracking-wide bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 bg-clip-text text-transparent">
+            ARTCRAFT
+          </div>
+          <div className="text-[10px] font-bold tracking-widest text-cyan-400/80 uppercase">
+            Tự Động Hóa AI
           </div>
         </div>
       </div>

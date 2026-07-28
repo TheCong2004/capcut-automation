@@ -26,6 +26,9 @@ const PLATFORMS: { value: Platform; label: string; tag: string }[] = [
   { value: 'pollinations', label: 'Pollinations AI', tag: 'Anon Free' },
   { value: 'llm7', label: 'LLM7', tag: 'Anon' },
   { value: 'huggingface', label: 'HuggingFace Router', tag: 'Open Source' },
+  { value: 'chatgpt2api', label: 'ChatGPT2API (self-hosted)', tag: 'Proxy' },
+  { value: 'grok2api', label: 'Grok2API (self-hosted)', tag: 'Proxy' },
+  { value: 'gemini2api', label: 'Gemini2API (self-hosted)', tag: 'Proxy' },
 ]
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {

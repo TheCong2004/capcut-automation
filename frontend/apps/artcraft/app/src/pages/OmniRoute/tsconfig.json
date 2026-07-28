@@ -59,5 +59,10 @@
     "_ideia",
     "_mono_repo",
     "_references"
+  ],
+  "references": [
+    {
+      "path": "../../../.."
+    }
   ]
 }

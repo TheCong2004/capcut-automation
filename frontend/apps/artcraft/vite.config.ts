@@ -41,6 +41,34 @@ const projectRoot = __dirname;
 const appRoot = path.resolve(projectRoot, "app");
 const workspaceRoot = path.resolve(projectRoot, "..", "..");
 
+// vite-tsconfig-paths only rewrites imports for files under Vite's `root`
+// (apps/artcraft/app). Files under libs/ live outside root, so their
+// `@storyteller/*` / `@frontend/*` imports are never rewritten. Generate real
+// resolve aliases from tsconfig.base.json so they resolve from any location.
+function workspacePathAliases(): Record<string, string> {
+  const baseTsconfig = path.resolve(workspaceRoot, "tsconfig.base.json");
+  const raw = fs.readFileSync(baseTsconfig, "utf8");
+  const stripped = raw
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1")
+    .replace(/,(\s*[}\]])/g, "$1");
+  const parsed = JSON.parse(stripped) as {
+    compilerOptions?: { paths?: Record<string, string[]> };
+  };
+  const paths = parsed.compilerOptions?.paths ?? {};
+  const aliases: Record<string, string> = {};
+  for (const [key, targets] of Object.entries(paths)) {
+    if (!key.startsWith("@storyteller/") && !key.startsWith("@frontend/")) {
+      continue;
+    }
+    if (key.includes("*") || !targets?.[0]) {
+      continue;
+    }
+    aliases[key] = path.resolve(workspaceRoot, targets[0]);
+  }
+  return aliases;
+}
+
 function tryResolveCandidate(baseDir: string, subPath: string): string | null {
   const target = path.resolve(baseDir, subPath);
   const candidates = [
@@ -113,6 +141,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      ...workspacePathAliases(),
       "~": path.resolve(projectRoot, "app/src"),
       "@mediacrawler": path.resolve(
         projectRoot,
@@ -127,7 +156,8 @@ export default defineConfig({
       "react",
       "react-dom",
       "@preact/signals-core",
-      "@preact/signals-react"
+      "@preact/signals-react",
+      "lucide-react"
     ],
   },
 });

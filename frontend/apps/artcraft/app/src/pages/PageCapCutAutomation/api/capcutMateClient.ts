@@ -44,6 +44,17 @@ export class CapCutMateError extends Error {
   }
 }
 
+/**
+ * Backoff giữa các lần thử lại khi KHÔNG kết nối được BE (vd process
+ * capcut-mate chưa lên). Số phần tử = số lần retry → tổng cộng
+ * `RETRY_DELAYS_MS.length + 1` lần thử (1 lần đầu + 3 retry).
+ */
+const RETRY_DELAYS_MS = [300, 900, 2000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 type Json = Record<string, unknown>;
 
 async function request<T extends Json>(
@@ -62,24 +73,33 @@ async function request<T extends Json>(
   }
 
   let res: Response;
-  try {
-    res = await fetch(url, {
-      method,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body:
-        method === "POST" && options.body !== undefined
-          ? JSON.stringify(options.body)
-          : undefined,
-    });
-  } catch (e) {
-    throw new CapCutMateError(
-      e instanceof Error
-        ? `Không kết nối được capcut-mate tại ${getCapCutMateBaseUrl()}: ${e.message}`
-        : "Không kết nối được capcut-mate",
-    );
+  // Retry chỉ khi fetch NÉM (BE chưa lên / mất kết nối). Response thật
+  // (kể cả HTTP lỗi hay code !== 0) KHÔNG retry — đó là câu trả lời hợp lệ.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(url, {
+        method,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body:
+          method === "POST" && options.body !== undefined
+            ? JSON.stringify(options.body)
+            : undefined,
+      });
+      break;
+    } catch (e) {
+      if (attempt < RETRY_DELAYS_MS.length) {
+        await sleep(RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw new CapCutMateError(
+        e instanceof Error
+          ? `Không kết nối được capcut-mate tại ${getCapCutMateBaseUrl()}: ${e.message}`
+          : "Không kết nối được capcut-mate",
+      );
+    }
   }
 
   let data: Json;
@@ -108,7 +128,7 @@ async function request<T extends Json>(
   return data as T;
 }
 
-export async function pingBackend(): Promise<boolean> {
+async function probeBackendOnce(): Promise<boolean> {
   try {
     const base = getCapCutMateBaseUrl();
     // Prefer /health (unified BE smoke)
@@ -123,6 +143,28 @@ export async function pingBackend(): Promise<boolean> {
     });
     return res.ok;
   } catch {
+    return false;
+  }
+}
+
+/**
+ * Kiểm tra BE có online không.
+ *
+ * Mặc định retry với backoff (`RETRY_DELAYS_MS`) để bỏ qua blip lúc BE mới
+ * lên — hợp cho manual check (HelpFab). Truyền `{ retries: 0 }` để probe 1
+ * phát duy nhất khi caller tự lo lịch retry (vd poll trong Context, tránh
+ * backoff chồng backoff).
+ */
+export async function pingBackend(
+  opts: { retries?: number } = {},
+): Promise<boolean> {
+  const retries = opts.retries ?? RETRY_DELAYS_MS.length;
+  for (let attempt = 0; ; attempt++) {
+    if (await probeBackendOnce()) return true;
+    if (attempt < retries && attempt < RETRY_DELAYS_MS.length) {
+      await sleep(RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
     return false;
   }
 }

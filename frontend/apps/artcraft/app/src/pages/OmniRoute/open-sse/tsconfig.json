@@ -19,5 +19,13 @@
       "@omniroute/open-sse/*": ["../open-sse/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.js"]
+  "include": [
+    "**/*.ts",
+    "**/*.js"
+  ],
+  "references": [
+    {
+      "path": "../../../../.."
+    }
+  ]
 }
