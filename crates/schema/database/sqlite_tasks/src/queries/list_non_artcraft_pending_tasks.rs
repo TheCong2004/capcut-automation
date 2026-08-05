@@ -65,7 +65,8 @@ pub async fn list_non_artcraft_pending_tasks(
       status: TaskStatus::from_str(&task.task_status)?,
       task_type: TaskType::from_str(&task.task_type)?,
       model_type: task.model_type
-        .map(|model| TaskModelType::from_str(&model))
+        .as_deref()
+        .map(TaskModelType::from_str)
         .transpose()?,
       provider: GenerationProvider::from_str(&task.provider)?,
       provider_job_id: task.provider_job_id,
@@ -73,7 +74,8 @@ pub async fn list_non_artcraft_pending_tasks(
       queue_response_url: task.queue_response_url,
       prompt_token: task.prompt_token,
       frontend_caller: task.frontend_caller
-        .map(|caller| TauriCommandCaller::from_str(&caller))
+        .as_deref()
+        .map(TauriCommandCaller::from_str)
         .transpose()?,
       frontend_subscriber_id: task.frontend_subscriber_id,
       frontend_subscriber_payload: task.frontend_subscriber_payload,

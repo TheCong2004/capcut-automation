@@ -13,7 +13,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # HTTP
-HOST = os.getenv("BE_HOST", "127.0.0.1")
+# "" = dual-stack (IPv4 + IPv6) — Windows resolves "localhost" → ::1 (IPv6)
+# Must accept both to serve Tauri WebView2 and curl/PowerShell equally.
+HOST = os.getenv("BE_HOST", "")
 PORT = int(os.getenv("BE_PORT", "30000"))
 
 # Draft storage (Mate engine default; same relative path as root config.DRAFT_DIR)

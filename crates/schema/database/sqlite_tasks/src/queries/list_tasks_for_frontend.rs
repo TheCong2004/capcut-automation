@@ -79,26 +79,31 @@ pub async fn list_tasks_for_frontend(
       status: TaskStatus::from_str(&raw.task_status)?,
       task_type: TaskType::from_str(&raw.task_type)?,
       model_type: raw.model_type
-          .map(|model| TaskModelType::from_str(&model))
+          .as_deref()
+          .map(TaskModelType::from_str)
           .transpose()?,
       provider: raw.provider
-          .map(|provider| GenerationProvider::from_str(&provider))
+          .as_deref()
+          .map(GenerationProvider::from_str)
           .transpose()?,
       provider_job_id: raw.provider_job_id,
       frontend_caller: raw.frontend_caller
-          .map(|caller| TauriCommandCaller::from_str(&caller))
+          .as_deref()
+          .map(TauriCommandCaller::from_str)
           .transpose()?,
       frontend_subscriber_id: raw.frontend_subscriber_id,
       frontend_subscriber_payload: raw.frontend_subscriber_payload,
-      on_complete_primary_media_file_token: raw.on_complete_primary_media_file_token.map(|t| MediaFileToken::new_from_str(&t)),
+      on_complete_primary_media_file_token: raw.on_complete_primary_media_file_token.as_deref().map(MediaFileToken::new_from_str),
       on_complete_primary_media_file_class: raw.on_complete_primary_media_file_class
-          .map(|c| TaskMediaFileClass::from_str(&c))
+          .as_deref()
+          .map(TaskMediaFileClass::from_str)
           .transpose()?,
-      on_complete_batch_token: raw.on_complete_batch_token.map(|t| BatchGenerationToken::new_from_str(&t)),
+      on_complete_batch_token: raw.on_complete_batch_token.as_deref().map(BatchGenerationToken::new_from_str),
       on_complete_primary_media_file_cdn_url: raw.on_complete_primary_media_file_cdn_url,
       on_complete_primary_media_file_thumbnail_url_template: raw.on_complete_primary_media_file_thumbnail_url_template,
       on_failure_type: raw.on_failure_type
-          .map(|t| TaskFailureType::from_str(&t))
+          .as_deref()
+          .map(TaskFailureType::from_str)
           .transpose()?,
       on_failure_message: raw.on_failure_message,
       created_at: raw.created_at,

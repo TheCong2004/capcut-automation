@@ -13,7 +13,7 @@
  * Base URL mặc định của BE Python thống nhất (capcut-mate / `be` sau gộp).
  * Port 30000 — đổi 1 chỗ khi rename/host; localStorage override vẫn ưu tiên.
  */
-export const CAPCUT_BE_BASE_URL = "http://localhost:30000";
+export const CAPCUT_BE_BASE_URL = "http://127.0.0.1:30000";
 
 const STORAGE_KEY = "capcut-mate-base-url";
 const DEFAULT_BASE = CAPCUT_BE_BASE_URL;

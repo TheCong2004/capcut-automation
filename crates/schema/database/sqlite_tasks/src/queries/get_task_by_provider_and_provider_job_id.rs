@@ -68,7 +68,8 @@ pub async fn get_task_by_provider_and_provider_job_id(
     status: TaskStatus::from_str(&record.task_status)?,
     task_type: TaskType::from_str(&record.task_type)?,
     model_type: record.model_type
-        .map(|model| TaskModelType::from_str(&model))
+        .as_deref()
+        .map(TaskModelType::from_str)
         .transpose()?,
     provider: GenerationProvider::from_str(provider)?,
     provider_job_id: record.provider_job_id,
@@ -76,7 +77,8 @@ pub async fn get_task_by_provider_and_provider_job_id(
     queue_response_url: record.queue_response_url,
     prompt_token: record.prompt_token,
     frontend_caller: record.frontend_caller
-        .map(|caller| TauriCommandCaller::from_str(&caller))
+        .as_deref()
+        .map(TauriCommandCaller::from_str)
         .transpose()?,
     frontend_subscriber_id: record.frontend_subscriber_id,
     frontend_subscriber_payload: record.frontend_subscriber_payload,

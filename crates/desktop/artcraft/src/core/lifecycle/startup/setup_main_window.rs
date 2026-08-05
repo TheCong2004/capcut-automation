@@ -7,9 +7,12 @@ pub async fn setup_main_window(
   app: &AppHandle,
 ) -> AnyhowResult<()> {
 
+  let is_headless = std::env::var("ARTCRAFT_HEADLESS").is_ok() || std::env::var("HEADLESS").is_ok();
+
   let win_builder =
       WebviewWindowBuilder::new(app, MAIN_WINDOW_NAME, WebviewUrl::default())
           .title("ArtCraft")
+          .visible(!is_headless)
           .resizable(true)
           .fullscreen(false)
           .background_color(Color(0, 0, 0, 0))

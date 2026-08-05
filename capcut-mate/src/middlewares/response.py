@@ -17,24 +17,34 @@ class ResponseMiddleware(BaseHTTPMiddleware):
         # 提前初始化 lang 变量，确保在异常处理中可用
         lang = 'zh'  # 默认语言
         
+        # Build CORS header for this request's origin (mirrors CORSMiddleware logic).
+        # We need to carry these through any JSONResponse we create ourselves so
+        # that the browser doesn't block the response.
+        origin = request.headers.get("origin", "")
+        cors_headers: dict[str, str] = {}
+        if origin:
+            cors_headers["access-control-allow-origin"] = origin
+            cors_headers["access-control-allow-credentials"] = "true"
+            cors_headers["vary"] = "Origin"
+
         try:
             lang = self._get_language_from_request(request)
             response = await call_next(request)
 
             # 处理非200状态码的响应
             if response.status_code != 200:
-                return await self._handle_non_200_response(response, lang)
+                return await self._handle_non_200_response(response, lang, cors_headers)
                 
             # 处理JSON响应
             if self._is_json_response(response):
-                return await self._process_json_response(response, lang)
+                return await self._process_json_response(response, lang, cors_headers)
                 
             return response
             
         except CustomException as e:
-            return self._handle_custom_exception(e, lang)
+            return self._handle_custom_exception(e, lang, cors_headers)
         except Exception as e:
-            return self._handle_generic_exception(e, lang)
+            return self._handle_generic_exception(e, lang, cors_headers)
 
     def _get_language_from_request(self, request: Request) -> str:
         """从请求头获取语言偏好"""
@@ -61,8 +71,9 @@ class ResponseMiddleware(BaseHTTPMiddleware):
             # 如果解析过程中出现任何异常，返回默认语言
             return 'zh'
     
-    def _handle_422_error(self, body_str: str, lang: str) -> JSONResponse:
+    def _handle_422_error(self, body_str: str, lang: str, cors_headers: dict | None = None) -> JSONResponse:
         """特殊处理422参数验证错误"""
+        cors_headers = cors_headers or {}
         try:
             # 尝试解析422错误的响应体
             error_data = json.loads(body_str)
@@ -80,16 +91,21 @@ class ResponseMiddleware(BaseHTTPMiddleware):
             # 构建统一的422错误响应（不包含data字段）
             error_message = "; ".join(validation_messages) if validation_messages else ""
             error_response = CustomError.PARAM_VALIDATION_FAILED.as_dict(detail=error_message, lang=lang)
-            return JSONResponse(status_code=200, content=error_response)
+            resp = JSONResponse(status_code=200, content=error_response)
+            resp.headers.update(cors_headers)
+            return resp
             
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse 422 response body: {body_str}")
             
             error_response = CustomError.PARAM_VALIDATION_FAILED.as_dict(detail=body_str, lang=lang)
-            return JSONResponse(status_code=200, content=error_response)
+            resp = JSONResponse(status_code=200, content=error_response)
+            resp.headers.update(cors_headers)
+            return resp
 
-    async def _handle_non_200_response(self, response, lang: str) -> JSONResponse:
+    async def _handle_non_200_response(self, response, lang: str, cors_headers: dict | None = None) -> JSONResponse:
         """处理非200状态码的响应"""
+        cors_headers = cors_headers or {}
         body = b""
         async for chunk in response.body_iterator:
             body += chunk
@@ -98,7 +114,7 @@ class ResponseMiddleware(BaseHTTPMiddleware):
 
         # 特殊处理422错误（参数验证错误）
         if response.status_code == 422:
-            return self._handle_422_error(body_str, lang)
+            return self._handle_422_error(body_str, lang, cors_headers)
         
         # 其它情况不应该发生，每一个错误都应该在前面被处理
         logger.error(f"Non-200 response: {response.status_code} - {body_str}")
@@ -107,14 +123,15 @@ class ResponseMiddleware(BaseHTTPMiddleware):
             "code": response.status_code,
             "message": f"HTTP Error {response.status_code}, detail: {body_str}"
         }
-        
-        return JSONResponse(status_code=200, content=error_response)
+        resp = JSONResponse(status_code=200, content=error_response)
+        resp.headers.update(cors_headers)
+        return resp
 
     def _is_json_response(self, response) -> bool:
         """检查是否为JSON响应"""
         return response.headers.get('content-type') == 'application/json'
 
-    async def _process_json_response(self, response, lang: str):
+    async def _process_json_response(self, response, lang: str, cors_headers: dict | None = None):
         """处理JSON响应并统一格式"""
         body = [section async for section in response.body_iterator]
         if not body:
@@ -122,12 +139,38 @@ class ResponseMiddleware(BaseHTTPMiddleware):
             
         body_str = b''.join(body).decode()
         
+        # Copy CORS / hop-by-hop headers từ response gốc sang response mới.
+        # Khi middleware tạo JSONResponse mới, CORSMiddleware headers (do FastAPI
+        # thêm vào response gốc) bị mất — gây CORS block ở browser.
+        _CORS_HEADERS = (
+            "access-control-allow-origin",
+            "access-control-allow-credentials",
+            "access-control-allow-methods",
+            "access-control-allow-headers",
+            "access-control-expose-headers",
+            "access-control-max-age",
+            "vary",
+        )
+        # Merge: caller-provided cors_headers (from request origin) take priority.
+        # Also copy any CORS headers already on the response (set by CORSMiddleware).
+        resp_cors = {
+            k: v
+            for k, v in response.headers.items()
+            if k.lower() in _CORS_HEADERS
+        }
+        merged_cors: dict[str, str] = {**resp_cors, **(cors_headers or {})}
+
         try:
             data = json.loads(body_str)
             
-            # 如果响应已经有统一格式，直接返回
+            # 如果响应已经有统一格式，重建 JSONResponse 保留 CORS headers
             if 'code' in data and 'message' in data:
-                return response
+                new_resp = JSONResponse(
+                    status_code=response.status_code,
+                    content=data,
+                )
+                new_resp.headers.update(merged_cors)
+                return new_resp
                 
             # 创建统一格式的响应（成功响应保留data字段）
             unified_response = {
@@ -136,28 +179,37 @@ class ResponseMiddleware(BaseHTTPMiddleware):
                 **data
             }
             
-            return JSONResponse(
+            new_resp = JSONResponse(
                 status_code=response.status_code,
-                content=unified_response
+                content=unified_response,
             )
+            new_resp.headers.update(merged_cors)
+            return new_resp
             
         except json.JSONDecodeError:
             logger.warning(f"JSON decode error: {body_str}")
             return response
 
-    def _handle_custom_exception(self, e: CustomException, lang: str) -> JSONResponse:
+
+    def _handle_custom_exception(self, e: CustomException, lang: str, cors_headers: dict | None = None) -> JSONResponse:
         """处理自定义异常（不包含data字段）"""
+        cors_headers = cors_headers or {}
         logger.warning(f"Custom exception: {e.err.code} - {e.err.cn_message}" + 
                     (f" ({e.detail})" if e.detail else ""))
         
         # 获取错误信息
         error_response = e.err.as_dict(detail=e.detail, lang=lang)
-        return JSONResponse(status_code=200, content=error_response)
+        resp = JSONResponse(status_code=200, content=error_response)
+        resp.headers.update(cors_headers)
+        return resp
 
-    def _handle_generic_exception(self, e: Exception, lang: str) -> JSONResponse:
+    def _handle_generic_exception(self, e: Exception, lang: str, cors_headers: dict | None = None) -> JSONResponse:
         """处理通用异常（不包含data字段）"""
+        cors_headers = cors_headers or {}
         logger.warning(f"Internal server error: {str(e)}")
         
         # 获取错误信息
         error_response = CustomError.INTERNAL_SERVER_ERROR.as_dict(detail=str(e), lang=lang)
-        return JSONResponse(status_code=200, content=error_response)
+        resp = JSONResponse(status_code=200, content=error_response)
+        resp.headers.update(cors_headers)
+        return resp
