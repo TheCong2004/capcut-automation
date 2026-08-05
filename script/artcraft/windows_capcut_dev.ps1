@@ -25,15 +25,15 @@ function Test-Port([int]$Port) {
   }
 }
 
-# --- 1. Backend on :30000 (capcut-mate) ---
+# --- 1. Unified Backend on :30000 ---
 if (Test-Port 30000) {
-  Write-Host "CapCut Backend is already running on :30000" -ForegroundColor Green
-} elseif (Test-Path (Join-Path $MateRoot "main.py")) {
-  Write-Host "Starting CapCut Backend on :30000 ..." -ForegroundColor Cyan
-  Start-Process -WorkingDirectory $MateRoot -FilePath "uv" -ArgumentList "run","main.py" -WindowStyle Minimized
+  Write-Host "Unified Backend is already running on :30000" -ForegroundColor Green
+} elseif (Test-Path (Join-Path $ArtcraftRoot "unified_server.py")) {
+  Write-Host "Starting Unified Backend on :30000 ..." -ForegroundColor Cyan
+  Start-Process -WorkingDirectory $MateRoot -FilePath "uv" -ArgumentList "run","python","..\unified_server.py" -WindowStyle Minimized
   Start-Sleep -Seconds 2
 } else {
-  Write-Host "WARNING: CapCut backend main.py not found at $MateRoot" -ForegroundColor Yellow
+  Write-Host "WARNING: Unified backend unified_server.py not found at $ArtcraftRoot" -ForegroundColor Yellow
 }
 
 # --- 2. FreeLLMAPI Server on :3001 ---

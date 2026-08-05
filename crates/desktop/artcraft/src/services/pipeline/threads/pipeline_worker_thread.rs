@@ -1,20 +1,14 @@
 //! The pipeline worker: a background loop that drives multi-stage pipeline jobs
 //! from `pending` to `complete_success` (or `complete_failure`).
-//!
-//! Pattern mirrors `services/sora/threads/sora_task_polling/sora_task_polling_thread.rs`:
-//! an outer loop that catches errors + sleeps, and an inner loop that reads
-//! pending jobs and processes them one stage at a time.
-//!
-//! MVP stages (see `PipelineStage`):
-//!   ScriptGeneration --(OmniRoute)--> VideoAssembly --(CapCut Mate)--> Done
-//!
-//! The CommandDispatcher gates each stage: script generation takes a CPU permit,
-//! video assembly takes a GPU permit (rendering is the heavy step).
 
 use crate::core::state::data_dir::app_data_root::AppDataRoot;
 use crate::core::state::task_database::TaskDatabase;
-use crate::services::pipeline::clients::capcut_mate_client::assemble_and_render;
-use crate::services::pipeline::clients::omniroute_client::generate_script;
+use crate::services::pipeline::clients::capcut_mate_client::{
+  assemble_and_process_draft, health_check as capcut_mate_health_check, DraftAssemblyResult,
+};
+use crate::services::pipeline::clients::omniroute_client::{
+  generate_script, health_check as llm_health_check,
+};
 use crate::services::pipeline::events::{
   emit_job_complete, emit_job_failed, emit_stage_complete, JobCompletePayload, JobFailedPayload,
   StageCompletePayload,
@@ -23,7 +17,7 @@ use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use enums::tauri::pipeline::pipeline_stage::PipelineStage;
 use enums::tauri::tasks::task_status::TaskStatus;
 use errors::AnyhowResult;
-use log::{error, info};
+use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use sqlite_tasks::queries::pipeline::fail_pipeline_job::{fail_pipeline_job, FailPipelineJobArgs};
@@ -63,7 +57,7 @@ pub async fn pipeline_worker_thread(
   loop {
     let res = worker_loop(&app_handle, &task_database, &dispatcher).await;
     if let Err(err) = res {
-      error!("Pipeline worker loop error: {:?}", err);
+      error!("[JOB][OUTER_LOOP_ERROR] Pipeline worker loop error: {:?}", err);
     }
     tokio::time::sleep(std::time::Duration::from_millis(ERROR_SLEEP_MS)).await;
   }
@@ -94,7 +88,7 @@ async fn worker_loop(
 
       if let Err(err) = result {
         let error_message = format!("{err:?}");
-        error!("Pipeline job {} failed at {}: {}", job_id.as_str(), stage.to_str(), error_message);
+        error!("[JOB][FAILED] Job {} failed at stage {}: {}", job_id.as_str(), stage.to_str(), error_message);
         fail_pipeline_job(FailPipelineJobArgs {
           db: task_database.get_connection(),
           pipeline_job_id: &job_id,
@@ -114,8 +108,7 @@ async fn worker_loop(
   }
 }
 
-/// Run whichever stage the job is currently on. Advancing the stage / marking
-/// completion (and emitting the matching event) happens here on success.
+/// Run whichever stage the job is currently on.
 async fn process_stage(
   app_handle: &AppHandle,
   task_database: &TaskDatabase,
@@ -124,13 +117,12 @@ async fn process_stage(
 ) -> AnyhowResult<()> {
   match job.current_stage {
     PipelineStage::ScriptGeneration => {
-      run_script_generation(app_handle, task_database, dispatcher, job).await
+      run_preflight_and_script_generation(app_handle, task_database, dispatcher, job).await
     }
     PipelineStage::VideoAssembly => {
       run_video_assembly(app_handle, task_database, dispatcher, job).await
     }
     PipelineStage::Done => {
-      // Terminal: nothing to run. Mark success in case it wasn't already.
       update_pipeline_job_status(UpdatePipelineJobStatusArgs {
         db: task_database.get_connection(),
         pipeline_job_id: &job.id,
@@ -142,17 +134,30 @@ async fn process_stage(
   }
 }
 
-/// ScriptGeneration: call OmniRoute, store the script, advance to VideoAssembly.
-async fn run_script_generation(
+/// Preflight Connectivity Check & Script Generation stage
+async fn run_preflight_and_script_generation(
   app_handle: &AppHandle,
   task_database: &TaskDatabase,
   dispatcher: &CommandDispatcher,
   job: &PipelineJob,
 ) -> AnyhowResult<()> {
   let prompt = extract_prompt(job)?;
+  if prompt.trim().is_empty() {
+    return Err(anyhow::anyhow!("PREFLIGHT_FAILED: Job prompt is empty"));
+  }
+
+  info!("[JOB][PREFLIGHT] Checking LLM and CapCut Mate service readiness...");
+  if let Err(err) = llm_health_check().await {
+    return Err(anyhow::anyhow!("PREFLIGHT_FAILED: LLM service unreachable: {err}"));
+  }
+
+  if let Err(err) = capcut_mate_health_check().await {
+    return Err(anyhow::anyhow!("PREFLIGHT_FAILED: CapCut Mate service unreachable: {err}"));
+  }
+  info!("[JOB][PREFLIGHT] All dependency services are reachable.");
 
   let _permit = dispatcher.acquire_cpu().await;
-  info!("Pipeline job {}: generating script", job.id.as_str());
+  info!("[JOB][LLM] Generating script for prompt (len={})", prompt.len());
   let script = generate_script(&prompt).await?;
 
   let mut outputs = parse_stage_outputs(job);
@@ -170,7 +175,7 @@ async fn run_script_generation(
   .await
 }
 
-/// VideoAssembly: read the script, render via CapCut Mate, mark the job complete.
+/// Video Assembly, Draft Creation, Captioning, and Export/Draft Output stage
 async fn run_video_assembly(
   app_handle: &AppHandle,
   task_database: &TaskDatabase,
@@ -181,17 +186,22 @@ async fn run_video_assembly(
   let script = outputs
     .get("script")
     .and_then(|v| v.as_str())
-    .ok_or_else(|| anyhow::anyhow!("VideoAssembly stage missing script from prior stage"))?;
+    .ok_or_else(|| anyhow::anyhow!("VideoAssembly stage missing script output"))?;
 
   let _permit = dispatcher.acquire_gpu().await;
-  info!("Pipeline job {}: assembling & rendering video", job.id.as_str());
-  let video_url = assemble_and_render(script).await?;
+  info!("[JOB][CAPCUT_CREATE_DRAFT] Assembling draft project from script...");
+  let result: DraftAssemblyResult = assemble_and_process_draft(script).await?;
+
+  let final_output_url = result.video_url.unwrap_or_else(|| result.draft_url.clone());
+  info!("[JOB][DONE] Draft assembly complete. Final output: {}", final_output_url);
 
   let mut outputs = outputs;
-  outputs["video_url"] = json!(video_url);
+  outputs["draft_url"] = json!(result.draft_url);
+  outputs["draft_id"] = json!(result.draft_id);
+  outputs["video_url"] = json!(final_output_url);
+  outputs["rendering_supported"] = json!(result.rendering_supported);
   let outputs_string = serde_json::to_string(&outputs)?;
 
-  // Advance stage to Done + persist outputs.
   update_pipeline_job_stage(UpdatePipelineJobStageArgs {
     db: task_database.get_connection(),
     pipeline_job_id: &job.id,
@@ -200,7 +210,6 @@ async fn run_video_assembly(
   })
   .await?;
 
-  // Mark terminal success.
   update_pipeline_job_status(UpdatePipelineJobStatusArgs {
     db: task_database.get_connection(),
     pipeline_job_id: &job.id,
@@ -212,14 +221,13 @@ async fn run_video_assembly(
     app_handle,
     JobCompletePayload {
       job_id: job.id.as_str().to_string(),
-      video_url,
+      video_url: final_output_url,
     },
   );
 
   Ok(())
 }
 
-/// Persist the new stage + outputs, mark the job `started`, and emit stage_complete.
 async fn advance_stage(
   app_handle: &AppHandle,
   task_database: &TaskDatabase,
@@ -236,7 +244,6 @@ async fn advance_stage(
   })
   .await?;
 
-  // Keep the job in the active set as it moves between stages.
   update_pipeline_job_status(UpdatePipelineJobStatusArgs {
     db: task_database.get_connection(),
     pipeline_job_id: job_id,
@@ -256,16 +263,12 @@ async fn advance_stage(
   Ok(())
 }
 
-/// Pull the prompt string out of the job's input payload. The payload is opaque
-/// JSON set at enqueue time; we accept either `{"prompt": "..."}` or a bare
-/// JSON string.
 fn extract_prompt(job: &PipelineJob) -> AnyhowResult<String> {
   let raw = job
     .maybe_input_payload
     .as_deref()
-    .ok_or_else(|| anyhow::anyhow!("Pipeline job {} has no input payload", job.id.as_str()))?;
+    .ok_or_else(|| anyhow::anyhow!("Pipeline job {} missing input payload", job.id.as_str()))?;
 
-  // Try structured `{ "prompt": "..." }` first.
   if let Ok(value) = serde_json::from_str::<Value>(raw) {
     if let Some(prompt) = value.get("prompt").and_then(|v| v.as_str()) {
       return Ok(prompt.to_string());
@@ -275,11 +278,9 @@ fn extract_prompt(job: &PipelineJob) -> AnyhowResult<String> {
     }
   }
 
-  // Fall back to the raw string as the prompt.
   Ok(raw.to_string())
 }
 
-/// Parse the accumulated stage outputs JSON, defaulting to an empty object.
 fn parse_stage_outputs(job: &PipelineJob) -> Value {
   job
     .maybe_stage_outputs

@@ -1,34 +1,93 @@
-//! HTTP client for OmniRoute (the unified AI router product) — used by the
-//! pipeline worker to generate a short-film script from an idea/prompt.
-//!
-//! OmniRoute runs as a standalone product on **:20128** (API + dashboard on the
-//! same port). It exposes an OpenAI-compatible `POST /v1/chat/completions`.
-//!
-//! ⚠️ Do NOT target :30000 — there `/v1/*` is hijacked by unified_server.py's
-//! FreeLLMAPI proxy (→ :3001), a different service.
-//!
-//! NB: the workspace's reqwest is built with `default-features = false` and only
-//! `multipart`/`stream` — there is NO `json` feature. So we serialize the request
-//! body and parse the response with `serde_json` manually instead of `.json()`.
+//! HTTP client for LLM / OmniRoute — used by the pipeline worker
+//! to generate script content from a prompt. Reads configuration dynamically
+//! from environment variables.
 
 use errors::AnyhowResult;
-use log::info;
+use log::{error, info, warn};
 use reqwest::Client;
 use serde_json::{json, Value};
+use std::env;
 use std::time::Duration;
 
-const OMNIROUTE_BASE_URL: &str = "http://localhost:20128";
-const CHAT_COMPLETIONS_PATH: &str = "/v1/chat/completions";
-const DEFAULT_MODEL: &str = "auto";
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+pub const DEFAULT_LLM_BASE_URL: &str = "http://127.0.0.1:20128";
+pub const DEFAULT_LLM_MODEL: &str = "auto";
+pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
+pub const DEFAULT_MAX_RETRIES: u32 = 3;
 
-/// Generate a script from an idea/prompt via OmniRoute's chat-completions endpoint.
-/// Returns the assistant message content as a plain string.
+fn get_llm_base_url() -> String {
+  env::var("LLM_BASE_URL").unwrap_or_else(|_| DEFAULT_LLM_BASE_URL.to_string())
+}
+
+fn get_llm_model() -> String {
+  env::var("LLM_MODEL").unwrap_or_else(|_| DEFAULT_LLM_MODEL.to_string())
+}
+
+fn get_llm_api_key() -> Option<String> {
+  env::var("LLM_API_KEY").ok().filter(|s| !s.trim().is_empty())
+}
+
+fn get_timeout() -> Duration {
+  let secs = env::var("REQUEST_TIMEOUT_SECONDS")
+    .ok()
+    .and_then(|s| s.parse::<u64>().ok())
+    .unwrap_or(DEFAULT_TIMEOUT_SECS);
+  Duration::from_secs(secs)
+}
+
+fn get_max_retries() -> u32 {
+  env::var("PIPELINE_MAX_RETRIES")
+    .ok()
+    .and_then(|s| s.parse::<u32>().ok())
+    .unwrap_or(DEFAULT_MAX_RETRIES)
+}
+
+/// Health check to verify LLM service reachability.
+pub async fn health_check() -> Result<(), String> {
+  let base_url = get_llm_base_url();
+  let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
+  let client = Client::builder()
+    .timeout(Duration::from_secs(5))
+    .build()
+    .map_err(|e| format!("LLM_UNAVAILABLE: Failed to build HTTP client: {e}"))?;
+
+  let mut req = client.get(&url);
+  if let Some(key) = get_llm_api_key() {
+    req = req.header("Authorization", format!("Bearer {key}"));
+  }
+
+  match req.send().await {
+    Ok(res) => {
+      let status = res.status();
+      if status.is_success() || status.as_u16() < 500 {
+        Ok(())
+      } else {
+        Err(format!("LLM_UNAVAILABLE: HTTP status {}", status.as_u16()))
+      }
+    }
+    Err(err) => {
+      if err.is_timeout() {
+        Err("LLM_TIMEOUT: Health check request timed out".to_string())
+      } else {
+        Err(format!("LLM_UNAVAILABLE: Connection failed: {err}"))
+      }
+    }
+  }
+}
+
+/// Generate a script from prompt via OpenAI-compatible chat completions with backoff retries.
 pub async fn generate_script(prompt: &str) -> AnyhowResult<String> {
-  let url = format!("{OMNIROUTE_BASE_URL}{CHAT_COMPLETIONS_PATH}");
+  if prompt.trim().is_empty() {
+    return Err(anyhow::anyhow!("LLM_EMPTY_SCRIPT: Prompt cannot be empty"));
+  }
+
+  let base_url = get_llm_base_url();
+  let model = get_llm_model();
+  let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
+  let timeout = get_timeout();
+  let max_retries = get_max_retries();
 
   let body = json!({
-    "model": DEFAULT_MODEL,
+    "model": model,
     "messages": [
       {
         "role": "user",
@@ -37,46 +96,107 @@ pub async fn generate_script(prompt: &str) -> AnyhowResult<String> {
     ],
     "stream": false,
   });
-
   let body_string = serde_json::to_string(&body)?;
 
-  let client = Client::builder()
-      .timeout(REQUEST_TIMEOUT)
-      .build()?;
+  let client = Client::builder().timeout(timeout).build()?;
 
-  let response = client.post(&url)
+  let mut attempt = 0;
+  loop {
+    attempt += 1;
+
+    let mut req = client
+      .post(&url)
       .header("Content-Type", "application/json")
-      .header("Accept", "application/json")
-      .body(body_string)
-      .send()
-      .await?;
+      .header("Accept", "application/json");
 
-  let status = response.status();
-  let text = response.text().await?;
+    if let Some(key) = get_llm_api_key() {
+      req = req.header("Authorization", format!("Bearer {key}"));
+    }
 
-  if !status.is_success() {
-    return Err(anyhow::anyhow!(
-      "OmniRoute returned HTTP {} for {}: {}",
-      status.as_u16(),
-      url,
-      text,
-    ));
+    info!("[LLM][POST] Sending script generation request (attempt {}/{})", attempt, max_retries);
+
+    let res_result = req.body(body_string.clone()).send().await;
+
+    match res_result {
+      Ok(response) => {
+        let status = response.status();
+        let status_code = status.as_u16();
+
+        // Fail fast on non-retryable 4xx auth/client errors
+        if status_code == 401 || status_code == 403 {
+          error!("[LLM][AUTH_ERROR] HTTP {}", status_code);
+          return Err(anyhow::anyhow!("LLM_UNAUTHORIZED: Authentication failed (HTTP {})", status_code));
+        }
+
+        if status_code == 400 {
+          let text = response.text().await.unwrap_or_default();
+          error!("[LLM][BAD_REQUEST] {}", text);
+          return Err(anyhow::anyhow!("LLM_INVALID_RESPONSE: Bad request (HTTP 400): {}", text));
+        }
+
+        if status_code == 429 {
+          if attempt < max_retries {
+            warn!("[LLM][RATE_LIMIT] Rate limited (HTTP 429). Retrying after delay...");
+            tokio::time::sleep(Duration::from_millis(1500 * attempt as u64)).await;
+            continue;
+          } else {
+            return Err(anyhow::anyhow!("LLM_RATE_LIMITED: Rate limit exceeded (HTTP 429)"));
+          }
+        }
+
+        if status.is_server_error() {
+          let text = response.text().await.unwrap_or_default();
+          if attempt < max_retries {
+            warn!("[LLM][SERVER_ERROR] HTTP {}: {}. Retrying...", status_code, text);
+            tokio::time::sleep(Duration::from_millis(1000 * attempt as u64)).await;
+            continue;
+          } else {
+            return Err(anyhow::anyhow!("LLM_UNAVAILABLE: Server error (HTTP {}): {}", status_code, text));
+          }
+        }
+
+        if !status.is_success() {
+          return Err(anyhow::anyhow!("LLM_UNAVAILABLE: Unexpected HTTP status {}", status_code));
+        }
+
+        // Parse response
+        let text = response.text().await?;
+        let parsed: Value = match serde_json::from_str(&text) {
+          Ok(v) => v,
+          Err(e) => return Err(anyhow::anyhow!("LLM_INVALID_RESPONSE: JSON parse error: {}", e)),
+        };
+
+        let content = parsed
+          .get("choices")
+          .and_then(|c| c.get(0))
+          .and_then(|c| c.get("message"))
+          .and_then(|m| m.get("content"))
+          .and_then(|v| v.as_str())
+          .ok_or_else(|| anyhow::anyhow!("LLM_INVALID_RESPONSE: Missing choices[0].message.content"))?;
+
+        let trimmed = content.trim();
+        if trimmed.is_empty() {
+          return Err(anyhow::anyhow!("LLM_EMPTY_SCRIPT: LLM returned empty script text"));
+        }
+
+        info!("[LLM][SUCCESS] Generated script ({} characters)", trimmed.len());
+        return Ok(trimmed.to_string());
+      }
+      Err(err) => {
+        let is_timeout = err.is_timeout();
+        let err_msg = if is_timeout {
+          "LLM_TIMEOUT".to_string()
+        } else {
+          format!("LLM_UNAVAILABLE: {err}")
+        };
+
+        if attempt < max_retries {
+          warn!("[LLM][RETRY] Request failed ({err_msg}). Retrying {}/{}", attempt, max_retries);
+          tokio::time::sleep(Duration::from_millis(1000 * attempt as u64)).await;
+        } else {
+          return Err(anyhow::anyhow!("{}", err_msg));
+        }
+      }
+    }
   }
-
-  let parsed: Value = serde_json::from_str(&text)?;
-
-  let content = parsed
-      .get("choices")
-      .and_then(|choices| choices.get(0))
-      .and_then(|choice| choice.get("message"))
-      .and_then(|message| message.get("content"))
-      .and_then(|content| content.as_str())
-      .ok_or_else(|| anyhow::anyhow!(
-        "OmniRoute response missing choices[0].message.content: {}",
-        text,
-      ))?;
-
-  info!("OmniRoute generated a script ({} chars)", content.len());
-
-  Ok(content.to_string())
 }
