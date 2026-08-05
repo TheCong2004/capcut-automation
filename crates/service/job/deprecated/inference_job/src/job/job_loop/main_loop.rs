@@ -18,14 +18,14 @@ use crate::job::job_loop::process_single_job_success_case::ProcessSingleJobSucce
 use crate::state::job_dependencies::JobDependencies;
 
 // Job runner timeouts (guards MySQL)
-const START_TIMEOUT_MILLIS : u64 = 500;
-const INCREASE_TIMEOUT_MILLIS : u64 = 1000;
+const START_TIMEOUT_MILLIS: u64 = 500;
+const INCREASE_TIMEOUT_MILLIS: u64 = 1000;
 
 /// Pause file millis
-const PAUSE_FILE_EXISTS_WAIT_MILLIS : u64 = 1000 * 30;
+const PAUSE_FILE_EXISTS_WAIT_MILLIS: u64 = 1000 * 30;
 
 /// Warn on slow batch queries
-const SLOW_BATCH_QUERY_NOTICE_DURATION : Duration = Duration::from_millis(3500);
+const SLOW_BATCH_QUERY_NOTICE_DURATION: Duration = Duration::from_millis(3500);
 
 pub async fn main_loop(job_dependencies: JobDependencies) {
   let mut noop_logger = NoOpLogger::new(job_dependencies.job.system.no_op_logger_millis as i64);
@@ -65,7 +65,8 @@ pub async fn main_loop(job_dependencies: JobDependencies) {
       maybe_scope_by_model_type: maybe_scoped_model_types,
       maybe_scope_by_job_category: None,
       mysql_pool: &job_dependencies.db.mysql_pool,
-    }).await;
+    })
+    .await;
 
     let batch_query_duration = Instant::now().duration_since(batch_query_start_time);
     job_dependencies.job_instruments.batch_query_duration.record(batch_query_duration.as_millis() as u64, &[]);
@@ -84,13 +85,11 @@ pub async fn main_loop(job_dependencies: JobDependencies) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     };
 
     if jobs.is_empty() {
-      let message = format!(
-        "No jobs picked up from database! Querying scoped to model types: {:?}",
-        maybe_scoped_model_types);
+      let message = format!("No jobs picked up from database! Querying scoped to model types: {:?}", maybe_scoped_model_types);
 
       noop_logger.log_message_after_awhile(&message);
 
@@ -116,7 +115,7 @@ pub async fn main_loop(job_dependencies: JobDependencies) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     }
 
     error_timeout_millis = START_TIMEOUT_MILLIS; // reset
@@ -152,13 +151,9 @@ async fn process_job_batch(job_dependencies: &JobDependencies, jobs: Vec<Availab
       None => "unknown".to_string(),
     };
 
-    let mut job_duration_instrumentation_attributes = vec![
-      OtelAttribute::new("job_user_is_premium", job.is_from_premium_user),
-      OtelAttribute::new("job_model", model_type_str),
-      OtelAttribute::new("job_inference_category", job.inference_category.to_str()),
-    ];
+    let mut job_duration_instrumentation_attributes = vec![OtelAttribute::new("job_user_is_premium", job.is_from_premium_user), OtelAttribute::new("job_model", model_type_str), OtelAttribute::new("job_inference_category", job.inference_category.to_str())];
 
-    let managed_result =  match result {
+    let managed_result = match result {
       Ok(success_case) => {
         info!("Job loop iteration ({i} of {job_count} batch) \"success\": {:?}", success_case);
 
@@ -181,29 +176,24 @@ async fn process_job_batch(job_dependencies: &JobDependencies, jobs: Vec<Availab
         error!(
           r#"Failure to process job ({i} of {job_count} batch): {:?} -
             {:?}
-          "#,job.inference_job_token, err);
+          "#,
+          job.inference_job_token, err
+        );
         // we try to handle the error and report details
         handle_error(&job_dependencies, &job, err).await
-      }
+      },
     };
 
-    job_duration_instrumentation_attributes.push(OtelAttribute::new(
-      "job_status",
-      managed_result
-          .is_err()
-          .then(|| "possibly_failed")
-          .unwrap_or("possibly_succeeded")));
+    job_duration_instrumentation_attributes.push(OtelAttribute::new("job_status", managed_result.is_err().then(|| "possibly_failed").unwrap_or("possibly_succeeded")));
 
-    job_dependencies.job_instruments.job_duration.record(
-      job_duration.as_millis() as u64,
-      &job_duration_instrumentation_attributes);
+    job_dependencies.job_instruments.job_duration.record(job_duration.as_millis() as u64, &job_duration_instrumentation_attributes);
   }
 
   info!("Process job batch loop ended.");
   Ok(())
 }
 
-#[derive(Eq,PartialEq)]
+#[derive(Eq, PartialEq)]
 enum JobFailureClass {
   // Jobs that can be retried
   TransientFailure,
@@ -211,7 +201,7 @@ enum JobFailureClass {
   PermanentFailure,
 }
 
-#[derive(Eq,PartialEq)]
+#[derive(Eq, PartialEq)]
 enum ContainerHealth {
   // No impact to container health
   Ignore,
@@ -225,82 +215,43 @@ async fn handle_error(job_dependencies: &&JobDependencies, job: &AvailableInfere
     container_health_report,
     internal_failure_reason,
     maybe_public_failure_reason, // TODO(bt,2023-10-11): Remove this column in favor of "frontend_failure_category".
-    maybe_frontend_failure_category
+    maybe_frontend_failure_category,
   ) = match error {
     // Permanent failures
-    ProcessSingleJobError::KeepAliveElapsed =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        "keepalive elapsed".to_string(),
-        None,
-        Some(FrontendFailureCategory::KeepAliveElapsed),
-      ),
-    ProcessSingleJobError::InvalidJob(ref err) =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        format!("InvalidJob: {:?}", err),
-        Some("invalid job"),
-        None,
-      ),
-    ProcessSingleJobError::NotYetImplemented =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        "not yet implemented".to_string(),
-        None,
-        Some(FrontendFailureCategory::NotYetImplemented),
-      ),
-    ProcessSingleJobError::FaceDetectionFailure =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        "face not detected".to_string(),
-        None,
-        Some(FrontendFailureCategory::FaceNotDetected),
-      ),
-    ProcessSingleJobError::ModelDeleted =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        "model deleted".to_string(),
-        None,
-        None,
-      ),
+    ProcessSingleJobError::KeepAliveElapsed => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, "keepalive elapsed".to_string(), None, Some(FrontendFailureCategory::KeepAliveElapsed)),
+    ProcessSingleJobError::InvalidJob(ref err) => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, format!("InvalidJob: {:?}", err), Some("invalid job"), None),
+    ProcessSingleJobError::NotYetImplemented => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, "not yet implemented".to_string(), None, Some(FrontendFailureCategory::NotYetImplemented)),
+    ProcessSingleJobError::FaceDetectionFailure => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, "face not detected".to_string(), None, Some(FrontendFailureCategory::FaceNotDetected)),
+    ProcessSingleJobError::ModelDeleted => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, "model deleted".to_string(), None, None),
     // Non-permanent failures
-    ProcessSingleJobError::FilesystemFull =>
-      (
-        JobFailureClass::TransientFailure,
-        ContainerHealth::IncrementContainerFailCount,
-        "worker filesystem full".to_string(),
-        None, // User doesn't need to know the filesystem is full
-        Some(FrontendFailureCategory::RetryableWorkerError),
-      ),
-    ProcessSingleJobError::Other(ref err) =>
-      (
-        JobFailureClass::TransientFailure,
-        ContainerHealth::IncrementContainerFailCount,
-        format!("OtherErr: {:?}", err),
-        None, // Obviously don't tell the user about errors even we're not sure about
-        Some(FrontendFailureCategory::RetryableWorkerError),
-      ),
-    ProcessSingleJobError::IoError(ref err) =>
-      (
-        JobFailureClass::TransientFailure,
-        ContainerHealth::IncrementContainerFailCount,
-        format!("IoError: {:?}", err),
-        None, // Obviously don't tell the user about errors even we're not sure about
-        Some(FrontendFailureCategory::RetryableWorkerError),
-      ),
-    ProcessSingleJobError::JobSystemMisconfiguration(ref maybe_reason) =>
-      (
-        JobFailureClass::TransientFailure,
-        ContainerHealth::IncrementContainerFailCount,
-        format!("job system misconfiguration error: {:?}", maybe_reason),
-        None, // Obviously don't tell the user about errors even we're not sure about
-        Some(FrontendFailureCategory::RetryableWorkerError),
-      ),
+    ProcessSingleJobError::FilesystemFull => (
+      JobFailureClass::TransientFailure,
+      ContainerHealth::IncrementContainerFailCount,
+      "worker filesystem full".to_string(),
+      None, // User doesn't need to know the filesystem is full
+      Some(FrontendFailureCategory::RetryableWorkerError),
+    ),
+    ProcessSingleJobError::Other(ref err) => (
+      JobFailureClass::TransientFailure,
+      ContainerHealth::IncrementContainerFailCount,
+      format!("OtherErr: {:?}", err),
+      None, // Obviously don't tell the user about errors even we're not sure about
+      Some(FrontendFailureCategory::RetryableWorkerError),
+    ),
+    ProcessSingleJobError::IoError(ref err) => (
+      JobFailureClass::TransientFailure,
+      ContainerHealth::IncrementContainerFailCount,
+      format!("IoError: {:?}", err),
+      None, // Obviously don't tell the user about errors even we're not sure about
+      Some(FrontendFailureCategory::RetryableWorkerError),
+    ),
+    ProcessSingleJobError::JobSystemMisconfiguration(ref maybe_reason) => (
+      JobFailureClass::TransientFailure,
+      ContainerHealth::IncrementContainerFailCount,
+      format!("job system misconfiguration error: {:?}", maybe_reason),
+      None, // Obviously don't tell the user about errors even we're not sure about
+      Some(FrontendFailureCategory::RetryableWorkerError),
+    ),
   };
 
   if container_health_report == ContainerHealth::IncrementContainerFailCount {
@@ -309,30 +260,15 @@ async fn handle_error(job_dependencies: &&JobDependencies, job: &AvailableInfere
     warn!("Failure stats: {:?}", stats);
   }
 
-  job_dependencies.job_instruments.job_failure_count.add(1, &[
-    OtelAttribute::new("job_failure_internal_reason", internal_failure_reason.clone()),
-  ]);
+  job_dependencies.job_instruments.job_failure_count.add(1, &[OtelAttribute::new("job_failure_internal_reason", internal_failure_reason.clone())]);
 
   match job_failure_class {
     JobFailureClass::PermanentFailure => {
-      let _r = mark_generic_inference_job_completely_failed(
-        &job_dependencies.db.mysql_pool,
-        &job,
-        maybe_public_failure_reason,
-        Some(&internal_failure_reason),
-        maybe_frontend_failure_category,
-      ).await;
-    }
+      let _r = mark_generic_inference_job_completely_failed(&job_dependencies.db.mysql_pool, &job, maybe_public_failure_reason, Some(&internal_failure_reason), maybe_frontend_failure_category).await;
+    },
     JobFailureClass::TransientFailure => {
-      let _r = mark_generic_inference_job_failure(
-        &job_dependencies.db.mysql_pool,
-        &job,
-        maybe_public_failure_reason,
-        &internal_failure_reason,
-        maybe_frontend_failure_category,
-        job_dependencies.job.system.job_max_attempts
-      ).await;
-    }
+      let _r = mark_generic_inference_job_failure(&job_dependencies.db.mysql_pool, &job, maybe_public_failure_reason, &internal_failure_reason, maybe_frontend_failure_category, job_dependencies.job.system.job_max_attempts).await;
+    },
   }
 
   match error {
@@ -340,16 +276,16 @@ async fn handle_error(job_dependencies: &&JobDependencies, job: &AvailableInfere
     ProcessSingleJobError::FilesystemFull => {
       warn!("Clearing full filesystem...");
       clear_full_filesystem(&job_dependencies.fs.semi_persistent_cache)?;
-    }
+    },
     // No-op
-    ProcessSingleJobError::Other(_) => {}
-    ProcessSingleJobError::InvalidJob(_) => {}
-    ProcessSingleJobError::KeepAliveElapsed => {}
-    ProcessSingleJobError::NotYetImplemented => {}
-    ProcessSingleJobError::FaceDetectionFailure => {}
-    ProcessSingleJobError::JobSystemMisconfiguration(_) => {}
-    ProcessSingleJobError::ModelDeleted => {}
-    ProcessSingleJobError::IoError(_) => {}
+    ProcessSingleJobError::Other(_) => {},
+    ProcessSingleJobError::InvalidJob(_) => {},
+    ProcessSingleJobError::KeepAliveElapsed => {},
+    ProcessSingleJobError::NotYetImplemented => {},
+    ProcessSingleJobError::FaceDetectionFailure => {},
+    ProcessSingleJobError::JobSystemMisconfiguration(_) => {},
+    ProcessSingleJobError::ModelDeleted => {},
+    ProcessSingleJobError::IoError(_) => {},
   }
 
   Ok(())

@@ -49,75 +49,29 @@ pub async fn prepare_file_upload(args: PrepareFileUploadArgs<'_>) -> Result<Prep
 
   info!("Preparing file upload with path: {}", material_path);
 
-  let client = Client::builder()
-    .emulation(Emulation::Firefox143)
-    .build()
-    .map_err(|err| Seedance2ProClientError::WreqClientError(err))?;
+  let client = Client::builder().emulation(Emulation::Firefox143).build().map_err(|err| Seedance2ProClientError::WreqClientError(err))?;
 
-  let request_body = BatchRequest {
-    zero: BatchRequestInner {
-      json: BatchRequestJson {
-        path: material_path.clone(),
-      },
-    },
-  };
+  let request_body = BatchRequest { zero: BatchRequestInner { json: BatchRequestJson { path: material_path.clone() } } };
 
   let cookie = args.session.cookies.as_str();
   let referer = format!("{}/", base_url);
 
-  let response = client.post(&signed_upload_url)
-    .header("User-Agent", FIREFOX_USER_AGENT)
-    .header("Accept", "*/*")
-    .header("Accept-Language", "en-US,en;q=0.9")
-    .header("Accept-Encoding", "gzip, deflate, br, zstd")
-    .header("Referer", &referer)
-    .header("Content-Type", "application/json")
-    .header("x-trpc-source", "client")
-    .header("Origin", base_url)
-    .header("Connection", "keep-alive")
-    .header("Cookie", cookie)
-    .header("Sec-Fetch-Dest", "empty")
-    .header("Sec-Fetch-Mode", "cors")
-    .header("Sec-Fetch-Site", "same-origin")
-    .header("Priority", "u=4")
-    .header("TE", "trailers")
-    .json(&request_body)
-    .send()
-    .await
-    .map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
+  let response = client.post(&signed_upload_url).header("User-Agent", FIREFOX_USER_AGENT).header("Accept", "*/*").header("Accept-Language", "en-US,en;q=0.9").header("Accept-Encoding", "gzip, deflate, br, zstd").header("Referer", &referer).header("Content-Type", "application/json").header("x-trpc-source", "client").header("Origin", base_url).header("Connection", "keep-alive").header("Cookie", cookie).header("Sec-Fetch-Dest", "empty").header("Sec-Fetch-Mode", "cors").header("Sec-Fetch-Site", "same-origin").header("Priority", "u=4").header("TE", "trailers").json(&request_body).send().await.map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
 
   let status = response.status();
-  let response_body = response.text()
-    .await
-    .map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
+  let response_body = response.text().await.map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
 
   info!("Response status: {}, body: {}", status, response_body);
 
   if !status.is_success() {
-    return Err(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody {
-      status_code: status,
-      body: response_body,
-    }.into());
+    return Err(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code: status, body: response_body }.into());
   }
 
-  let batch_response: Vec<BatchResponseItem> = serde_json::from_str(&response_body)
-    .map_err(|err| Seedance2ProGenericApiError::SerdeResponseParseErrorWithBody(err, response_body.clone()))?;
+  let batch_response: Vec<BatchResponseItem> = serde_json::from_str(&response_body).map_err(|err| Seedance2ProGenericApiError::SerdeResponseParseErrorWithBody(err, response_body.clone()))?;
 
-  let upload_url = batch_response
-    .into_iter()
-    .next()
-    .ok_or_else(|| Seedance2ProGenericApiError::UnexpectedResponseShape {
-      explanation: "Empty batch response array".to_string(),
-      raw_body: response_body.clone(),
-    })?
-    .result
-    .data
-    .json;
+  let upload_url = batch_response.into_iter().next().ok_or_else(|| Seedance2ProGenericApiError::UnexpectedResponseShape { explanation: "Empty batch response array".to_string(), raw_body: response_body.clone() })?.result.data.json;
 
-  Ok(PrepareFileUploadResponse {
-    upload_url,
-    material_path,
-  })
+  Ok(PrepareFileUploadResponse { upload_url, material_path })
 }
 
 #[cfg(test)]
@@ -135,11 +89,7 @@ mod tests {
     setup_test_logging(LevelFilter::Trace);
     let cookies = get_test_cookies()?;
     let session = Seedance2ProSession::from_cookies_string(cookies);
-    let args = PrepareFileUploadArgs {
-      session: &session,
-      extension: "png".to_string(),
-      host_override: None,
-    };
+    let args = PrepareFileUploadArgs { session: &session, extension: "png".to_string(), host_override: None };
     let result = prepare_file_upload(args).await?;
     println!("Upload URL: {}", result.upload_url);
     println!("Material path: {}", result.material_path);
@@ -158,11 +108,7 @@ mod tests {
     setup_test_logging(LevelFilter::Trace);
     let cookies = get_test_cookies()?;
     let session = Seedance2ProSession::from_cookies_string(cookies);
-    let args = PrepareFileUploadArgs {
-      session: &session,
-      extension: "mp4".to_string(),
-      host_override: None,
-    };
+    let args = PrepareFileUploadArgs { session: &session, extension: "mp4".to_string(), host_override: None };
     let result = prepare_file_upload(args).await?;
     println!("Upload URL: {}", result.upload_url);
     println!("Material path: {}", result.material_path);

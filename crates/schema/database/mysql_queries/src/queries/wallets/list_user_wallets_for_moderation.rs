@@ -18,10 +18,7 @@ pub struct UserWalletForModerationResult {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn list_user_wallets_for_moderation(
-  user_token: &UserToken,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Vec<UserWalletForModerationResult>> {
+pub async fn list_user_wallets_for_moderation(user_token: &UserToken, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<UserWalletForModerationResult>> {
   let results = sqlx::query_as!(
     UserWalletForModerationResult,
     r#"
@@ -39,14 +36,14 @@ ORDER BY w.id DESC
     "#,
     user_token,
   )
-    .fetch_all(mysql_pool)
-    .await;
+  .fetch_all(mysql_pool)
+  .await;
 
   match results {
     Ok(records) => Ok(records),
     Err(err) => {
       warn!("list_user_wallets_for_moderation query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }

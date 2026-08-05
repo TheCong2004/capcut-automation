@@ -11,14 +11,10 @@ pub struct ArcSieve<K: Eq + Hash + Clone, V: Clone + ?Sized> {
   cache: Arc<Mutex<SieveCache<K, V>>>,
 }
 
-impl <K: Eq + Hash + Clone, V: Clone + ?Sized> ArcSieve<K, V> {
-
+impl<K: Eq + Hash + Clone, V: Clone + ?Sized> ArcSieve<K, V> {
   pub fn with_capacity(capacity: usize) -> AnyhowResult<Self> {
-    let cache = SieveCache::new(capacity)
-        .map_err(|err| anyhow!("could not create cache: {:?}", err))?;
-    Ok(Self {
-      cache: Arc::new(Mutex::new(cache)),
-    })
+    let cache = SieveCache::new(capacity).map_err(|err| anyhow!("could not create cache: {:?}", err))?;
+    Ok(Self { cache: Arc::new(Mutex::new(cache)) })
   }
 
   pub fn store(&self, key: K, value: V) -> AnyhowResult<()> {
@@ -44,9 +40,7 @@ impl <K: Eq + Hash + Clone, V: Clone + ?Sized> ArcSieve<K, V> {
   pub fn get_copy(&self, key: &K) -> AnyhowResult<Option<V>> {
     let maybe_copy = match self.cache.lock() {
       Err(e) => bail!("could not unlock mutex to read: {:?}", e),
-      Ok(mut cache) => {
-        cache.get(key).map(|inner| inner.clone())
-      },
+      Ok(mut cache) => cache.get(key).map(|inner| inner.clone()),
     };
     Ok(maybe_copy)
   }
@@ -58,7 +52,7 @@ mod tests {
 
   #[test]
   fn test_get_copy() {
-    let sieve : ArcSieve<String, String> = ArcSieve::with_capacity(1).unwrap();
+    let sieve: ArcSieve<String, String> = ArcSieve::with_capacity(1).unwrap();
     let key = "key".to_string();
     let value = "value".to_string();
 

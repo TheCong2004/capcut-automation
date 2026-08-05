@@ -28,41 +28,26 @@ use crate::state::server_state::ServerState;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn edit_character_handler(
-  http_request: HttpRequest,
-  request: Json<EditCharacterRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<EditCharacterResponse>, CommonWebError> {
-
+pub async fn edit_character_handler(http_request: HttpRequest, request: Json<EditCharacterRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<EditCharacterResponse>, CommonWebError> {
   // --- Auth ---
 
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let user_session = require_api_or_web_session(
-    &http_request,
-    &server_state.session_checker,
-    &server_state.avt_cookie_manager,
-    &mut *mysql_connection,
-  ).await?;
+  let user_session = require_api_or_web_session(&http_request, &server_state.session_checker, &server_state.avt_cookie_manager, &mut *mysql_connection).await?;
 
   let user_token = &user_session.user_token;
   let is_mod = user_session.is_mod();
 
   // --- Look up character ---
 
-  let character = get_character_by_token(&request.token, &mut mysql_connection)
-      .await?
-      .ok_or_else(|| {
-        warn!("Character not found: {}", request.token);
-        CommonWebError::NotFound
-      })?;
+  let character = get_character_by_token(&request.token, &mut mysql_connection).await?.ok_or_else(|| {
+    warn!("Character not found: {}", request.token);
+    CommonWebError::NotFound
+  })?;
 
   // --- Ownership check ---
 
-  let is_owner = character.maybe_creator_user_token
-      .as_ref()
-      .map(|owner| owner == user_token)
-      .unwrap_or(false);
+  let is_owner = character.maybe_creator_user_token.as_ref().map(|owner| owner == user_token).unwrap_or(false);
 
   if !is_owner && !is_mod {
     warn!("User {} tried to edit character {} they don't own", user_token, request.token);
@@ -85,11 +70,7 @@ pub async fn edit_character_handler(
 
   let final_name = new_name.unwrap_or_else(|| character.character_name.clone().unwrap_or_default());
 
-  let final_kinovi_name = if has_name_change { final_name.clone() } else {
-    character.kinovi_character_name.clone()
-        .or_else(|| character.character_name.clone())
-        .unwrap_or_default()
-  };
+  let final_kinovi_name = if has_name_change { final_name.clone() } else { character.kinovi_character_name.clone().or_else(|| character.character_name.clone()).unwrap_or_default() };
 
   let final_description = match &description_update {
     DescriptionUpdateType::NoUpdate => character.maybe_description.clone(),
@@ -101,25 +82,12 @@ pub async fn edit_character_handler(
 
   if has_name_change {
     if let Some(ref kinovi_id) = character.kinovi_character_id {
-      let session = Seedance2ProSession::from_cookies_string(
-        server_state.inference_providers.seedance2pro.cookies_volcengine.clone()
-      );
+      let session = Seedance2ProSession::from_cookies_string(server_state.inference_providers.seedance2pro.cookies_volcengine.clone());
 
-      update_character(UpdateCharacterArgs {
-        session: &session,
-        character_id: kinovi_id.clone(),
-        name: final_name.clone(),
-        description: final_description.clone().unwrap_or_default(),
-        host_override: None,
-      })
-          .await
-          .map_err(|err| {
-            error!("Error updating character on Kinovi: {:?}", err);
-            CommonWebError::from_error_with_message(
-              "Error Updating Kinovi Character API".to_string(),
-              err,
-            )
-          })?;
+      update_character(UpdateCharacterArgs { session: &session, character_id: kinovi_id.clone(), name: final_name.clone(), description: final_description.clone().unwrap_or_default(), host_override: None }).await.map_err(|err| {
+        error!("Error updating character on Kinovi: {:?}", err);
+        CommonWebError::from_error_with_message("Error Updating Kinovi Character API".to_string(), err)
+      })?;
 
       info!("Updated character {} on Kinovi (name='{}')", kinovi_id, final_name);
     }
@@ -127,13 +95,7 @@ pub async fn edit_character_handler(
 
   // --- Update database ---
 
-  update_character_name_and_description(
-    &request.token,
-    &final_name,
-    &final_kinovi_name,
-    final_description.as_deref(),
-    &mut mysql_connection,
-  ).await?;
+  update_character_name_and_description(&request.token, &final_name, &final_kinovi_name, final_description.as_deref(), &mut mysql_connection).await?;
 
   info!("Updated character {} in database", request.token);
 
@@ -165,9 +127,7 @@ fn resolve_name_update(updated_name: &Option<String>) -> Option<String> {
 }
 
 /// Determine the description update type.
-fn resolve_description_update(
-  updated_description: &Option<String>,
-) -> Result<DescriptionUpdateType, CommonWebError> {
+fn resolve_description_update(updated_description: &Option<String>) -> Result<DescriptionUpdateType, CommonWebError> {
   let desc = match updated_description.as_ref() {
     None => return Ok(DescriptionUpdateType::NoUpdate),
     Some(d) => d,
@@ -177,14 +137,16 @@ fn resolve_description_update(
   if trimmed.is_empty() {
     Ok(DescriptionUpdateType::Nullify)
   } else if trimmed.len() > CHARACTER_MAX_DESCRIPTION_LENGTH {
-    Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("Description exceeds maximum length of {} characters.", CHARACTER_MAX_DESCRIPTION_LENGTH),
-    ))
+    Err(CommonWebError::BadInputWithSimpleMessage(format!("Description exceeds maximum length of {} characters.", CHARACTER_MAX_DESCRIPTION_LENGTH)))
   } else {
     Ok(DescriptionUpdateType::Update(trimmed.to_string()))
   }
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-  if s.len() <= max_len { s.to_string() } else { s[..max_len].to_string() }
+  if s.len() <= max_len {
+    s.to_string()
+  } else {
+    s[..max_len].to_string()
+  }
 }

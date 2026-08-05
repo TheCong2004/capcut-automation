@@ -66,17 +66,13 @@ impl StableAnimatorCommand {
       root_code_directory: easyenv::get_env_pathbuf_or_default("STABLE_ANIMATOR_ROOT_CODE_DIRECTORY", PathBuf::from("/model_code")),
       executable_or_command: ExecutableOrCommand::Command("python inference_advanced.py".to_string()),
       // TODO(bt,2025-02-02): The default should be None, not Some(str).
-      maybe_virtual_env_activation_command: Some(easyenv::get_env_string_or_default(
-        "STABLE_ANIMATOR_VENV_ACTIVATION_COMMAND", "source /python_install/python/bin/activate")),
+      maybe_virtual_env_activation_command: Some(easyenv::get_env_string_or_default("STABLE_ANIMATOR_VENV_ACTIVATION_COMMAND", "source /python_install/python/bin/activate")),
       maybe_docker_options: None,
       maybe_execution_timeout: None,
     })
   }
 
-  pub async fn execute_inference<'a, 'b>(
-    &'a self,
-    args: InferenceArgs<'b>,
-  ) -> AnyhowResult<CommandExitStatus> {
+  pub async fn execute_inference<'a, 'b>(&'a self, args: InferenceArgs<'b>) -> AnyhowResult<CommandExitStatus> {
     info!("InferenceArgs: {:?}", &args);
 
     let mut command = String::new();
@@ -94,11 +90,11 @@ impl StableAnimatorCommand {
       ExecutableOrCommand::Executable(ref executable) => {
         command.push_str(&path_to_string(executable));
         command.push_str(" ");
-      }
+      },
       ExecutableOrCommand::Command(ref cmd) => {
         command.push_str(cmd);
         command.push_str(" ");
-      }
+      },
     }
 
     // TODO: Build command
@@ -168,7 +164,7 @@ impl StableAnimatorCommand {
     command.push_str(" --noise_aug_strength=0.02 ");
     command.push_str(" --frames_overlap=4 ");
     command.push_str(" --decode_chunk_size=4 ");
-    command.push_str(" --gradient_checkpointing ");;
+    command.push_str(" --gradient_checkpointing ");
 
     if let Some(docker_options) = self.maybe_docker_options.as_ref() {
       command = docker_options.to_command_string(&command);
@@ -180,28 +176,11 @@ impl StableAnimatorCommand {
 
     info!("stderr will be written to file: {:?}", args.stderr_output_file.as_os_str());
 
-    let mut stderr_file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(&args.stderr_output_file)
-        .await?;
+    let mut stderr_file = tokio::fs::OpenOptions::new().create(true).read(true).write(true).open(&args.stderr_output_file).await?;
 
-    let mut stdout_file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(&args.stdout_output_file)
-        .await?;
+    let mut stdout_file = tokio::fs::OpenOptions::new().create(true).read(true).write(true).open(&args.stdout_output_file).await?;
 
-    let mut c = Command::new("bash")
-        .arg("-c")
-        .arg(&command)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .envs(env_vars)
-        .spawn()
-        .expect("failed to execute process");
+    let mut c = Command::new("bash").arg("-c").arg(&command).stdout(Stdio::piped()).stderr(Stdio::piped()).envs(env_vars).spawn().expect("failed to execute process");
 
     let stdout = c.stdout.take();
     // (Kasisnu, 9/08/24) these are safe to leave dangling, when stdout is dropped,
@@ -220,25 +199,25 @@ impl StableAnimatorCommand {
                 }
                 let write_result = stdout_file.write_all(line.as_bytes()).await;
                 match write_result {
-                  Ok(_) => {}
+                  Ok(_) => {},
                   Err(e) => {
                     warn!("Error writing stdout: {:?}", e);
                     break;
-                  }
+                  },
                 }
                 print!("{}", line);
                 line.clear();
-              }
+              },
               Err(e) => {
                 warn!("Error reading stdout: {:?}", e);
                 break;
-              }
+              },
             }
           }
-        }
+        },
         None => {
           warn!("No stdout available to read");
-        }
+        },
       }
     });
 
@@ -257,25 +236,25 @@ impl StableAnimatorCommand {
                 }
                 let write_result = stderr_file.write_all(line.as_bytes()).await;
                 match write_result {
-                  Ok(_) => {}
+                  Ok(_) => {},
                   Err(e) => {
                     warn!("Error writing stderr: {:?}", e);
                     break;
-                  }
+                  },
                 }
                 println!("here: {}", line);
                 line.clear();
-              }
+              },
               Err(e) => {
                 warn!("Error reading stderr: {:?}", e);
                 break;
-              }
+              },
             }
           }
-        }
+        },
         None => {
           warn!("No stderr available to read");
-        }
+        },
       }
     });
 
@@ -283,7 +262,6 @@ impl StableAnimatorCommand {
     let execution_start_time = std::time::Instant::now();
 
     loop {
-
       if let Some(execution_timeout) = self.maybe_execution_timeout {
         let now = std::time::Instant::now();
         if now.duration_since(execution_start_time) > execution_timeout {
@@ -292,10 +270,10 @@ impl StableAnimatorCommand {
           match res {
             Ok(_) => {
               info!("Killed Studio Gen2 process");
-            }
+            },
             Err(e) => {
               info!("Error killing Studio Gen2 process: {:?}, this might leak resources", e);
-            }
+            },
           }
           status = Some(CommandExitStatus::Timeout);
           break;
@@ -328,23 +306,21 @@ impl StableAnimatorCommand {
       //}
 
       match c.try_wait() {
-        Ok(Some(exit_status)) => {
-          match exit_status.success() {
-            true => {
-              status = Some(CommandExitStatus::Success);
-            }
-            false => {
-              status = Some(CommandExitStatus::Failure);
-            }
-          }
-        }
+        Ok(Some(exit_status)) => match exit_status.success() {
+          true => {
+            status = Some(CommandExitStatus::Success);
+          },
+          false => {
+            status = Some(CommandExitStatus::Failure);
+          },
+        },
         Ok(None) => {
           debug!("Studio Gen2 process is still running");
-        }
+        },
         Err(e) => {
           info!("Error attempting to wait: {:?}", e);
           break;
-        }
+        },
       }
 
       if status.is_some() {

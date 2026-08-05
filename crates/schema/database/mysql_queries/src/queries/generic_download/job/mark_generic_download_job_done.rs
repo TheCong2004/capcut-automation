@@ -7,22 +7,14 @@ use errors::AnyhowResult;
 
 use crate::queries::generic_download::job::list_available_generic_download_jobs::AvailableDownloadJob;
 
-pub async fn mark_generic_download_job_done(
-  pool: &MySqlPool,
-  job: &AvailableDownloadJob,
-  success: bool,
-  maybe_entity_token: Option<&str>,
-  maybe_entity_type: Option<&str>,
-  job_duration: Duration,
-) -> AnyhowResult<()>
-{
+pub async fn mark_generic_download_job_done(pool: &MySqlPool, job: &AvailableDownloadJob, success: bool, maybe_entity_token: Option<&str>, maybe_entity_type: Option<&str>, job_duration: Duration) -> AnyhowResult<()> {
   // NB: MySql's unsigned int (32 bits) can store integers up to 4,294,967,295.
   // Given milliseconds, this is ~49.71 days, which should be plenty for us.
   let truncated_execution_millis = job_duration.as_millis() as u32;
 
   let query_result = if success {
     sqlx::query!(
-        r#"
+      r#"
 UPDATE generic_download_jobs
 SET
   status = "complete_success",
@@ -34,16 +26,16 @@ SET
   successfully_completed_at = NOW()
 WHERE id = ?
         "#,
-        maybe_entity_token,
-        maybe_entity_type,
-        truncated_execution_millis,
-        job.id.0,
+      maybe_entity_token,
+      maybe_entity_type,
+      truncated_execution_millis,
+      job.id.0,
     )
-        .execute(pool)
-        .await
+    .execute(pool)
+    .await
   } else {
     sqlx::query!(
-        r#"
+      r#"
 UPDATE generic_download_jobs
 SET
   status = "complete_failure",
@@ -54,13 +46,13 @@ SET
   retry_at = NULL
 WHERE id = ?
         "#,
-        maybe_entity_token,
-        maybe_entity_type,
-        truncated_execution_millis,
-        job.id.0,
+      maybe_entity_token,
+      maybe_entity_type,
+      truncated_execution_millis,
+      job.id.0,
     )
-        .execute(pool)
-        .await
+    .execute(pool)
+    .await
   };
 
   match query_result {

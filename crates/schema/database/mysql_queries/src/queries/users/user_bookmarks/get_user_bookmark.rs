@@ -23,17 +23,13 @@ pub struct UserBookmark {
   pub maybe_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn get_user_bookmark<'e, 'c, E>(
-    user_bookmark_token: &'e UserBookmarkToken,
-    mysql_executor: E
-)
-    -> AnyhowResult<Option<UserBookmark>>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn get_user_bookmark<'e, 'c, E>(user_bookmark_token: &'e UserBookmarkToken, mysql_executor: E) -> AnyhowResult<Option<UserBookmark>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-
   let maybe_results = sqlx::query_as!(
-      RawUserBookmark,
-        r#"
+    RawUserBookmark,
+    r#"
 SELECT
     f.token as `token: tokens::tokens::user_bookmarks::UserBookmarkToken`,
 
@@ -56,28 +52,17 @@ JOIN users AS u
 WHERE
     f.token = ?
         "#,
-      user_bookmark_token
-    )
-      .fetch_one(mysql_executor)
-      .await;
+    user_bookmark_token
+  )
+  .fetch_one(mysql_executor)
+  .await;
 
   match maybe_results {
-    Ok(user_bookmark) => Ok(Some(UserBookmark {
-      token: user_bookmark.token,
-      entity_type: user_bookmark.entity_type,
-      entity_token: user_bookmark.entity_token,
-      user_token: user_bookmark.user_token,
-      username: user_bookmark.username,
-      user_display_name: user_bookmark.user_display_name,
-      user_gravatar_hash: user_bookmark.user_gravatar_hash,
-      created_at: user_bookmark.created_at,
-      updated_at: user_bookmark.updated_at,
-      maybe_deleted_at: user_bookmark.deleted_at,
-    })),
+    Ok(user_bookmark) => Ok(Some(UserBookmark { token: user_bookmark.token, entity_type: user_bookmark.entity_type, entity_token: user_bookmark.entity_token, user_token: user_bookmark.user_token, username: user_bookmark.username, user_display_name: user_bookmark.user_display_name, user_gravatar_hash: user_bookmark.user_gravatar_hash, created_at: user_bookmark.created_at, updated_at: user_bookmark.updated_at, maybe_deleted_at: user_bookmark.deleted_at })),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(None),
       _ => Err(anyhow!("Error querying for IP ban: {:?}", err)),
-    }
+    },
   }
 }
 

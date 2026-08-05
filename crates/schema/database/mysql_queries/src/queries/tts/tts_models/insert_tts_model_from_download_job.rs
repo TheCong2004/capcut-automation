@@ -33,23 +33,16 @@ pub struct InsertTtsModelFromDownloadJobArgs<'a, P: AsRef<Path>> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-
-pub async fn insert_tts_model_from_download_job<P: AsRef<Path>>(
-  args: InsertTtsModelFromDownloadJobArgs<'_, P>,
-) -> AnyhowResult<(u64, TtsModelToken)> {
-
+pub async fn insert_tts_model_from_download_job<P: AsRef<Path>>(args: InsertTtsModelFromDownloadJobArgs<'_, P>) -> AnyhowResult<(u64, TtsModelToken)> {
   let model_token = match args.maybe_model_token {
     None => TtsModelToken::generate(),
     Some(model_token) => model_token.clone(),
   };
 
-  let private_bucket_object_name = &args.private_bucket_object_name
-      .as_ref()
-      .display()
-      .to_string();
+  let private_bucket_object_name = &args.private_bucket_object_name.as_ref().display().to_string();
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO tts_models
 SET
   token = ?,
@@ -65,19 +58,19 @@ SET
   private_bucket_object_name = ?,
   file_size_bytes = ?
         "#,
-      &model_token,
-      args.tts_model_type,
-      args.title,
-      args.creator_user_token,
-      args.creator_ip_address,
-      args.creator_ip_address,
-      args.original_download_url,
-      args.private_bucket_hash,
-      private_bucket_object_name,
-      args.file_size_bytes
-    )
-      .execute(args.mysql_pool)
-      .await;
+    &model_token,
+    args.tts_model_type,
+    args.title,
+    args.creator_user_token,
+    args.creator_ip_address,
+    args.creator_ip_address,
+    args.original_download_url,
+    args.private_bucket_hash,
+    private_bucket_object_name,
+    args.file_size_bytes
+  )
+  .execute(args.mysql_pool)
+  .await;
 
   let record_id = match query_result {
     Ok(res) => res.last_insert_id(),

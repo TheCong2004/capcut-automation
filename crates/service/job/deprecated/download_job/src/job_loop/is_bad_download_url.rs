@@ -3,15 +3,12 @@ use url::{Host, Url};
 
 /// Reports if the URL is inappropriate for downloading as a TTS model, vocoder, etc.
 pub fn is_bad_download_url(url: &str) -> anyhow::Result<bool> {
-
   if url.trim().is_empty() {
     // We can't use empty URLs.
     return Ok(true);
   }
 
-  let looks_malicious = url.contains("\"")
-      || url.contains("\'")
-      || url.contains("\\");
+  let looks_malicious = url.contains("\"") || url.contains("\'") || url.contains("\\");
 
   if looks_malicious {
     return Ok(true);
@@ -33,9 +30,9 @@ pub fn is_bad_download_url(url: &str) -> anyhow::Result<bool> {
       debug!("domain: {:?}", domain);
 
       if bad_host {
-        return Ok(true)
+        return Ok(true);
       }
-    }
+    },
     _ => {},
   }
 
@@ -51,7 +48,8 @@ mod tests {
     assert_eq!(true, is_bad_download_url("").unwrap());
     assert_eq!(true, is_bad_download_url("   ").unwrap());
     assert_eq!(true, is_bad_download_url("https://vm.tiktok.com/ZMNYjT7Xy/?k=1 ").unwrap()); // NB: We get lots of these
-    assert_eq!(true, is_bad_download_url("https://m.youtube.com/watch?v=HY-vzGBiAZo").unwrap()); // NB: We get lots of these
+    assert_eq!(true, is_bad_download_url("https://m.youtube.com/watch?v=HY-vzGBiAZo").unwrap());
+    // NB: We get lots of these
   }
 
   #[test]

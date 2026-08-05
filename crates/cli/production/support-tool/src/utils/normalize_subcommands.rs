@@ -6,11 +6,9 @@
 ///
 /// This lets users type `findjob`, `find_job`, or even `f_ind_job` and all
 /// resolve to the canonical `find_job`.
-pub fn normalize_subcommand_args(
-  args: impl IntoIterator<Item = String>,
-  canonical_names: &[&str],
-) -> Vec<String> {
-  args.into_iter()
+pub fn normalize_subcommand_args(args: impl IntoIterator<Item = String>, canonical_names: &[&str]) -> Vec<String> {
+  args
+    .into_iter()
     .map(|arg| {
       if arg.starts_with('-') {
         return arg;

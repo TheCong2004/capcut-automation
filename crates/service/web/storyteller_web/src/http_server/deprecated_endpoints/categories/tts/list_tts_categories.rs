@@ -64,80 +64,48 @@ pub struct DisplayCategory {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn list_tts_categories_handler(
-  _http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError>
-{
-  let database_categories = list_cached_tts_categories_for_public_dropdown_db_pool(
-    &server_state.caches.ephemeral.database_tts_category_list, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        error!("error querying categories from db/cache: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+pub async fn list_tts_categories_handler(_http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let database_categories = list_cached_tts_categories_for_public_dropdown_db_pool(&server_state.caches.ephemeral.database_tts_category_list, &server_state.mysql_pool).await.map_err(|e| {
+    error!("error querying categories from db/cache: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
   // NB: These will be already sorted.
   // Transform them to be display-appropriate.
-  let mut categories = database_categories.categories.iter()
-      .map(|c| {
-        DisplayCategory {
-          category_token: ModelCategoryToken::new_from_str(&c.category_token),
-          // NB: Unwrap default of TTS because we don't have other types yet.
-          model_type: ModelType::from_str(&c.model_type)
-              .unwrap_or(ModelType::Tts),
-          maybe_super_category_token: c.maybe_super_category_token
-              .as_deref()
-              .map(|t| ModelCategoryToken::new_from_str(t)),
-          can_directly_have_models: c.can_directly_have_models,
-          can_have_subcategories: c.can_have_subcategories,
-          can_only_mods_apply: c.can_only_mods_apply,
-          is_mod_approved: c.is_mod_approved,
-          is_synthetic: false,
-          name: c.name.clone(),
-          // NB: Always populate dropdown name instead of leaving it as an optional.
-          // This way we can always rely on it to be authoritative for dropdowns.
-          name_for_dropdown: c.maybe_dropdown_name
-              .clone()
-              .unwrap_or(c.name.clone()),
-          should_be_sorted: true,
-          created_at: c.created_at,
-          updated_at: c.updated_at,
-          deleted_at: c.deleted_at,
-        }
-      })
-      .collect::<Vec<DisplayCategory>>();
+  let mut categories = database_categories
+    .categories
+    .iter()
+    .map(|c| {
+      DisplayCategory {
+        category_token: ModelCategoryToken::new_from_str(&c.category_token),
+        // NB: Unwrap default of TTS because we don't have other types yet.
+        model_type: ModelType::from_str(&c.model_type).unwrap_or(ModelType::Tts),
+        maybe_super_category_token: c.maybe_super_category_token.as_deref().map(|t| ModelCategoryToken::new_from_str(t)),
+        can_directly_have_models: c.can_directly_have_models,
+        can_have_subcategories: c.can_have_subcategories,
+        can_only_mods_apply: c.can_only_mods_apply,
+        is_mod_approved: c.is_mod_approved,
+        is_synthetic: false,
+        name: c.name.clone(),
+        // NB: Always populate dropdown name instead of leaving it as an optional.
+        // This way we can always rely on it to be authoritative for dropdowns.
+        name_for_dropdown: c.maybe_dropdown_name.clone().unwrap_or(c.name.clone()),
+        should_be_sorted: true,
+        created_at: c.created_at,
+        updated_at: c.updated_at,
+        deleted_at: c.deleted_at,
+      }
+    })
+    .collect::<Vec<DisplayCategory>>();
 
   // Add the synthetic categories at bottom.
-  SYNTHETIC_CATEGORY_LIST.iter()
-      .for_each(|category| {
-        categories.push(DisplayCategory {
-          category_token: ModelCategoryToken::new_from_str(category.category_token),
-          maybe_super_category_token: category.maybe_super_category_token
-              .map(|token| ModelCategoryToken::new_from_str(token)),
-          model_type: category.model_type,
-          name: category.name.to_string(),
-          name_for_dropdown: category.name_for_dropdown.to_string(),
-          can_directly_have_models: category.can_directly_have_models,
-          can_have_subcategories: category.can_directly_have_subcategories,
-          can_only_mods_apply: true,
-          is_mod_approved: None,
-          is_synthetic: true,
-          should_be_sorted: category.should_be_sorted,
-          created_at: *CHRONO_DATETIME_UNIX_EPOCH,
-          updated_at: *CHRONO_DATETIME_UNIX_EPOCH,
-          deleted_at: None,
-        });
-      });
+  SYNTHETIC_CATEGORY_LIST.iter().for_each(|category| {
+    categories.push(DisplayCategory { category_token: ModelCategoryToken::new_from_str(category.category_token), maybe_super_category_token: category.maybe_super_category_token.map(|token| ModelCategoryToken::new_from_str(token)), model_type: category.model_type, name: category.name.to_string(), name_for_dropdown: category.name_for_dropdown.to_string(), can_directly_have_models: category.can_directly_have_models, can_have_subcategories: category.can_directly_have_subcategories, can_only_mods_apply: true, is_mod_approved: None, is_synthetic: true, should_be_sorted: category.should_be_sorted, created_at: *CHRONO_DATETIME_UNIX_EPOCH, updated_at: *CHRONO_DATETIME_UNIX_EPOCH, deleted_at: None });
+  });
 
-  let response = ListTtsCategoriesResponse {
-    success: true,
-    categories,
-  };
+  let response = ListTtsCategoriesResponse { success: true, categories };
 
-  let body = serde_json::to_string(&response)
-      .map_err(CommonWebError::from_error)?;
+  let body = serde_json::to_string(&response).map_err(CommonWebError::from_error)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

@@ -10,7 +10,7 @@ use tokens::tokens::users::UserToken;
 pub struct CreateSubscriptionCheckoutSessionArgs<'a> {
   /// Subscription is required
   pub subscription_price_id: &'a PriceId,
-  
+
   /// Optional: Existing user's Stripe customer id, if it exists.
   /// You MUST look this up.
   pub maybe_existing_stripe_customer_id: Option<&'a CustomerId>,
@@ -20,18 +20,17 @@ pub struct CreateSubscriptionCheckoutSessionArgs<'a> {
 
   /// Username is optional in the case we eagerly created a user account for the user.
   pub username: Option<&'a str>,
-  
+
   /// User email is optional in the case we eagerly created a user account for the user.
   pub user_email: Option<&'a str>,
-  
-  pub stripe_client: &'a Client, 
-  
+
+  pub stripe_client: &'a Client,
+
   pub success_url: &'a str,
   pub cancel_url: &'a str,
 }
 
 pub async fn create_subscription_checkout_session(args: CreateSubscriptionCheckoutSessionArgs<'_>) -> Result<CheckoutSession, CommonWebError> {
-
   let checkout_session = {
     // `client_reference_id`
     // Stripe Docs:
@@ -100,24 +99,20 @@ pub async fn create_subscription_checkout_session(args: CreateSubscriptionChecko
         .subscription_data(CreateCheckoutSessionSubscriptionData {
           metadata: Some(metadata),
           ..Default::default()
-        })
-        ;
+        });
 
     if let Some(customer_id) = args.maybe_existing_stripe_customer_id {
       info!("Adding existing stripe customer id to checkout session: {}", customer_id.as_str());
       checkout_builder = checkout_builder.customer(customer_id);
     }
 
-    let checkout_session = checkout_builder
-        .send(args.stripe_client)
-        .await
-        .map_err(|err| {
-          error!("Stripe Error: {:?}", err);
-          CommonWebError::ServerError
-        })?;
+    let checkout_session = checkout_builder.send(args.stripe_client).await.map_err(|err| {
+      error!("Stripe Error: {:?}", err);
+      CommonWebError::ServerError
+    })?;
 
     checkout_session
   };
-  
+
   Ok(checkout_session)
 }

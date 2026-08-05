@@ -113,84 +113,46 @@ impl std::fmt::Display for AppStateError {
     (status = 500, description = "Server error", body = AppStateError),
   ),
 )]
-pub async fn get_app_state_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, AppStateError>
-{
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        error!("Could not acquire DB pool: {:?}", e);
-        AppStateError::ServerError
-      })?;
+pub async fn get_app_state_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, AppStateError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    error!("Could not acquire DB pool: {:?}", e);
+    AppStateError::ServerError
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_extended_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        AppStateError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_extended_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    AppStateError::ServerError
+  })?;
 
   let server_info = get_server_info(&server_state);
   let maybe_alert = get_status_alert(&server_state);
   let locale = get_user_locale(&http_request);
 
-  let mut maybe_user_info = maybe_user_session
-      .as_ref()
-      .map(|session| get_user_info(session));
+  let mut maybe_user_info = maybe_user_session.as_ref().map(|session| get_user_info(session));
 
   let permissions = get_permissions(maybe_user_session.as_ref());
 
-  let maybe_premium = maybe_user_session
-      .as_ref()
-      .map(|session| get_premium_info(session));
+  let maybe_premium = maybe_user_session.as_ref().map(|session| get_premium_info(session));
 
   let is_logged_in = maybe_user_session.is_some();
 
-  let is_banned = maybe_user_session
-      .as_ref()
-      .map(|session| session.role.is_banned)
-      .unwrap_or(false);
+  let is_banned = maybe_user_session.as_ref().map(|session| session.role.is_banned).unwrap_or(false);
 
-  let response = AppStateResponse {
-    success: true,
-    refresh_interval_millis: REFRESH_INTERVAL.as_millis(),
-    server_info,
-    locale,
-    maybe_alert,
-    maybe_user_info,
-    permissions,
-    maybe_premium,
-    is_logged_in,
-    is_banned,
-  };
+  let response = AppStateResponse { success: true, refresh_interval_millis: REFRESH_INTERVAL.as_millis(), server_info, locale, maybe_alert, maybe_user_info, permissions, maybe_premium, is_logged_in, is_banned };
 
-  maybe_respond_with_avt_cookie(
-    &http_request,
-    &server_state.avt_cookie_manager,
-    response
-  )
+  maybe_respond_with_avt_cookie(&http_request, &server_state.avt_cookie_manager, response)
 }
 
-fn maybe_respond_with_avt_cookie(
-  http_request: &HttpRequest,
-  avt_manager: &AvtCookieManager,
-  response: AppStateResponse,
-) -> Result<HttpResponse, AppStateError> {
-
+fn maybe_respond_with_avt_cookie(http_request: &HttpRequest, avt_manager: &AvtCookieManager, response: AppStateResponse) -> Result<HttpResponse, AppStateError> {
   let maybe_avt_cookie = match avt_manager.decode_cookie_payload_from_request(&http_request) {
     Ok(Some(_avt_cookie)) => None, // User already has AVT cookie. Don't replace it.
     _ => {
-      let cookie = avt_manager.make_new_cookie()
-          .map_err(|e| {
-            warn!("avt cookie creation error: {:?}", e);
-            AppStateError::ServerError
-          })?;
+      let cookie = avt_manager.make_new_cookie().map_err(|e| {
+        warn!("avt cookie creation error: {:?}", e);
+        AppStateError::ServerError
+      })?;
       Some(cookie)
-    }
+    },
   };
 
   let mut response_builder = HttpResponse::Ok();
@@ -199,10 +161,7 @@ fn maybe_respond_with_avt_cookie(
     response_builder.cookie(cookie);
   }
 
-  let body = serde_json::to_string(&response)
-      .map_err(|_e| AppStateError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|_e| AppStateError::ServerError)?;
 
-  Ok(response_builder
-      .content_type("application/json")
-      .body(body))
+  Ok(response_builder.content_type("application/json").body(body))
 }

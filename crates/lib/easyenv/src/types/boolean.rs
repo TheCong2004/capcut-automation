@@ -22,7 +22,7 @@ pub fn get_env_bool_optional(env_name: &str) -> Option<bool> {
         warn!("Env var '{}': error parsing boolean value: {:?}", env_name, val);
         None
       },
-    }
+    },
   }
 }
 
@@ -30,31 +30,29 @@ pub fn get_env_bool_optional(env_name: &str) -> Option<bool> {
 /// Returns the default in the event of a parse error.
 pub fn get_env_bool_or_default(env_name: &str, default: bool) -> bool {
   get_env_bool_internal(env_name)
-      .map(|maybe| match maybe {
-        None => {
-          warn!("Env var '{}' not supplied. Using default '{}'.", env_name, default);
-          default
-        },
-        Some(val) => val,
-      })
-      .unwrap_or_else(|e| {
-        warn!("Env var '{}': error parsing boolean value: {:?}. Using default '{}'.",
-            env_name, e, default);
+    .map(|maybe| match maybe {
+      None => {
+        warn!("Env var '{}' not supplied. Using default '{}'.", env_name, default);
         default
-      })
+      },
+      Some(val) => val,
+    })
+    .unwrap_or_else(|e| {
+      warn!("Env var '{}': error parsing boolean value: {:?}. Using default '{}'.", env_name, e, default);
+      default
+    })
 }
 
 /// Get an environment variable as a bool.
 /// If not provided or cannot parse, return an error.
 pub fn get_env_bool_required(env_name: &str) -> Result<bool, EnvError> {
-  get_env_bool_internal(env_name)
-      .and_then(|maybe| match maybe {
-        None => {
-          warn!("Env var '{}' not supplied.", env_name);
-          Err(EnvError::RequiredNotPresent { name: env_name.to_string() })
-        },
-        Some(val) => Ok(val),
-      })
+  get_env_bool_internal(env_name).and_then(|maybe| match maybe {
+    None => {
+      warn!("Env var '{}' not supplied.", env_name);
+      Err(EnvError::RequiredNotPresent { name: env_name.to_string() })
+    },
+    Some(val) => Ok(val),
+  })
 }
 
 fn get_env_bool_internal(env_name: &str) -> Result<Option<bool>, EnvError> {
@@ -63,16 +61,14 @@ fn get_env_bool_internal(env_name: &str) -> Result<Option<bool>, EnvError> {
       // TODO: EnvError enum variant for equals sign in env var name
       VarError::NotPresent => Ok(None),
       VarError::NotUnicode(_) => Err(EnvError::NotUnicode),
-    }
+    },
     Ok(val) => match val {
       "TRUE" => Ok(Some(true)),
       "true" => Ok(Some(true)),
       "FALSE" => Ok(Some(false)),
       "false" => Ok(Some(false)),
-      _ => {
-        Err(EnvError::ParseError { reason: format!("Couldn't parse as bool: '{}'", val) })
-      },
-    }
+      _ => Err(EnvError::ParseError { reason: format!("Couldn't parse as bool: '{}'", val) }),
+    },
   }
 }
 

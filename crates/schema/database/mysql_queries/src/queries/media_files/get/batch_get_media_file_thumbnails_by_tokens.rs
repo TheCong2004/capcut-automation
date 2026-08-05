@@ -32,9 +32,7 @@ where
 /// SQL doesn't care about duplicates.
 ///
 /// Uses runtime `QueryBuilder` because the IN-list size is dynamic.
-pub async fn batch_get_media_file_thumbnails_by_tokens<'e, 'c: 'e, E>(
-  args: BatchGetMediaFileThumbnailsByTokensArgs<'e, 'c, E>,
-) -> Result<Vec<MediaFileThumbnailRow>, sqlx::Error>
+pub async fn batch_get_media_file_thumbnails_by_tokens<'e, 'c: 'e, E>(args: BatchGetMediaFileThumbnailsByTokensArgs<'e, 'c, E>) -> Result<Vec<MediaFileThumbnailRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -62,19 +60,9 @@ where
   }
   separated.push_unseparated(")");
 
-  let rows = builder
-    .build_query_as::<RawRow>()
-    .fetch_all(args.mysql_executor)
-    .await?;
+  let rows = builder.build_query_as::<RawRow>().fetch_all(args.mysql_executor).await?;
 
-  Ok(rows.into_iter().map(|r| MediaFileThumbnailRow {
-    token: MediaFileToken::new(r.token),
-    media_class: MediaFileClass::from_str(&r.media_class).unwrap_or(MediaFileClass::Image),
-    media_type: MediaFileType::from_str(&r.media_type).unwrap_or(MediaFileType::Image),
-    public_bucket_directory_hash: r.public_bucket_directory_hash,
-    maybe_public_bucket_prefix: r.maybe_public_bucket_prefix,
-    maybe_public_bucket_extension: r.maybe_public_bucket_extension,
-  }).collect())
+  Ok(rows.into_iter().map(|r| MediaFileThumbnailRow { token: MediaFileToken::new(r.token), media_class: MediaFileClass::from_str(&r.media_class).unwrap_or(MediaFileClass::Image), media_type: MediaFileType::from_str(&r.media_type).unwrap_or(MediaFileType::Image), public_bucket_directory_hash: r.public_bucket_directory_hash, maybe_public_bucket_prefix: r.maybe_public_bucket_prefix, maybe_public_bucket_extension: r.maybe_public_bucket_extension }).collect())
 }
 
 /// Internal row shape used by the dynamic `QueryBuilder` call. We hand-roll

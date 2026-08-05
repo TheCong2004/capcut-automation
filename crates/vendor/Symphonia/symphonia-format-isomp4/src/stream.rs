@@ -79,8 +79,7 @@ impl MoofSegment {
             for trun in traf.truns.iter() {
                 total_sample_duration += if trun.is_sample_duration_present() {
                     trun.total_sample_duration
-                }
-                else {
+                } else {
                     let duration = traf
                         .tfhd
                         .default_sample_duration
@@ -130,8 +129,7 @@ impl StreamSegment for MoofSegment {
                     let dur = trun.sample_duration[sample_num_rel as usize];
 
                     SampleTiming { ts: trun_ts_offset + ts, dur }
-                }
-                else {
+                } else {
                     let dur = traf
                         .tfhd
                         .default_sample_duration
@@ -148,8 +146,7 @@ impl StreamSegment for MoofSegment {
             let trun_duration = if trun.is_sample_duration_present() {
                 // The size of the entire track fragment run is known.
                 trun.total_sample_duration
-            }
-            else {
+            } else {
                 let duration = traf
                     .tfhd
                     .default_sample_duration
@@ -180,8 +177,7 @@ impl StreamSegment for MoofSegment {
             // Get the total duration of this track run.
             let trun_duration = if trun.is_sample_duration_present() {
                 trun.total_sample_duration
-            }
-            else {
+            } else {
                 let duration = traf
                     .tfhd
                     .default_sample_duration
@@ -204,8 +200,7 @@ impl StreamSegment for MoofSegment {
                         ts_delta -= u64::from(duration);
                         sample_num += 1;
                     }
-                }
-                else {
+                } else {
                     // If the sample durations are not present, then get the sample duration from
                     // the track fragment header or track extends atom. Then, calculate the number
                     // of samples are needed to reach the desired timestamp.
@@ -259,8 +254,7 @@ impl StreamSegment for MoofSegment {
                 // fragment header.
                 trun_offset = if offset.is_negative() {
                     traf_base_pos - u64::from(offset.wrapping_abs() as u32)
-                }
-                else {
+                } else {
                     traf_base_pos + offset as u64
                 };
             }
@@ -269,8 +263,7 @@ impl StreamSegment for MoofSegment {
                 // Get the size of the sample.
                 let size = if trun.is_sample_size_present() {
                     trun.sample_size[sample_num_rel as usize]
-                }
-                else {
+                } else {
                     traf.tfhd
                         .default_sample_size
                         .unwrap_or(self.mvex.trexs[track_num as usize].default_sample_size)
@@ -280,12 +273,10 @@ impl StreamSegment for MoofSegment {
                     if trun.is_sample_size_present() {
                         let sample_sizes = &trun.sample_size[..sample_num_rel as usize];
                         Some(sample_sizes.iter().map(|&s| u64::from(s)).sum::<u64>())
-                    }
-                    else {
+                    } else {
                         Some(u64::from(sample_num_rel) * u64::from(size))
                     }
-                }
-                else {
+                } else {
                     None
                 };
 
@@ -296,8 +287,7 @@ impl StreamSegment for MoofSegment {
             let trun_size = if trun.is_sample_size_present() {
                 // The size of the entire track fragment run is known.
                 trun.total_sample_size
-            }
-            else {
+            } else {
                 let size = traf
                     .tfhd
                     .default_sample_size
@@ -334,21 +324,17 @@ fn get_chunk_offset(
         // 32-bit offset
         if let Some(offset) = stco.chunk_offsets.get(chunk) {
             Ok(Some(u64::from(*offset)))
-        }
-        else {
+        } else {
             decode_error("isomp4: missing stco entry")
         }
-    }
-    else if let Some(co64) = co64.as_ref() {
+    } else if let Some(co64) = co64.as_ref() {
         // 64-bit offset
         if let Some(offset) = co64.chunk_offsets.get(chunk) {
             Ok(Some(*offset))
-        }
-        else {
+        } else {
             decode_error("isomp4: missing co64 entry")
         }
-    }
-    else {
+    } else {
         // This should never happen because it is mandatory to have either a stco or co64 atom.
         decode_error("isomp4: missing stco or co64 atom")
     }
@@ -384,8 +370,7 @@ impl StreamSegment for MoovSegment {
 
         if let Some((ts, dur)) = timing {
             Ok(Some(SampleTiming { ts, dur }))
-        }
-        else {
+        } else {
             Ok(None)
         }
     }
@@ -457,16 +442,14 @@ impl StreamSegment for MoovSegment {
 
                     if let Some(samples) = entries.get(chunk_first_sample..sample_num as usize) {
                         samples.iter().map(|&size| u64::from(size)).sum()
-                    }
-                    else {
+                    } else {
                         return decode_error("isomp4: missing one or more stsz entries");
                     }
                 }
             };
 
             Some(offset)
-        }
-        else {
+        } else {
             None
         };
 
@@ -476,8 +459,7 @@ impl StreamSegment for MoovSegment {
             SampleSize::Variable(ref entries) => {
                 if let Some(size) = entries.get(sample_num as usize) {
                     *size
-                }
-                else {
+                } else {
                     return decode_error("isomp4: missing stsz entry");
                 }
             }

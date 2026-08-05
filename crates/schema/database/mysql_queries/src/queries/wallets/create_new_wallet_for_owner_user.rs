@@ -5,15 +5,11 @@ use sqlx::MySql;
 use tokens::tokens::users::UserToken;
 use tokens::tokens::wallets::WalletToken;
 
-pub async fn create_new_wallet_for_owner_user(
-  user_token: &UserToken,
-  namespace: PaymentsNamespace,
-  transaction: &mut sqlx::Transaction<'_, MySql>,
-) -> Result<WalletToken, sqlx::Error> {
+pub async fn create_new_wallet_for_owner_user(user_token: &UserToken, namespace: PaymentsNamespace, transaction: &mut sqlx::Transaction<'_, MySql>) -> Result<WalletToken, sqlx::Error> {
   let token = WalletToken::generate();
 
   let result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO wallets
 SET
   token = ?,
@@ -24,12 +20,12 @@ SET
   banked_credits = 0,
   monthly_credits = 0
         "#,
-        token.as_str(),
-        namespace.to_str(),
-        user_token.as_str()
-    )
-      .execute(&mut **transaction)
-      .await;
+    token.as_str(),
+    namespace.to_str(),
+    user_token.as_str()
+  )
+  .execute(&mut **transaction)
+  .await;
 
   if let Err(err) = result {
     error!("Error while inserting wallet: {}", err);

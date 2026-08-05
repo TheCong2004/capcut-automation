@@ -51,7 +51,6 @@ pub struct TtsResultRecordForResponse {
 
   //pub model_is_mod_approved: bool, // converted
   //pub maybe_mod_user_token: Option<String>,
-
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 
@@ -105,7 +104,6 @@ pub struct TtsResultRecordRaw {
 
   //pub model_is_mod_approved: i8, // needs convert
   //pub maybe_mod_user_token: Option<String>,
-
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 
@@ -115,32 +113,21 @@ pub struct TtsResultRecordRaw {
   pub mod_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn select_tts_result_by_token(
-  tts_result_token: &str,
-  can_see_deleted: bool,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<TtsResultRecordForResponse>> {
+pub async fn select_tts_result_by_token(tts_result_token: &str, can_see_deleted: bool, mysql_pool: &MySqlPool) -> AnyhowResult<Option<TtsResultRecordForResponse>> {
+  let maybe_record = if can_see_deleted { select_including_deleted(tts_result_token, mysql_pool).await } else { select_without_deleted(tts_result_token, mysql_pool).await };
 
-  let maybe_record = if can_see_deleted {
-    select_including_deleted(tts_result_token, mysql_pool).await
-  } else {
-    select_without_deleted(tts_result_token, mysql_pool).await
-  };
-
-  let ir : TtsResultRecordRaw = match maybe_record {
+  let ir: TtsResultRecordRaw = match maybe_record {
     Ok(inference_result) => inference_result,
-    Err(ref err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          warn!("tts result not found: {:?}", &err);
-          return Ok(None);
-        },
-        _ => {
-          warn!("tts result query error: {:?}", &err);
-          return Err(anyhow!("database error"));
-        }
-      }
-    }
+    Err(ref err) => match err {
+      sqlx::Error::RowNotFound => {
+        warn!("tts result not found: {:?}", &err);
+        return Ok(None);
+      },
+      _ => {
+        warn!("tts result query error: {:?}", &err);
+        return Err(anyhow!("database error"));
+      },
+    },
   };
 
   let mut pretrained_vocoder = None;
@@ -169,13 +156,11 @@ pub async fn select_tts_result_by_token(
     maybe_model_creator_gravatar_hash: ir.maybe_model_creator_gravatar_hash,
 
     //model_is_mod_approved: if ir.model_is_mod_approved == 0 { false } else { true },
-
     public_bucket_wav_audio_path: ir.public_bucket_wav_audio_path,
     public_bucket_spectrogram_path: ir.public_bucket_spectrogram_path,
 
     // NB: Fail open/public since we're already looking at it
-    creator_set_visibility: Visibility::from_str(&ir.creator_set_visibility)
-        .unwrap_or(Visibility::Public),
+    creator_set_visibility: Visibility::from_str(&ir.creator_set_visibility).unwrap_or(Visibility::Public),
 
     generated_by_worker: ir.generated_by_worker.unwrap_or("unknown".to_string()),
 
@@ -187,27 +172,16 @@ pub async fn select_tts_result_by_token(
     created_at: ir.created_at,
     updated_at: ir.updated_at,
 
-    maybe_moderator_fields: Some(TtsResultModeratorFields {
-      model_creator_is_banned:
-        nullable_i8_to_bool(ir.maybe_model_creator_is_banned, false),
-      result_creator_is_banned_if_user:
-        nullable_i8_to_bool(ir.maybe_creator_is_banned, false),
-      result_creator_ip_address: ir.creator_ip_address,
-      result_creator_deleted_at: ir.user_deleted_at,
-      mod_deleted_at: ir.mod_deleted_at,
-    }),
+    maybe_moderator_fields: Some(TtsResultModeratorFields { model_creator_is_banned: nullable_i8_to_bool(ir.maybe_model_creator_is_banned, false), result_creator_is_banned_if_user: nullable_i8_to_bool(ir.maybe_creator_is_banned, false), result_creator_ip_address: ir.creator_ip_address, result_creator_deleted_at: ir.user_deleted_at, mod_deleted_at: ir.mod_deleted_at }),
   };
 
   Ok(Some(ir_for_response))
 }
 
-async fn select_including_deleted(
-  tts_result_token: &str,
-  mysql_pool: &MySqlPool
-) -> Result<TtsResultRecordRaw, sqlx::Error> {
+async fn select_including_deleted(tts_result_token: &str, mysql_pool: &MySqlPool) -> Result<TtsResultRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      TtsResultRecordRaw,
-        r#"
+    TtsResultRecordRaw,
+    r#"
 SELECT
     tts_results.token as tts_result_token,
 
@@ -257,19 +231,16 @@ LEFT OUTER JOIN users as model_users
 WHERE
     tts_results.token = ?
         "#,
-      tts_result_token
-    )
-    .fetch_one(mysql_pool)
-    .await // TODO: This will return error if it doesn't exist
+    tts_result_token
+  )
+  .fetch_one(mysql_pool)
+  .await // TODO: This will return error if it doesn't exist
 }
 
-async fn select_without_deleted(
-  tts_result_token: &str,
-  mysql_pool: &MySqlPool
-) -> Result<TtsResultRecordRaw, sqlx::Error> {
+async fn select_without_deleted(tts_result_token: &str, mysql_pool: &MySqlPool) -> Result<TtsResultRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      TtsResultRecordRaw,
-        r#"
+    TtsResultRecordRaw,
+    r#"
 SELECT
     tts_results.token as tts_result_token,
 
@@ -321,8 +292,8 @@ WHERE
     AND tts_results.user_deleted_at IS NULL
     AND tts_results.mod_deleted_at IS NULL
         "#,
-      tts_result_token
-    )
-    .fetch_one(mysql_pool)
-    .await // TODO: This will return error if it doesn't exist
+    tts_result_token
+  )
+  .fetch_one(mysql_pool)
+  .await // TODO: This will return error if it doesn't exist
 }

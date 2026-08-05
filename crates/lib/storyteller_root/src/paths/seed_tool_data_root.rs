@@ -4,10 +4,10 @@ use crate::get_storyteller_root;
 use crate::paths::env_get_path::env_get_path;
 
 /// The env var that declares where the seed tool data repo lives.
-pub const SEED_TOOL_DATA_ROOT : &str = "SEED_TOOL_DATA_ROOT";
+pub const SEED_TOOL_DATA_ROOT: &str = "SEED_TOOL_DATA_ROOT";
 
 // DO NOT LEAK THIS. THIS IS FOR TESTING ONLY.
-pub (crate) const TEST_SEED_TOOL_DATA_ROOT : &str = "ENV_TEST_SEED_TOOL_DATA_ROOT_DO_NOT_LEAK_";
+pub(crate) const TEST_SEED_TOOL_DATA_ROOT: &str = "ENV_TEST_SEED_TOOL_DATA_ROOT_DO_NOT_LEAK_";
 
 /// Get the root of the seed-tool-data repo
 pub fn get_seed_tool_data_root() -> PathBuf {
@@ -91,9 +91,7 @@ mod tests {
       // We'll make sure to canonicalize both paths.
       let mut corrected = PathBuf::from("/private");
 
-      expected.iter()
-          .filter(|component| !component.to_string_lossy().eq("/"))
-          .for_each(|component| corrected.push(component));
+      expected.iter().filter(|component| !component.to_string_lossy().eq("/")).for_each(|component| corrected.push(component));
 
       expected = corrected;
     }

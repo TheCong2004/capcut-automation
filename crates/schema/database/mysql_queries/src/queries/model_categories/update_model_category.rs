@@ -18,7 +18,6 @@ pub struct UpdateModelCategoryArgs<'a> {
 }
 
 pub async fn update_model_category(args: UpdateModelCategoryArgs<'_>) -> AnyhowResult<()> {
-
   let query_result =
       // We need to store the IP address details.
       sqlx::query!(
@@ -59,8 +58,6 @@ LIMIT 1
 
   match query_result {
     Ok(_) => Ok(()),
-    Err(err) => {
-      Err(anyhow!("Edit category DB error: {:?}", err))
-    }
+    Err(err) => Err(anyhow!("Edit category DB error: {:?}", err)),
   }
 }

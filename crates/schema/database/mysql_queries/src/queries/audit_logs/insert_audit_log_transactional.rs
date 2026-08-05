@@ -22,16 +22,12 @@ pub struct InsertAuditLogTransactionalArgs<'a, 'b> {
   pub transaction: &'a mut Transaction<'b, MySql>,
 }
 
-
-pub async fn insert_audit_log_transactional<'a, 'b>(
-  args: InsertAuditLogTransactionalArgs<'a, 'b>,
-) -> AnyhowResult<AuditLogToken> {
-
+pub async fn insert_audit_log_transactional<'a, 'b>(args: InsertAuditLogTransactionalArgs<'a, 'b>) -> AnyhowResult<AuditLogToken> {
   let audit_log_token = AuditLogToken::generate();
   let (entity_type, entity_token) = args.entity.get_composite_keys();
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO audit_logs
 SET
   token = ?,
@@ -43,17 +39,17 @@ SET
   is_actor_moderator = ?,
   actor_ip_address = ?
         "#,
-      &audit_log_token,
-      entity_type.to_str(),
-      entity_token,
-      args.entity_action.to_str(),
-      args.maybe_actor_user_token.map(|t| t.as_str()),
-      args.maybe_actor_anonymous_visitor_token.map(|t| t.as_str()),
-      args.is_actor_moderator,
-      args.actor_ip_address,
-    )
-      .execute(&mut **args.transaction)
-      .await;
+    &audit_log_token,
+    entity_type.to_str(),
+    entity_token,
+    args.entity_action.to_str(),
+    args.maybe_actor_user_token.map(|t| t.as_str()),
+    args.maybe_actor_anonymous_visitor_token.map(|t| t.as_str()),
+    args.is_actor_moderator,
+    args.actor_ip_address,
+  )
+  .execute(&mut **args.transaction)
+  .await;
 
   let _record_id = match query_result {
     Ok(res) => res.last_insert_id(),

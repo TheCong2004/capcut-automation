@@ -26,26 +26,18 @@ pub struct StaffRecordForList {
   pub user_role_slug: String,
   pub user_role_name: String,
 }
-pub async fn list_staff_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn list_staff_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: This is not the correct permission.
@@ -55,30 +47,18 @@ pub async fn list_staff_handler(
   }
 
   let results = list_staff(&server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        error!("list staff db error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?
-      .into_iter()
-      .map(|user| StaffRecordForList {
-        user_token: user.user_token,
-        username: user.username,
-        display_name: user.display_name,
-        user_role_slug: user.user_role_slug,
-        user_role_name: user.user_role_name,
-      })
-      .collect();
+    .await
+    .map_err(|err| {
+      error!("list staff db error: {:?}", err);
+      CommonWebError::from_anyhow_error(err)
+    })?
+    .into_iter()
+    .map(|user| StaffRecordForList { user_token: user.user_token, username: user.username, display_name: user.display_name, user_role_slug: user.user_role_slug, user_role_name: user.user_role_name })
+    .collect();
 
-  let response = ListStaffResponse {
-    success: true,
-    staff: results,
-  };
+  let response = ListStaffResponse { success: true, staff: results };
 
-  let body = serde_json::to_string(&response)
-      .map_err(CommonWebError::from_error)?;
+  let body = serde_json::to_string(&response).map_err(CommonWebError::from_error)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

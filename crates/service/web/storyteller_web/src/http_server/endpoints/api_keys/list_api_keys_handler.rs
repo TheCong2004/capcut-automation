@@ -6,9 +6,7 @@ use actix_web::{web, HttpRequest};
 use log::warn;
 
 use artcraft_api_defs::api_keys::list_api_keys::{ListApiKeysQueryParams, ListApiKeysSuccessResponse};
-use mysql_queries::queries::api_keys::list_api_keys_for_user::{
-  list_api_keys_for_user, ListApiKeysForUserArgs,
-};
+use mysql_queries::queries::api_keys::list_api_keys_for_user::{list_api_keys_for_user, ListApiKeysForUserArgs};
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
 use crate::http_server::endpoints::api_keys::api_key_info_conversion::api_key_row_to_info;
@@ -32,11 +30,7 @@ const MAX_LIMIT: u32 = 1000;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn list_api_keys_handler(
-  http_request: HttpRequest,
-  query: Query<ListApiKeysQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListApiKeysSuccessResponse>, CommonWebError> {
+pub async fn list_api_keys_handler(http_request: HttpRequest, query: Query<ListApiKeysQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListApiKeysSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -47,21 +41,12 @@ pub async fn list_api_keys_handler(
   let limit = query.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
   let offset = query.offset.unwrap_or(0);
 
-  let rows = list_api_keys_for_user(ListApiKeysForUserArgs {
-    owner_user_token: &user_session.user_token,
-    limit,
-    offset,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let rows = list_api_keys_for_user(ListApiKeysForUserArgs { owner_user_token: &user_session.user_token, limit, offset, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("list_api_keys_for_user failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
 
   let api_keys = rows.into_iter().map(api_key_row_to_info).collect();
 
-  Ok(Json(ListApiKeysSuccessResponse {
-    success: true,
-    api_keys,
-  }))
+  Ok(Json(ListApiKeysSuccessResponse { success: true, api_keys }))
 }

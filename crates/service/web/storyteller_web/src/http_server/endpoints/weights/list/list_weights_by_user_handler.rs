@@ -52,7 +52,6 @@ pub struct Weight {
   //  Hopefully we don't break the frontend by omitting these.
   //description_markdown: String,
   //description_rendered_html: String,
-  
   file_size_bytes: i32,
   file_checksum_sha2: String,
 
@@ -61,7 +60,7 @@ pub struct Weight {
 
   /// Cover images are small descriptive images that can be set for any model.
   /// If a cover image is set, this is the path to the asset.
-  #[deprecated(note="switch to CoverImageDetails")]
+  #[deprecated(note = "switch to CoverImageDetails")]
   maybe_cover_image_public_bucket_path: Option<String>,
 
   /// Statistics about the weights
@@ -75,8 +74,7 @@ pub struct Weight {
   updated_at: DateTime<Utc>,
 }
 
-
-#[derive(Serialize,ToSchema)]
+#[derive(Serialize, ToSchema)]
 pub struct ListWeightsByUserSuccessResponse {
   pub success: bool,
   pub results: Vec<Weight>,
@@ -99,7 +97,7 @@ pub struct ListWeightsForUserQueryParams {
   pub maybe_scoped_weight_category: Option<WeightsCategory>,
 }
 
-#[derive(Deserialize,ToSchema)]
+#[derive(Deserialize, ToSchema)]
 pub struct ListWeightsByUserPathInfo {
   username: String,
 }
@@ -117,21 +115,11 @@ pub struct ListWeightsByUserPathInfo {
       ListWeightsForUserQueryParams
   )
 )]
-pub async fn list_weights_by_user_handler(
-  http_request: HttpRequest,
-  path: Path<ListWeightsByUserPathInfo>,
-  query: Query<ListWeightsForUserQueryParams>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListWeightsByUserSuccessResponse>, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn list_weights_by_user_handler(http_request: HttpRequest, path: Path<ListWeightsByUserPathInfo>, query: Query<ListWeightsForUserQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListWeightsByUserSuccessResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let mut is_author = false;
   let mut is_mod = false;
@@ -141,7 +129,6 @@ pub async fn list_weights_by_user_handler(
     Some(session) => {
       is_author = session.username == path.username;
       is_mod = session.can_ban_users;
-
     },
   };
 
@@ -159,18 +146,7 @@ pub async fn list_weights_by_user_handler(
   let page_size = query.page_size.unwrap_or_else(|| 25);
   let page_index = query.page_index.unwrap_or_else(|| 0);
 
-  let query_results = list_weights_by_creator_username(
-    ListWeightsForUserArgs{
-        creator_username: username,
-        page_size,
-        page_index,
-        sort_ascending,
-        view_as,
-        maybe_scoped_weight_category: query.maybe_scoped_weight_category,
-        maybe_scoped_weight_type: query.maybe_scoped_weight_type,
-        mysql_pool: &server_state.mysql_pool,
-    }
-  ).await.map_err(|e| {
+  let query_results = list_weights_by_creator_username(ListWeightsForUserArgs { creator_username: username, page_size, page_index, sort_ascending, view_as, maybe_scoped_weight_category: query.maybe_scoped_weight_category, maybe_scoped_weight_type: query.maybe_scoped_weight_type, mysql_pool: &server_state.mysql_pool }).await.map_err(|e| {
     warn!("Error querying for weights: {:?}", e);
     CommonWebError::from_anyhow_error(e)
   });
@@ -180,71 +156,42 @@ pub async fn list_weights_by_user_handler(
     Err(e) => {
       warn!("Error querying for weights: {:?}", e);
       return Err(CommonWebError::from_error(e));
-    }
+    },
   };
 
   let media_domain = get_media_domain(&http_request);
 
-  let weights: Vec<Weight> = results_page.records.into_iter().map(|weight| {
+  let weights: Vec<Weight> = results_page
+    .records
+    .into_iter()
+    .map(|weight| {
+      let cover_image_details = WeightsCoverImageDetails::from_optional_db_fields(media_domain, server_state.server_environment, &weight.token, weight.maybe_cover_image_public_bucket_hash.as_deref(), weight.maybe_cover_image_public_bucket_prefix.as_deref(), weight.maybe_cover_image_public_bucket_extension.as_deref());
 
-    let cover_image_details = WeightsCoverImageDetails::from_optional_db_fields(
-      media_domain,
-      server_state.server_environment,
-      &weight.token,
-      weight.maybe_cover_image_public_bucket_hash.as_deref(),
-      weight.maybe_cover_image_public_bucket_prefix.as_deref(),
-      weight.maybe_cover_image_public_bucket_extension.as_deref(),
-    );
+      let maybe_cover_image = weight.maybe_cover_image_public_bucket_hash.as_deref().map(|hash| MediaFileBucketPath::from_object_hash(hash, weight.maybe_cover_image_public_bucket_prefix.as_deref(), weight.maybe_cover_image_public_bucket_extension.as_deref()).get_full_object_path_str().to_string());
 
-    let maybe_cover_image = weight.maybe_cover_image_public_bucket_hash
-        .as_deref()
-        .map(|hash| {
-          MediaFileBucketPath::from_object_hash(
-            hash,
-            weight.maybe_cover_image_public_bucket_prefix.as_deref(),
-            weight.maybe_cover_image_public_bucket_extension.as_deref())
-              .get_full_object_path_str()
-              .to_string()
-        });
+      Weight {
+        weight_token: weight.token,
+        maybe_url_slug: title_to_url_slug(&weight.title),
+        title: weight.title,
+        weight_type: weight.weights_type.to_string(),
+        weight_category: weight.weights_category.to_string(),
+        maybe_ietf_language_tag: weight.maybe_ietf_language_tag,
+        maybe_ietf_primary_language_subtag: weight.maybe_ietf_primary_language_subtag,
+        creator: UserDetailsLight::from_db_fields(&weight.creator_user_token, &weight.creator_username, &weight.creator_display_name, &weight.creator_email_gravatar_hash),
+        cover_image: cover_image_details,
+        maybe_cover_image_public_bucket_path: maybe_cover_image,
+        file_size_bytes: weight.file_size_bytes,
+        file_checksum_sha2: weight.file_checksum_sha2,
+        creator_set_visibility: weight.creator_set_visibility,
+        stats: SimpleEntityStats { positive_rating_count: weight.maybe_ratings_positive_count.unwrap_or(0), bookmark_count: weight.maybe_bookmark_count.unwrap_or(0) },
+        usage_count: u64_to_u32_saturating(weight.cached_usage_count),
+        created_at: weight.created_at,
+        updated_at: weight.updated_at,
+      }
+    })
+    .collect();
 
-    Weight {
-      weight_token: weight.token,
-      maybe_url_slug: title_to_url_slug(&weight.title),
-      title: weight.title,
-      weight_type: weight.weights_type.to_string(),
-      weight_category: weight.weights_category.to_string(),
-      maybe_ietf_language_tag: weight.maybe_ietf_language_tag,
-      maybe_ietf_primary_language_subtag: weight.maybe_ietf_primary_language_subtag,
-      creator: UserDetailsLight::from_db_fields(
-        &weight.creator_user_token,
-        &weight.creator_username,
-        &weight.creator_display_name,
-        &weight.creator_email_gravatar_hash,
-      ),
-      cover_image: cover_image_details,
-      maybe_cover_image_public_bucket_path: maybe_cover_image,
-      file_size_bytes: weight.file_size_bytes,
-      file_checksum_sha2: weight.file_checksum_sha2,
-      creator_set_visibility: weight.creator_set_visibility,
-      stats: SimpleEntityStats {
-        positive_rating_count: weight.maybe_ratings_positive_count.unwrap_or(0),
-        bookmark_count: weight.maybe_bookmark_count.unwrap_or(0),
-      },
-      usage_count: u64_to_u32_saturating(weight.cached_usage_count),
-      created_at: weight.created_at,
-      updated_at: weight.updated_at,
-    }
-  }).collect();
+  let response: ListWeightsByUserSuccessResponse = ListWeightsByUserSuccessResponse { success: true, results: weights, pagination: PaginationPage { current: results_page.current_page, total_page_count: results_page.total_page_count } };
 
-  let response: ListWeightsByUserSuccessResponse = ListWeightsByUserSuccessResponse {
-    success: true,
-    results: weights,
-    pagination: PaginationPage {
-      current: results_page.current_page,
-      total_page_count: results_page.total_page_count,
-    },
-  };
-
-  
   Ok(Json(response))
 }

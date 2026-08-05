@@ -82,8 +82,7 @@ impl Decoder for Mp3Decoder {
         if let Err(e) = self.decode_inner(packet) {
             self.buf.clear();
             Err(e)
-        }
-        else {
+        } else {
             Ok(self.buf.as_audio_buffer_ref())
         }
     }

@@ -43,22 +43,22 @@ pub async fn main() -> AnyhowResult<()> {
 
   let args = parse_cli_args()?;
 
-  let mysql= get_mysql(args.mysql_environment).await?;
+  let mysql = get_mysql(args.mysql_environment).await?;
   let elasticsearch = get_elasticsearch_client(args.elasticsearch_environment)?;
 
   match args.action {
     Action::ReindexTts => {
       info!("Reindexing TTS...");
       create_all_tts_documents(&mysql, &elasticsearch).await?;
-    }
+    },
     Action::SearchTts => {
       info!("Searching TTS...");
       let _results = search_tts_models(&elasticsearch, "zel", Some("en")).await?;
-    }
+    },
     Action::ReindexModelWeights => {
       info!("Reindexing model weights...");
       create_all_model_weight_documents(&mysql, &elasticsearch).await?;
-    }
+    },
     Action::SearchModelWeights => {
       info!("Searching model weights...");
       let results = test_search_model_weights_documents(&elasticsearch).await?;
@@ -66,19 +66,19 @@ pub async fn main() -> AnyhowResult<()> {
       for result in results {
         println!("Result: {:#?}", result);
       }
-    }
+    },
     Action::EvaluateModelWeights => {
       info!("Evaluate model weights search...");
       let _ = evaluate_model_weights_search(&elasticsearch).await?;
-    }
+    },
     Action::ReindexMediaFiles => {
       info!("Reindexing media files...");
       create_dimensional_media_file_documents(&mysql, &elasticsearch).await?;
-    }
+    },
     Action::SearchMediaFiles => {
       info!("Search media files...");
       test_search_media_files(&elasticsearch).await?;
-    }
+    },
   }
 
   info!("Done!");
@@ -93,10 +93,7 @@ async fn get_mysql(environment: Environment) -> AnyhowResult<Pool<MySql>> {
     Environment::Production => "MYSQL_PRODUCTION_URL",
   };
 
-  let pool = MySqlPoolOptions::new()
-      .max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 3)?)
-      .connect(&easyenv::get_env_string_required(connection_string_env)?)
-      .await?;
+  let pool = MySqlPoolOptions::new().max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 3)?).connect(&easyenv::get_env_string_required(connection_string_env)?).await?;
 
   Ok(pool)
 }

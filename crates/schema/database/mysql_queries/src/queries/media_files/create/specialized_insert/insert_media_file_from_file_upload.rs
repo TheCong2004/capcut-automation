@@ -75,10 +75,7 @@ pub struct InsertMediaFileFromUploadArgs<'a> {
   pub maybe_public_bucket_extension: Option<&'a str>,
 }
 
-pub async fn insert_media_file_from_file_upload(
-  args: InsertMediaFileFromUploadArgs<'_>
-) -> AnyhowResult<(MediaFileToken, u64)>
-{
+pub async fn insert_media_file_from_file_upload(args: InsertMediaFileFromUploadArgs<'_>) -> AnyhowResult<(MediaFileToken, u64)> {
   let token = MediaFileToken::generate();
 
   let mut origin_category = match args.upload_type {
@@ -103,34 +100,25 @@ pub async fn insert_media_file_from_file_upload(
     }
   }
 
-  let mut maybe_creator_file_synthetic_id : Option<u64> = None;
-  let mut maybe_creator_category_synthetic_id : Option<u64> = None;
+  let mut maybe_creator_file_synthetic_id: Option<u64> = None;
+  let mut maybe_creator_category_synthetic_id: Option<u64> = None;
 
   let mut transaction = args.pool.begin().await?;
 
   if let Some(user_token) = args.maybe_creator_user_token.as_deref() {
+    let next_media_file_id = transactional_increment_generic_synthetic_id(&user_token, IdCategory::MediaFile, &mut transaction).await?;
 
-    let next_media_file_id = transactional_increment_generic_synthetic_id(
-      &user_token,
-      IdCategory::MediaFile,
-      &mut transaction
-    ).await?;
-
-    let next_voice_conversion_id = transactional_increment_generic_synthetic_id(
-      &user_token,
-      IdCategory::FileUpload,
-      &mut transaction
-    ).await?;
+    let next_voice_conversion_id = transactional_increment_generic_synthetic_id(&user_token, IdCategory::FileUpload, &mut transaction).await?;
 
     maybe_creator_file_synthetic_id = Some(next_media_file_id);
     maybe_creator_category_synthetic_id = Some(next_voice_conversion_id);
   }
 
-  const ORIGIN_PRODUCT_CATEGORY : MediaFileOriginProductCategory = MediaFileOriginProductCategory::Unknown;
+  const ORIGIN_PRODUCT_CATEGORY: MediaFileOriginProductCategory = MediaFileOriginProductCategory::Unknown;
 
   let record_id = {
     let query_result = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO media_files
 SET
   token = ?,
@@ -180,64 +168,44 @@ SET
   maybe_origin_model_token = NULL
         "#,
       token.as_str(),
-
-      args.maybe_media_class
-        .map(|media_class| media_class.to_str())
-        .unwrap_or_else(|| MediaFileClass::Unknown.to_str()),
-
+      args.maybe_media_class.map(|media_class| media_class.to_str()).unwrap_or_else(|| MediaFileClass::Unknown.to_str()),
       args.media_file_type.to_str(),
-
       args.maybe_project_type.map(|project_type| project_type.to_str()),
-
       origin_category.to_str(),
       ORIGIN_PRODUCT_CATEGORY.to_str(),
-
       args.maybe_engine_category.map(|s| s.to_str()),
       args.maybe_animation_type.map(|s| s.to_str()),
-
       args.maybe_mime_type,
       args.file_size_bytes,
-
       args.sha256_checksum,
-
       args.maybe_prompt_token.map(|t| t.as_str()),
       args.maybe_batch_token.map(|t| t.as_str()),
-
       args.maybe_title,
       args.maybe_duration_millis,
-
       args.public_bucket_directory_hash,
       args.maybe_public_bucket_prefix,
       args.maybe_public_bucket_extension,
-
       args.maybe_creator_user_token,
       args.maybe_creator_anonymous_visitor_token,
       args.creator_ip_address,
-
       args.creator_set_visibility.to_str(),
-
       args.maybe_scene_source_media_file_token.map(|t| t.as_str()),
-
       is_intermediate_system_file,
       is_user_upload,
-
       maybe_generation_provider_str,
-
       maybe_creator_file_synthetic_id,
       maybe_creator_category_synthetic_id,
     )
-        .execute(&mut *transaction)
-        .await;
+    .execute(&mut *transaction)
+    .await;
 
     let record_id = match query_result {
-      Ok(res) => {
-        res.last_insert_id()
-      },
+      Ok(res) => res.last_insert_id(),
       Err(err) => {
         // TODO: handle better
         //transaction.rollback().await?;
         return Err(anyhow!("Mysql error: {:?}", err));
-      }
+      },
     };
 
     record_id

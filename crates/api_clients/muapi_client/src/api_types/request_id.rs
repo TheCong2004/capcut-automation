@@ -3,11 +3,10 @@
 pub struct RequestId(String);
 
 impl RequestId {
-  
   pub fn new(value: String) -> Self {
     RequestId(value)
   }
-  
+
   pub fn from_str(value: &str) -> Self {
     RequestId(value.to_string())
   }

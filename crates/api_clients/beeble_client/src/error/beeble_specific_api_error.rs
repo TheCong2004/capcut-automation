@@ -20,17 +20,10 @@ pub enum BeebleSpecificApiError {
   GenerationFailed(String),
 
   /// 400 Bad Request — the callback_url is not a valid publicly-reachable HTTPS URL.
-  BadWebhookUrl {
-    message: String,
-    webhook_url: String,
-  },
+  BadWebhookUrl { message: String, webhook_url: String },
 
   /// 400 Bad Request — the video has too many frames.
-  VideoHasTooManyFrames {
-    max_frames: u64,
-    detected_frames: u64,
-    message: String,
-  },
+  VideoHasTooManyFrames { max_frames: u64, detected_frames: u64, message: String },
 }
 
 impl Error for BeebleSpecificApiError {}
@@ -45,10 +38,10 @@ impl Display for BeebleSpecificApiError {
       Self::GenerationFailed(msg) => write!(f, "Beeble API: Generation failed: {}", msg),
       Self::BadWebhookUrl { message, webhook_url } => {
         write!(f, "Beeble API: Bad webhook URL '{}': {}", webhook_url, message)
-      }
+      },
       Self::VideoHasTooManyFrames { max_frames, detected_frames, message } => {
         write!(f, "Beeble API: Video has too many frames ({} detected, max {}): {}", detected_frames, max_frames, message)
-      }
+      },
     }
   }
 }

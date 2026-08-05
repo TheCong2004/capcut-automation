@@ -12,8 +12,8 @@ use crate::job_loop::process_single_job::process_single_job;
 use crate::JobState;
 
 // Job runner timeouts (guards MySQL)
-const START_TIMEOUT_MILLIS : u64 = 500;
-const INCREASE_TIMEOUT_MILLIS : u64 = 1000;
+const START_TIMEOUT_MILLIS: u64 = 500;
+const INCREASE_TIMEOUT_MILLIS: u64 = 1000;
 
 pub async fn main_loop(job_state: JobState) {
   let mut error_timeout_millis = START_TIMEOUT_MILLIS;
@@ -31,10 +31,7 @@ pub async fn main_loop(job_state: JobState) {
 
     let num_records = 1;
 
-    let maybe_available_jobs = list_available_generic_download_jobs(
-      &job_state.mysql_pool,
-      num_records,
-      maybe_scoped_download_types).await;
+    let maybe_available_jobs = list_available_generic_download_jobs(&job_state.mysql_pool, num_records, maybe_scoped_download_types).await;
 
     let jobs = match maybe_available_jobs {
       Ok(jobs) => jobs,
@@ -43,7 +40,7 @@ pub async fn main_loop(job_state: JobState) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     };
 
     if jobs.is_empty() {
@@ -62,7 +59,7 @@ pub async fn main_loop(job_state: JobState) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     }
 
     error_timeout_millis = START_TIMEOUT_MILLIS; // reset
@@ -84,13 +81,8 @@ async fn process_jobs(job_state: &JobState, jobs: Vec<AvailableDownloadJob>) -> 
       Err(e) => {
         warn!("Failure to process job: {:?}", e);
         let failure_reason = "";
-        let _r = mark_generic_download_job_failure(
-          &job_state.mysql_pool,
-          &job,
-          failure_reason,
-          job_state.job_max_attempts
-        ).await;
-      }
+        let _r = mark_generic_download_job_failure(&job_state.mysql_pool, &job, failure_reason, job_state.job_max_attempts).await;
+      },
     }
   }
 

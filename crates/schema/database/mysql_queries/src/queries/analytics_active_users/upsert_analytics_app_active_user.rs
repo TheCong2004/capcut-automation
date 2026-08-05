@@ -18,10 +18,10 @@ pub struct UpsertAnalyticsAppActiveUser<'a> {
   pub session_duration_seconds: Option<u64>,
 }
 
-impl <'a> UpsertAnalyticsAppActiveUser<'a> {
+impl<'a> UpsertAnalyticsAppActiveUser<'a> {
   fn query(&self) -> Query<MySql, MySqlArguments> {
     sqlx::query!(
-        r#"
+      r#"
 INSERT INTO analytics_app_active_users
 SET
   app_namespace = ?,
@@ -60,13 +60,8 @@ ON DUPLICATE KEY UPDATE
     )
   }
 
-  pub async fn upsert_with_connection(
-    &self,
-    mysql_connection: &mut PoolConnection<MySql>
-  ) -> Result<(), MysqlError<UpsertError>> {
-    let _query_result = self.query()
-        .execute(&mut **mysql_connection)
-        .await?;
+  pub async fn upsert_with_connection(&self, mysql_connection: &mut PoolConnection<MySql>) -> Result<(), MysqlError<UpsertError>> {
+    let _query_result = self.query().execute(&mut **mysql_connection).await?;
     Ok(())
   }
 }

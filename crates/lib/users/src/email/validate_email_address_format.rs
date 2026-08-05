@@ -1,4 +1,3 @@
-
 /// Basic email format validation
 pub fn validate_email_address_format(email: &str) -> Result<(), String> {
   let email = email.trim();

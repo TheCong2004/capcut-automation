@@ -47,7 +47,6 @@ pub struct GoogleCustomClaims {
   /// The user's locale, represented by a BCP 47 language tag.
   /// Might be provided when a name claim is present.
   pub locale: Option<String>,
-
   // Other fields are pulled out of the custom payload:
 
   // /// The audience that this ID token is intended for. It must be one of the

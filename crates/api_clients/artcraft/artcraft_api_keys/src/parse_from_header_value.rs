@@ -39,7 +39,7 @@ pub fn parse_from_header_value(header_value: &str) -> Option<ArtcraftApiKey> {
         // not a usable key.
         return None;
       }
-    }
+    },
     // No whitespace: AWS-style bare API key ("<api_key>") — unless the value is
     // just a bare scheme keyword (a malformed header carrying no credential).
     None => {
@@ -47,7 +47,7 @@ pub fn parse_from_header_value(header_value: &str) -> Option<ArtcraftApiKey> {
         return None;
       }
       trimmed
-    }
+    },
   };
 
   Some(ArtcraftApiKey::new_from_str(key))

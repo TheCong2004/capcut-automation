@@ -1,4 +1,3 @@
-
 /// Numeric denominations are concrete types.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum UserBadgeType {

@@ -17,32 +17,28 @@ pub async fn get_or_update_grok_full_credentials(grok_credential_manager: &GrokC
 
   let cookies = match grok_credential_manager.maybe_copy_cookie_store()? {
     Some(cookies) => cookies.to_cookie_string(),
-    None => {
-      return Err(GrokError::Client(GrokClientError::NoCookiesPresent).into())
-    }
+    None => return Err(GrokError::Client(GrokClientError::NoCookiesPresent).into()),
   };
 
   let cookies = GrokCookies::new(cookies);
 
   info!("Requesting Grok client secrets...");
 
-  let upgraded = request_client_secrets(RequestClientSecretsArgs {
-    cookies: &cookies,
-  }).await;
+  let upgraded = request_client_secrets(RequestClientSecretsArgs { cookies: &cookies }).await;
 
   match upgraded {
     Err(err) => {
       error!("Failed to fetch Grok client secrets: {}", err); // NB: Fall-through
       return Err(ArtcraftError::from(err));
-    }
+    },
     Ok(secrets) => {
       info!("Grok client secrets successfully upgraded...");
       let full_creds = GrokFullCredentials::from_cookies_and_client_secrets(cookies, secrets);
       grok_credential_manager.replace_full_credentials(full_creds.clone())?;
       info!("Persisting grok credentials to disk...");
       grok_credential_manager.persist_to_disk()?;
-      return Ok(full_creds)
-    }
+      return Ok(full_creds);
+    },
   }
 
   warn!("Grok upgrade failed. Try logging in again...");

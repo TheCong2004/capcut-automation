@@ -9,13 +9,14 @@
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
-#[macro_use] extern crate magic_crypt;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate magic_crypt;
+#[macro_use]
+extern crate serde_derive;
 
 use std::error::Error;
 
@@ -40,18 +41,13 @@ pub mod util;
 
 #[actix_web::main]
 async fn main() -> Result<(), impl Error> {
-  HttpServer::new(move || {
-      App::new()
-          .service(
-              SwaggerUi::new("/{_:.*}")
-                  .url("/api-docs/openapi.json", ApiDoc::openapi()),
-          )
-  })
-  .bind(("localhost", 8989))
-  .unwrap_or_else(|err| {
-    eprintln!("FATAL: Failed to bind docs server to localhost:8989: {}", err);
-    eprintln!("The address is likely already in use by another process.");
-    std::process::exit(1);
-  })
-  .run().await
+  HttpServer::new(move || App::new().service(SwaggerUi::new("/{_:.*}").url("/api-docs/openapi.json", ApiDoc::openapi())))
+    .bind(("localhost", 8989))
+    .unwrap_or_else(|err| {
+      eprintln!("FATAL: Failed to bind docs server to localhost:8989: {}", err);
+      eprintln!("The address is likely already in use by another process.");
+      std::process::exit(1);
+    })
+    .run()
+    .await
 }

@@ -13,16 +13,8 @@ pub enum CrudType {
 }
 
 /// Record the credits pack purchase
-pub async fn upsert_subscription_details(
-  details: &UpsertableSubscriptionDetails,
-  crud_type: CrudType,
-  transaction: &mut sqlx::Transaction<'_, sqlx::MySql>,
-) -> anyhow::Result<()> {
-
-  let maybe_existing_subscription = get_user_subscription_by_stripe_subscription_id_transactional(
-    &details.stripe_subscription_id,
-    transaction,
-  ).await?;
+pub async fn upsert_subscription_details(details: &UpsertableSubscriptionDetails, crud_type: CrudType, transaction: &mut sqlx::Transaction<'_, sqlx::MySql>) -> anyhow::Result<()> {
+  let maybe_existing_subscription = get_user_subscription_by_stripe_subscription_id_transactional(&details.stripe_subscription_id, transaction).await?;
 
   // NB: It's possible to receive events out of order.
   // We can get an 'update' after a 'create', etc.
@@ -32,17 +24,17 @@ pub async fn upsert_subscription_details(
         // We won't want to play a `create` event on top of something already existing.
         info!("Subscription record already exists. Skipping insert.");
         return Ok(()); // Turn this into a no-op. This is stale info.
-      }
+      },
       CrudType::Update | CrudType::Delete => {
         match existing_sub.maybe_stripe_subscription_status {
           Some(StripeSubscriptionStatus::Canceled) => {
             // NB: The stored subscription already had a terminal status and the subscription cannot be updated any further.
             info!("Existing subscription record already in terminal state. Skipping updates.");
             return Ok(()); // Turn this into a no-op. This is stale info.
-          }
-          _ => {} // Fall-through
+          },
+          _ => {}, // Fall-through
         }
-      }
+      },
     }
   }
 

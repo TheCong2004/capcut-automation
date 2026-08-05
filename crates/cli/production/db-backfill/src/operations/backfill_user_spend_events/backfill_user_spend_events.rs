@@ -13,18 +13,10 @@ use enums::by_table::user_spend_events::payment_event_type::PaymentEventType;
 use enums::by_table::user_spend_events::payment_source::PaymentSource;
 use enums::common::payments_namespace::PaymentsNamespace;
 use errors::AnyhowResult;
-use mysql_queries::queries::user_spend_events::backfill_get_user_token_by_email::{
-  backfill_get_user_token_by_email, BackfillGetUserTokenByEmailArgs,
-};
-use mysql_queries::queries::user_spend_events::backfill_list_artcraft_customer_links::{
-  backfill_list_artcraft_customer_links, BackfillListCustomerLinksArgs,
-};
-use mysql_queries::queries::user_spend_events::backfill_list_artcraft_ledger_payments::{
-  backfill_list_artcraft_ledger_payments, BackfillListLedgerPaymentsArgs, LedgerPaymentRef,
-};
-use mysql_queries::queries::user_spend_events::insert_user_spend_event::{
-  insert_user_spend_event, InsertUserSpendEventArgs,
-};
+use mysql_queries::queries::user_spend_events::backfill_get_user_token_by_email::{backfill_get_user_token_by_email, BackfillGetUserTokenByEmailArgs};
+use mysql_queries::queries::user_spend_events::backfill_list_artcraft_customer_links::{backfill_list_artcraft_customer_links, BackfillListCustomerLinksArgs};
+use mysql_queries::queries::user_spend_events::backfill_list_artcraft_ledger_payments::{backfill_list_artcraft_ledger_payments, BackfillListLedgerPaymentsArgs, LedgerPaymentRef};
+use mysql_queries::queries::user_spend_events::insert_user_spend_event::{insert_user_spend_event, InsertUserSpendEventArgs};
 use tokens::tokens::users::UserToken;
 
 use crate::operations::backfill_user_spend_events::stripe_api::{Invoice, StripeApi};
@@ -38,35 +30,19 @@ use crate::operations::backfill_user_spend_events::sub_args::BackfillUserSpendEv
 /// (write pool) on the same `(payment_source, source_object_id)` dedup key the
 /// webhook path uses, so rows already written live are no-ops. Payments that
 /// can't be linked to a user are written to a CSV instead of inserted.
-pub async fn backfill_user_spend_events(
-  read_pool: &Pool<MySql>,
-  write_pool: &Pool<MySql>,
-  stripe: &StripeApi,
-  args: BackfillUserSpendEventsArgs,
-) -> AnyhowResult<()> {
+pub async fn backfill_user_spend_events(read_pool: &Pool<MySql>, write_pool: &Pool<MySql>, stripe: &StripeApi, args: BackfillUserSpendEventsArgs) -> AnyhowResult<()> {
   let started = Instant::now();
   let since = parse_since(&args.since)?;
   info!("Backfill user_spend_events since {since} (UTC). dry_run={}", args.dry_run);
 
   // ---- 1. Enrichment maps from the READ pool (replica) ----
-  let ledger_rows = backfill_list_artcraft_ledger_payments(BackfillListLedgerPaymentsArgs {
-    since,
-    mysql_executor: read_pool,
-    phantom: PhantomData,
-  })
-  .await?;
+  let ledger_rows = backfill_list_artcraft_ledger_payments(BackfillListLedgerPaymentsArgs { since, mysql_executor: read_pool, phantom: PhantomData }).await?;
   info!("Loaded {} ArtCraft ledger payment refs (enrichment)", ledger_rows.len());
-  let ledger_by_id: HashMap<String, LedgerPaymentRef> =
-    ledger_rows.into_iter().map(|r| (r.stripe_object_id.clone(), r)).collect();
+  let ledger_by_id: HashMap<String, LedgerPaymentRef> = ledger_rows.into_iter().map(|r| (r.stripe_object_id.clone(), r)).collect();
 
-  let links = backfill_list_artcraft_customer_links(BackfillListCustomerLinksArgs {
-    mysql_executor: read_pool,
-    phantom: PhantomData,
-  })
-  .await?;
+  let links = backfill_list_artcraft_customer_links(BackfillListCustomerLinksArgs { mysql_executor: read_pool, phantom: PhantomData }).await?;
   info!("Loaded {} ArtCraft customer links (fallback attribution)", links.len());
-  let user_by_customer: HashMap<String, UserToken> =
-    links.into_iter().map(|l| (l.stripe_customer_id, l.user_token)).collect();
+  let user_by_customer: HashMap<String, UserToken> = links.into_iter().map(|l| (l.stripe_customer_id, l.user_token)).collect();
 
   let mut stats = Stats::default();
   let mut unattributed: Vec<UnattributedRow> = Vec::new();
@@ -75,18 +51,10 @@ pub async fn backfill_user_spend_events(
   let mut customer_cache: HashMap<String, Option<UserToken>> = HashMap::new();
 
   // ---- 2. Credit-pack purchases: succeeded one-off PaymentIntents ----
-  backfill_payment_intents(
-    stripe, read_pool, write_pool, since, &args, &ledger_by_id, &user_by_customer,
-    &mut customer_cache, &mut stats, &mut unattributed,
-  )
-  .await?;
+  backfill_payment_intents(stripe, read_pool, write_pool, since, &args, &ledger_by_id, &user_by_customer, &mut customer_cache, &mut stats, &mut unattributed).await?;
 
   // ---- 3. Subscription payments: paid invoices (create/cycle) ----
-  backfill_invoices(
-    stripe, read_pool, write_pool, since, &args, &ledger_by_id, &user_by_customer,
-    &mut customer_cache, &mut stats, &mut unattributed,
-  )
-  .await?;
+  backfill_invoices(stripe, read_pool, write_pool, since, &args, &ledger_by_id, &user_by_customer, &mut customer_cache, &mut stats, &mut unattributed).await?;
 
   // ---- 4. Report unattributable payments ----
   write_unattributed_report(&args.unattributed_report, &unattributed)?;
@@ -97,10 +65,7 @@ pub async fn backfill_user_spend_events(
   info!("  skipped (not a tracked type):   {}", stats.skipped);
   info!("  UNATTRIBUTED (no user account): {} -> {}", unattributed.len(), args.unattributed_report);
   let elapsed = started.elapsed();
-  info!("  elapsed: {:.1}s ({:.0} payments/sec)",
-    elapsed.as_secs_f64(),
-    (stats.credit_packs + stats.subscriptions) as f64 / elapsed.as_secs_f64().max(0.001),
-  );
+  info!("  elapsed: {:.1}s ({:.0} payments/sec)", elapsed.as_secs_f64(), (stats.credit_packs + stats.subscriptions) as f64 / elapsed.as_secs_f64().max(0.001),);
   if args.dry_run {
     info!("  (dry run — NOTHING was written to the database)");
   }
@@ -109,18 +74,7 @@ pub async fn backfill_user_spend_events(
 
 // ---- Enumerators ----
 
-async fn backfill_payment_intents(
-  stripe: &StripeApi,
-  read_pool: &Pool<MySql>,
-  write_pool: &Pool<MySql>,
-  since: DateTime<Utc>,
-  args: &BackfillUserSpendEventsArgs,
-  ledger_by_id: &HashMap<String, LedgerPaymentRef>,
-  user_by_customer: &HashMap<String, UserToken>,
-  customer_cache: &mut HashMap<String, Option<UserToken>>,
-  stats: &mut Stats,
-  unattributed: &mut Vec<UnattributedRow>,
-) -> AnyhowResult<()> {
+async fn backfill_payment_intents(stripe: &StripeApi, read_pool: &Pool<MySql>, write_pool: &Pool<MySql>, since: DateTime<Utc>, args: &BackfillUserSpendEventsArgs, ledger_by_id: &HashMap<String, LedgerPaymentRef>, user_by_customer: &HashMap<String, UserToken>, customer_cache: &mut HashMap<String, Option<UserToken>>, stats: &mut Stats, unattributed: &mut Vec<UnattributedRow>) -> AnyhowResult<()> {
   info!("Enumerating Stripe PaymentIntents (credit packs) since {} …", since.format("%Y-%m-%d"));
   let mut starting_after: Option<String> = None;
   let mut processed = 0usize;
@@ -147,8 +101,7 @@ async fn backfill_payment_intents(
       // A one-off credit-pack PI carries our `user_token` metadata; subscription
       // PIs have empty metadata. The ledger `credit_banked` match is a backstop
       // for any historical pack PI that lacks metadata.
-      let is_credit_pack = pi.metadata.contains_key("user_token")
-        || ledger_by_id.get(&pi_id).map(|l| l.entry_type == "credit_banked").unwrap_or(false);
+      let is_credit_pack = pi.metadata.contains_key("user_token") || ledger_by_id.get(&pi_id).map(|l| l.entry_type == "credit_banked").unwrap_or(false);
       if !is_credit_pack {
         stats.skipped += 1;
         continue;
@@ -158,46 +111,21 @@ async fn backfill_payment_intents(
       let customer_id = pi.customer.clone();
       let charge_id = pi.latest_charge.clone();
       let occurred_at = DateTime::from_timestamp(pi.created, 0).unwrap_or_else(Utc::now);
-      let mut maybe_user = resolve_user(
-        pi.metadata.get("user_token").map(|s| s.as_str()),
-        &pi_id, customer_id.as_deref(), ledger_by_id, user_by_customer,
-      );
+      let mut maybe_user = resolve_user(pi.metadata.get("user_token").map(|s| s.as_str()), &pi_id, customer_id.as_deref(), ledger_by_id, user_by_customer);
       if maybe_user.is_none() && args.deep_attribution {
         maybe_user = deep_resolve_user(stripe, read_pool, customer_cache, customer_id.as_deref(), None).await;
       }
 
       match maybe_user {
         Some(user) => {
-          upsert_event(write_pool, args.dry_run, UpsertInput {
-            event_type: PaymentEventType::CreditPackPurchase,
-            amount_usd_cents: pi.amount_received,
-            source_object_id: &pi_id,
-            invoice_id: None,
-            payment_intent_id: Some(&pi_id),
-            charge_id: charge_id.as_deref(),
-            customer_id: customer_id.as_deref(),
-            user: &user,
-            ledger: ledger_by_id.get(&pi_id),
-            is_production: pi.livemode,
-            occurred_at,
-          })
-          .await?;
+          upsert_event(write_pool, args.dry_run, UpsertInput { event_type: PaymentEventType::CreditPackPurchase, amount_usd_cents: pi.amount_received, source_object_id: &pi_id, invoice_id: None, payment_intent_id: Some(&pi_id), charge_id: charge_id.as_deref(), customer_id: customer_id.as_deref(), user: &user, ledger: ledger_by_id.get(&pi_id), is_production: pi.livemode, occurred_at }).await?;
           stats.credit_packs += 1;
-        }
-        None => unattributed.push(UnattributedRow {
-          kind: "credit_pack",
-          stripe_id: pi_id.clone(),
-          amount_usd_cents: pi.amount_received,
-          customer_id: customer_id.clone(),
-          occurred_at,
-        }),
+        },
+        None => unattributed.push(UnattributedRow { kind: "credit_pack", stripe_id: pi_id.clone(), amount_usd_cents: pi.amount_received, customer_id: customer_id.clone(), occurred_at }),
       }
     }
 
-    info!(
-      "  payment_intents page {page_num}: {} fetched | packs={} skipped={} unattributed={}",
-      page.data.len(), stats.credit_packs, stats.skipped, unattributed.len(),
-    );
+    info!("  payment_intents page {page_num}: {} fetched | packs={} skipped={} unattributed={}", page.data.len(), stats.credit_packs, stats.skipped, unattributed.len(),);
     if !page.has_more {
       break;
     }
@@ -207,18 +135,7 @@ async fn backfill_payment_intents(
   Ok(())
 }
 
-async fn backfill_invoices(
-  stripe: &StripeApi,
-  read_pool: &Pool<MySql>,
-  write_pool: &Pool<MySql>,
-  since: DateTime<Utc>,
-  args: &BackfillUserSpendEventsArgs,
-  ledger_by_id: &HashMap<String, LedgerPaymentRef>,
-  user_by_customer: &HashMap<String, UserToken>,
-  customer_cache: &mut HashMap<String, Option<UserToken>>,
-  stats: &mut Stats,
-  unattributed: &mut Vec<UnattributedRow>,
-) -> AnyhowResult<()> {
+async fn backfill_invoices(stripe: &StripeApi, read_pool: &Pool<MySql>, write_pool: &Pool<MySql>, since: DateTime<Utc>, args: &BackfillUserSpendEventsArgs, ledger_by_id: &HashMap<String, LedgerPaymentRef>, user_by_customer: &HashMap<String, UserToken>, customer_cache: &mut HashMap<String, Option<UserToken>>, stats: &mut Stats, unattributed: &mut Vec<UnattributedRow>) -> AnyhowResult<()> {
   info!("Enumerating Stripe paid invoices (subscriptions) since {} …", since.format("%Y-%m-%d"));
   let mut starting_after: Option<String> = None;
   let mut processed = 0usize;
@@ -246,62 +163,34 @@ async fn backfill_invoices(
         _ => {
           stats.skipped += 1;
           continue;
-        }
+        },
       };
       let inv_id = match inv.id.clone() {
         Some(id) => id,
         None => {
           stats.skipped += 1;
           continue;
-        }
+        },
       };
       processed += 1;
 
       let customer_id = inv.customer.clone();
       let occurred_at = DateTime::from_timestamp(inv.created, 0).unwrap_or_else(Utc::now);
-      let mut maybe_user = resolve_user(
-        invoice_metadata_user_token(inv),
-        &inv_id, customer_id.as_deref(), ledger_by_id, user_by_customer,
-      );
+      let mut maybe_user = resolve_user(invoice_metadata_user_token(inv), &inv_id, customer_id.as_deref(), ledger_by_id, user_by_customer);
       if maybe_user.is_none() && args.deep_attribution {
-        maybe_user = deep_resolve_user(
-          stripe, read_pool, customer_cache, customer_id.as_deref(), inv.customer_email.as_deref(),
-        )
-        .await;
+        maybe_user = deep_resolve_user(stripe, read_pool, customer_cache, customer_id.as_deref(), inv.customer_email.as_deref()).await;
       }
 
       match maybe_user {
         Some(user) => {
-          upsert_event(write_pool, args.dry_run, UpsertInput {
-            event_type,
-            amount_usd_cents: inv.amount_paid,
-            source_object_id: &inv_id,
-            invoice_id: Some(&inv_id),
-            payment_intent_id: None,
-            charge_id: None,
-            customer_id: customer_id.as_deref(),
-            user: &user,
-            ledger: ledger_by_id.get(&inv_id),
-            is_production: inv.livemode,
-            occurred_at,
-          })
-          .await?;
+          upsert_event(write_pool, args.dry_run, UpsertInput { event_type, amount_usd_cents: inv.amount_paid, source_object_id: &inv_id, invoice_id: Some(&inv_id), payment_intent_id: None, charge_id: None, customer_id: customer_id.as_deref(), user: &user, ledger: ledger_by_id.get(&inv_id), is_production: inv.livemode, occurred_at }).await?;
           stats.subscriptions += 1;
-        }
-        None => unattributed.push(UnattributedRow {
-          kind: "subscription",
-          stripe_id: inv_id.clone(),
-          amount_usd_cents: inv.amount_paid,
-          customer_id: customer_id.clone(),
-          occurred_at,
-        }),
+        },
+        None => unattributed.push(UnattributedRow { kind: "subscription", stripe_id: inv_id.clone(), amount_usd_cents: inv.amount_paid, customer_id: customer_id.clone(), occurred_at }),
       }
     }
 
-    info!(
-      "  invoices page {page_num}: {} fetched | subscriptions={} skipped={} unattributed={}",
-      page.data.len(), stats.subscriptions, stats.skipped, unattributed.len(),
-    );
+    info!("  invoices page {page_num}: {} fetched | subscriptions={} skipped={} unattributed={}", page.data.len(), stats.subscriptions, stats.skipped, unattributed.len(),);
     if !page.has_more {
       break;
     }
@@ -320,13 +209,7 @@ async fn backfill_invoices(
 ///      links table does NOT reliably have.
 ///   3. `user_stripe_customer_links` by customer id — LAST resort (sparse for
 ///      subscriptions).
-fn resolve_user(
-  metadata_user_token: Option<&str>,
-  stripe_object_id: &str,
-  customer_id: Option<&str>,
-  ledger_by_id: &HashMap<String, LedgerPaymentRef>,
-  user_by_customer: &HashMap<String, UserToken>,
-) -> Option<UserToken> {
+fn resolve_user(metadata_user_token: Option<&str>, stripe_object_id: &str, customer_id: Option<&str>, ledger_by_id: &HashMap<String, LedgerPaymentRef>, user_by_customer: &HashMap<String, UserToken>) -> Option<UserToken> {
   if let Some(user_token) = metadata_user_token {
     if !user_token.is_empty() {
       return Some(UserToken(user_token.to_string()));
@@ -372,13 +255,7 @@ fn invoice_metadata_user_token(inv: &Invoice) -> Option<&str> {
 /// Deep attribution (opt-in): when the cheap path fails, interrogate Stripe.
 /// (1) invoice email -> users; (2) retrieve the Stripe Customer and use its
 /// `user_token` metadata, then its email -> users. Customer retrieval is cached.
-async fn deep_resolve_user(
-  stripe: &StripeApi,
-  read_pool: &Pool<MySql>,
-  customer_cache: &mut HashMap<String, Option<UserToken>>,
-  customer_id: Option<&str>,
-  invoice_email: Option<&str>,
-) -> Option<UserToken> {
+async fn deep_resolve_user(stripe: &StripeApi, read_pool: &Pool<MySql>, customer_cache: &mut HashMap<String, Option<UserToken>>, customer_id: Option<&str>, invoice_email: Option<&str>) -> Option<UserToken> {
   if let Some(email) = invoice_email {
     if let Some(user) = lookup_user_token_by_email(read_pool, email).await {
       return Some(user);
@@ -403,8 +280,8 @@ async fn deep_resolve_user(
           resolved = lookup_user_token_by_email(read_pool, email).await;
         }
       }
-    }
-    Ok(_deleted) => {}
+    },
+    Ok(_deleted) => {},
     Err(err) => warn!("deep attribution: retrieve customer {customer_id} failed: {err:?}"),
   }
 
@@ -413,18 +290,12 @@ async fn deep_resolve_user(
 }
 
 async fn lookup_user_token_by_email(read_pool: &Pool<MySql>, email: &str) -> Option<UserToken> {
-  match backfill_get_user_token_by_email(BackfillGetUserTokenByEmailArgs {
-    email_address: email,
-    mysql_executor: read_pool,
-    phantom: PhantomData,
-  })
-  .await
-  {
+  match backfill_get_user_token_by_email(BackfillGetUserTokenByEmailArgs { email_address: email, mysql_executor: read_pool, phantom: PhantomData }).await {
     Ok(user) => user,
     Err(err) => {
       warn!("deep attribution: email lookup for {email:?} failed: {err:?}");
       None
-    }
+    },
   }
 }
 
@@ -474,15 +345,7 @@ fn write_unattributed_report(path: &str, rows: &[UnattributedRow]) -> AnyhowResu
   let mut file = File::create(path)?;
   writeln!(file, "kind,stripe_object_id,amount_usd_cents,stripe_customer_id,occurred_at,reason")?;
   for row in rows {
-    writeln!(
-      file,
-      "{},{},{},{},{},no user_token in metadata/ledger/customer_link",
-      row.kind,
-      row.stripe_id,
-      row.amount_usd_cents,
-      row.customer_id.as_deref().unwrap_or(""),
-      row.occurred_at.to_rfc3339(),
-    )?;
+    writeln!(file, "{},{},{},{},{},no user_token in metadata/ledger/customer_link", row.kind, row.stripe_id, row.amount_usd_cents, row.customer_id.as_deref().unwrap_or(""), row.occurred_at.to_rfc3339(),)?;
   }
   if !rows.is_empty() {
     warn!("{} payment(s) could not be linked to a user — see {}", rows.len(), path);
@@ -491,11 +354,8 @@ fn write_unattributed_report(path: &str, rows: &[UnattributedRow]) -> AnyhowResu
 }
 
 fn parse_since(s: &str) -> AnyhowResult<DateTime<Utc>> {
-  let date = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-    .map_err(|err| anyhow::anyhow!("invalid --since {s:?} (want YYYY-MM-DD): {err}"))?;
-  let naive = date
-    .and_hms_opt(0, 0, 0)
-    .ok_or_else(|| anyhow::anyhow!("invalid time for --since {s:?}"))?;
+  let date = NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|err| anyhow::anyhow!("invalid --since {s:?} (want YYYY-MM-DD): {err}"))?;
+  let naive = date.and_hms_opt(0, 0, 0).ok_or_else(|| anyhow::anyhow!("invalid time for --since {s:?}"))?;
   Ok(Utc.from_utc_datetime(&naive))
 }
 

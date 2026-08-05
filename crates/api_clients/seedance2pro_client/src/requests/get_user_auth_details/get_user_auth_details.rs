@@ -28,87 +28,40 @@ pub struct GetUserAuthDetailsResponse {
 // --- Implementation ---
 
 /// The tRPC `input` query param for `auth.user` — a static null payload.
-const AUTH_USER_INPUT: &str =
-  r#"{"0":{"json":null,"meta":{"values":["undefined"],"v":1}}}"#;
+const AUTH_USER_INPUT: &str = r#"{"0":{"json":null,"meta":{"values":["undefined"],"v":1}}}"#;
 
-pub async fn get_user_auth_details(
-  args: GetUserAuthDetailsArgs<'_>,
-) -> Result<GetUserAuthDetailsResponse, Seedance2ProError> {
+pub async fn get_user_auth_details(args: GetUserAuthDetailsArgs<'_>) -> Result<GetUserAuthDetailsResponse, Seedance2ProError> {
   let host = resolve_host(args.host_override.as_ref());
   let base_url = host.api_base_url();
   let url = format!("{}/api/trpc/auth.user", base_url);
 
   info!("Fetching user auth details...");
 
-  let client = Client::builder()
-    .emulation(Emulation::Firefox143)
-    .build()
-    .map_err(|err| Seedance2ProClientError::WreqClientError(err))?;
+  let client = Client::builder().emulation(Emulation::Firefox143).build().map_err(|err| Seedance2ProClientError::WreqClientError(err))?;
 
   let cookie = args.session.cookies.as_str();
   let referer = format!("{}/pricing", base_url);
 
-  let request = client.get(&url)
-    .query(&[("batch", "1"), ("input", AUTH_USER_INPUT)])
-    .header("User-Agent", FIREFOX_USER_AGENT)
-    .header("Accept", "*/*")
-    .header("Accept-Language", "en-US,en;q=0.9")
-    .header("Accept-Encoding", "gzip, deflate, br, zstd")
-    .header("Referer", &referer)
-    .header("content-type", "application/json")
-    .header("x-trpc-source", "client")
-    .header("Connection", "keep-alive")
-    .header("Cookie", cookie)
-    .header("Sec-Fetch-Dest", "empty")
-    .header("Sec-Fetch-Mode", "cors")
-    .header("Sec-Fetch-Site", "same-origin")
-    .header("Priority", "u=4")
-    .header("TE", "trailers")
-    .build()
-    .map_err(|err| Seedance2ProClientError::WreqClientError(err))?;
+  let request = client.get(&url).query(&[("batch", "1"), ("input", AUTH_USER_INPUT)]).header("User-Agent", FIREFOX_USER_AGENT).header("Accept", "*/*").header("Accept-Language", "en-US,en;q=0.9").header("Accept-Encoding", "gzip, deflate, br, zstd").header("Referer", &referer).header("content-type", "application/json").header("x-trpc-source", "client").header("Connection", "keep-alive").header("Cookie", cookie).header("Sec-Fetch-Dest", "empty").header("Sec-Fetch-Mode", "cors").header("Sec-Fetch-Site", "same-origin").header("Priority", "u=4").header("TE", "trailers").build().map_err(|err| Seedance2ProClientError::WreqClientError(err))?;
 
-  let response = client.execute(request)
-    .await
-    .map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
+  let response = client.execute(request).await.map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
 
   let status = response.status();
-  let response_body = response.text()
-    .await
-    .map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
+  let response_body = response.text().await.map_err(|err| Seedance2ProGenericApiError::WreqError(err))?;
 
   info!("Get user auth details response status: {}", status);
 
   if !status.is_success() {
-    return Err(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody {
-      status_code: status,
-      body: response_body,
-    }.into());
+    return Err(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code: status, body: response_body }.into());
   }
 
-  let batch_response: Vec<BatchResponseItem> = serde_json::from_str(&response_body)
-    .map_err(|err| Seedance2ProGenericApiError::SerdeResponseParseErrorWithBody(
-      err,
-      response_body.clone(),
-    ))?;
+  let batch_response: Vec<BatchResponseItem> = serde_json::from_str(&response_body).map_err(|err| Seedance2ProGenericApiError::SerdeResponseParseErrorWithBody(err, response_body.clone()))?;
 
-  let json = batch_response
-    .into_iter()
-    .next()
-    .ok_or_else(|| Seedance2ProGenericApiError::UnexpectedResponseShape {
-      explanation: "Empty batch response array".to_string(),
-      raw_body: response_body.clone(),
-    })?
-    .result
-    .data
-    .json;
+  let json = batch_response.into_iter().next().ok_or_else(|| Seedance2ProGenericApiError::UnexpectedResponseShape { explanation: "Empty batch response array".to_string(), raw_body: response_body.clone() })?.result.data.json;
 
   info!("User: {}, credits: {}, available: {}", json.email, json.credits, json.available_credits);
 
-  Ok(GetUserAuthDetailsResponse {
-    email: json.email,
-    credits: json.credits,
-    available_credits: json.available_credits,
-  })
+  Ok(GetUserAuthDetailsResponse { email: json.email, credits: json.credits, available_credits: json.available_credits })
 }
 
 #[cfg(test)]
@@ -147,10 +100,7 @@ mod tests {
   async fn test_get_user_auth_details() -> AnyhowResult<()> {
     setup_test_logging(LevelFilter::Trace);
     let session = test_session()?;
-    let result = get_user_auth_details(GetUserAuthDetailsArgs {
-      session: &session,
-      host_override: None,
-    }).await?;
+    let result = get_user_auth_details(GetUserAuthDetailsArgs { session: &session, host_override: None }).await?;
     println!("Email: {}", result.email);
     println!("Credits: {}", result.credits);
     println!("Available credits: {}", result.available_credits);

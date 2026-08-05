@@ -38,10 +38,10 @@ impl ErrorAlertingMiddleware {
 }
 
 impl<S, B> Transform<S, ServiceRequest> for ErrorAlertingMiddleware
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-      S::Future: 'static,
-      B: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+  S::Future: 'static,
+  B: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;
@@ -50,11 +50,7 @@ impl<S, B> Transform<S, ServiceRequest> for ErrorAlertingMiddleware
   type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
   fn new_transform(&self, service: S) -> Self::Future {
-    ready(Ok(ErrorAlertingService {
-      service,
-      pager: self.pager.clone(),
-      paging_flags: self.paging_flags.clone(),
-    }))
+    ready(Ok(ErrorAlertingService { service, pager: self.pager.clone(), paging_flags: self.paging_flags.clone() }))
   }
 }
 
@@ -67,10 +63,10 @@ pub struct ErrorAlertingService<S> {
 }
 
 impl<S, B> Service<ServiceRequest> for ErrorAlertingService<S>
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-      S::Future: 'static,
-      B: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+  S::Future: 'static,
+  B: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;
@@ -96,11 +92,11 @@ impl<S, B> Service<ServiceRequest> for ErrorAlertingService<S>
         Ok(res) => {
           check_ok_response_for_alerts(&pager, &method, &path, &metadata, &res);
           Ok(res)
-        }
+        },
         Err(err) => {
           check_err_for_alerts(&pager, &method, &path, &metadata, &err);
           Err(err)
-        }
+        },
       }
     })
   }
@@ -112,13 +108,7 @@ impl<S, B> Service<ServiceRequest> for ErrorAlertingService<S>
 ///
 /// Actix-web converts `ResponseError` types into HTTP responses and stashes
 /// the original error in `response.error()`. We can downcast from there.
-fn check_ok_response_for_alerts<B>(
-  pager: &Pager,
-  method: &str,
-  path: &str,
-  metadata: &RequestDebuggingMetadata,
-  response: &ServiceResponse<B>,
-) {
+fn check_ok_response_for_alerts<B>(pager: &Pager, method: &str, path: &str, metadata: &RequestDebuggingMetadata, response: &ServiceResponse<B>) {
   let status = response.status();
 
   // Try to get the original typed error from the response (if it came from ResponseError).
@@ -137,13 +127,7 @@ fn check_ok_response_for_alerts<B>(
 }
 
 /// Inspect an `actix_web::Error` returned from the handler or inner middleware.
-fn check_err_for_alerts(
-  pager: &Pager,
-  method: &str,
-  path: &str,
-  metadata: &RequestDebuggingMetadata,
-  err: &Error,
-) {
+fn check_err_for_alerts(pager: &Pager, method: &str, path: &str, metadata: &RequestDebuggingMetadata, err: &Error) {
   // --- Typed matchers (add new check_*.rs modules and downcast branches here) ---
 
   if let Some(common_err) = err.as_error::<CommonWebError>() {

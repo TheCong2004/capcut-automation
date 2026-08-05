@@ -5,16 +5,10 @@ use actix_web::web::{Json, Path};
 use actix_web::{web, HttpRequest};
 use log::warn;
 
-use artcraft_api_defs::tags::list_media_file_tags::{
-  ListMediaFileTagsPathInfo, ListMediaFileTagsSuccessResponse,
-};
+use artcraft_api_defs::tags::list_media_file_tags::{ListMediaFileTagsPathInfo, ListMediaFileTagsSuccessResponse};
 use enums::common::visibility::Visibility;
-use mysql_queries::queries::tags::get_media_file_access_fields::{
-  get_media_file_access_fields, GetMediaFileAccessFieldsArgs,
-};
-use mysql_queries::queries::tags::list_tags_for_media_file::{
-  list_tags_for_media_file, ListTagsForMediaFileArgs,
-};
+use mysql_queries::queries::tags::get_media_file_access_fields::{get_media_file_access_fields, GetMediaFileAccessFieldsArgs};
+use mysql_queries::queries::tags::list_tags_for_media_file::{list_tags_for_media_file, ListTagsForMediaFileArgs};
 use tokens::tokens::media_files::MediaFileToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
@@ -36,21 +30,13 @@ use crate::state::server_state::ServerState;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn list_media_file_tags_handler(
-  http_request: HttpRequest,
-  path: Path<ListMediaFileTagsPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListMediaFileTagsSuccessResponse>, CommonWebError> {
+pub async fn list_media_file_tags_handler(http_request: HttpRequest, path: Path<ListMediaFileTagsPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListMediaFileTagsSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
   })?;
 
-  let access_fields = get_media_file_access_fields(GetMediaFileAccessFieldsArgs {
-    media_file_token: &path.media_file_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let access_fields = get_media_file_access_fields(GetMediaFileAccessFieldsArgs { media_file_token: &path.media_file_token, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("Media file access lookup failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -62,13 +48,10 @@ pub async fn list_media_file_tags_handler(
     // Only the creator may see a private file's tags. The session
     // lookup is deferred to here so the common (non-private) case
     // stays session-free.
-    let maybe_user_session = server_state.session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut conn)
-      .await
-      .map_err(|err| {
-        warn!("Session checker error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+    let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut conn).await.map_err(|err| {
+      warn!("Session checker error: {:?}", err);
+      CommonWebError::from_error(err)
+    })?;
 
     let is_creator = match (&maybe_user_session, &access_fields.maybe_creator_user_token) {
       (Some(session), Some(creator)) => session.user_token.as_str() == creator.as_str(),
@@ -79,17 +62,10 @@ pub async fn list_media_file_tags_handler(
     }
   }
 
-  let rows = list_tags_for_media_file(ListTagsForMediaFileArgs {
-    media_file_token: &path.media_file_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let rows = list_tags_for_media_file(ListTagsForMediaFileArgs { media_file_token: &path.media_file_token, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("list_tags_for_media_file failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
 
-  Ok(Json(ListMediaFileTagsSuccessResponse {
-    success: true,
-    tags: rows.into_iter().map(tag_row_to_details).collect(),
-  }))
+  Ok(Json(ListMediaFileTagsSuccessResponse { success: true, tags: rows.into_iter().map(tag_row_to_details).collect() }))
 }

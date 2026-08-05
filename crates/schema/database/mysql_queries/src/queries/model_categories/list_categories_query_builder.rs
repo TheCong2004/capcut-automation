@@ -39,7 +39,6 @@ pub struct Category {
   //pub maybe_mod_user_token: Option<String>,
   //pub maybe_mod_username: Option<String>,
   //pub maybe_mod_display_name: Option<String>,
-
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
   pub deleted_at: Option<DateTime<Utc>>,
@@ -78,14 +77,7 @@ pub struct ListCategoriesQueryBuilder {
 
 impl ListCategoriesQueryBuilder {
   pub fn new() -> Self {
-    Self {
-      show_unapproved: false,
-      show_deleted: false,
-      hide_approved: false,
-      hide_non_deleted: false,
-      scope_creator_user_token: None,
-      scope_model_type: None,
-    }
+    Self { show_unapproved: false, show_deleted: false, hide_approved: false, hide_non_deleted: false, scope_creator_user_token: None, scope_model_type: None }
   }
 
   pub fn show_unapproved(mut self, show_unapproved: bool) -> Self {
@@ -120,57 +112,22 @@ impl ListCategoriesQueryBuilder {
 
   /// Perform the query based on the set predicates.
   #[deprecated = "Use the PoolConnection<MySql> method instead of the MySqlPool one."]
-  pub async fn perform_query(
-    &self,
-    mysql_pool: &MySqlPool,
-  ) -> AnyhowResult<CategoryList> {
+  pub async fn perform_query(&self, mysql_pool: &MySqlPool) -> AnyhowResult<CategoryList> {
     let mut mysql_connection = mysql_pool.acquire().await?;
     self.perform_query_using_connection(&mut mysql_connection).await
   }
 
   /// Perform the query based on the set predicates.
-  pub async fn perform_query_using_connection(
-    &self,
-    mysql_connection: &mut PoolConnection<MySql>,
-  ) -> AnyhowResult<CategoryList> {
+  pub async fn perform_query_using_connection(&self, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<CategoryList> {
     let internal_results = self.perform_internal_query(mysql_connection).await?;
 
-    let categories = internal_results
-        .into_iter()
-        .map(|c| {
-          Category {
-            category_token: c.category_token,
-            model_type: c.model_type,
-            maybe_super_category_token: c.maybe_super_category_token,
-            can_directly_have_models: i8_to_bool(c.can_directly_have_models),
-            can_have_subcategories: i8_to_bool(c.can_have_subcategories),
-            can_only_mods_apply: i8_to_bool(c.can_only_mods_apply),
-            name: c.name,
-            maybe_dropdown_name: c.maybe_dropdown_name,
-            creator_user_token: c.creator_user_token,
-            creator_username: c.creator_username,
-            creator_display_name: c.creator_display_name,
-            creator_gravatar_hash: c.creator_gravatar_hash,
-            is_mod_approved: nullable_i8_to_optional_bool(c.is_mod_approved),
-            maybe_mod_comments: c.maybe_mod_comments,
-            created_at: c.created_at,
-            updated_at: c.updated_at,
-            deleted_at: c.deleted_at,
-          }
-        })
-        .collect::<Vec<Category>>();
+    let categories = internal_results.into_iter().map(|c| Category { category_token: c.category_token, model_type: c.model_type, maybe_super_category_token: c.maybe_super_category_token, can_directly_have_models: i8_to_bool(c.can_directly_have_models), can_have_subcategories: i8_to_bool(c.can_have_subcategories), can_only_mods_apply: i8_to_bool(c.can_only_mods_apply), name: c.name, maybe_dropdown_name: c.maybe_dropdown_name, creator_user_token: c.creator_user_token, creator_username: c.creator_username, creator_display_name: c.creator_display_name, creator_gravatar_hash: c.creator_gravatar_hash, is_mod_approved: nullable_i8_to_optional_bool(c.is_mod_approved), maybe_mod_comments: c.maybe_mod_comments, created_at: c.created_at, updated_at: c.updated_at, deleted_at: c.deleted_at }).collect::<Vec<Category>>();
 
-    Ok(CategoryList {
-      categories,
-    })
+    Ok(CategoryList { categories })
   }
 
   /// Perform the query based on the set predicates.
-  async fn perform_internal_query(
-    &self,
-    mysql_connection: &mut PoolConnection<MySql>
-  ) -> AnyhowResult<Vec<RawInternalCategoryRecord>> {
-
+  async fn perform_internal_query(&self, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<RawInternalCategoryRecord>> {
     let query = self.build_query_string();
     let mut query = sqlx::query_as::<_, RawInternalCategoryRecord>(&query);
 
@@ -184,8 +141,7 @@ impl ListCategoriesQueryBuilder {
       query = query.bind(model_type);
     }
 
-    let results = query.fetch_all(&mut **mysql_connection)
-        .await?;
+    let results = query.fetch_all(&mut **mysql_connection).await?;
 
     Ok(results)
   }
@@ -228,7 +184,8 @@ SELECT
 FROM model_categories
 LEFT OUTER JOIN users
     ON model_categories.creator_user_token = users.token
-    "#.to_string();
+    "#
+    .to_string();
 
     query.push_str(&self.build_predicates());
     query
@@ -334,62 +291,64 @@ mod tests {
   fn predicates_default_scoping() {
     let query_builder = ListCategoriesQueryBuilder::new();
 
-    assert_eq!(&query_builder.build_predicates(),
-               " WHERE model_categories.is_mod_approved IS TRUE \
-                AND model_categories.deleted_at IS NULL");
+    assert_eq!(
+      &query_builder.build_predicates(),
+      " WHERE model_categories.is_mod_approved IS TRUE \
+                AND model_categories.deleted_at IS NULL"
+    );
   }
 
   #[test]
   fn predicates_scoped_to_user() {
-    let query_builder = ListCategoriesQueryBuilder::new()
-        .scope_creator_user_token(Some("U:ASDF"));
+    let query_builder = ListCategoriesQueryBuilder::new().scope_creator_user_token(Some("U:ASDF"));
 
-    assert_eq!(&query_builder.build_predicates(),
-               " WHERE model_categories.creator_user_token = ? \
+    assert_eq!(
+      &query_builder.build_predicates(),
+      " WHERE model_categories.creator_user_token = ? \
                 AND model_categories.is_mod_approved IS TRUE \
-                AND model_categories.deleted_at IS NULL");
+                AND model_categories.deleted_at IS NULL"
+    );
   }
 
   #[test]
   fn predicates_scoped_to_model_type() {
-    let query_builder = ListCategoriesQueryBuilder::new()
-        .scope_model_type(Some("foo"));
+    let query_builder = ListCategoriesQueryBuilder::new().scope_model_type(Some("foo"));
 
-    assert_eq!(&query_builder.build_predicates(),
-               " WHERE model_categories.model_type = ? \
+    assert_eq!(
+      &query_builder.build_predicates(),
+      " WHERE model_categories.model_type = ? \
                 AND model_categories.is_mod_approved IS TRUE \
-                AND model_categories.deleted_at IS NULL");
+                AND model_categories.deleted_at IS NULL"
+    );
   }
 
   #[test]
   fn predicates_scoped_to_unapproved() {
-    let query_builder = ListCategoriesQueryBuilder::new()
-        .show_unapproved(false);
+    let query_builder = ListCategoriesQueryBuilder::new().show_unapproved(false);
 
-    assert_eq!(&query_builder.build_predicates(),
-               " WHERE model_categories.is_mod_approved IS TRUE \
-                AND model_categories.deleted_at IS NULL");
+    assert_eq!(
+      &query_builder.build_predicates(),
+      " WHERE model_categories.is_mod_approved IS TRUE \
+                AND model_categories.deleted_at IS NULL"
+    );
 
-    let query_builder = ListCategoriesQueryBuilder::new()
-        .show_unapproved(true);
+    let query_builder = ListCategoriesQueryBuilder::new().show_unapproved(true);
 
-    assert_eq!(&query_builder.build_predicates(),
-               " WHERE model_categories.deleted_at IS NULL");
+    assert_eq!(&query_builder.build_predicates(), " WHERE model_categories.deleted_at IS NULL");
   }
 
   #[test]
   fn predicates_scoped_to_deleted() {
-    let query_builder = ListCategoriesQueryBuilder::new()
-        .show_deleted(false);
+    let query_builder = ListCategoriesQueryBuilder::new().show_deleted(false);
 
-    assert_eq!(&query_builder.build_predicates(),
-               " WHERE model_categories.is_mod_approved IS TRUE \
-                AND model_categories.deleted_at IS NULL");
+    assert_eq!(
+      &query_builder.build_predicates(),
+      " WHERE model_categories.is_mod_approved IS TRUE \
+                AND model_categories.deleted_at IS NULL"
+    );
 
-    let query_builder = ListCategoriesQueryBuilder::new()
-        .show_deleted(true);
+    let query_builder = ListCategoriesQueryBuilder::new().show_deleted(true);
 
-    assert_eq!(&query_builder.build_predicates(),
-               " WHERE model_categories.is_mod_approved IS TRUE");
+    assert_eq!(&query_builder.build_predicates(), " WHERE model_categories.is_mod_approved IS TRUE");
   }
 }

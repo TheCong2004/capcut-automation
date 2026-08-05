@@ -6,21 +6,11 @@ use log::{error, info};
 
 use enums::by_table::user_spend_events::payment_event_type::PaymentEventType;
 use enums::common::payments_namespace::PaymentsNamespace;
-use mysql_queries::queries::user_spend_summaries::list_payments_namespaces_with_spend_activity::{
-  list_payments_namespaces_with_spend_activity, ListPaymentsNamespacesWithSpendActivityArgs,
-};
-use mysql_queries::queries::user_spend_summaries::list_user_spend_events_for_user::{
-  list_user_spend_events_for_user, ListUserSpendEventsForUserArgs, UserSpendEventRow,
-};
-use mysql_queries::queries::user_spend_summaries::list_user_tokens_with_spend_activity::{
-  list_user_tokens_with_spend_activity, ListUserTokensWithSpendActivityArgs,
-};
-use mysql_queries::queries::user_spend_summaries::upsert_user_spend_summary::{
-  upsert_user_spend_summary, UpsertUserSpendSummaryArgs,
-};
-use mysql_queries::queries::users::user_subscriptions::get_active_subscription_status_for_user::{
-  get_active_subscription_status_for_user, GetActiveSubscriptionStatusArgs,
-};
+use mysql_queries::queries::user_spend_summaries::list_payments_namespaces_with_spend_activity::{list_payments_namespaces_with_spend_activity, ListPaymentsNamespacesWithSpendActivityArgs};
+use mysql_queries::queries::user_spend_summaries::list_user_spend_events_for_user::{list_user_spend_events_for_user, ListUserSpendEventsForUserArgs, UserSpendEventRow};
+use mysql_queries::queries::user_spend_summaries::list_user_tokens_with_spend_activity::{list_user_tokens_with_spend_activity, ListUserTokensWithSpendActivityArgs};
+use mysql_queries::queries::user_spend_summaries::upsert_user_spend_summary::{upsert_user_spend_summary, UpsertUserSpendSummaryArgs};
+use mysql_queries::queries::users::user_subscriptions::get_active_subscription_status_for_user::{get_active_subscription_status_for_user, GetActiveSubscriptionStatusArgs};
 use tokens::tokens::users::UserToken;
 
 use crate::job::alert_on_error::alert_pager;
@@ -39,21 +29,14 @@ pub async fn backfill_user_summaries(deps: &JobDependencies) {
   let now = Utc::now();
   info!("User-summaries backfill starting (reference time {now}).");
 
-  let namespaces = match list_payments_namespaces_with_spend_activity(
-    ListPaymentsNamespacesWithSpendActivityArgs {
-      mysql_executor: &deps.mysql_pool,
-      phantom: PhantomData,
-    },
-  )
-  .await
-  {
+  let namespaces = match list_payments_namespaces_with_spend_activity(ListPaymentsNamespacesWithSpendActivityArgs { mysql_executor: &deps.mysql_pool, phantom: PhantomData }).await {
     Ok(namespaces) => namespaces,
     Err(err) => {
       error!("User-summaries: listing namespaces failed: {err:?}");
       alert_pager(&deps.pager, "user-spend-analytics: namespace list error", &format!("{err:?}"));
       let _ = deps.job_stats.increment_failure_count();
       return;
-    }
+    },
   };
 
   let mut total_upserted = 0u64;
@@ -77,22 +60,14 @@ async fn backfill_namespace(deps: &JobDependencies, namespace: PaymentsNamespace
     if deps.application_shutdown.get() {
       return upserted;
     }
-    let user_tokens = match list_user_tokens_with_spend_activity(ListUserTokensWithSpendActivityArgs {
-      payments_namespace: namespace,
-      after_user_token: &after_user_token,
-      limit: deps.summary_user_page_size,
-      mysql_executor: &deps.mysql_pool,
-      phantom: PhantomData,
-    })
-    .await
-    {
+    let user_tokens = match list_user_tokens_with_spend_activity(ListUserTokensWithSpendActivityArgs { payments_namespace: namespace, after_user_token: &after_user_token, limit: deps.summary_user_page_size, mysql_executor: &deps.mysql_pool, phantom: PhantomData }).await {
       Ok(user_tokens) => user_tokens,
       Err(err) => {
         error!("User-summaries: listing users for {} failed: {err:?}", namespace.to_str());
         alert_pager(&deps.pager, "user-spend-analytics: user list error", &format!("ns={}: {err:?}", namespace.to_str()));
         let _ = deps.job_stats.increment_failure_count();
         return upserted;
-      }
+      },
     };
 
     if user_tokens.is_empty() {
@@ -107,24 +82,17 @@ async fn backfill_namespace(deps: &JobDependencies, namespace: PaymentsNamespace
         Ok(()) => {
           upserted += 1;
           let _ = deps.job_stats.increment_success_count();
-        }
+        },
         Err(err) => {
           error!("User-summaries: failed for {} ({}): {err:?}", user_token.as_str(), namespace.to_str());
-          alert_pager(
-            &deps.pager,
-            "user-spend-analytics: summary error",
-            &format!("user={} ns={}: {err:?}", user_token.as_str(), namespace.to_str()),
-          );
+          alert_pager(&deps.pager, "user-spend-analytics: summary error", &format!("user={} ns={}: {err:?}", user_token.as_str(), namespace.to_str()));
           let _ = deps.job_stats.increment_failure_count();
           tokio::time::sleep(deps.error_recovery).await;
-        }
+        },
       }
       processed += 1;
       if processed % SUMMARY_LOG_EVERY == 0 {
-        info!(
-          "  user-summaries [{}]: {processed} processed, {upserted} upserted so far…",
-          namespace.to_str(),
-        );
+        info!("  user-summaries [{}]: {processed} processed, {upserted} upserted so far…", namespace.to_str(),);
       }
       tokio::time::sleep(deps.query_delay).await;
     }
@@ -132,53 +100,26 @@ async fn backfill_namespace(deps: &JobDependencies, namespace: PaymentsNamespace
     after_user_token = user_tokens.last().expect("non-empty page").as_str().to_string();
   }
 
-  info!(
-    "User-summaries: namespace '{}' done — {processed} processed, {upserted} upserted.",
-    namespace.to_str(),
-  );
+  info!("User-summaries: namespace '{}' done — {processed} processed, {upserted} upserted.", namespace.to_str(),);
   upserted
 }
 
-async fn process_user(
-  deps: &JobDependencies,
-  namespace: PaymentsNamespace,
-  user_token: &UserToken,
-  now: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-  let events = list_user_spend_events_for_user(ListUserSpendEventsForUserArgs {
-    user_token,
-    payments_namespace: namespace,
-    mysql_executor: &deps.mysql_pool,
-    phantom: PhantomData,
-  })
-  .await?;
+async fn process_user(deps: &JobDependencies, namespace: PaymentsNamespace, user_token: &UserToken, now: DateTime<Utc>) -> Result<(), sqlx::Error> {
+  let events = list_user_spend_events_for_user(ListUserSpendEventsForUserArgs { user_token, payments_namespace: namespace, mysql_executor: &deps.mysql_pool, phantom: PhantomData }).await?;
 
   let aggregate = compute_summary(&events, now);
 
   // Authoritative subscription state (from user_subscriptions, not the events).
-  let subscription_row = get_active_subscription_status_for_user(GetActiveSubscriptionStatusArgs {
-    user_token,
-    subscription_namespace: namespace,
-    mysql_executor: &deps.mysql_pool,
-    phantom: PhantomData,
-  })
-  .await?;
+  let subscription_row = get_active_subscription_status_for_user(GetActiveSubscriptionStatusArgs { user_token, subscription_namespace: namespace, mysql_executor: &deps.mysql_pool, phantom: PhantomData }).await?;
   let (is_active_subscriber, maybe_subscription_interval) = match subscription_row {
     Some(row) => {
-      let active = matches!(
-        row.maybe_stripe_subscription_status.as_deref(),
-        Some("active") | Some("trialing")
-      ) && row.subscription_expires_at > now;
+      let active = matches!(row.maybe_stripe_subscription_status.as_deref(), Some("active") | Some("trialing")) && row.subscription_expires_at > now;
       (active, row.maybe_stripe_recurring_interval)
-    }
+    },
     None => (false, None),
   };
 
-  let score = reengagement_score(
-    aggregate.lifetime_net_spend_usd_cents,
-    aggregate.maybe_days_since_last_payment,
-    &deps.reengagement,
-  );
+  let score = reengagement_score(aggregate.lifetime_net_spend_usd_cents, aggregate.maybe_days_since_last_payment, &deps.reengagement);
 
   upsert_user_spend_summary(UpsertUserSpendSummaryArgs {
     payments_namespace: namespace,
@@ -299,14 +240,30 @@ fn compute_summary(events: &[UserSpendEventRow], now: DateTime<Utc>) -> SummaryA
 
     let days_ago = (now - event.payment_occurred_at).num_days();
     if days_ago >= 0 {
-      if days_ago < 7 { w7 += amount; }
-      if (7..14).contains(&days_ago) { pw7 += amount; }
-      if days_ago < 14 { w14 += amount; }
-      if (14..28).contains(&days_ago) { pw14 += amount; }
-      if days_ago < 30 { w30 += amount; }
-      if (30..60).contains(&days_ago) { pw30 += amount; }
-      if days_ago < 60 { w60 += amount; }
-      if days_ago < 90 { w90 += amount; }
+      if days_ago < 7 {
+        w7 += amount;
+      }
+      if (7..14).contains(&days_ago) {
+        pw7 += amount;
+      }
+      if days_ago < 14 {
+        w14 += amount;
+      }
+      if (14..28).contains(&days_ago) {
+        pw14 += amount;
+      }
+      if days_ago < 30 {
+        w30 += amount;
+      }
+      if (30..60).contains(&days_ago) {
+        pw30 += amount;
+      }
+      if days_ago < 60 {
+        w60 += amount;
+      }
+      if days_ago < 90 {
+        w90 += amount;
+      }
     }
 
     let week_index = (now_monday - monday_of(event.payment_occurred_at.date_naive())).num_days() / DAYS_PER_WEEK;
@@ -318,11 +275,9 @@ fn compute_summary(events: &[UserSpendEventRow], now: DateTime<Utc>) -> SummaryA
       gross += amount;
       payment_count += 1;
       match event.event_type {
-        PaymentEventType::SubscriptionInitial
-        | PaymentEventType::SubscriptionRenewal
-        | PaymentEventType::SubscriptionProrationUpgrade => subscription += amount,
+        PaymentEventType::SubscriptionInitial | PaymentEventType::SubscriptionRenewal | PaymentEventType::SubscriptionProrationUpgrade => subscription += amount,
         PaymentEventType::CreditPackPurchase => credits += amount,
-        _ => {}
+        _ => {},
       }
       if first_payment.is_none() {
         first_payment = Some(event);
@@ -410,23 +365,13 @@ mod tests {
   use super::*;
 
   fn event(days_ago: i64, amount_usd_cents: i64, event_type: PaymentEventType, now: DateTime<Utc>) -> UserSpendEventRow {
-    UserSpendEventRow {
-      payment_occurred_at: now - Duration::days(days_ago),
-      amount_usd_cents,
-      event_type,
-      maybe_credits_granted: None,
-    }
+    UserSpendEventRow { payment_occurred_at: now - Duration::days(days_ago), amount_usd_cents, event_type, maybe_credits_granted: None }
   }
 
   #[test]
   fn lifetime_and_day_windows() {
     let now = Utc::now();
-    let events = vec![
-      event(40, 1999, PaymentEventType::SubscriptionInitial, now),
-      event(20, 999, PaymentEventType::CreditPackPurchase, now),
-      event(5, 2999, PaymentEventType::SubscriptionRenewal, now),
-      event(3, -999, PaymentEventType::Refund, now),
-    ];
+    let events = vec![event(40, 1999, PaymentEventType::SubscriptionInitial, now), event(20, 999, PaymentEventType::CreditPackPurchase, now), event(5, 2999, PaymentEventType::SubscriptionRenewal, now), event(3, -999, PaymentEventType::Refund, now)];
     let agg = compute_summary(&events, now);
 
     assert_eq!(agg.lifetime_gross_spend_usd_cents, 1999 + 999 + 2999);
@@ -449,11 +394,7 @@ mod tests {
     let monday = monday_of(today);
     let now = Utc.from_utc_datetime(&monday.and_hms_opt(12, 0, 0).unwrap());
     // Payments on three consecutive Mondays => weeks 0,1,2 active.
-    let events = vec![
-      event(14, 1000, PaymentEventType::CreditPackPurchase, now),
-      event(7, 1000, PaymentEventType::CreditPackPurchase, now),
-      event(0, 1000, PaymentEventType::CreditPackPurchase, now),
-    ];
+    let events = vec![event(14, 1000, PaymentEventType::CreditPackPurchase, now), event(7, 1000, PaymentEventType::CreditPackPurchase, now), event(0, 1000, PaymentEventType::CreditPackPurchase, now)];
     let agg = compute_summary(&events, now);
 
     assert_eq!(agg.maybe_weeks_since_last_spend, Some(0));

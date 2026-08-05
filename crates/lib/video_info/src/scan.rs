@@ -14,10 +14,7 @@ pub(crate) fn find_from(haystack: &[u8], needle: &[u8], start: usize) -> Option<
   if needle.is_empty() || start >= haystack.len() || needle.len() > haystack.len() - start {
     return None;
   }
-  haystack[start..]
-    .windows(needle.len())
-    .position(|w| w == needle)
-    .map(|p| p + start)
+  haystack[start..].windows(needle.len()).position(|w| w == needle).map(|p| p + start)
 }
 
 /// Read a CBOR text string (major type 3) starting at `at`. Supports inline
@@ -31,7 +28,7 @@ pub(crate) fn read_cbor_text(data: &[u8], at: usize) -> Option<String> {
       let hi = *data.get(at + 1)? as usize;
       let lo = *data.get(at + 2)? as usize;
       ((hi << 8) | lo, 3)
-    }
+    },
     _ => return None,
   };
   let start = at + value_offset;
@@ -60,13 +57,7 @@ pub(crate) fn find_rfc3339(data: &[u8]) -> Option<String> {
 fn is_rfc3339(w: &[u8]) -> bool {
   // YYYY-MM-DDTHH:MM:SSZ
   let d = |i: usize| w[i].is_ascii_digit();
-  w.len() == 20
-    && d(0) && d(1) && d(2) && d(3) && w[4] == b'-'
-    && d(5) && d(6) && w[7] == b'-'
-    && d(8) && d(9) && w[10] == b'T'
-    && d(11) && d(12) && w[13] == b':'
-    && d(14) && d(15) && w[16] == b':'
-    && d(17) && d(18) && w[19] == b'Z'
+  w.len() == 20 && d(0) && d(1) && d(2) && d(3) && w[4] == b'-' && d(5) && d(6) && w[7] == b'-' && d(8) && d(9) && w[10] == b'T' && d(11) && d(12) && w[13] == b':' && d(14) && d(15) && w[16] == b':' && d(17) && d(18) && w[19] == b'Z'
 }
 
 /// Find a `<prefix><uuid>` token (e.g. `urn:c2pa:…`, `xmp:iid:…`) and return the
@@ -74,10 +65,7 @@ fn is_rfc3339(w: &[u8]) -> bool {
 pub(crate) fn find_prefixed_uuid(data: &[u8], prefix: &[u8]) -> Option<String> {
   let i = find(data, prefix)?;
   let start = i + prefix.len();
-  let end = (start..data.len().min(start + 36))
-    .take_while(|&j| data[j].is_ascii_hexdigit() || data[j] == b'-')
-    .last()
-    .map(|j| j + 1)?;
+  let end = (start..data.len().min(start + 36)).take_while(|&j| data[j].is_ascii_hexdigit() || data[j] == b'-').last().map(|j| j + 1)?;
   let uuid = std::str::from_utf8(&data[start..end]).ok()?;
   let mut out = String::with_capacity(prefix.len() + uuid.len());
   out.push_str(&String::from_utf8_lossy(prefix));
@@ -157,7 +145,9 @@ pub(crate) fn decode_base64url(input: &str) -> Option<Vec<u8>> {
 /// The value is a DER string whose length byte immediately precedes it.
 pub(crate) fn find_org_identifier(data: &[u8]) -> Option<(String, &'static str)> {
   for (prefix, country) in [(b"NTRSG-".as_slice(), "SG"), (b"NTRCN-".as_slice(), "CN")] {
-    let Some(start) = find(data, prefix) else { continue };
+    let Some(start) = find(data, prefix) else {
+      continue;
+    };
     if start == 0 {
       continue;
     }
@@ -165,7 +155,9 @@ pub(crate) fn find_org_identifier(data: &[u8]) -> Option<(String, &'static str)>
     if len < prefix.len() || len > 40 {
       continue;
     }
-    let Some(bytes) = data.get(start..start + len) else { continue };
+    let Some(bytes) = data.get(start..start + len) else {
+      continue;
+    };
     if bytes.iter().all(|b| b.is_ascii_graphic()) {
       if let Ok(value) = std::str::from_utf8(bytes) {
         return Some((value.to_string(), country));

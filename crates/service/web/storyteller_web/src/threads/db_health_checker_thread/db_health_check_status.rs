@@ -23,7 +23,6 @@ pub struct HealthCheckStatusData {
 }
 
 impl HealthCheckStatus {
-
   pub fn new() -> Self {
     Self {
       internal_status: Arc::new(RwLock::new(HealthCheckStatusData {
@@ -70,9 +69,7 @@ impl HealthCheckStatus {
   pub fn get_health_check_status(&self) -> AnyhowResult<HealthCheckStatusData> {
     match self.internal_status.read() {
       Err(_) => Err(anyhow!("Can't read lock")),
-      Ok(lock) => {
-        Ok(lock.clone())
-      },
+      Ok(lock) => Ok(lock.clone()),
     }
   }
 }

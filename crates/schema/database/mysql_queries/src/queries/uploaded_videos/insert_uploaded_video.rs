@@ -31,9 +31,7 @@ where
 /// Insert a new `uploaded_videos` record. The `UploadedVideoToken` is minted
 /// here (in the data-access layer, not the handler) and returned. `created_at`
 /// is set to `NOW()`.
-pub async fn insert_uploaded_video<'e, 'c: 'e, E>(
-  args: InsertUploadedVideoArgs<'e, 'c, E>,
-) -> Result<UploadedVideoToken, sqlx::Error>
+pub async fn insert_uploaded_video<'e, 'c: 'e, E>(args: InsertUploadedVideoArgs<'e, 'c, E>) -> Result<UploadedVideoToken, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -68,8 +66,8 @@ SET
     args.maybe_report,
     args.upload_ip_address,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(token)
 }

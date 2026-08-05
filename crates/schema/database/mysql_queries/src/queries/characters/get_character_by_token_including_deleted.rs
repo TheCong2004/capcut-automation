@@ -16,10 +16,7 @@ pub struct CharacterOwnershipRecord {
 /// Look up a character by token, including soft-deleted records.
 ///
 /// Returns `None` if the character does not exist at all.
-pub async fn get_character_by_token_including_deleted(
-  character_token: &CharacterToken,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<Option<CharacterOwnershipRecord>, sqlx::Error> {
+pub async fn get_character_by_token_including_deleted(character_token: &CharacterToken, connection: &mut PoolConnection<MySql>) -> Result<Option<CharacterOwnershipRecord>, sqlx::Error> {
   let result = sqlx::query_as::<_, CharacterOwnershipRecord>(
     r#"
 SELECT
@@ -31,9 +28,9 @@ FROM characters
 WHERE token = ?
     "#,
   )
-      .bind(character_token.as_str())
-      .fetch_optional(&mut **connection)
-      .await?;
+  .bind(character_token.as_str())
+  .fetch_optional(&mut **connection)
+  .await?;
 
   Ok(result)
 }

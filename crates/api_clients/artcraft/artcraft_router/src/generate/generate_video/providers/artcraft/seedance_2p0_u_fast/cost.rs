@@ -16,8 +16,7 @@ pub struct ArtcraftSeedance2p0UltraFastCostState {
 
 impl ArtcraftSeedance2p0UltraFastCostState {
   pub fn from_request(request: &ArtcraftSeedance2p0UltraFastRequestState) -> Self {
-    let resolution = request.request.resolution
-      .unwrap_or(CommonResolution::SevenTwentyP);
+    let resolution = request.request.resolution.unwrap_or(CommonResolution::SevenTwentyP);
     let duration_seconds = request.request.duration_seconds.unwrap_or(5);
     let batch_count = request.request.video_batch_count.unwrap_or(1);
 
@@ -34,15 +33,7 @@ impl ArtcraftSeedance2p0UltraFastCostState {
     let cents_per_video = (cents_per_second * self.duration_seconds as f64).ceil() as u64;
     let usd_cents = cents_per_video * self.batch_count as u64;
 
-    VideoGenerationCostEstimate {
-      cost_in_credits: Some(usd_cents),
-      cost_in_usd_cents: Some(usd_cents),
-      is_free: false,
-      is_unlimited: false,
-      is_rate_limited: false,
-      has_watermark: false,
-      failures_are_refunded: None,
-    }
+    VideoGenerationCostEstimate { cost_in_credits: Some(usd_cents), cost_in_usd_cents: Some(usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None }
   }
 }
 
@@ -124,14 +115,7 @@ mod tests {
     fn fast_g_cheaper_than_standard_g() {
       let fast = cost_cents(Some(RouterResolution::SevenTwentyP), 10, 1);
       let standard = {
-        let builder = GenerateVideoRequestBuilder {
-          model: RouterVideoModel::Seedance2p0Ultra,
-          provider: RouterProvider::Artcraft,
-          resolution: Some(RouterResolution::SevenTwentyP),
-          duration_seconds: Some(10),
-          video_batch_count: Some(1),
-          ..Default::default()
-        };
+        let builder = GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0Ultra, provider: RouterProvider::Artcraft, resolution: Some(RouterResolution::SevenTwentyP), duration_seconds: Some(10), video_batch_count: Some(1), ..Default::default() };
         builder.build2().unwrap().estimate_cost().unwrap().cost_in_usd_cents.unwrap()
       };
       assert!(fast < standard, "Fast ({fast}¢) should be < Standard ({standard}¢)");
@@ -146,19 +130,8 @@ mod tests {
 
   // -- Helpers --
 
-  fn build_cost(
-    resolution: Option<RouterResolution>,
-    duration_seconds: u16,
-    video_batch_count: u16,
-  ) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
-    let builder = GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Seedance2p0UltraFast,
-      provider: RouterProvider::Artcraft,
-      resolution,
-      duration_seconds: Some(duration_seconds),
-      video_batch_count: Some(video_batch_count),
-      ..Default::default()
-    };
+  fn build_cost(resolution: Option<RouterResolution>, duration_seconds: u16, video_batch_count: u16) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
+    let builder = GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0UltraFast, provider: RouterProvider::Artcraft, resolution, duration_seconds: Some(duration_seconds), video_batch_count: Some(video_batch_count), ..Default::default() };
     builder.build2().expect("build2").estimate_cost().expect("estimate_cost")
   }
 

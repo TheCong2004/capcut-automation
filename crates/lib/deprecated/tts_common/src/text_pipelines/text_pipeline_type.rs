@@ -9,11 +9,9 @@ use errors::AnyhowResult;
 /// varchar field and communicated over the API.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum TextPipelineType {
-
   // TODO: Introduce old vocodes models.
   //#[serde(rename = "legacy_vocodes")]
   //LegacyVocodes,
-
   /// Introduction date: 2021.
   /// Legacy FakeYou models use graphemes by default. They "can" support arpabet segments manually
   /// specified by the user with curly brackets, but there is no guarantee that the model supports
@@ -48,14 +46,13 @@ pub enum TextPipelineType {
 }
 
 // TODO: Sucks to redefine enum variants. `serde_variant` looks like a fix, but it's GPL3.
-const LEGACY_FAKEYOU : &str = "legacy_fakeyou";
-const ENGLISH_V1 : &str = "english_v1";
-const SPANISH_V1 : &str = "spanish_v1";
-const SPANISH_V2 : &str = "spanish_v2";
-const SYNTHETIC_LEGACY_FAKEYOU_2 : &str = "legacy_fakeyou_2";
+const LEGACY_FAKEYOU: &str = "legacy_fakeyou";
+const ENGLISH_V1: &str = "english_v1";
+const SPANISH_V1: &str = "spanish_v1";
+const SPANISH_V2: &str = "spanish_v2";
+const SYNTHETIC_LEGACY_FAKEYOU_2: &str = "legacy_fakeyou_2";
 
 impl TextPipelineType {
-
   /// Check if the text pipeline name is valid and supported.
   pub fn is_valid_name(tts_text_pipeline: &str) -> bool {
     Self::from_str(tts_text_pipeline).is_ok()

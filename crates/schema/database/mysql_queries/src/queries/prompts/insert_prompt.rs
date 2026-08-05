@@ -18,8 +18,9 @@ use tokens::tokens::users::UserToken;
 
 use crate::payloads::prompt_args::prompt_inner_payload::PromptInnerPayload;
 
-pub struct InsertPromptArgs<'e, 'c,  E>
-  where E: 'e + Executor<'c, Database = MySql>
+pub struct InsertPromptArgs<'e, 'c, E>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   /// If we need to generate the prompt token upfront, this will be the token to use for the insert.
   pub maybe_apriori_prompt_token: Option<&'e PromptToken>,
@@ -27,7 +28,7 @@ pub struct InsertPromptArgs<'e, 'c,  E>
   pub prompt_type: PromptType,
 
   pub maybe_creator_user_token: Option<&'e UserToken>,
-  
+
   pub maybe_model_type: Option<CommonModelType>,
   pub maybe_generation_provider: Option<GenerationProvider>,
 
@@ -53,9 +54,9 @@ pub struct InsertPromptArgs<'e, 'c,  E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn insert_prompt<'e, 'c : 'e, E>(args: InsertPromptArgs<'e, 'c, E>)
-  -> AnyhowResult<PromptToken>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn insert_prompt<'e, 'c: 'e, E>(args: InsertPromptArgs<'e, 'c, E>) -> AnyhowResult<PromptToken>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let prompt_token = match args.maybe_apriori_prompt_token {
     Some(token) => token.clone(),
@@ -65,8 +66,7 @@ pub async fn insert_prompt<'e, 'c : 'e, E>(args: InsertPromptArgs<'e, 'c, E>)
   let maybe_other_args = match args.maybe_other_args {
     None => None,
     Some(inner_payload) => {
-      let encoded = inner_payload.to_json()
-          .map_err(|_e| anyhow!("could not encode inner payload"))?;
+      let encoded = inner_payload.to_json().map_err(|_e| anyhow!("could not encode inner payload"))?;
       Some(encoded)
     },
   };
@@ -74,7 +74,7 @@ pub async fn insert_prompt<'e, 'c : 'e, E>(args: InsertPromptArgs<'e, 'c, E>)
   info!("maybe other prompt args (json): {:?}", maybe_other_args);
 
   let query = sqlx::query!(
-      r#"
+    r#"
 INSERT INTO prompts
 SET
   token = ?,

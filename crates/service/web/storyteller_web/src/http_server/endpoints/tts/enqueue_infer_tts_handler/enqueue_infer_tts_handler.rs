@@ -38,9 +38,5 @@ pub enum InferenceJobTokenType {
   ),
 )]
 pub async fn enqueue_infer_tts_handler() -> Json<InferTtsSuccessResponse> {
-  Json(InferTtsSuccessResponse {
-    success: true,
-    inference_job_token: SYNTHETIC_INFERENCE_JOB_TOKEN.to_string(),
-    inference_job_token_type: InferenceJobTokenType::Generic,
-  })
+  Json(InferTtsSuccessResponse { success: true, inference_job_token: SYNTHETIC_INFERENCE_JOB_TOKEN.to_string(), inference_job_token_type: InferenceJobTokenType::Generic })
 }

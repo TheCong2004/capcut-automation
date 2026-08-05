@@ -59,12 +59,7 @@ pub struct TwitchOauthTokenFinder {
 
 impl TwitchOauthTokenFinder {
   pub fn new() -> Self {
-    Self {
-      scope_user_token: None,
-      scope_twitch_user_id: None,
-      scope_twitch_username_lowercase: None,
-      allow_expired_tokens: false,
-    }
+    Self { scope_user_token: None, scope_twitch_user_id: None, scope_twitch_username_lowercase: None, allow_expired_tokens: false }
   }
 
   pub fn scope_user_token(mut self, user_token: Option<&str>) -> Self {
@@ -79,8 +74,7 @@ impl TwitchOauthTokenFinder {
 
   /// This will automatically look up against a lowercased username
   pub fn scope_twitch_username(mut self, twitch_username: Option<&str>) -> Self {
-    self.scope_twitch_username_lowercase = twitch_username
-        .map(|t| t.to_string().to_lowercase());
+    self.scope_twitch_username_lowercase = twitch_username.map(|t| t.to_string().to_lowercase());
     self
   }
 
@@ -89,44 +83,34 @@ impl TwitchOauthTokenFinder {
     self
   }
 
-  pub async fn perform_query(
-    &self,
-    mysql_pool: &MySqlPool
-  ) -> AnyhowResult<Option<TwitchOauthTokenRecord>> {
-    Ok(self.perform_query_internal(mysql_pool).await?
-        .map(|record| {
-          TwitchOauthTokenRecord {
-            internal_token: record.internal_token,
-            oauth_refresh_grouping_token: record.oauth_refresh_grouping_token,
-            maybe_user_token: record.maybe_user_token,
-            maybe_user_display_name: record.maybe_user_display_name,
-            maybe_user_gravatar_hash: record.maybe_user_gravatar_hash,
-            twitch_user_id: record.twitch_user_id,
-            twitch_username: record.twitch_username,
-            twitch_username_lowercase: record.twitch_username_lowercase,
-            access_token: record.access_token,
-            maybe_refresh_token: record.maybe_refresh_token,
-            token_type: record.token_type,
-            expires_in_seconds: record.expires_in_seconds,
-            refresh_count: record.refresh_count,
-            has_bits_read: i8_to_bool(record.has_bits_read),
-            has_channel_read_redemptions: i8_to_bool(record.has_channel_read_redemptions),
-            has_channel_read_subscriptions: i8_to_bool(record.has_channel_read_subscriptions),
-            has_chat_edit: i8_to_bool(record.has_chat_edit),
-            has_chat_read: i8_to_bool(record.has_chat_read),
-            ip_address_creation: record.ip_address_creation,
-            expires_at: record.expires_at,
-            user_deleted_at: record.user_deleted_at,
-            mod_deleted_at: record.mod_deleted_at,
-          }
-        }))
+  pub async fn perform_query(&self, mysql_pool: &MySqlPool) -> AnyhowResult<Option<TwitchOauthTokenRecord>> {
+    Ok(self.perform_query_internal(mysql_pool).await?.map(|record| TwitchOauthTokenRecord {
+      internal_token: record.internal_token,
+      oauth_refresh_grouping_token: record.oauth_refresh_grouping_token,
+      maybe_user_token: record.maybe_user_token,
+      maybe_user_display_name: record.maybe_user_display_name,
+      maybe_user_gravatar_hash: record.maybe_user_gravatar_hash,
+      twitch_user_id: record.twitch_user_id,
+      twitch_username: record.twitch_username,
+      twitch_username_lowercase: record.twitch_username_lowercase,
+      access_token: record.access_token,
+      maybe_refresh_token: record.maybe_refresh_token,
+      token_type: record.token_type,
+      expires_in_seconds: record.expires_in_seconds,
+      refresh_count: record.refresh_count,
+      has_bits_read: i8_to_bool(record.has_bits_read),
+      has_channel_read_redemptions: i8_to_bool(record.has_channel_read_redemptions),
+      has_channel_read_subscriptions: i8_to_bool(record.has_channel_read_subscriptions),
+      has_chat_edit: i8_to_bool(record.has_chat_edit),
+      has_chat_read: i8_to_bool(record.has_chat_read),
+      ip_address_creation: record.ip_address_creation,
+      expires_at: record.expires_at,
+      user_deleted_at: record.user_deleted_at,
+      mod_deleted_at: record.mod_deleted_at,
+    }))
   }
 
-  pub async fn perform_query_internal(
-    &self,
-    mysql_pool: &MySqlPool
-  ) -> AnyhowResult<Option<TwitchOauthTokenRecordInternal>> {
-
+  pub async fn perform_query_internal(&self, mysql_pool: &MySqlPool) -> AnyhowResult<Option<TwitchOauthTokenRecordInternal>> {
     let query = self.build_query_string();
     let mut query = sqlx::query_as::<_, TwitchOauthTokenRecordInternal>(&query);
     //let mut query = sqlx::query(&query);
@@ -148,16 +132,12 @@ impl TwitchOauthTokenFinder {
     let result = query.fetch_optional(mysql_pool).await;
 
     match result {
-      Ok(Some(record)) => {
-        Ok(Some(record))
-      }
-      Ok(None) => {
-        Ok(None)
-      },
+      Ok(Some(record)) => Ok(Some(record)),
+      Ok(None) => Ok(None),
       Err(err) => {
         error!("twitch oauth token query error: {:?}", err);
         Err(anyhow!("twitch oauth token query error: {:?}", err))
-      }
+      },
     }
   }
 
@@ -196,7 +176,8 @@ SELECT
 FROM twitch_oauth_tokens
 LEFT OUTER JOIN users
     ON twitch_oauth_tokens.maybe_user_token = users.token
-    "#.to_string();
+    "#
+    .to_string();
 
     query.push_str(&self.build_predicates());
 

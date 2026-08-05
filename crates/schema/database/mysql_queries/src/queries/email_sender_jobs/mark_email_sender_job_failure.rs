@@ -7,13 +7,7 @@ use errors::AnyhowResult;
 use crate::queries::email_sender_jobs::list_available_email_sender_jobs::AvailableEmailSenderJob;
 
 /// Mark a single inference job failure. The job may be re-run.
-pub async fn mark_email_sender_job_failure(
-  pool: &MySqlPool,
-  job: &AvailableEmailSenderJob,
-  internal_debugging_failure_reason: &str,
-  max_attempts: u16
-) -> AnyhowResult<()> {
-
+pub async fn mark_email_sender_job_failure(pool: &MySqlPool, job: &AvailableEmailSenderJob, internal_debugging_failure_reason: &str, max_attempts: u16) -> AnyhowResult<()> {
   // statuses: "attempt_failed", "complete_failure", "dead"
   let mut next_status = "attempt_failed";
 
@@ -27,7 +21,7 @@ pub async fn mark_email_sender_job_failure(
   }
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 UPDATE email_sender_jobs
 SET
   status = ?,
@@ -35,12 +29,12 @@ SET
   retry_at = NOW() + interval 2 minute
 WHERE id = ?
         "#,
-        next_status,
-        &internal_debugging_failure_reason,
-        job.id.0,
-    )
-      .execute(pool)
-      .await;
+    next_status,
+    &internal_debugging_failure_reason,
+    job.id.0,
+  )
+  .execute(pool)
+  .await;
 
   match query_result {
     Err(err) => Err(anyhow!("error with query: {:?}", err)),

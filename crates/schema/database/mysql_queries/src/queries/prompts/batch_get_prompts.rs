@@ -36,20 +36,14 @@ impl FromRow<'_, MySqlRow> for BatchPromptResult {
     Ok(Self {
       token: PromptToken::try_from_mysql_row(row, "token")?,
       prompt_type: PromptType::try_from_mysql_row(row, "prompt_type")?,
-      maybe_model_type: row.try_get::<Option<String>, _>("maybe_model_type")?
-        .and_then(|s| CommonModelType::from_str(&s).ok()),
-      maybe_generation_provider: row.try_get::<Option<String>, _>("maybe_generation_provider")?
-        .and_then(|s| GenerationProvider::from_str(&s).ok()),
+      maybe_model_type: row.try_get::<Option<String>, _>("maybe_model_type")?.and_then(|s| CommonModelType::from_str(&s).ok()),
+      maybe_generation_provider: row.try_get::<Option<String>, _>("maybe_generation_provider")?.and_then(|s| GenerationProvider::from_str(&s).ok()),
       maybe_positive_prompt: row.try_get("maybe_positive_prompt")?,
       maybe_negative_prompt: row.try_get("maybe_negative_prompt")?,
-      maybe_generation_mode: row.try_get::<Option<String>, _>("maybe_generation_mode")?
-        .and_then(|s| CommonGenerationMode::from_str(&s).ok()),
-      maybe_aspect_ratio: row.try_get::<Option<String>, _>("maybe_aspect_ratio")?
-        .and_then(|s| CommonAspectRatio::from_str(&s).ok()),
-      maybe_resolution: row.try_get::<Option<String>, _>("maybe_resolution")?
-        .and_then(|s| CommonResolution::from_str(&s).ok()),
-      maybe_bitrate: row.try_get::<Option<String>, _>("maybe_bitrate")?
-        .and_then(|s| CommonBitrate::from_str(&s).ok()),
+      maybe_generation_mode: row.try_get::<Option<String>, _>("maybe_generation_mode")?.and_then(|s| CommonGenerationMode::from_str(&s).ok()),
+      maybe_aspect_ratio: row.try_get::<Option<String>, _>("maybe_aspect_ratio")?.and_then(|s| CommonAspectRatio::from_str(&s).ok()),
+      maybe_resolution: row.try_get::<Option<String>, _>("maybe_resolution")?.and_then(|s| CommonResolution::from_str(&s).ok()),
+      maybe_bitrate: row.try_get::<Option<String>, _>("maybe_bitrate")?.and_then(|s| CommonBitrate::from_str(&s).ok()),
       maybe_batch_count: row.try_get("maybe_batch_count")?,
       maybe_generate_audio: row.try_get("maybe_generate_audio")?,
       maybe_duration_seconds: row.try_get("maybe_duration_seconds")?,
@@ -58,15 +52,13 @@ impl FromRow<'_, MySqlRow> for BatchPromptResult {
   }
 }
 
-pub async fn batch_get_prompts(
-  tokens: &[PromptToken],
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> Result<Vec<BatchPromptResult>, sqlx::Error> {
+pub async fn batch_get_prompts(tokens: &[PromptToken], mysql_connection: &mut PoolConnection<MySql>) -> Result<Vec<BatchPromptResult>, sqlx::Error> {
   if tokens.is_empty() {
     return Ok(Vec::new());
   }
 
-  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(r#"
+  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
+    r#"
 SELECT
     p.token,
     p.prompt_type,
@@ -84,7 +76,8 @@ SELECT
     p.created_at
 FROM prompts as p
 WHERE p.token IN (
-  "#);
+  "#,
+  );
 
   let mut separated = query_builder.separated(", ");
 

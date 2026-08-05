@@ -12,10 +12,7 @@ pub struct InternalSessionCachePurgeImpl {
 
 impl InternalSessionCachePurgeImpl {
   pub fn new(session_checker: SessionChecker, redis_ttl_cache: RedisTtlCache) -> Self {
-    Self {
-      session_checker,
-      redis_ttl_cache,
-    }
+    Self { session_checker, redis_ttl_cache }
   }
 }
 
@@ -27,10 +24,7 @@ impl InternalSessionCachePurge for InternalSessionCachePurgeImpl {
     //  This makes sense for non-mods and should solve 95% of cases.
     if let Some(session_token) = self.session_checker.forgiving_get_session_token(&http_request) {
       if let Ok(mut redis_ttl_cache) = self.redis_ttl_cache.get_connection() {
-        let keys = vec![
-          RedisCacheKeys::session_record_user(&session_token),
-          RedisCacheKeys::session_record_light(&session_token),
-        ];
+        let keys = vec![RedisCacheKeys::session_record_user(&session_token), RedisCacheKeys::session_record_light(&session_token)];
         for key in keys.iter() {
           let _r = redis_ttl_cache.delete_from_cache(key).ok();
         }

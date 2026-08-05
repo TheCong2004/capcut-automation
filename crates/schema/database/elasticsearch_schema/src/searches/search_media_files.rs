@@ -12,11 +12,10 @@ use tokens::tokens::users::UserToken;
 
 use crate::documents::media_file_document::{MEDIA_FILE_INDEX, MediaFileDocument};
 
-static JSON_QUERY : Lazy<Value> = Lazy::new(|| {
-  const QUERY_TEMPLATE : &str = include_str!("../../../../../../_database/elasticsearch/searches/media_files/search.json");
+static JSON_QUERY: Lazy<Value> = Lazy::new(|| {
+  const QUERY_TEMPLATE: &str = include_str!("../../../../../../_database/elasticsearch/searches/media_files/search.json");
 
-  let json : Value = serde_json::from_str(QUERY_TEMPLATE)
-      .expect("json should parse");
+  let json: Value = serde_json::from_str(QUERY_TEMPLATE).expect("json should parse");
 
   json
 });
@@ -35,39 +34,28 @@ pub struct SearchArgs<'a> {
 pub async fn search_media_files(args: SearchArgs<'_>) -> AnyhowResult<Vec<MediaFileDocument>> {
   let query = build_query(&args)?;
 
-  let search_response = args.client
-      .search(SearchParts::Index(&[MEDIA_FILE_INDEX]))
-      .body(query)
-      .size(30)
-      .allow_no_indices(true)
-      .send()
-      .await?;
+  let search_response = args.client.search(SearchParts::Index(&[MEDIA_FILE_INDEX])).body(query).size(30).allow_no_indices(true).send().await?;
 
   let _status_code = search_response.status_code();
 
   let mut response_json = search_response.json::<Value>().await?;
 
-  let hits = response_json.get_mut("hits")
-      .map(|hits| hits.take());
+  let hits = response_json.get_mut("hits").map(|hits| hits.take());
 
-  let hits = hits.map(|mut hits| {
-    hits.get_mut("hits")
-        .map(|hits| hits.take())
-  }).flatten();
+  let hits = hits.map(|mut hits| hits.get_mut("hits").map(|hits| hits.take())).flatten();
 
   let mut documents = Vec::new();
 
   match hits {
     Some(Value::Array(inner_hits)) => {
       for mut hit in inner_hits {
-        let maybe_object = hit.get_mut("_source")
-            .map(|source| source.take());
+        let maybe_object = hit.get_mut("_source").map(|source| source.take());
         if let Some(value) = maybe_object {
           let document = serde_json::from_value::<MediaFileDocument>(value)?;
           documents.push(document);
         }
       }
-    }
+    },
     _ => {},
   }
 
@@ -78,9 +66,7 @@ fn build_query(args: &SearchArgs) -> AnyhowResult<Value> {
   let query = JSON_QUERY.clone();
 
   let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.must", &mut |_| {
-    let mut predicates = vec![
-      must_be_not_deleted(),
-    ];
+    let mut predicates = vec![must_be_not_deleted()];
 
     if let Some(is_featured) = args.is_featured {
       predicates.push(featured_predicate(is_featured));
@@ -105,17 +91,11 @@ fn build_query(args: &SearchArgs) -> AnyhowResult<Value> {
     Some(json!(predicates))
   })?;
 
-  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value", &mut |_| {
-    Some(json!(args.search_term))
-  })?;
+  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value", &mut |_| Some(json!(args.search_term)))?;
 
-  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[1].match.maybe_title.query", &mut |_| {
-    Some(json!(args.search_term))
-  })?;
+  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[1].match.maybe_title.query", &mut |_| Some(json!(args.search_term)))?;
 
-  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[2].multi_match.query", &mut |_| {
-    Some(json!(args.search_term))
-  })?;
+  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[2].multi_match.query", &mut |_| Some(json!(args.search_term)))?;
 
   Ok(query)
 }
@@ -145,7 +125,9 @@ fn creator_user_token_predicate(creator_user_token: &UserToken) -> Value {
 }
 
 fn media_classes_predicate(media_classes: &HashSet<MediaFileClass>) -> Value {
-  should_predicates(media_classes.iter()
+  should_predicates(
+    media_classes
+      .iter()
       .map(|media_type| {
         json!({
           "term": {
@@ -153,11 +135,14 @@ fn media_classes_predicate(media_classes: &HashSet<MediaFileClass>) -> Value {
           }
         })
       })
-      .collect())
+      .collect(),
+  )
 }
 
 fn media_types_predicate(media_types: &HashSet<MediaFileType>) -> Value {
-  should_predicates(media_types.iter()
+  should_predicates(
+    media_types
+      .iter()
       .map(|media_type| {
         json!({
           "term": {
@@ -165,11 +150,14 @@ fn media_types_predicate(media_types: &HashSet<MediaFileType>) -> Value {
           }
         })
       })
-      .collect())
+      .collect(),
+  )
 }
 
 fn engine_categories_predicate(engine_categories: &HashSet<MediaFileEngineCategory>) -> Value {
-  should_predicates(engine_categories.iter()
+  should_predicates(
+    engine_categories
+      .iter()
       .map(|engine_category| {
         json!({
           "term": {
@@ -177,7 +165,8 @@ fn engine_categories_predicate(engine_categories: &HashSet<MediaFileEngineCatego
           }
         })
       })
-      .collect())
+      .collect(),
+  )
 }
 
 // NB: "Should" is a logical OR.
@@ -205,134 +194,84 @@ mod tests {
 
   #[test]
   fn test_default_search() {
-    let search = build_query(&SearchArgs {
-      search_term: "foo",
-      is_featured: None,
-      maybe_creator_user_token: None,
-      maybe_media_classes: None,
-      maybe_media_types: None,
-      maybe_engine_categories: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "foo", is_featured: None, maybe_creator_user_token: None, maybe_media_classes: None, maybe_media_types: None, maybe_engine_categories: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[1].match.maybe_title.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[1].match.maybe_title.query").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
   }
 
   #[test]
   fn test_featured() {
-    let search = build_query(&SearchArgs {
-      search_term: "asdf",
-      is_featured: Some(true),
-      maybe_creator_user_token: None,
-      maybe_media_classes: None,
-      maybe_media_types: None,
-      maybe_engine_categories: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "asdf", is_featured: Some(true), maybe_creator_user_token: None, maybe_media_classes: None, maybe_media_types: None, maybe_engine_categories: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[1].term.is_featured").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[1].term.is_featured").unwrap();
 
     assert_eq!(value[0], &Value::Bool(true));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[1].match.maybe_title.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[1].match.maybe_title.query").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
   }
 
   #[test]
   fn test_creator_user_token() {
-    let search = build_query(&SearchArgs {
-      search_term: "asdf",
-      is_featured: None,
-      maybe_creator_user_token: Some(&UserToken::new_from_str("USER_TOKEN")),
-      maybe_media_classes: None,
-      maybe_media_types: None,
-      maybe_engine_categories: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "asdf", is_featured: None, maybe_creator_user_token: Some(&UserToken::new_from_str("USER_TOKEN")), maybe_media_classes: None, maybe_media_types: None, maybe_engine_categories: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[1].term.maybe_creator_user_token").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[1].term.maybe_creator_user_token").unwrap();
 
     assert_eq!(value[0], &Value::String("USER_TOKEN".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[0].fuzzy.maybe_title.value").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[1].match.maybe_title.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[1].match.maybe_title.query").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
   }
 
   #[test]
   fn test_media_class() {
-    let search = build_query(&SearchArgs {
-      search_term: "bar",
-      is_featured: None,
-      maybe_creator_user_token: None,
-      maybe_media_classes: Some(HashSet::from_iter(vec![
-        MediaFileClass::Dimensional,
-        MediaFileClass::Image,
-      ])),
-      maybe_media_types: None,
-      maybe_engine_categories: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "bar", is_featured: None, maybe_creator_user_token: None, maybe_media_classes: Some(HashSet::from_iter(vec![MediaFileClass::Dimensional, MediaFileClass::Image])), maybe_media_types: None, maybe_engine_categories: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
     let value = select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted");
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let values = select_str_values(
-      &search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.media_class");
+    let values = select_str_values(&search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.media_class");
 
     assert_eq!(values.len(), 2);
     assert!(values.contains(&"image"));
@@ -341,25 +280,13 @@ mod tests {
 
   #[test]
   fn test_media_type() {
-    let search = build_query(&SearchArgs {
-      search_term: "baz",
-      is_featured: None,
-      maybe_creator_user_token: None,
-      maybe_media_classes: None,
-      maybe_media_types: Some(HashSet::from_iter(vec![
-        MediaFileType::Glb,
-        MediaFileType::Png,
-      ])),
-      maybe_engine_categories: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "baz", is_featured: None, maybe_creator_user_token: None, maybe_media_classes: None, maybe_media_types: Some(HashSet::from_iter(vec![MediaFileType::Glb, MediaFileType::Png])), maybe_engine_categories: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
     let value = select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted");
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let values = select_str_values(
-      &search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.media_type");
+    let values = select_str_values(&search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.media_type");
 
     assert_eq!(values.len(), 2);
     assert!(values.contains(&"glb"));
@@ -368,25 +295,13 @@ mod tests {
 
   #[test]
   fn test_engine_category() {
-    let search = build_query(&SearchArgs {
-      search_term: "bin",
-      is_featured: None,
-      maybe_creator_user_token: None,
-      maybe_media_classes: None,
-      maybe_media_types: None,
-      maybe_engine_categories: Some(HashSet::from_iter(vec![
-        MediaFileEngineCategory::Animation,
-        MediaFileEngineCategory::Character,
-      ])),
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "bin", is_featured: None, maybe_creator_user_token: None, maybe_media_classes: None, maybe_media_types: None, maybe_engine_categories: Some(HashSet::from_iter(vec![MediaFileEngineCategory::Animation, MediaFileEngineCategory::Character])), client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
     let value = select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted");
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let values = select_str_values(
-      &search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.maybe_engine_category");
+    let values = select_str_values(&search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.maybe_engine_category");
 
     assert_eq!(values.len(), 2);
     assert!(values.contains(&"animation"));
@@ -398,13 +313,12 @@ mod tests {
   }
 
   fn select_str_values<'a>(search: &'a Value, path: &str) -> Vec<&'a str> {
-    select(search, path).into_iter()
-        .map(|value| {
-          match value {
-            Value::String(inner) => inner.as_str(),
-            _ => panic!("Expected string"),
-          }
-        })
-        .collect()
+    select(search, path)
+      .into_iter()
+      .map(|value| match value {
+        Value::String(inner) => inner.as_str(),
+        _ => panic!("Expected string"),
+      })
+      .collect()
   }
 }

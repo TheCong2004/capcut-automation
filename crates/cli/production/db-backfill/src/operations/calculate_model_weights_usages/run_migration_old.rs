@@ -31,10 +31,7 @@ pub async fn run_migration_old(mysql: Pool<MySql>) -> AnyhowResult<()> {
   info!("Backfill args: {:?}", args);
 
   let models = match args.model_token.as_ref() {
-    Some(model_token) => vec![ModelInfo {
-      token: model_token.clone(),
-      maybe_created_date: None,
-    }],
+    Some(model_token) => vec![ModelInfo { token: model_token.clone(), maybe_created_date: None }],
     None => get_all_model_weight_tokens(mysql.clone()).await?,
   };
 
@@ -48,7 +45,7 @@ pub async fn run_migration_old(mysql: Pool<MySql>) -> AnyhowResult<()> {
   //  }
   //}
 
-  const THREAD_COUNT : usize = 8;
+  const THREAD_COUNT: usize = 8;
   let chunk_size = models.len() / THREAD_COUNT;
 
   let model_chunks = split_vec(models, chunk_size);
@@ -62,20 +59,15 @@ pub async fn run_migration_old(mysql: Pool<MySql>) -> AnyhowResult<()> {
       let mut connection = match mysql_pool.acquire().await {
         Ok(cnx) => cnx,
         Err(err) => {
-          error!("ERROR ACQUIRING FIRST MYSQL POOL CONNECTION FOR THREAD {}: {:?}", (h+1), err);
+          error!("ERROR ACQUIRING FIRST MYSQL POOL CONNECTION FOR THREAD {}: {:?}", (h + 1), err);
           return;
-        }
+        },
       };
 
       for (i, model) in model_chunk.iter().enumerate() {
-        let dates = get_all_dates(&args_copy, model)
-            .unwrap_or_else(|_err| Vec::new());
+        let dates = get_all_dates(&args_copy, model).unwrap_or_else(|_err| Vec::new());
         for (j, date) in dates.iter().enumerate() {
-          info!("Thread: {}/{} Model: {}/{} Date: {}/{}",
-            h + 1, THREAD_COUNT,
-            i + 1, model_chunk.len(),
-            j + 1, dates.len()
-          );
+          info!("Thread: {}/{} Model: {}/{} Date: {}/{}", h + 1, THREAD_COUNT, i + 1, model_chunk.len(), j + 1, dates.len());
           backfill_on_date_with_retry(&mut mysql_pool.clone(), &mut connection, model, *date).await;
         }
       }
@@ -88,12 +80,7 @@ pub async fn run_migration_old(mysql: Pool<MySql>) -> AnyhowResult<()> {
   Ok(())
 }
 
-async fn backfill_on_date_with_retry(
-  mysql: &mut Pool<MySql>,
-  connection: &mut PoolConnection<MySql>,
-  model: &ModelInfo,
-  date: NaiveDate,
-) {
+async fn backfill_on_date_with_retry(mysql: &mut Pool<MySql>, connection: &mut PoolConnection<MySql>, model: &ModelInfo, date: NaiveDate) {
   let mut duration = Duration::from_secs(60);
 
   loop {
@@ -109,11 +96,11 @@ async fn backfill_on_date_with_retry(
           Err(err) => {
             error!("ERROR RE-ACQUIRING CONNECTION: {:?}", err);
             tokio::time::sleep(Duration::from_secs(15)).await;
-          }
+          },
           Ok(cnx) => {
             *connection = cnx;
             break;
-          }
+          },
         }
       }
       continue; // retry
@@ -138,20 +125,12 @@ pub struct ModelInfo {
 async fn get_all_model_weight_tokens(mysql: Pool<MySql>) -> AnyhowResult<Vec<ModelInfo>> {
   let epoch = *CHRONO_DATETIME_UNIX_EPOCH;
   let results = list_all_model_weight_tokens_for_backfill(&mysql, &epoch).await?;
-  Ok(results.into_iter()
-      .map(|result| ModelInfo {
-        token: result.token,
-        maybe_created_date: Some(result.created_at.date_naive()),
-      })
-      .collect())
+  Ok(results.into_iter().map(|result| ModelInfo { token: result.token, maybe_created_date: Some(result.created_at.date_naive()) }).collect())
 }
 
 fn get_all_dates(args: &SubArgs, model: &ModelInfo) -> AnyhowResult<Vec<NaiveDate>> {
-  let start_date = args.start_date
-      .or_else(|| model.maybe_created_date)
-      .ok_or_else(|| anyhow!("no start date given"))?;
-  let end_date = args.end_date
-      .unwrap_or_else(|| Utc::today().naive_utc());
+  let start_date = args.start_date.or_else(|| model.maybe_created_date).ok_or_else(|| anyhow!("no start date given"))?;
+  let end_date = args.end_date.unwrap_or_else(|| Utc::today().naive_utc());
   Ok(generate_dates_inclusive(start_date, end_date))
 }
 
@@ -162,8 +141,7 @@ fn get_all_dates(args: &SubArgs, model: &ModelInfo) -> AnyhowResult<Vec<NaiveDat
 async fn backfill_token(mysql: &mut PoolConnection<MySql>, model_token: &ModelWeightToken, date: NaiveDate) -> AnyhowResult<()> {
   info!("Backfilling token: {} for date: {:?}", model_token.as_str(), date);
 
-  let count = count_model_use_using_media_files_on_date(
-    &mut **mysql, &model_token, date).await?;
+  let count = count_model_use_using_media_files_on_date(&mut **mysql, &model_token, date).await?;
 
   if count.record_count == 0 {
     info!("Count: {:?} (skipping)", count.record_count);
@@ -172,14 +150,7 @@ async fn backfill_token(mysql: &mut PoolConnection<MySql>, model_token: &ModelWe
     info!("Count: {:?}", count.record_count);
   }
 
-  upsert_model_weight_usage_count_for_date(Args {
-    model_token: &model_token,
-    date,
-    usage_count: count.record_count,
-    insert_on_zero: false,
-    mysql_executor: &mut **mysql,
-    phantom: Default::default(),
-  }).await?;
+  upsert_model_weight_usage_count_for_date(Args { model_token: &model_token, date, usage_count: count.record_count, insert_on_zero: false, mysql_executor: &mut **mysql, phantom: Default::default() }).await?;
 
   Ok(())
 }

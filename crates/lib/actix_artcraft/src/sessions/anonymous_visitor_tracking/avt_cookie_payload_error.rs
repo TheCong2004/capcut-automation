@@ -19,19 +19,11 @@ impl AvtCookiePayloadError {
   pub fn is_server_error(&self) -> bool {
     match self {
       // JWT verify errors (eg. forged cookies) → 400 bad input.
-      AvtCookiePayloadError::JwtSigner(JwtSignerError::JwtVerifyError(_)) => {
-        false
-      },
+      AvtCookiePayloadError::JwtSigner(JwtSignerError::JwtVerifyError(_)) => false,
       // Server-side JWT signer failures (bad HMAC config, signing failure) → 500.
-      AvtCookiePayloadError::JwtSigner(
-        JwtSignerError::JwtInvalidKeyLength | JwtSignerError::JwtSignError(_)
-      ) => {
-        true
-      },
+      AvtCookiePayloadError::JwtSigner(JwtSignerError::JwtInvalidKeyLength | JwtSignerError::JwtSignError(_)) => true,
       // Other payload decode failures (how did these make it into the wild!?) → 500
-      AvtCookiePayloadError::MissingField(_) | AvtCookiePayloadError::PayloadDecodeError(_) => {
-        true
-      }
+      AvtCookiePayloadError::MissingField(_) | AvtCookiePayloadError::PayloadDecodeError(_) => true,
     }
   }
 }

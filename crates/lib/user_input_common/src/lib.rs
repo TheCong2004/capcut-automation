@@ -8,7 +8,7 @@
 #![forbid(unused_variables)]
 #![forbid(warnings)]
 
-pub (crate) const BANNED_SLURS : &str = include_str!("../../../../includes/binary_includes/safety/banned_slurs.txt");
+pub(crate) const BANNED_SLURS: &str = include_str!("../../../../includes/binary_includes/safety/banned_slurs.txt");
 
 pub mod check_for_slurs;
 pub mod latin_alphabet;

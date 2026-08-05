@@ -20,16 +20,10 @@ use crate::http_server::endpoints::users::password_reset_request_handler::passwo
 use crate::http_server::endpoints::users::session_info_handler::session_info_handler;
 use crate::http_server::endpoints::users::session_token_info_handler::session_token_info_handler;
 
-pub fn add_user_routes<T, B> (app: App<T>) -> App<T>
-  where
-      B: MessageBody,
-      T: ServiceFactory<
-        ServiceRequest,
-        Config = (),
-        Response = ServiceResponse<B>,
-        Error = Error,
-        InitError = (),
-      >,
+pub fn add_user_routes<T, B>(app: App<T>) -> App<T>
+where
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
   app
       .service(

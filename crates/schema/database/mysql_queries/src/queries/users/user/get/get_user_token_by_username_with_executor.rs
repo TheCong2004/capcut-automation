@@ -1,10 +1,7 @@
 use sqlx::{Executor, MySql};
 use tokens::tokens::users::UserToken;
 
-pub async fn get_user_token_by_username_with_executor<'e, 'c: 'e, E>(
-  username: &str,
-  mysql_executor: E,
-) -> Result<Option<UserToken>, sqlx::Error>
+pub async fn get_user_token_by_username_with_executor<'e, 'c: 'e, E>(username: &str, mysql_executor: E) -> Result<Option<UserToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -21,8 +18,8 @@ LIMIT 1
     "#,
     username
   )
-    .fetch_one(mysql_executor)
-    .await;
+  .fetch_one(mysql_executor)
+  .await;
 
   match result {
     Ok(record) => Ok(Some(record.token)),

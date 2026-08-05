@@ -35,16 +35,7 @@ use user_traits_component::traits::internal_session_cache_purge::InternalSession
 //     (status = 200, description = "Success Delete", body = CreateCheckoutSessionSuccessResponse),
 //   ),
 // )]
-pub async fn stripe_artcraft_create_subscription_session_handler(
-  http_request: HttpRequest,
-  request: Json<StripeArtcraftCreateSubscriptionCheckoutRequest>,
-  stripe_config: Data<ArtcraftStripeConfigWithClient>,
-  server_environment: Data<ServerEnvironment>,
-  internal_user_lookup: Data<dyn InternalUserLookup>,
-  internal_session_cache_purge: Data<dyn InternalSessionCachePurge>,
-  mysql_pool: Data<MySqlPool>,
-) -> Result<Json<StripeArtcraftCreateSubscriptionCheckoutResponse>, CommonWebError>
-{
+pub async fn stripe_artcraft_create_subscription_session_handler(http_request: HttpRequest, request: Json<StripeArtcraftCreateSubscriptionCheckoutRequest>, stripe_config: Data<ArtcraftStripeConfigWithClient>, server_environment: Data<ServerEnvironment>, internal_user_lookup: Data<dyn InternalUserLookup>, internal_session_cache_purge: Data<dyn InternalSessionCachePurge>, mysql_pool: Data<MySqlPool>) -> Result<Json<StripeArtcraftCreateSubscriptionCheckoutResponse>, CommonWebError> {
   let slug = match request.plan {
     None => return Err(CommonWebError::BadInputWithSimpleMessage("no plan supplied".to_string())),
     Some(slug) => slug,
@@ -57,26 +48,20 @@ pub async fn stripe_artcraft_create_subscription_session_handler(
 
   let plan = get_artcraft_subscription_by_slug_and_env(slug, **server_environment);
 
-  let mut mysql_connection = mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("Could not acquire mysql connection: {:?}", err);
-        CommonWebError::ServerError
-      })?;
+  let mut mysql_connection = mysql_pool.acquire().await.map_err(|err| {
+    error!("Could not acquire mysql connection: {:?}", err);
+    CommonWebError::ServerError
+  })?;
 
   let price_id = match cadence {
     PlanBillingCadence::Monthly => plan.monthly_price_id.clone(),
     PlanBillingCadence::Yearly => plan.yearly_price_id.clone(),
   };
 
-  let maybe_user_metadata = internal_user_lookup
-      .lookup_user_from_http_request_and_mysql_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error looking up user: {:?}", err);
-        CommonWebError::ServerError // NB: This was probably *our* fault.
-      })?;
+  let maybe_user_metadata = internal_user_lookup.lookup_user_from_http_request_and_mysql_connection(&http_request, &mut mysql_connection).await.map_err(|err| {
+    error!("Error looking up user: {:?}", err);
+    CommonWebError::ServerError // NB: This was probably *our* fault.
+  })?;
 
   // NB: Our integration relies on an internal user token being present.
   let user_metadata = match maybe_user_metadata {
@@ -87,19 +72,13 @@ pub async fn stripe_artcraft_create_subscription_session_handler(
   // NB: Currently the stripe customer id field in the `users` table is only for FakeYou subscriptions,
   // so we need to look up any existing Artcraft subscription separately. This is needed to pre-fill
   // the Stripe billing form.
-  let maybe_active_subscription = find_subscription_for_owner_user_using_connection(
-    &user_metadata.user_token_typed,
-    PaymentsNamespace::Artcraft,
-    &mut mysql_connection
-  ).await.map_err(|err| {
+  let maybe_active_subscription = find_subscription_for_owner_user_using_connection(&user_metadata.user_token_typed, PaymentsNamespace::Artcraft, &mut mysql_connection).await.map_err(|err| {
     error!("Error looking up user's ({}) existing subscription: {:?}", &user_metadata.user_token_typed, err);
     CommonWebError::ServerError // NB: This was probably *our* fault.
   })?;
 
   if maybe_active_subscription.is_some() {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "user already has an active subscription plan; use the portal to update the plan"
-          .to_string()))
+    return Err(CommonWebError::BadInputWithSimpleMessage("user already has an active subscription plan; use the portal to update the plan".to_string()));
   }
 
   // NB: This works, but it feels really weird to have the customer's old email shown in a
@@ -119,11 +98,7 @@ pub async fn stripe_artcraft_create_subscription_session_handler(
 
   let mut maybe_existing_stripe_customer_id = None;
 
-  let result = find_user_stripe_customer_link_using_connection(
-    &user_metadata.user_token_typed,
-    PaymentsNamespace::Artcraft,
-    &mut mysql_connection
-  ).await;
+  let result = find_user_stripe_customer_link_using_connection(&user_metadata.user_token_typed, PaymentsNamespace::Artcraft, &mut mysql_connection).await;
 
   // NB: Fail silently.
   if let Ok(Some(link)) = result {
@@ -203,21 +178,17 @@ pub async fn stripe_artcraft_create_subscription_session_handler(
         .subscription_data(CreateCheckoutSessionSubscriptionData {
           metadata: Some(metadata),
           ..Default::default()
-        })
-        ;
+        });
 
     if let Some(customer_id) = maybe_existing_stripe_customer_id {
       info!("Adding existing stripe customer id to checkout session: {}", customer_id.as_str());
       checkout_builder = checkout_builder.customer(customer_id);
     }
 
-    let checkout_session = checkout_builder
-        .send(&stripe_config.client)
-        .await
-        .map_err(|err| {
-          error!("Stripe Error: {:?}", err);
-          CommonWebError::ServerError
-        })?;
+    let checkout_session = checkout_builder.send(&stripe_config.client).await.map_err(|err| {
+      error!("Stripe Error: {:?}", err);
+      CommonWebError::ServerError
+    })?;
 
     checkout_session
   };
@@ -227,8 +198,5 @@ pub async fn stripe_artcraft_create_subscription_session_handler(
   // Best effort to delete Redis session cache
   internal_session_cache_purge.best_effort_purge_session_cache(&http_request);
 
-  Ok(Json(StripeArtcraftCreateSubscriptionCheckoutResponse {
-    success: true,
-    stripe_checkout_redirect_url: url,
-  }))
+  Ok(Json(StripeArtcraftCreateSubscriptionCheckoutResponse { success: true, stripe_checkout_redirect_url: url }))
 }

@@ -36,9 +36,7 @@ where
 /// Aggregate spend events for one UTC day, grouped by (user, namespace). Rows
 /// with neither spend nor refund are excluded so `user_daily_spends` stays
 /// sparse. Only attributed events (non-null user) are counted.
-pub async fn aggregate_daily_spends_for_date<'c, E>(
-  args: AggregateDailySpendsForDateArgs<'c, E>,
-) -> Result<Vec<DailySpendAggregate>, sqlx::Error>
+pub async fn aggregate_daily_spends_for_date<'c, E>(args: AggregateDailySpendsForDateArgs<'c, E>) -> Result<Vec<DailySpendAggregate>, sqlx::Error>
 where
   E: Executor<'c, Database = MySql>,
 {
@@ -69,8 +67,8 @@ HAVING SUM(CASE WHEN amount_usd_cents <> 0 THEN 1 ELSE 0 END) > 0
     args.range_start,
     args.range_end,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

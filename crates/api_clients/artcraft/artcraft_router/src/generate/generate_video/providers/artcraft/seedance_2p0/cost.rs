@@ -36,33 +36,18 @@ pub struct ArtcraftSeedance2p0CostState {
 
 impl ArtcraftSeedance2p0CostState {
   pub fn from_request(request: &ArtcraftSeedance2p0RequestState) -> Self {
-    let resolution = request.request.resolution
-      .unwrap_or(CommonResolution::SevenTwentyP);
+    let resolution = request.request.resolution.unwrap_or(CommonResolution::SevenTwentyP);
     let duration_seconds = request.request.duration_seconds.unwrap_or(5);
     let batch_count = request.request.video_batch_count.unwrap_or(1);
-    let has_video_reference = request.request.reference_video_media_tokens
-      .as_ref()
-      .is_some_and(|tokens| !tokens.is_empty());
+    let has_video_reference = request.request.reference_video_media_tokens.as_ref().is_some_and(|tokens| !tokens.is_empty());
 
     Self { resolution, duration_seconds, batch_count, has_video_reference }
   }
 
   pub fn estimate_cost(&self) -> VideoGenerationCostEstimate {
     if self.resolution == CommonResolution::FourK {
-      let usd_cents = seedance_2p0_four_k_usd_cents(
-        self.duration_seconds,
-        self.batch_count,
-        self.has_video_reference,
-      );
-      return VideoGenerationCostEstimate {
-        cost_in_credits: Some(usd_cents),
-        cost_in_usd_cents: Some(usd_cents),
-        is_free: false,
-        is_unlimited: false,
-        is_rate_limited: false,
-        has_watermark: false,
-        failures_are_refunded: None,
-      };
+      let usd_cents = seedance_2p0_four_k_usd_cents(self.duration_seconds, self.batch_count, self.has_video_reference);
+      return VideoGenerationCostEstimate { cost_in_credits: Some(usd_cents), cost_in_usd_cents: Some(usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None };
     }
 
     let cents_per_second = match self.resolution {
@@ -75,15 +60,7 @@ impl ArtcraftSeedance2p0CostState {
     let usd_cents = (self.duration_seconds as f64 * cents_per_second * self.batch_count as f64).round() as u64;
 
     // ArtCraft credits: 100 credits = $1.00, so credits = cents.
-    VideoGenerationCostEstimate {
-      cost_in_credits: Some(usd_cents),
-      cost_in_usd_cents: Some(usd_cents),
-      is_free: false,
-      is_unlimited: false,
-      is_rate_limited: false,
-      has_watermark: false,
-      failures_are_refunded: None,
-    }
+    VideoGenerationCostEstimate { cost_in_credits: Some(usd_cents), cost_in_usd_cents: Some(usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None }
   }
 }
 
@@ -181,15 +158,7 @@ mod tests {
     use enums::common::generation::common_resolution::CommonResolution;
 
     fn artcraft_4k_cents(duration_seconds: u16, batch_count: u16, has_video_reference: bool) -> u64 {
-      super::super::ArtcraftSeedance2p0CostState {
-        resolution: CommonResolution::FourK,
-        duration_seconds,
-        batch_count,
-        has_video_reference,
-      }
-      .estimate_cost()
-      .cost_in_usd_cents
-      .unwrap()
+      super::super::ArtcraftSeedance2p0CostState { resolution: CommonResolution::FourK, duration_seconds, batch_count, has_video_reference }.estimate_cost().cost_in_usd_cents.unwrap()
     }
 
     #[test]
@@ -256,22 +225,12 @@ mod tests {
 
     #[test]
     fn credits_equal_usd_cents_all_combos() {
-      let resolutions = [
-        Some(RouterResolution::FourEightyP),
-        Some(RouterResolution::SevenTwentyP),
-        Some(RouterResolution::TenEightyP),
-        Some(RouterResolution::FourK),
-        None,
-      ];
+      let resolutions = [Some(RouterResolution::FourEightyP), Some(RouterResolution::SevenTwentyP), Some(RouterResolution::TenEightyP), Some(RouterResolution::FourK), None];
       for res in resolutions {
         for dur in [4, 5, 10, 15] {
           for batch in [1, 2, 4] {
             let cost = build_cost(res, dur, batch);
-            assert_eq!(
-              cost.cost_in_credits, cost.cost_in_usd_cents,
-              "credits should equal cents for res={:?} dur={}s batch={}",
-              res, dur, batch,
-            );
+            assert_eq!(cost.cost_in_credits, cost.cost_in_usd_cents, "credits should equal cents for res={:?} dur={}s batch={}", res, dur, batch,);
           }
         }
       }
@@ -281,31 +240,12 @@ mod tests {
   // -- Helpers --
 
   /// Build a cost estimate end-to-end: GenerateVideoRequestBuilder → build2 → estimate_cost.
-  fn build_cost(
-    resolution: Option<RouterResolution>,
-    duration_seconds: u16,
-    video_batch_count: u16,
-  ) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
-    let builder = GenerateVideoRequestBuilder {
-      provider: RouterProvider::Artcraft,
-      resolution,
-      duration_seconds: Some(duration_seconds),
-      video_batch_count: Some(video_batch_count),
-      ..Default::default()
-    };
-    builder.build2()
-      .expect("build2 should succeed")
-      .estimate_cost()
-      .expect("estimate_cost should succeed")
+  fn build_cost(resolution: Option<RouterResolution>, duration_seconds: u16, video_batch_count: u16) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
+    let builder = GenerateVideoRequestBuilder { provider: RouterProvider::Artcraft, resolution, duration_seconds: Some(duration_seconds), video_batch_count: Some(video_batch_count), ..Default::default() };
+    builder.build2().expect("build2 should succeed").estimate_cost().expect("estimate_cost should succeed")
   }
 
-  fn cost_cents(
-    resolution: Option<RouterResolution>,
-    duration_seconds: u16,
-    video_batch_count: u16,
-  ) -> u64 {
-    build_cost(resolution, duration_seconds, video_batch_count)
-      .cost_in_usd_cents
-      .unwrap()
+  fn cost_cents(resolution: Option<RouterResolution>, duration_seconds: u16, video_batch_count: u16) -> u64 {
+    build_cost(resolution, duration_seconds, video_batch_count).cost_in_usd_cents.unwrap()
   }
 }

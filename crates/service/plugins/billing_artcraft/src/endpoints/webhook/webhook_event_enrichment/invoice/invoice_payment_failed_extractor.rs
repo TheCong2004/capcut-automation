@@ -12,21 +12,10 @@ pub fn invoice_payment_failed_extractor(invoice: &Invoice) -> Result<WebhookEven
 
   // NB: We'll need this to send them to the "customer portal", which is how they can modify
   // or cancel their subscriptions.
-  let maybe_stripe_customer_id  = invoice.customer
-      .as_ref()
-      .map(|c| expand_customer_id(c));
+  let maybe_stripe_customer_id = invoice.customer.as_ref().map(|c| expand_customer_id(c));
 
   // NB: Our internal user token.
-  let maybe_user_token = invoice.metadata
-      .as_ref()
-      .map(|metadata| get_metadata_user_token(metadata))
-      .flatten();
+  let maybe_user_token = invoice.metadata.as_ref().map(|metadata| get_metadata_user_token(metadata)).flatten();
 
-  Ok(WebhookEventLogSummary {
-    maybe_user_token,
-    maybe_event_entity_id: maybe_invoice_id,
-    maybe_stripe_customer_id,
-    action_was_taken: false,
-    should_ignore_retry: false,
-  })
+  Ok(WebhookEventLogSummary { maybe_user_token, maybe_event_entity_id: maybe_invoice_id, maybe_stripe_customer_id, action_was_taken: false, should_ignore_retry: false })
 }

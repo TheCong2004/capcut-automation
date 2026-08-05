@@ -12,10 +12,7 @@ use tokens::tokens::generic_inference_jobs::InferenceJobToken;
 /// so the caller can safely read-then-write the conclusion exactly once.
 ///
 /// Returns `Ok(None)` when no row matches the token.
-pub async fn select_inference_job_status_for_update<'e, E>(
-  executor: E,
-  job_token: &InferenceJobToken,
-) -> Result<Option<JobStatusPlus>, sqlx::Error>
+pub async fn select_inference_job_status_for_update<'e, E>(executor: E, job_token: &InferenceJobToken) -> Result<Option<JobStatusPlus>, sqlx::Error>
 where
   E: Executor<'e, Database = MySql>,
 {
@@ -28,8 +25,8 @@ FOR UPDATE
     "#,
     job_token.as_str(),
   )
-    .fetch_optional(executor)
-    .await?;
+  .fetch_optional(executor)
+  .await?;
 
   Ok(maybe_row.map(|row| row.status))
 }

@@ -18,10 +18,10 @@ impl Display for MediaFileInsertBuilderError {
     match self {
       MediaFileInsertBuilderError::MissingRequiredField(reason) => {
         write!(f, "Missing required field: {}", reason)
-      }
+      },
       MediaFileInsertBuilderError::ProbablyDatabaseError(reason) => {
         write!(f, "Probably database error: {:?}", reason)
-      }
+      },
     }
   }
 }

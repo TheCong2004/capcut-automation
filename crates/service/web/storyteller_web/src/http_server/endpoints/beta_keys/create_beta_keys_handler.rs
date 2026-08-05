@@ -18,7 +18,7 @@ use crate::http_server::common_responses::common_web_error::CommonWebError;
 use crate::http_server::user_lookup::user_session::require_moderator::require_moderator;
 use crate::state::server_state::ServerState;
 
-const MAXIMUM_KEYS : u32 = 100;
+const MAXIMUM_KEYS: u32 = 100;
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateBetaKeysRequest {
@@ -55,30 +55,23 @@ pub struct CreateBetaKeysSuccessResponse {
     ("request" = CreateBetaKeysRequest, description = "Payload for Request"),
   )
 )]
-pub async fn create_beta_keys_handler(
-  http_request: HttpRequest,
-  request: Json<CreateBetaKeysRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<CreateBetaKeysSuccessResponse>, CommonWebError>
-{
+pub async fn create_beta_keys_handler(http_request: HttpRequest, request: Json<CreateBetaKeysRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<CreateBetaKeysSuccessResponse>, CommonWebError> {
   let user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
   let mut maybe_referrer_user_token = None;
 
   if let Some(username) = &request.maybe_referrer_username {
     let username = username.to_lowercase();
-    let maybe_user = get_user_profile_by_username(&username, &server_state.mysql_pool)
-        .await
-        .map_err(|err| {
-          warn!("Error inserting beta keys: {:?}", err);
-          CommonWebError::from_anyhow_error(err)
-        })?;
+    let maybe_user = get_user_profile_by_username(&username, &server_state.mysql_pool).await.map_err(|err| {
+      warn!("Error inserting beta keys: {:?}", err);
+      CommonWebError::from_anyhow_error(err)
+    })?;
 
     let user = match maybe_user {
       Some(user) => user,
       None => {
         return Err(CommonWebError::BadInputWithSimpleMessage("referrer user not found".to_string()));
-      }
+      },
     };
 
     maybe_referrer_user_token = Some(user.user_token);
@@ -86,27 +79,14 @@ pub async fn create_beta_keys_handler(
 
   let number_of_keys = request.number_of_keys.min(MAXIMUM_KEYS);
 
-  let beta_keys = (0..number_of_keys).map(|_| {
-    crockford_entropy_lower(8)
-  }).collect::<Vec::<String>>();
+  let beta_keys = (0..number_of_keys).map(|_| crockford_entropy_lower(8)).collect::<Vec<String>>();
 
-  insert_batch_beta_keys(InsertBatchArgs {
-    product: BetaKeyProduct::Studio,
-    creator_user_token: &user_session.user_token,
-    maybe_referrer_user_token: maybe_referrer_user_token.as_ref(),
-    maybe_note: request.maybe_note.as_deref(),
-    beta_keys: &beta_keys,
-    mysql_pool: &server_state.mysql_pool,
-  }).await.map_err(|err| {
+  insert_batch_beta_keys(InsertBatchArgs { product: BetaKeyProduct::Studio, creator_user_token: &user_session.user_token, maybe_referrer_user_token: maybe_referrer_user_token.as_ref(), maybe_note: request.maybe_note.as_deref(), beta_keys: &beta_keys, mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
     warn!("Error inserting beta keys: {:?}", err);
     CommonWebError::from_anyhow_error(err)
   })?;
 
-  let response = CreateBetaKeysSuccessResponse {
-    success: true,
-    beta_keys,
-  };
+  let response = CreateBetaKeysSuccessResponse { success: true, beta_keys };
 
   Ok(Json(response))
 }
-

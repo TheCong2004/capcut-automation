@@ -47,12 +47,7 @@ pub struct RedeemBetaKeySuccessResponse {
     ("request" = RedeemBetaKeyRequest, description = "Payload for Request"),
   )
 )]
-pub async fn redeem_beta_key_handler(
-  http_request: HttpRequest,
-  request: Json<RedeemBetaKeyRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<RedeemBetaKeySuccessResponse>, CommonWebError>
-{
+pub async fn redeem_beta_key_handler(http_request: HttpRequest, request: Json<RedeemBetaKeyRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<RedeemBetaKeySuccessResponse>, CommonWebError> {
   let user_session = require_user_session(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
   let rate_limiter = &server_state.redis_rate_limiters.logged_out;
@@ -61,12 +56,10 @@ pub async fn redeem_beta_key_handler(
     return Err(CommonWebError::TooManyRequests);
   }
 
-  let maybe_beta_key = get_beta_key_by_value(&request.beta_key, &server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        warn!("Error getting beta key by value: {:?}", &err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let maybe_beta_key = get_beta_key_by_value(&request.beta_key, &server_state.mysql_pool).await.map_err(|err| {
+    warn!("Error getting beta key by value: {:?}", &err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
   let beta_key = match maybe_beta_key {
     Some(beta_key) => beta_key,
@@ -82,75 +75,46 @@ pub async fn redeem_beta_key_handler(
   match beta_key.product {
     BetaKeyProduct::Studio => {
       enroll_in_studio(&request, &server_state, &user_session, &ip_address).await?;
-    }
+    },
   }
 
   try_delete_session_cache(&http_request, &server_state);
 
-  let response = RedeemBetaKeySuccessResponse {
-    success: true,
-  };
+  let response = RedeemBetaKeySuccessResponse { success: true };
 
   Ok(Json(response))
 }
 
-async fn enroll_in_studio(
-  request: &RedeemBetaKeyRequest,
-  server_state: &ServerState,
-  user_session: &SessionUserRecord,
-  ip_address: &str,
-) -> Result<(), CommonWebError> {
-  let mut user_feature_flags =
-      UserSessionFeatureFlags::new(user_session.maybe_feature_flags.as_deref());
+async fn enroll_in_studio(request: &RedeemBetaKeyRequest, server_state: &ServerState, user_session: &SessionUserRecord, ip_address: &str) -> Result<(), CommonWebError> {
+  let mut user_feature_flags = UserSessionFeatureFlags::new(user_session.maybe_feature_flags.as_deref());
 
-  user_feature_flags.add_flags([
-    UserFeatureFlag::Studio,
-    UserFeatureFlag::VideoStyleTransfer,
-  ]);
+  user_feature_flags.add_flags([UserFeatureFlag::Studio, UserFeatureFlag::VideoStyleTransfer]);
 
-  let mut transaction = server_state.mysql_pool.begin()
-      .await
-      .map_err(|e| {
-        warn!("Could not open transaction: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut transaction = server_state.mysql_pool.begin().await.map_err(|e| {
+    warn!("Could not open transaction: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  set_user_feature_flags_transactional(SetUserFeatureFlagTransactionalArgs {
-    subject_user_token: &user_session.user_token,
-    maybe_feature_flags: user_feature_flags.maybe_serialize_string().as_deref(),
-    maybe_mod_user_token: None,
-    ip_address: &ip_address,
-    transaction: &mut transaction,
-  }).await
-      .map_err(|e| {
-        warn!("Could not set flags: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  set_user_feature_flags_transactional(SetUserFeatureFlagTransactionalArgs { subject_user_token: &user_session.user_token, maybe_feature_flags: user_feature_flags.maybe_serialize_string().as_deref(), maybe_mod_user_token: None, ip_address: &ip_address, transaction: &mut transaction }).await.map_err(|e| {
+    warn!("Could not set flags: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
   // NB: This isn't a necessary field, but can be useful for analytics.
-  set_can_access_studio_transactional(SetCanAccessStudioArgs {
-    subject_user_token: &user_session.user_token,
-    can_access_studio: true,
-    transaction: &mut transaction,
-  }).await
-      .map_err(|e| {
-        warn!("Could not set can_access_studio: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  set_can_access_studio_transactional(SetCanAccessStudioArgs { subject_user_token: &user_session.user_token, can_access_studio: true, transaction: &mut transaction }).await.map_err(|e| {
+    warn!("Could not set can_access_studio: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
-  redeem_beta_key(&request.beta_key, &user_session.user_token, &mut transaction)
-      .await
-      .map_err(|e| {
-        warn!("Could not redeem beta key: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  redeem_beta_key(&request.beta_key, &user_session.user_token, &mut transaction).await.map_err(|e| {
+    warn!("Could not redeem beta key: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
-  transaction.commit()
-      .await
-      .map_err(|e| {
-        warn!("Could not commit transaction: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  transaction.commit().await.map_err(|e| {
+    warn!("Could not commit transaction: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   Ok(())
 }

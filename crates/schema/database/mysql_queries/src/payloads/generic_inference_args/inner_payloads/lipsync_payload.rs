@@ -155,7 +155,7 @@ mod tests {
   use crate::payloads::generic_inference_args::inner_payloads::lipsync_payload::{FaceEnhancer, LipsyncAnimationAudioSource, LipsyncAnimationImageSource, LipsyncArgs};
 
   fn assert_json_deserializes_to_match(json: &str, original: &LipsyncArgs) {
-    let duplicate : LipsyncArgs = serde_json::de::from_str(json).unwrap();
+    let duplicate: LipsyncArgs = serde_json::de::from_str(json).unwrap();
     assert_eq!(&duplicate, original);
   }
 
@@ -169,11 +169,7 @@ mod tests {
 
   #[test]
   fn test_media_file() {
-    let args = LipsyncArgs {
-      maybe_audio_source: Some(LipsyncAnimationAudioSource::media_file_token("audio_media_file")),
-      maybe_image_source: Some(LipsyncAnimationImageSource::media_file_token("image_media_file")),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_audio_source: Some(LipsyncAnimationAudioSource::media_file_token("audio_media_file")), maybe_image_source: Some(LipsyncAnimationImageSource::media_file_token("image_media_file")), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"a":{"F":"audio_media_file"},"i":{"F":"image_media_file"}}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -181,11 +177,7 @@ mod tests {
 
   #[test]
   fn test_media_upload() {
-    let args = LipsyncArgs {
-      maybe_audio_source: Some(LipsyncAnimationAudioSource::media_upload_token("audio_media_upload")),
-      maybe_image_source: Some(LipsyncAnimationImageSource::media_upload_token("image_media_upload")),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_audio_source: Some(LipsyncAnimationAudioSource::media_upload_token("audio_media_upload")), maybe_image_source: Some(LipsyncAnimationImageSource::media_upload_token("image_media_upload")), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"a":{"U":"audio_media_upload"},"i":{"U":"image_media_upload"}}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -193,11 +185,7 @@ mod tests {
 
   #[test]
   fn test_tts_result() {
-    let args = LipsyncArgs {
-      maybe_audio_source: Some(LipsyncAnimationAudioSource::tts_result_token("audio_tts_result")),
-      maybe_image_source: Some(LipsyncAnimationImageSource::media_upload_token("image_media_upload")),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_audio_source: Some(LipsyncAnimationAudioSource::tts_result_token("audio_tts_result")), maybe_image_source: Some(LipsyncAnimationImageSource::media_upload_token("image_media_upload")), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"a":{"T":"audio_tts_result"},"i":{"U":"image_media_upload"}}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -205,11 +193,7 @@ mod tests {
 
   #[test]
   fn test_voice_conversion_result() {
-    let args = LipsyncArgs {
-      maybe_audio_source: Some(LipsyncAnimationAudioSource::voice_conversion_result_token("audio_voice_conversion_result")),
-      maybe_image_source: Some(LipsyncAnimationImageSource::media_upload_token("image_media_upload")),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_audio_source: Some(LipsyncAnimationAudioSource::voice_conversion_result_token("audio_voice_conversion_result")), maybe_image_source: Some(LipsyncAnimationImageSource::media_upload_token("image_media_upload")), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"a":{"V":"audio_voice_conversion_result"},"i":{"U":"image_media_upload"}}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -217,10 +201,7 @@ mod tests {
 
   #[test]
   fn test_face_enhancer_1() {
-    let args = LipsyncArgs {
-      maybe_face_enhancer: Some(FaceEnhancer::G),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_face_enhancer: Some(FaceEnhancer::G), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"f":"G"}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -228,10 +209,7 @@ mod tests {
 
   #[test]
   fn test_face_enhancer_2() {
-    let args = LipsyncArgs {
-      maybe_face_enhancer: Some(FaceEnhancer::R),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_face_enhancer: Some(FaceEnhancer::R), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"f":"R"}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -239,11 +217,7 @@ mod tests {
 
   #[test]
   fn test_width_and_height() {
-    let args = LipsyncArgs {
-      maybe_resize_width: Some(123),
-      maybe_resize_height: Some(321),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_resize_width: Some(123), maybe_resize_height: Some(321), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"w":123,"h":321}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -251,10 +225,7 @@ mod tests {
 
   #[test]
   fn test_maybe_make_still() {
-    let args = LipsyncArgs {
-      maybe_make_still: Some(true),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_make_still: Some(true), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"s":true}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);
@@ -262,10 +233,7 @@ mod tests {
 
   #[test]
   fn test_maybe_remove_watermark() {
-    let args = LipsyncArgs {
-      maybe_remove_watermark: Some(true),
-      ..Default::default()
-    };
+    let args = LipsyncArgs { maybe_remove_watermark: Some(true), ..Default::default() };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"m":true}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);

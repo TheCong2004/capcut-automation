@@ -4,10 +4,10 @@ use crate::get_storyteller_root;
 use crate::paths::env_get_path::env_get_path;
 
 /// The env var that declares where the storyteller frontend monorepo lives.
-pub const STORYTELLER_FRONTEND_ROOT : &str = "STORYTELLER_FRONTEND_ROOT";
+pub const STORYTELLER_FRONTEND_ROOT: &str = "STORYTELLER_FRONTEND_ROOT";
 
 // DO NOT LEAK THIS. THIS IS FOR TESTING ONLY.
-pub const TEST_STORYTELLER_FRONTEND_ROOT : &str = "ENV_TEST_STORYTELLER_FRONTEND_ROOT_DO_NOT_LEAK_";
+pub const TEST_STORYTELLER_FRONTEND_ROOT: &str = "ENV_TEST_STORYTELLER_FRONTEND_ROOT_DO_NOT_LEAK_";
 
 /// Get the root of the Rust monorepo
 pub fn get_storyteller_frontend_root() -> PathBuf {
@@ -91,9 +91,7 @@ mod tests {
       // We'll make sure to canonicalize both paths.
       let mut corrected = PathBuf::from("/private");
 
-      expected.iter()
-          .filter(|component| !component.to_string_lossy().eq("/"))
-          .for_each(|component| corrected.push(component));
+      expected.iter().filter(|component| !component.to_string_lossy().eq("/")).for_each(|component| corrected.push(component));
 
       expected = corrected;
     }

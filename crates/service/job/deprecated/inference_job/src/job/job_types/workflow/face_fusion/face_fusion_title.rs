@@ -1,19 +1,10 @@
 use primitives::trim_or_empty::trim_or_empty;
 
-pub fn face_fusion_title(
-  maybe_existing_audio_model_weights_title: Option<&str>,
-  maybe_existing_audio_title: Option<&str>,
-  maybe_existing_video_title: Option<&str>
-) -> String {
-  const FIELD_LENGTH : usize = 255;
+pub fn face_fusion_title(maybe_existing_audio_model_weights_title: Option<&str>, maybe_existing_audio_title: Option<&str>, maybe_existing_video_title: Option<&str>) -> String {
+  const FIELD_LENGTH: usize = 255;
   const TITLE_SUFFIX: &str = " Lip Sync Video";
 
-  let maybe_title_basis = maybe_existing_audio_model_weights_title
-      .map(|title| trim_or_empty(title)).flatten()
-      .or(maybe_existing_audio_title)
-      .map(|title| trim_or_empty(title)).flatten()
-      .or(maybe_existing_video_title)
-      .map(|title| trim_or_empty(title)).flatten();
+  let maybe_title_basis = maybe_existing_audio_model_weights_title.map(|title| trim_or_empty(title)).flatten().or(maybe_existing_audio_title).map(|title| trim_or_empty(title)).flatten().or(maybe_existing_video_title).map(|title| trim_or_empty(title)).flatten();
 
   match maybe_title_basis {
     None => "Lip Sync Video".to_string(),

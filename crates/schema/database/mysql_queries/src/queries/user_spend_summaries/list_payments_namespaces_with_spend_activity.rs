@@ -13,9 +13,7 @@ where
 }
 
 /// The distinct payment namespaces that have any attributed spend activity.
-pub async fn list_payments_namespaces_with_spend_activity<'c, E>(
-  args: ListPaymentsNamespacesWithSpendActivityArgs<'c, E>,
-) -> Result<Vec<PaymentsNamespace>, sqlx::Error>
+pub async fn list_payments_namespaces_with_spend_activity<'c, E>(args: ListPaymentsNamespacesWithSpendActivityArgs<'c, E>) -> Result<Vec<PaymentsNamespace>, sqlx::Error>
 where
   E: Executor<'c, Database = MySql>,
 {
@@ -27,8 +25,8 @@ WHERE maybe_user_token IS NOT NULL
   AND is_production = TRUE
     "#,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

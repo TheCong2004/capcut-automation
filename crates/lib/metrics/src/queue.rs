@@ -22,10 +22,7 @@ impl SampleQueue {
   }
 
   pub fn with_capacity(max_samples: usize) -> Self {
-    Self {
-      inner: Arc::new(Mutex::new(Vec::with_capacity(1024))),
-      max_samples,
-    }
+    Self { inner: Arc::new(Mutex::new(Vec::with_capacity(1024))), max_samples }
   }
 
   /// Non-blocking push. Drops the *oldest* sample if the buffer is full so
@@ -50,7 +47,7 @@ impl SampleQueue {
       Err(poison) => {
         warn!("metrics SampleQueue lock poisoned on drain; recovering");
         poison.into_inner()
-      }
+      },
     };
     std::mem::take(&mut *guard)
   }
@@ -61,7 +58,9 @@ impl SampleQueue {
 }
 
 impl Default for SampleQueue {
-  fn default() -> Self { Self::new() }
+  fn default() -> Self {
+    Self::new()
+  }
 }
 
 #[cfg(test)]
@@ -70,13 +69,7 @@ mod tests {
   use crate::sample::RequestSample;
 
   fn request_sample(route: &str) -> Sample {
-    Sample::Request(RequestSample {
-      route: route.to_string(),
-      method: "GET".to_string(),
-      status_code: 200,
-      duration_ms: 1.0,
-      timestamp_secs: 1,
-    })
+    Sample::Request(RequestSample { route: route.to_string(), method: "GET".to_string(), status_code: 200, duration_ms: 1.0, timestamp_secs: 1 })
   }
 
   #[test]
@@ -98,10 +91,13 @@ mod tests {
     q.push(request_sample("/new"));
     let drained = q.drain();
     assert_eq!(drained.len(), 3);
-    let routes: Vec<_> = drained.iter().filter_map(|s| match s {
-      Sample::Request(r) => Some(r.route.clone()),
-      _ => None,
-    }).collect();
+    let routes: Vec<_> = drained
+      .iter()
+      .filter_map(|s| match s {
+        Sample::Request(r) => Some(r.route.clone()),
+        _ => None,
+      })
+      .collect();
     assert!(routes.contains(&"/new".to_string()));
   }
 }

@@ -36,20 +36,8 @@ use crate::state::server_state::ServerState;
     ),
   )
 )]
-pub async fn upload_new_scene_3d_project_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(form): MultipartForm<NewProjectMultipartForm>,
-) -> Result<Json<UploadNewScene3dProjectSuccessResponse>, CommonWebError> {
-  let media_file_token = save_new_project(SaveNewProjectArgs {
-    http_request: &http_request,
-    server_state: &server_state,
-    config: &SCENE_3D_PROJECT_CONFIG,
-    form,
-  }).await?;
+pub async fn upload_new_scene_3d_project_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(form): MultipartForm<NewProjectMultipartForm>) -> Result<Json<UploadNewScene3dProjectSuccessResponse>, CommonWebError> {
+  let media_file_token = save_new_project(SaveNewProjectArgs { http_request: &http_request, server_state: &server_state, config: &SCENE_3D_PROJECT_CONFIG, form }).await?;
 
-  Ok(Json(UploadNewScene3dProjectSuccessResponse {
-    success: true,
-    media_file_token,
-  }))
+  Ok(Json(UploadNewScene3dProjectSuccessResponse { success: true, media_file_token }))
 }

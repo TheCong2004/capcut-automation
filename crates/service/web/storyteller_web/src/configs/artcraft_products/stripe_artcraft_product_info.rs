@@ -6,4 +6,3 @@ pub struct StripeArtcraftProductInfo {
   pub monthly_price_id: &'static str,
   pub yearly_price_id: &'static str,
 }
-

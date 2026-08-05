@@ -455,8 +455,7 @@ pub mod vlc {
                     if code_len == 0 {
                         if self.is_sparse {
                             continue;
-                        }
-                        else {
+                        } else {
                             return codebook_error("core (io): zero length codeword");
                         }
                     }
@@ -469,8 +468,7 @@ pub mod vlc {
                         // Recurse down the tree.
                         if let Some(&block_id) = blocks[parent_block_id].nodes.get(&prefix) {
                             parent_block_id = block_id;
-                        }
-                        else {
+                        } else {
                             // Add a child block to the parent block.
                             let block_id = blocks.len();
 
@@ -569,8 +567,7 @@ pub trait ReadBitsLtr: private::FetchBitsLtr {
     fn ignore_bits(&mut self, mut num_bits: u32) -> io::Result<()> {
         if num_bits <= self.num_bits_left() {
             self.consume_bits(num_bits);
-        }
-        else {
+        } else {
             // Consume whole bit caches directly.
             while num_bits > self.num_bits_left() {
                 num_bits -= self.num_bits_left();
@@ -664,8 +661,7 @@ pub trait ReadBitsLtr: private::FetchBitsLtr {
         // (as oppopsed to 32-bits), this is an acceptable solution.
         if bit_width == 0 {
             Ok(0)
-        }
-        else {
+        } else {
             // Since bit_width is always > 0, this shift operation is always < 64, and will
             // therefore never panic.
             let mut bits = self.get_bits() >> (u64::BITS - bit_width);
@@ -708,8 +704,7 @@ pub trait ReadBitsLtr: private::FetchBitsLtr {
                 // bits were 0.
                 num += self.num_bits_left();
                 self.fetch_bits()?;
-            }
-            else {
+            } else {
                 // Otherwise, a 1 bit was encountered after `n_zeros` 0 bits.
                 num += num_zeros;
 
@@ -742,8 +737,7 @@ pub trait ReadBitsLtr: private::FetchBitsLtr {
                 num += limit;
                 self.consume_bits(limit);
                 break;
-            }
-            else {
+            } else {
                 // There are less ones than the limit. A terminator was encountered OR more bits
                 // are needed.
                 limit -= num_zeros;
@@ -776,8 +770,7 @@ pub trait ReadBitsLtr: private::FetchBitsLtr {
             if num_ones >= self.num_bits_left() {
                 num += self.num_bits_left();
                 self.fetch_bits()?;
-            }
-            else {
+            } else {
                 num += num_ones;
 
                 self.consume_bits(num_ones);
@@ -804,8 +797,7 @@ pub trait ReadBitsLtr: private::FetchBitsLtr {
                 num += limit;
                 self.consume_bits(limit);
                 break;
-            }
-            else {
+            } else {
                 limit -= num_ones;
                 num += num_ones;
 
@@ -1026,8 +1018,7 @@ pub trait ReadBitsRtl: private::FetchBitsRtl {
     fn ignore_bits(&mut self, mut num_bits: u32) -> io::Result<()> {
         if num_bits <= self.num_bits_left() {
             self.consume_bits(num_bits);
-        }
-        else {
+        } else {
             // Consume whole bit caches directly.
             while num_bits > self.num_bits_left() {
                 num_bits -= self.num_bits_left();
@@ -1120,8 +1111,7 @@ pub trait ReadBitsRtl: private::FetchBitsRtl {
         // (as oppopsed to 32-bits), this is an acceptable solution.
         if bit_width == 0 {
             Ok(0)
-        }
-        else {
+        } else {
             let mut bits = self.get_bits();
             let mut bits_needed = bit_width;
 
@@ -1168,8 +1158,7 @@ pub trait ReadBitsRtl: private::FetchBitsRtl {
                 // bits were 0.
                 num += self.num_bits_left();
                 self.fetch_bits()?;
-            }
-            else {
+            } else {
                 // Otherwise, a 1 bit was encountered after `n_zeros` 0 bits.
                 num += num_zeros;
 
@@ -1202,8 +1191,7 @@ pub trait ReadBitsRtl: private::FetchBitsRtl {
                 num += limit;
                 self.consume_bits(limit);
                 break;
-            }
-            else {
+            } else {
                 // There are less zeros than the limit. A terminator was encountered OR more bits
                 // are needed.
                 limit -= num_zeros;
@@ -1236,8 +1224,7 @@ pub trait ReadBitsRtl: private::FetchBitsRtl {
             if num_ones >= self.num_bits_left() {
                 num += self.num_bits_left();
                 self.fetch_bits()?;
-            }
-            else {
+            } else {
                 num += num_ones;
 
                 self.consume_bits(num_ones);
@@ -1264,8 +1251,7 @@ pub trait ReadBitsRtl: private::FetchBitsRtl {
                 num += limit;
                 self.consume_bits(limit);
                 break;
-            }
-            else {
+            } else {
                 limit -= num_ones;
                 num += num_ones;
 

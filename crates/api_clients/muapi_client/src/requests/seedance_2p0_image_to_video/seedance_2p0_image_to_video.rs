@@ -131,13 +131,7 @@ impl Seedance2p0ImageToVideoArgs<'_> {
 
 impl std::fmt::Debug for Seedance2p0ImageToVideoArgs<'_> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("Seedance2p0ImageToVideoArgs")
-      .field("prompt", &self.prompt)
-      .field("image_urls", &self.image_urls)
-      .field("aspect_ratio", &self.aspect_ratio)
-      .field("duration", &self.duration)
-      .field("quality", &self.quality)
-      .finish()
+    f.debug_struct("Seedance2p0ImageToVideoArgs").field("prompt", &self.prompt).field("image_urls", &self.image_urls).field("aspect_ratio", &self.aspect_ratio).field("duration", &self.duration).field("quality", &self.quality).finish()
   }
 }
 
@@ -149,55 +143,31 @@ pub struct Seedance2p0ImageToVideoResponse {
 
 // --- Implementation ---
 
-pub async fn seedance_2p0_image_to_video(
-  args: Seedance2p0ImageToVideoArgs<'_>,
-) -> Result<Seedance2p0ImageToVideoResponse, MuapiError> {
+pub async fn seedance_2p0_image_to_video(args: Seedance2p0ImageToVideoArgs<'_>) -> Result<Seedance2p0ImageToVideoResponse, MuapiError> {
   info!("Submitting Seedance 2.0 i2v task to Muapi: {:?}", args);
 
-  let request_body = Seedance2p0I2vRequest {
-    prompt: args.prompt,
-    images_list: args.image_urls,
-    aspect_ratio: args.aspect_ratio.as_str(),
-    duration: args.duration.as_u8(),
-    quality: args.quality.as_str(),
-  };
+  let request_body = Seedance2p0I2vRequest { prompt: args.prompt, images_list: args.image_urls, aspect_ratio: args.aspect_ratio.as_str(), duration: args.duration.as_u8(), quality: args.quality.as_str() };
 
   info!("Muapi request body: {:?}", request_body);
 
   let api_key = args.session.api_key.as_str();
 
-  let client = Client::builder()
-    .build()
-    .map_err(|err| MuapiClientError::WreqClientError(err))?;
+  let client = Client::builder().build().map_err(|err| MuapiClientError::WreqClientError(err))?;
 
-  let response = client.post(SEEDANCE_2P0_I2V_URL)
-    .header("Content-Type", "application/json")
-    .header("x-api-key", api_key)
-    .json(&request_body)
-    .send()
-    .await
-    .map_err(|err| MuapiGenericApiError::WreqError(err))?;
+  let response = client.post(SEEDANCE_2P0_I2V_URL).header("Content-Type", "application/json").header("x-api-key", api_key).json(&request_body).send().await.map_err(|err| MuapiGenericApiError::WreqError(err))?;
 
   let status = response.status();
-  let response_body = response.text()
-    .await
-    .map_err(|err| MuapiGenericApiError::WreqError(err))?;
+  let response_body = response.text().await.map_err(|err| MuapiGenericApiError::WreqError(err))?;
 
   info!("Muapi response status: {}, body: {}", status, response_body);
 
   if !status.is_success() {
-    return Err(MuapiGenericApiError::UncategorizedBadResponseWithStatusAndBody {
-      status_code: status,
-      body: response_body,
-    }.into());
+    return Err(MuapiGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code: status, body: response_body }.into());
   }
 
-  let parsed: Seedance2p0I2vResponse = serde_json::from_str(&response_body)
-    .map_err(|err| MuapiGenericApiError::SerdeResponseParseErrorWithBody(err, response_body))?;
+  let parsed: Seedance2p0I2vResponse = serde_json::from_str(&response_body).map_err(|err| MuapiGenericApiError::SerdeResponseParseErrorWithBody(err, response_body))?;
 
-  Ok(Seedance2p0ImageToVideoResponse {
-    request_id: RequestId::new(parsed.request_id),
-  })
+  Ok(Seedance2p0ImageToVideoResponse { request_id: RequestId::new(parsed.request_id) })
 }
 
 #[cfg(test)]
@@ -216,14 +186,7 @@ mod tests {
 
   fn args_with(duration: Duration, quality: Quality) -> Seedance2p0ImageToVideoArgs<'static> {
     let session = Box::leak(Box::new(dummy_session()));
-    Seedance2p0ImageToVideoArgs {
-      session,
-      prompt: String::new(),
-      image_urls: vec![],
-      aspect_ratio: AspectRatio::Landscape16x9,
-      duration,
-      quality,
-    }
+    Seedance2p0ImageToVideoArgs { session, prompt: String::new(), image_urls: vec![], aspect_ratio: AspectRatio::Landscape16x9, duration, quality }
   }
 
   #[test]
@@ -257,16 +220,7 @@ mod tests {
   async fn test_seedance_2p0_image_to_video() -> AnyhowResult<()> {
     setup_test_logging(LevelFilter::Trace);
     let session = get_test_api_key()?;
-    let args = Seedance2p0ImageToVideoArgs {
-      session: &session,
-      prompt: "The dog barks and runs across the lake's pier, tail wagging.".to_string(),
-      image_urls: vec![
-        JUNO_AT_LAKE_IMAGE_URL.to_string(),
-      ],
-      aspect_ratio: AspectRatio::Landscape16x9,
-      duration: Duration::FiveSeconds,
-      quality: Quality::High,
-    };
+    let args = Seedance2p0ImageToVideoArgs { session: &session, prompt: "The dog barks and runs across the lake's pier, tail wagging.".to_string(), image_urls: vec![JUNO_AT_LAKE_IMAGE_URL.to_string()], aspect_ratio: AspectRatio::Landscape16x9, duration: Duration::FiveSeconds, quality: Quality::High };
     let result = seedance_2p0_image_to_video(args).await?;
     println!("Result: {:?}", result);
     println!("Request ID: {}", result.request_id);
@@ -280,16 +234,7 @@ mod tests {
   async fn test_seedance_2p0_image_to_video_portrait() -> AnyhowResult<()> {
     setup_test_logging(LevelFilter::Trace);
     let session = get_test_api_key()?;
-    let args = Seedance2p0ImageToVideoArgs {
-      session: &session,
-      prompt: "The corgi and shiba swim through the treasure-filled ocean, bubbles rising around them.".to_string(),
-      image_urls: vec![
-        TALL_CORGI_SHIBA_TREASURE_OCEAN_URL.to_string(),
-      ],
-      aspect_ratio: AspectRatio::Portrait9x16,
-      duration: Duration::FiveSeconds,
-      quality: Quality::High,
-    };
+    let args = Seedance2p0ImageToVideoArgs { session: &session, prompt: "The corgi and shiba swim through the treasure-filled ocean, bubbles rising around them.".to_string(), image_urls: vec![TALL_CORGI_SHIBA_TREASURE_OCEAN_URL.to_string()], aspect_ratio: AspectRatio::Portrait9x16, duration: Duration::FiveSeconds, quality: Quality::High };
     let result = seedance_2p0_image_to_video(args).await?;
     println!("Result: {:?}", result);
     println!("Request ID: {}", result.request_id);

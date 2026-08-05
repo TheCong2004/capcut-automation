@@ -7,24 +7,13 @@ use rand::distr::{Distribution, StandardUniform};
 use rand::Rng;
 use std::collections::HashSet;
 
-pub const ADJECTIVES : &str = include_str!("../../../../../includes/binary_includes/usernames/atoms/username_adjectives.txt");
-pub const NOUNS : &str = include_str!("../../../../../includes/binary_includes/usernames/atoms/username_nouns.txt");
+pub const ADJECTIVES: &str = include_str!("../../../../../includes/binary_includes/usernames/atoms/username_adjectives.txt");
+pub const NOUNS: &str = include_str!("../../../../../includes/binary_includes/usernames/atoms/username_nouns.txt");
 pub const NOUNS_ANIMALS: &str = include_str!("../../../../../includes/binary_includes/usernames/atoms/username_nouns_animals.txt");
 
-static ALL_NOUNS : Lazy<Vec<&'static str>> = Lazy::new(|| {
-  iterate_trimmed_lines_without_comments(NOUNS.lines())
-      .chain(iterate_trimmed_lines_without_comments(NOUNS_ANIMALS.lines()))
-      .collect::<HashSet<&'static str>>()
-      .into_iter()
-      .collect()
-});
+static ALL_NOUNS: Lazy<Vec<&'static str>> = Lazy::new(|| iterate_trimmed_lines_without_comments(NOUNS.lines()).chain(iterate_trimmed_lines_without_comments(NOUNS_ANIMALS.lines())).collect::<HashSet<&'static str>>().into_iter().collect());
 
-static ALL_ADJECTIVES : Lazy<Vec<&'static str>> = Lazy::new(|| {
-  iterate_trimmed_lines_without_comments(ADJECTIVES.lines())
-      .collect::<HashSet<&'static str>>()
-      .into_iter()
-      .collect::<Vec<&'static str>>()
-});
+static ALL_ADJECTIVES: Lazy<Vec<&'static str>> = Lazy::new(|| iterate_trimmed_lines_without_comments(ADJECTIVES.lines()).collect::<HashSet<&'static str>>().into_iter().collect::<Vec<&'static str>>());
 
 /// Generate a random username for onboarding purposes.
 /// This function is infallible and will always return a possible username.
@@ -66,7 +55,7 @@ fn generate_candidate_username() -> Option<String> {
   let adjective = random_from_array(&ALL_ADJECTIVES)?;
   let noun = random_from_array(&ALL_NOUNS)?;
 
-  let format : UsernameFormat = rand::random();
+  let format: UsernameFormat = rand::random();
   let mut candidate_username = match format {
     UsernameFormat::CamelCase => format!("{}{}", first_letter_uppercase(adjective), first_letter_uppercase(noun)),
     UsernameFormat::KebabCase => format!("{}-{}", adjective, noun),
@@ -80,11 +69,8 @@ fn generate_candidate_username() -> Option<String> {
 
   candidate_username = match format {
     UsernameFormat::CamelCase => format!("{}{}", candidate_username, digit),
-    UsernameFormat::KebabCase
-    | UsernameFormat::CamelKebabCase => format!("{}-{}", candidate_username, digit),
-    UsernameFormat::SnakeCase
-    | UsernameFormat::CamelSnakeCase
-    | UsernameFormat::ScreamingSnakeCase => format!("{}_{}", candidate_username, digit),
+    UsernameFormat::KebabCase | UsernameFormat::CamelKebabCase => format!("{}-{}", candidate_username, digit),
+    UsernameFormat::SnakeCase | UsernameFormat::CamelSnakeCase | UsernameFormat::ScreamingSnakeCase => format!("{}_{}", candidate_username, digit),
   };
 
   Some(candidate_username)
@@ -116,11 +102,11 @@ fn random_digit() -> u32 {
   // Non-uniform probability for the number of digits
   let num_digits = rand::thread_rng().gen_range(0..100);
   match num_digits {
-    0..5 => rand::thread_rng().gen_range(0..10), // 5%
-    5..25 => rand::thread_rng().gen_range(10..100), // 20%
-    25..60 => rand::thread_rng().gen_range(100..1000), // 35%
+    0..5 => rand::thread_rng().gen_range(0..10),         // 5%
+    5..25 => rand::thread_rng().gen_range(10..100),      // 20%
+    25..60 => rand::thread_rng().gen_range(100..1000),   // 35%
     60..90 => rand::thread_rng().gen_range(1000..10000), // 30%
-    _ => rand::thread_rng().gen_range(10000..100000), // 10%
+    _ => rand::thread_rng().gen_range(10000..100000),    // 10%
   }
 }
 

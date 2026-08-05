@@ -67,8 +67,7 @@ impl OggReader {
         if let Some(stream) = self.streams.get_mut(&page.header.serial) {
             // TODO: Process side data.
             let _side_data = stream.read_page(&page)?;
-        }
-        else {
+        } else {
             // If there is no associated logical stream with this page, then this is a
             // completely random page within the physical stream. Discard it.
         }
@@ -81,8 +80,7 @@ impl OggReader {
 
         if let Some(stream) = self.streams.get(&page.header.serial) {
             stream.peek_packet()
-        }
-        else {
+        } else {
             None
         }
     }
@@ -150,13 +148,11 @@ impl OggReader {
                     // The required timestamp is less-than the timestamp of the first sample in
                     // page1. Update the upper bound and bisect again.
                     end_byte_pos = mid_byte_pos;
-                }
-                else if required_ts > end_ts {
+                } else if required_ts > end_ts {
                     // The required timestamp is greater-than the timestamp of the final sample in
                     // the in page1. Update the lower bound and bisect again.
                     start_byte_pos = mid_byte_pos;
-                }
-                else {
+                } else {
                     // The sample with the required timestamp is contained in page1. Return the
                     // byte position for page0, and the timestamp of the first sample in page1, so
                     // that when packets from page1 are read, those packets will have a non-zero
@@ -416,8 +412,7 @@ impl FormatReader for OggReader {
                             return seek_error(SeekErrorKind::OutOfRange);
                         }
                     }
-                }
-                else {
+                } else {
                     return seek_error(SeekErrorKind::InvalidTrack);
                 }
 
@@ -428,11 +423,9 @@ impl FormatReader for OggReader {
                 // Get the track serial.
                 let serial = if let Some(serial) = track_id {
                     serial
-                }
-                else if let Some(default_track) = self.default_track() {
+                } else if let Some(default_track) = self.default_track() {
                     default_track.id
-                }
-                else {
+                } else {
                     // No tracks.
                     return seek_error(SeekErrorKind::Unseekable);
                 };
@@ -443,8 +436,7 @@ impl FormatReader for OggReader {
 
                     let ts = if let Some(sample_rate) = params.sample_rate {
                         TimeBase::new(1, sample_rate).calc_timestamp(time)
-                    }
-                    else {
+                    } else {
                         // No sample rate. This should never happen.
                         return seek_error(SeekErrorKind::Unseekable);
                     };
@@ -462,8 +454,7 @@ impl FormatReader for OggReader {
                     }
 
                     ts
-                }
-                else {
+                } else {
                     // No mapper for track. The user provided a bad track ID.
                     return seek_error(SeekErrorKind::InvalidTrack);
                 };

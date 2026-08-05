@@ -7,11 +7,7 @@ use log::error;
 use std::collections::HashSet;
 use tokens::tokens::model_weights::ModelWeightToken;
 
-pub async fn assert_search_term_contains_titles(
-  client: &Elasticsearch,
-  search_term: &str,
-  expected_titles: &Vec<&str>,
-) -> AnyhowResult<()> {
+pub async fn assert_search_term_contains_titles(client: &Elasticsearch, search_term: &str, expected_titles: &Vec<&str>) -> AnyhowResult<()> {
   let results = search_term_only(search_term, client).await?;
   let titles = to_title_set(&results);
 
@@ -28,11 +24,9 @@ pub async fn assert_search_term_contains_titles(
 }
 pub fn assert_contains(titles: &HashSet<String>, expected: &str, search_term: &str) -> AnyhowResult<()> {
   if !titles.contains(expected) {
-    error!("Expected title not found: {} for search {} ({} results)",
-      expected, search_term, titles.len());
+    error!("Expected title not found: {} for search {} ({} results)", expected, search_term, titles.len());
 
-    return Err(anyhow!("Expected title not found: {} for search {} ({} results)",
-      expected, search_term, titles.len()));
+    return Err(anyhow!("Expected title not found: {} for search {} ({} results)", expected, search_term, titles.len()));
   }
   Ok(())
 }
@@ -44,13 +38,8 @@ pub fn assert_contains_all(titles: &HashSet<String>, expected: &Vec<&str>, searc
   Ok(())
 }
 
-pub fn assert_results_contain_tokens(
-  results: &Vec<ModelWeightDocument>,
-  expected_tokens: &[&str],
-) -> AnyhowResult<()> {
-  let tokens = results.iter()
-      .map(|result| result.token.clone())
-      .collect::<HashSet<_>>();
+pub fn assert_results_contain_tokens(results: &Vec<ModelWeightDocument>, expected_tokens: &[&str]) -> AnyhowResult<()> {
+  let tokens = results.iter().map(|result| result.token.clone()).collect::<HashSet<_>>();
 
   for token in expected_tokens.iter() {
     let token = ModelWeightToken::new_from_str(token);
@@ -63,13 +52,8 @@ pub fn assert_results_contain_tokens(
   Ok(())
 }
 
-pub fn assert_results_do_not_contain_tokens(
-  results: &Vec<ModelWeightDocument>,
-  expected_tokens: &[&str],
-) -> AnyhowResult<()> {
-  let tokens = results.iter()
-      .map(|result| result.token.clone())
-      .collect::<HashSet<_>>();
+pub fn assert_results_do_not_contain_tokens(results: &Vec<ModelWeightDocument>, expected_tokens: &[&str]) -> AnyhowResult<()> {
+  let tokens = results.iter().map(|result| result.token.clone()).collect::<HashSet<_>>();
 
   for token in expected_tokens.iter() {
     let token = ModelWeightToken::new_from_str(token);

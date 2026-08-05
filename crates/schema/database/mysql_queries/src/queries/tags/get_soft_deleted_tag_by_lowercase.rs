@@ -19,9 +19,7 @@ where
 /// rows still occupy the `(tag_value_lowercase, creator_user_token)`
 /// unique key, so a rename onto that value must purge the dead row
 /// first — this lookup feeds that purge.
-pub async fn get_soft_deleted_tag_by_lowercase<'e, 'c: 'e, E>(
-  args: GetSoftDeletedTagByLowercaseArgs<'e, 'c, E>,
-) -> Result<Option<TagToken>, sqlx::Error>
+pub async fn get_soft_deleted_tag_by_lowercase<'e, 'c: 'e, E>(args: GetSoftDeletedTagByLowercaseArgs<'e, 'c, E>) -> Result<Option<TagToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -37,8 +35,8 @@ LIMIT 1
     args.creator_user_token.as_str(),
     args.tag_value_lowercase,
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
   Ok(result.map(|r| r.token))
 }

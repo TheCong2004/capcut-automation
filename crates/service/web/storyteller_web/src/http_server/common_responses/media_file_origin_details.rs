@@ -42,63 +42,21 @@ pub enum MediaFileModelDetails {
 }
 
 impl MediaFileOriginDetails {
-  pub fn from_db_fields_owned(
-    origin_category: MediaFileOriginCategory,
-    product_category: MediaFileOriginProductCategory,
-    maybe_model_type: Option<MediaFileOriginModelType>,
-    maybe_model_token: Option<ModelWeightToken>,
-    maybe_model_title: Option<String>,
-  ) -> Self {
+  pub fn from_db_fields_owned(origin_category: MediaFileOriginCategory, product_category: MediaFileOriginProductCategory, maybe_model_type: Option<MediaFileOriginModelType>, maybe_model_token: Option<ModelWeightToken>, maybe_model_title: Option<String>) -> Self {
     let maybe_model = match (maybe_model_type, maybe_model_token, maybe_model_title) {
-      (Some(model_type), Some(model_token), Some(model_title)) => {
-        Some(MediaFileModelDetails::ModelWeight {
-          model_type,
-          token: model_token,
-          title: model_title,
-        })
-      },
-      (Some(model_type), None, None) => {
-        Some(MediaFileModelDetails::SystemModel {
-          model_type,
-        })
-      },
+      (Some(model_type), Some(model_token), Some(model_title)) => Some(MediaFileModelDetails::ModelWeight { model_type, token: model_token, title: model_title }),
+      (Some(model_type), None, None) => Some(MediaFileModelDetails::SystemModel { model_type }),
       _ => None,
     };
 
-    Self {
-      origin_category,
-      product_category,
-      maybe_model,
-    }
+    Self { origin_category, product_category, maybe_model }
   }
 
-  pub fn from_db_fields(
-    origin_category: MediaFileOriginCategory,
-    product_category: MediaFileOriginProductCategory,
-    maybe_model_type: Option<MediaFileOriginModelType>,
-    maybe_model_token: Option<&ModelWeightToken>,
-    maybe_model_title: Option<&str>,
-  ) -> Self {
-    Self::from_db_fields_owned(
-      origin_category,
-      product_category,
-      maybe_model_type,
-      maybe_model_token.cloned(),
-      maybe_model_title.map(|s|s.to_string()))
+  pub fn from_db_fields(origin_category: MediaFileOriginCategory, product_category: MediaFileOriginProductCategory, maybe_model_type: Option<MediaFileOriginModelType>, maybe_model_token: Option<&ModelWeightToken>, maybe_model_title: Option<&str>) -> Self {
+    Self::from_db_fields_owned(origin_category, product_category, maybe_model_type, maybe_model_token.cloned(), maybe_model_title.map(|s| s.to_string()))
   }
 
-  pub fn from_db_fields_str(
-    origin_category: MediaFileOriginCategory,
-    product_category: MediaFileOriginProductCategory,
-    maybe_model_type: Option<MediaFileOriginModelType>,
-    maybe_model_token: Option<&str>,
-    maybe_model_title: Option<&str>,
-  ) -> Self {
-    Self::from_db_fields_owned(
-      origin_category,
-      product_category,
-      maybe_model_type,
-      maybe_model_token.map(|s| ModelWeightToken::new_from_str(s)),
-      maybe_model_title.map(|s| s.to_string()))
+  pub fn from_db_fields_str(origin_category: MediaFileOriginCategory, product_category: MediaFileOriginProductCategory, maybe_model_type: Option<MediaFileOriginModelType>, maybe_model_token: Option<&str>, maybe_model_title: Option<&str>) -> Self {
+    Self::from_db_fields_owned(origin_category, product_category, maybe_model_type, maybe_model_token.map(|s| ModelWeightToken::new_from_str(s)), maybe_model_title.map(|s| s.to_string()))
   }
 }

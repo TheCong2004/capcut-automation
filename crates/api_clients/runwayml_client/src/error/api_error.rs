@@ -10,12 +10,9 @@ pub enum ApiError {
 
   /// An error that occurred as or after the request was sent.
   ReqwestError(reqwest::Error),
-  
+
   /// Some other failure response.
-  UncategorizedBadResponse{
-    status_code: StatusCode,
-    message : String,
-  }
+  UncategorizedBadResponse { status_code: StatusCode, message: String },
 }
 
 impl Display for ApiError {
@@ -25,7 +22,7 @@ impl Display for ApiError {
       ApiError::ReqwestError(err) => write!(f, "ReqwestError: {}", err),
       ApiError::UncategorizedBadResponse { status_code, message } => {
         write!(f, "UncategorizedBadResponse: {:?} : {}", status_code, message)
-      }
+      },
     }
   }
 }

@@ -1,4 +1,3 @@
-
 /// Configuration for Stripe, including secrets.
 /// Inject these into Actix http handlers, etc.
 /// Do not log!

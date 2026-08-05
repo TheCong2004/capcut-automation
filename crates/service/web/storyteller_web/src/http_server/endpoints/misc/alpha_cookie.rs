@@ -2,7 +2,7 @@ use actix_web::cookie::Cookie;
 
 use crate::state::server_state::ServerState;
 
-pub const ALPHA_COOKIE_NAME : &str = "enable-alpha";
+pub const ALPHA_COOKIE_NAME: &str = "enable-alpha";
 
 pub fn alpha_cookie(server_state: &ServerState) -> Cookie<'_> {
   Cookie::build(ALPHA_COOKIE_NAME, "true")

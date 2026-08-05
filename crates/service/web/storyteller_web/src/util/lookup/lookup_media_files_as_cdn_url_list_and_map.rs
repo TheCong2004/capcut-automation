@@ -23,33 +23,21 @@ pub struct MediaFilesAsCdnUrlListAndMap {
   pub token_to_url_map: HashMap<MediaFileToken, String>,
 }
 
-pub async fn lookup_media_files_as_cdn_url_list_and_map(
-  http_request: &HttpRequest,
-  mysql_connection: &mut PoolConnection<MySql>,
-  server_environment: ServerEnvironment,
-  tokens: &[MediaFileToken],
-) -> Result<MediaFilesAsCdnUrlListAndMap, CommonWebError> {
+pub async fn lookup_media_files_as_cdn_url_list_and_map(http_request: &HttpRequest, mysql_connection: &mut PoolConnection<MySql>, server_environment: ServerEnvironment, tokens: &[MediaFileToken]) -> Result<MediaFilesAsCdnUrlListAndMap, CommonWebError> {
   const CAN_SEE_DELETED: bool = false;
 
   if tokens.is_empty() {
-    return Ok(MediaFilesAsCdnUrlListAndMap {
-      ordered_url_list: Vec::new(),
-      token_to_url_map: HashMap::new(),
-    });
+    return Ok(MediaFilesAsCdnUrlListAndMap { ordered_url_list: Vec::new(), token_to_url_map: HashMap::new() });
   }
 
-  let result = batch_get_media_files_by_tokens_with_connection(
-    mysql_connection,
-    tokens,
-    CAN_SEE_DELETED,
-  ).await;
+  let result = batch_get_media_files_by_tokens_with_connection(mysql_connection, tokens, CAN_SEE_DELETED).await;
 
   let media_files = match result {
     Ok(files) => files,
     Err(err) => {
       error!("Error getting media files by tokens: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   if media_files.len() != tokens.len() {
@@ -58,13 +46,9 @@ pub async fn lookup_media_files_as_cdn_url_list_and_map(
     let requested: HashSet<&MediaFileToken> = HashSet::from_iter(tokens.iter());
     let returned: HashSet<&MediaFileToken> = HashSet::from_iter(media_files.iter().map(|m| &m.token));
 
-    let diff = requested.difference(&returned)
-        .cloned()
-        .collect::<Vec<&MediaFileToken>>();
+    let diff = requested.difference(&returned).cloned().collect::<Vec<&MediaFileToken>>();
 
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("Not all media files could be found. Media files found: {}, tokens provided: {}, in original: {:?}, req {:?}, ret {:?}",
-        media_files.len(), tokens.len(), diff, requested, returned)));
+    return Err(CommonWebError::BadInputWithSimpleMessage(format!("Not all media files could be found. Media files found: {}, tokens provided: {}, in original: {:?}, req {:?}, ret {:?}", media_files.len(), tokens.len(), diff, requested, returned)));
   }
 
   let media_domain = get_media_domain(http_request);
@@ -73,15 +57,9 @@ pub async fn lookup_media_files_as_cdn_url_list_and_map(
   let mut token_to_url_map = HashMap::with_capacity(media_files.len());
 
   for file in media_files {
-    let public_bucket_path = MediaFileBucketPath::from_object_hash(
-      &file.public_bucket_directory_hash,
-      file.maybe_public_bucket_prefix.as_deref(),
-      file.maybe_public_bucket_extension.as_deref());
+    let public_bucket_path = MediaFileBucketPath::from_object_hash(&file.public_bucket_directory_hash, file.maybe_public_bucket_prefix.as_deref(), file.maybe_public_bucket_extension.as_deref());
 
-    let media_links = MediaLinksBuilder::from_media_path_and_env(
-      media_domain,
-      server_environment,
-      &public_bucket_path);
+    let media_links = MediaLinksBuilder::from_media_path_and_env(media_domain, server_environment, &public_bucket_path);
 
     let url = media_links.cdn_url.to_string();
 
@@ -89,8 +67,5 @@ pub async fn lookup_media_files_as_cdn_url_list_and_map(
     token_to_url_map.insert(file.token, url);
   }
 
-  Ok(MediaFilesAsCdnUrlListAndMap {
-    ordered_url_list,
-    token_to_url_map,
-  })
+  Ok(MediaFilesAsCdnUrlListAndMap { ordered_url_list, token_to_url_map })
 }

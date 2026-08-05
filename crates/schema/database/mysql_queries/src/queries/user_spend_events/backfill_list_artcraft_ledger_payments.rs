@@ -46,9 +46,7 @@ where
 /// backfill's in-memory enrichment map. ArtCraft-only via `wallet_namespace`
 /// (the ledger has no FakeYou rows, but we filter defensively). Refund/staff/
 /// deduct/create entries and non-Stripe refs are excluded.
-pub async fn backfill_list_artcraft_ledger_payments<'c, E>(
-  args: BackfillListLedgerPaymentsArgs<'c, E>,
-) -> Result<Vec<LedgerPaymentRef>, sqlx::Error>
+pub async fn backfill_list_artcraft_ledger_payments<'c, E>(args: BackfillListLedgerPaymentsArgs<'c, E>) -> Result<Vec<LedgerPaymentRef>, sqlx::Error>
 where
   E: Executor<'c, Database = MySql>,
 {
@@ -71,8 +69,8 @@ WHERE w.wallet_namespace = 'artcraft'
     "#,
     args.since,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

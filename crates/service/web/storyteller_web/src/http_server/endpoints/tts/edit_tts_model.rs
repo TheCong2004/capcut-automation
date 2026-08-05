@@ -26,8 +26,8 @@ use redis_common::redis_cache_keys::RedisCacheKeys;
 use tts_common::text_pipelines::text_pipeline_type::TextPipelineType;
 use user_input_common::check_for_slurs::contains_slurs;
 
-const DEFAULT_IETF_LANGUAGE_TAG : &str = "en-US";
-const DEFAULT_IETF_PRIMARY_LANGUAGE_SUBTAG : &str = "en";
+const DEFAULT_IETF_LANGUAGE_TAG: &str = "en-US";
+const DEFAULT_IETF_PRIMARY_LANGUAGE_SUBTAG: &str = "en";
 
 /// For the URL PathInfo
 #[derive(Deserialize)]
@@ -38,7 +38,6 @@ pub struct EditTtsModelPathInfo {
 #[derive(Deserialize)]
 pub struct EditTtsModelRequest {
   // ========== Author + Moderator options ==========
-
   pub title: Option<String>,
   pub description_markdown: Option<String>,
   pub creator_set_visibility: Option<String>,
@@ -68,14 +67,12 @@ pub struct EditTtsModelRequest {
   pub ietf_language_tag: Option<String>,
 
   // ========== Moderator options (protection) ==========
-
   pub is_public_listing_approved: Option<bool>,
   pub is_locked_from_user_modification: Option<bool>,
   pub is_locked_from_use: Option<bool>,
   pub maybe_mod_comments: Option<String>,
 
   // ========== Moderator options (front page, Discord, Twitch, etc.) ==========
-
   pub is_front_page_featured: Option<bool>,
   pub is_twitch_featured: Option<bool>,
 
@@ -88,43 +85,31 @@ pub struct EditTtsModelRequest {
   pub maybe_custom_m_factor: Option<f64>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn edit_tts_model_handler(
-  http_request: HttpRequest,
-  path: Path<EditTtsModelPathInfo>,
-  request: Json<EditTtsModelRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError>
-{
+pub async fn edit_tts_model_handler(http_request: HttpRequest, path: Path<EditTtsModelPathInfo>, request: Json<EditTtsModelRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
   // NB: Disable if we've migrated to model_weights
   if server_state.flags.switch_tts_to_model_weights {
     warn!("Migration to model_weights for tts. Cannot delete old model.");
     return Err(CommonWebError::server_error_with_message("TTS migrated to model_weights; legacy edit endpoint disabled"));
   }
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // NB: First permission check.
   // Only mods should see deleted models (both user_* and mod_* deleted).
   let is_mod_that_can_see_deleted = user_session.can_delete_other_users_tts_models;
 
-  let model_lookup_result = get_tts_model_by_token(
-    &path.model_token,
-    is_mod_that_can_see_deleted,
-    &server_state.mysql_pool).await;
+  let model_lookup_result = get_tts_model_by_token(&path.model_token, is_mod_that_can_see_deleted, &server_state.mysql_pool).await;
 
   let model_record = match model_lookup_result {
     Ok(Some(result)) => {
@@ -143,7 +128,7 @@ pub async fn edit_tts_model_handler(
 
   // NB: Second set of permission checks
   let is_author = &model_record.creator_user_token == user_session.user_token.as_str();
-  let is_mod = user_session.can_edit_other_users_tts_models ;
+  let is_mod = user_session.can_edit_other_users_tts_models;
 
   if !is_author && !is_mod {
     warn!("user is not allowed to edit model: {:?}", user_session.user_token);
@@ -168,8 +153,7 @@ pub async fn edit_tts_model_handler(
   let mut ietf_primary_language_subtag = None;
 
   let mut creator_set_visibility = Visibility::Public;
-  let mut maybe_default_pretrained_vocoder =
-      model_record.maybe_default_pretrained_vocoder;
+  let mut maybe_default_pretrained_vocoder = model_record.maybe_default_pretrained_vocoder;
 
   if let Some(payload) = request.title.as_deref() {
     if contains_slurs(payload) {
@@ -196,15 +180,10 @@ pub async fn edit_tts_model_handler(
     let maybe_full_canonical_tag = get_canonicalized_language_tag_for_model(tag);
 
     // eg. en, es, ja, etc.
-    let maybe_primary_language_subtag = maybe_full_canonical_tag
-        .map(|t| LanguageTag::parse(t)
-            .map(|language_tag| language_tag.primary_language().to_string())
-        )
-        .transpose()
-        .map_err(|e| {
-          error!("Error parsing language tag '{}': {:?}", tag, e);
-          CommonWebError::BadInputWithSimpleMessage("bad locale string".to_string())
-        })?;
+    let maybe_primary_language_subtag = maybe_full_canonical_tag.map(|t| LanguageTag::parse(t).map(|language_tag| language_tag.primary_language().to_string())).transpose().map_err(|e| {
+      error!("Error parsing language tag '{}': {:?}", tag, e);
+      CommonWebError::BadInputWithSimpleMessage("bad locale string".to_string())
+    })?;
 
     if let Some(full_tag) = maybe_full_canonical_tag {
       if let Some(primary_subtag) = maybe_primary_language_subtag.as_deref() {
@@ -214,20 +193,15 @@ pub async fn edit_tts_model_handler(
     }
   }
 
-  let ietf_language_tag = ietf_language_tag
-      .unwrap_or(DEFAULT_IETF_LANGUAGE_TAG.to_string());
+  let ietf_language_tag = ietf_language_tag.unwrap_or(DEFAULT_IETF_LANGUAGE_TAG.to_string());
 
-  let ietf_primary_language_subtag = ietf_primary_language_subtag
-      .unwrap_or(DEFAULT_IETF_PRIMARY_LANGUAGE_SUBTAG.to_string());
+  let ietf_primary_language_subtag = ietf_primary_language_subtag.unwrap_or(DEFAULT_IETF_PRIMARY_LANGUAGE_SUBTAG.to_string());
 
   if let Some(visibility) = request.creator_set_visibility.as_deref() {
-    creator_set_visibility = Visibility::from_str(visibility)
-        .map_err(|_| CommonWebError::BadInputWithSimpleMessage("bad record visibility".to_string()))?;
+    creator_set_visibility = Visibility::from_str(visibility).map_err(|_| CommonWebError::BadInputWithSimpleMessage("bad record visibility".to_string()))?;
   }
 
-  let text_pipeline_type = request.text_pipeline_type
-      .map(|pipeline_type| pipeline_type.to_db_variant())
-      .map(|pipeline_type| pipeline_type.to_str());
+  let text_pipeline_type = request.text_pipeline_type.map(|pipeline_type| pipeline_type.to_db_variant()).map(|pipeline_type| pipeline_type.to_str());
 
   if let Some(vocoder) = request.maybe_default_pretrained_vocoder {
     maybe_default_pretrained_vocoder = Some(vocoder);
@@ -237,36 +211,10 @@ pub async fn edit_tts_model_handler(
 
   let query_result = if is_author {
     // We need to store the IP address details.
-    edit_tts_model_details_as_author(
-      &server_state.mysql_pool,
-      &model_record.model_token,
-      title.as_deref(),
-      description_markdown.as_deref(),
-      description_html.as_deref(),
-      &ietf_language_tag,
-      &ietf_primary_language_subtag,
-      creator_set_visibility,
-      maybe_default_pretrained_vocoder,
-      request.maybe_custom_vocoder_token.as_deref(),
-      text_pipeline_type,
-      &ip_address,
-    ).await
+    edit_tts_model_details_as_author(&server_state.mysql_pool, &model_record.model_token, title.as_deref(), description_markdown.as_deref(), description_html.as_deref(), &ietf_language_tag, &ietf_primary_language_subtag, creator_set_visibility, maybe_default_pretrained_vocoder, request.maybe_custom_vocoder_token.as_deref(), text_pipeline_type, &ip_address).await
   } else {
     // We need to store the moderator details.
-    edit_tts_model_details_as_mod(
-      &server_state.mysql_pool,
-      &model_record.model_token,
-      title.as_deref(),
-      description_markdown.as_deref(),
-      description_html.as_deref(),
-      &ietf_language_tag,
-      &ietf_primary_language_subtag,
-      creator_set_visibility,
-      maybe_default_pretrained_vocoder,
-      request.maybe_custom_vocoder_token.as_deref(),
-      text_pipeline_type,
-      user_session.user_token.as_str(),
-    ).await
+    edit_tts_model_details_as_mod(&server_state.mysql_pool, &model_record.model_token, title.as_deref(), description_markdown.as_deref(), description_html.as_deref(), &ietf_language_tag, &ietf_primary_language_subtag, creator_set_visibility, maybe_default_pretrained_vocoder, request.maybe_custom_vocoder_token.as_deref(), text_pipeline_type, user_session.user_token.as_str()).await
   };
 
   // =============================================
@@ -278,12 +226,7 @@ pub async fn edit_tts_model_handler(
   //  with string literals. It does not support dynamic query building, thus the PREDICATES
   //  MUST BE HELD CONSTANT (at least in type signature). :(
   if is_mod {
-    update_mod_details(
-      &request,
-      user_session.user_token.as_str(),
-      &model_record.model_token,
-      &server_state.mysql_pool
-    ).await?;
+    update_mod_details(&request, user_session.user_token.as_str(), &model_record.model_token, &server_state.mysql_pool).await?;
   }
 
   match query_result {
@@ -291,7 +234,7 @@ pub async fn edit_tts_model_handler(
     Err(err) => {
       warn!("Update W2L model edit DB error: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
   // Best effort to clear any redis cache
@@ -303,14 +246,8 @@ pub async fn edit_tts_model_handler(
   Ok(Json(SimpleGenericJsonSuccess { success: true }))
 }
 
-async fn update_mod_details(
-  request: &Json<EditTtsModelRequest>,
-  moderator_user_token: &str,
-  tts_model_token: &str,
-  mysql_pool: &MySqlPool
-) -> Result<(), CommonWebError> {
-
-  let is_public_listing_approved= request.is_public_listing_approved.unwrap_or(false);
+async fn update_mod_details(request: &Json<EditTtsModelRequest>, moderator_user_token: &str, tts_model_token: &str, mysql_pool: &MySqlPool) -> Result<(), CommonWebError> {
+  let is_public_listing_approved = request.is_public_listing_approved.unwrap_or(false);
   let is_locked_from_user_modification = request.is_locked_from_user_modification.unwrap_or(false);
   let is_locked_from_use = request.is_locked_from_use.unwrap_or(false);
 
@@ -333,26 +270,13 @@ async fn update_mod_details(
   let use_default_mel_multiply_factor = request.use_default_m_factor.unwrap_or(false);
   let maybe_custom_mel_multiply_factor = request.maybe_custom_m_factor;
 
-  let query_result = edit_tts_model_moderator_details(
-    &mysql_pool,
-    tts_model_token,
-    is_public_listing_approved,
-    is_locked_from_user_modification,
-    is_locked_from_use,
-    maybe_suggested_unique_bot_command.as_deref(),
-    is_front_page_featured,
-    is_twitch_featured,
-    moderator_user_token,
-    request.maybe_mod_comments.as_deref(),
-    use_default_mel_multiply_factor,
-    maybe_custom_mel_multiply_factor,
-  ).await;
+  let query_result = edit_tts_model_moderator_details(&mysql_pool, tts_model_token, is_public_listing_approved, is_locked_from_user_modification, is_locked_from_use, maybe_suggested_unique_bot_command.as_deref(), is_front_page_featured, is_twitch_featured, moderator_user_token, request.maybe_mod_comments.as_deref(), use_default_mel_multiply_factor, maybe_custom_mel_multiply_factor).await;
 
   match query_result {
     Ok(_) => Ok(()),
     Err(err) => {
       warn!("Update TTS model (mod details) DB error: {:?}", err);
       Err(CommonWebError::from_error(err))
-    }
+    },
   }
 }

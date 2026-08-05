@@ -35,43 +35,20 @@ use stripe_types::Expandable;
 // 4. Your webhook endpoint updates the customer’s access expiration date in your database to the
 //    appropriate date in the future (plus a day or two for leeway).
 //
-pub async fn invoice_paid_extractor(
-  stripe_event_descriptor: &StripeEventDescriptor,
-  invoice: &Invoice,
-  server_environment: ServerEnvironment,
-  stripe_client: &Client,
-) -> Result<EnrichedWebhookEvent, StripeArtcraftWebhookError> {
+pub async fn invoice_paid_extractor(stripe_event_descriptor: &StripeEventDescriptor, invoice: &Invoice, server_environment: ServerEnvironment, stripe_client: &Client) -> Result<EnrichedWebhookEvent, StripeArtcraftWebhookError> {
+  let maybe_user_token = invoice.metadata.as_ref().map(|metadata| get_metadata_user_token(metadata)).flatten();
 
-  let maybe_user_token = invoice.metadata
-      .as_ref()
-      .map(|metadata| get_metadata_user_token(metadata))
-      .flatten();
-
-  let maybe_stripe_customer_id  = invoice.customer
-      .as_ref()
-      .map(|c| expand_customer_id(c));
+  let maybe_stripe_customer_id = invoice.customer.as_ref().map(|c| expand_customer_id(c));
 
   // NB: We probably don't have a root-level subscription since this is a webhook.
-  let mut maybe_stripe_subscription_id = invoice.subscription
-      .as_ref()
-      .map(|s| expand_subscription_id(s));
+  let mut maybe_stripe_subscription_id = invoice.subscription.as_ref().map(|s| expand_subscription_id(s));
 
   // NB: But we probably do have a parent object.
   if maybe_stripe_subscription_id.is_none() {
-    maybe_stripe_subscription_id = invoice.parent
-        .as_ref()
-        .map(|parent| parent.subscription_details.as_ref())
-        .flatten()
-        .map(|parent_sub| parent_sub.subscription.id().to_string());
+    maybe_stripe_subscription_id = invoice.parent.as_ref().map(|parent| parent.subscription_details.as_ref()).flatten().map(|parent_sub| parent_sub.subscription.id().to_string());
   }
 
-  let mut event_log_summary = WebhookEventLogSummary {
-    maybe_stripe_customer_id,
-    maybe_user_token,
-    maybe_event_entity_id: None,
-    action_was_taken: false,
-    should_ignore_retry: true,
-  };
+  let mut event_log_summary = WebhookEventLogSummary { maybe_stripe_customer_id, maybe_user_token, maybe_event_entity_id: None, action_was_taken: false, should_ignore_retry: true };
 
   let is_paid = match invoice.status {
     Some(InvoiceStatus::Paid) => true,
@@ -99,13 +76,12 @@ pub async fn invoice_paid_extractor(
     None => {
       info!("{} : invoice is not for a subscription; skipping ...", stripe_event_descriptor);
       return Ok(EnrichedWebhookEvent::from_actionless_log(event_log_summary));
-    }
+    },
   };
 
   info!("Calling Stripe to look up subscription info...");
 
-  let subscription = stripe_lookup_subscription_from_subscription_id(
-    &subscription_id, stripe_client).await?;
+  let subscription = stripe_lookup_subscription_from_subscription_id(&subscription_id, stripe_client).await?;
 
   // TODO: Multiple ways to get this; better ways to get this
   let user_token = match &subscription.maybe_user_token {
@@ -113,28 +89,24 @@ pub async fn invoice_paid_extractor(
     None => {
       warn!("No user token found in subscription metadata. Cannot proceed.");
       return Err(StripeArtcraftWebhookError::BadRequest("no user token in subscription metadata".to_string()));
-    }
+    },
   };
 
-  let maybe_product = get_artcraft_product_by_stripe_id_and_env(
-    &subscription.stripe_product_id, server_environment);
+  let maybe_product = get_artcraft_product_by_stripe_id_and_env(&subscription.stripe_product_id, server_environment);
 
   let product = match maybe_product {
     Some(StripeArtcraftGenericProductInfo::Subscription(subscription)) => subscription,
     Some(StripeArtcraftGenericProductInfo::CreditsPack(credits_pack)) => {
       error!("Received a non-subscription credits pack product ({}). This should not happen.", &credits_pack.slug.to_str());
       return Err(StripeArtcraftWebhookError::BadRequest("wrong product type".to_string()));
-    }
+    },
     None => {
       error!("No matching product for stripe product ID: {}", &subscription.stripe_product_id);
       return Err(StripeArtcraftWebhookError::BadRequest("no matching product".to_string()));
-    }
+    },
   };
 
-  let ledger_event_ref = invoice.id
-      .as_ref()
-      .map(|id| id.to_string())
-      .unwrap_or_else(|| stripe_event_descriptor.stripe_event_id.clone());
+  let ledger_event_ref = invoice.id.as_ref().map(|id| id.to_string()).unwrap_or_else(|| stripe_event_descriptor.stripe_event_id.clone());
 
   // The first paid invoice of a new subscription is the "initial"; everything
   // else that reaches here (subscription_cycle) is a renewal.
@@ -144,7 +116,6 @@ pub async fn invoice_paid_extractor(
   };
 
   info!("{} : invoice paid is for subscription.", stripe_event_descriptor);
-  
 
   Ok(EnrichedWebhookEvent {
     maybe_billing_action: Some(ArtcraftBillingAction::SubscriptionPaid(SubscriptionPaidEvent {

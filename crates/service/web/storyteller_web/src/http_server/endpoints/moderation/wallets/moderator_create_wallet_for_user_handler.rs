@@ -6,10 +6,7 @@ use enums::common::payments_namespace::PaymentsNamespace;
 use log::{error, warn};
 use sqlx::Acquire;
 
-use artcraft_api_defs::moderation::wallets::moderator_create_wallet_for_user::{
-  ModeratorCreateWalletForUserRequest,
-  ModeratorCreateWalletForUserResponse,
-};
+use artcraft_api_defs::moderation::wallets::moderator_create_wallet_for_user::{ModeratorCreateWalletForUserRequest, ModeratorCreateWalletForUserResponse};
 use mysql_queries::queries::users::user::get::get_username_by_user_token::get_username_by_user_token;
 use mysql_queries::queries::wallets::create_new_wallet_for_owner_user::create_new_wallet_for_owner_user;
 use mysql_queries::queries::wallets::find_primary_wallet_token_for_owner::find_primary_wallet_token_for_owner_using_connection;
@@ -31,24 +28,16 @@ use crate::state::server_state::ServerState;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn moderator_create_wallet_for_user_handler(
-  http_request: HttpRequest,
-  request: Json<ModeratorCreateWalletForUserRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ModeratorCreateWalletForUserResponse>, CommonWebError> {
-
+pub async fn moderator_create_wallet_for_user_handler(http_request: HttpRequest, request: Json<ModeratorCreateWalletForUserRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModeratorCreateWalletForUserResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
-  let user_token = request.user_token.as_ref()
-    .ok_or_else(|| CommonWebError::BadInputWithSimpleMessage("user_token is required".to_string()))?;
+  let user_token = request.user_token.as_ref().ok_or_else(|| CommonWebError::BadInputWithSimpleMessage("user_token is required".to_string()))?;
 
   // Verify user exists
-  let maybe_user = get_username_by_user_token(user_token, &server_state.mysql_pool)
-    .await
-    .map_err(|err| {
-      warn!("moderator_create_wallet_for_user user lookup error: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let maybe_user = get_username_by_user_token(user_token, &server_state.mysql_pool).await.map_err(|err| {
+    warn!("moderator_create_wallet_for_user user lookup error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   if maybe_user.is_none() {
     return Err(CommonWebError::BadInputWithSimpleMessage("User not found".to_string()));
@@ -57,58 +46,35 @@ pub async fn moderator_create_wallet_for_user_handler(
   let namespace = request.payments_namespace.unwrap_or(PaymentsNamespace::Artcraft);
 
   // Check for existing wallet
-  let mut mysql_connection = server_state.mysql_pool
-    .acquire()
-    .await
-    .map_err(|err| {
-      error!("Error acquiring MySQL connection: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("Error acquiring MySQL connection: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_connection(
-    user_token,
-    namespace,
-    &mut mysql_connection,
-  ).await.map_err(|err| {
+  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_connection(user_token, namespace, &mut mysql_connection).await.map_err(|err| {
     error!("Error finding wallet for user {:?}: {:?}", user_token, err);
     CommonWebError::from_error(err)
   })?;
 
   if let Some(wallet_token) = maybe_wallet_token {
-    return Ok(Json(ModeratorCreateWalletForUserResponse {
-      success: true,
-      wallet_token,
-    }));
+    return Ok(Json(ModeratorCreateWalletForUserResponse { success: true, wallet_token }));
   }
 
   // Create new wallet
-  let mut transaction = mysql_connection
-    .begin()
-    .await
-    .map_err(|err| {
-      error!("Error starting MySQL transaction: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("Error starting MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let wallet_token = create_new_wallet_for_owner_user(
-    user_token,
-    namespace,
-    &mut transaction,
-  ).await.map_err(|err| {
+  let wallet_token = create_new_wallet_for_owner_user(user_token, namespace, &mut transaction).await.map_err(|err| {
     error!("Error creating wallet for user {:?}: {:?}", user_token, err);
     CommonWebError::from_error(err)
   })?;
 
-  transaction
-    .commit()
-    .await
-    .map_err(|err| {
-      error!("Error committing MySQL transaction: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  transaction.commit().await.map_err(|err| {
+    error!("Error committing MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  Ok(Json(ModeratorCreateWalletForUserResponse {
-    success: true,
-    wallet_token,
-  }))
+  Ok(Json(ModeratorCreateWalletForUserResponse { success: true, wallet_token }))
 }

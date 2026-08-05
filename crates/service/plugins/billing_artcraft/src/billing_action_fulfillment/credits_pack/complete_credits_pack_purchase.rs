@@ -15,45 +15,22 @@ use enums::by_table::user_spend_events::payment_source::PaymentSource;
 use mysql_queries::queries::user_spend_events::insert_user_spend_event::{insert_user_spend_event, InsertUserSpendEventArgs};
 
 /// Record the credits pack purchase
-pub async fn complete_credits_pack_purchase(
-  owner_user_token: &UserToken,
-  pack: &StripeArtcraftCreditsPackInfo,
-  quantity: u64,
-  maybe_ledger_ref: Option<&str>,
-  maybe_stripe_customer_id: Option<&str>,
-  maybe_stripe_charge_id: Option<&str>,
-  maybe_stripe_event_id: Option<&str>,
-  amount_usd_cents: i64,
-  is_production: bool,
-  payment_occurred_at: DateTime<Utc>,
-  transaction: &mut sqlx::Transaction<'_, sqlx::MySql>,
-) -> anyhow::Result<()> {
+pub async fn complete_credits_pack_purchase(owner_user_token: &UserToken, pack: &StripeArtcraftCreditsPackInfo, quantity: u64, maybe_ledger_ref: Option<&str>, maybe_stripe_customer_id: Option<&str>, maybe_stripe_charge_id: Option<&str>, maybe_stripe_event_id: Option<&str>, amount_usd_cents: i64, is_production: bool, payment_occurred_at: DateTime<Utc>, transaction: &mut sqlx::Transaction<'_, sqlx::MySql>) -> anyhow::Result<()> {
+  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_transaction(owner_user_token, PaymentsNamespace::Artcraft, transaction).await?;
 
-  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_transaction(
-    owner_user_token, 
-    PaymentsNamespace::Artcraft,
-    transaction
-  ).await?;
-  
   let wallet_token = match maybe_wallet_token {
     Some(token) => token,
     None => {
       info!("No wallet found for user: {} ; creating a new one...", owner_user_token.as_str());
       create_new_artcraft_wallet_for_owner_user(owner_user_token, transaction).await?
-    }
+    },
   };
-  
+
   let credits_purchased = pack.purchase_credits_amount.saturating_mul(quantity);
-  
+
   info!("Adding {} credits to wallet: {}", credits_purchased, wallet_token.as_str());
-  
-  let wallet_update = add_durable_banked_balance_to_wallet(
-    &wallet_token,
-    credits_purchased,
-    maybe_ledger_ref,
-    None,
-    transaction,
-  ).await?;
+
+  let wallet_update = add_durable_banked_balance_to_wallet(&wallet_token, credits_purchased, maybe_ledger_ref, None, transaction).await?;
 
   // Record the money movement in the spend-events ledger, in this SAME
   // transaction. Idempotent on (payment_source, source_object_id), so a replayed
@@ -78,14 +55,11 @@ pub async fn complete_credits_pack_purchase(
     payment_occurred_at,
     mysql_executor: &mut **transaction,
     phantom: PhantomData,
-  }).await?;
+  })
+  .await?;
 
   if let Some(stripe_customer_id) = maybe_stripe_customer_id {
-    optionally_link_user_to_stripe_customer(
-      owner_user_token,
-      stripe_customer_id,
-      transaction,
-    ).await?;
+    optionally_link_user_to_stripe_customer(owner_user_token, stripe_customer_id, transaction).await?;
   }
 
   Ok(())
@@ -94,17 +68,8 @@ pub async fn complete_credits_pack_purchase(
 /// Linking the payment customer to the local user is optional, but it helps us reuse
 /// the card details and not create spurious duplicate customers in Stripe. We use this
 /// linkage in all future portal and checkout sessions once it's established.
-async fn optionally_link_user_to_stripe_customer(
-  user_token: &UserToken,
-  stripe_customer_id: &str,
-  transaction: &mut sqlx::Transaction<'_, sqlx::MySql>,
-) -> anyhow::Result<()> {
-
-  let maybe_record = find_user_stripe_customer_link_using_transaction(
-    user_token,
-    PaymentsNamespace::Artcraft,
-    transaction
-  ).await?;
+async fn optionally_link_user_to_stripe_customer(user_token: &UserToken, stripe_customer_id: &str, transaction: &mut sqlx::Transaction<'_, sqlx::MySql>) -> anyhow::Result<()> {
+  let maybe_record = find_user_stripe_customer_link_using_transaction(user_token, PaymentsNamespace::Artcraft, transaction).await?;
 
   if maybe_record.is_some() {
     return Ok(());
@@ -112,11 +77,7 @@ async fn optionally_link_user_to_stripe_customer(
 
   info!("User is not already linked to a Stripe customer; linking ...");
 
-  let upsert = UpsertUserStripeCustomerLink {
-    user_token,
-    stripe_customer_id,
-    payments_namespace: PaymentsNamespace::Artcraft,
-  };
+  let upsert = UpsertUserStripeCustomerLink { user_token, stripe_customer_id, payments_namespace: PaymentsNamespace::Artcraft };
 
   upsert.upsert_with_transaction(transaction).await?;
 

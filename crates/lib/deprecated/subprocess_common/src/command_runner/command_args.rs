@@ -1,4 +1,3 @@
-
 /// Trait for arguments that can be turned into a command line string.
 pub trait CommandArgs {
   /// Convert to the call signature.

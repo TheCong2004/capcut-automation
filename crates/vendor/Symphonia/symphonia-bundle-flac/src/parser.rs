@@ -201,8 +201,7 @@ impl PacketParser {
         while let Some(fragment) = self.fragments.front() {
             if fragment.pos < to {
                 self.fragments.pop_front();
-            }
-            else {
+            } else {
                 break;
             }
         }
@@ -334,8 +333,7 @@ impl PacketParser {
                     if iter.next().is_some() {
                         self.fragments.pop_front();
                         trace!("discard fragment");
-                    }
-                    else {
+                    } else {
                         break;
                     }
                     best >>= 1;
@@ -479,8 +477,7 @@ impl PacketParser {
                             self.fragments.pop_front();
                             best >>= 1;
                         }
-                    }
-                    else {
+                    } else {
                         self.fragments.pop_front();
                     }
                 }

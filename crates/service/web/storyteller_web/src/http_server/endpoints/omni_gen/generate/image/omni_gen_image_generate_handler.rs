@@ -19,9 +19,7 @@ use enums::by_table::debug_logs::debug_log_level::DebugLogLevel;
 use mysql_queries::queries::debug_logs::insert_debug_log::{insert_debug_log, InsertDebugLogArgs};
 use mysql_queries::queries::generic_inference::api_providers::seedance2pro::insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token::KinoviVersion;
 use mysql_queries::queries::idepotency_tokens::insert_idempotency_token::insert_idempotency_token;
-use mysql_queries::queries::prompt_context_items::insert_batch_prompt_context_items::{
-  insert_batch_prompt_context_items, InsertBatchArgs, PromptContextItem,
-};
+use mysql_queries::queries::prompt_context_items::insert_batch_prompt_context_items::{insert_batch_prompt_context_items, InsertBatchArgs, PromptContextItem};
 use mysql_queries::queries::prompts::insert_prompt::{insert_prompt, InsertPromptArgs};
 use tokens::tokens::generic_inference_jobs::InferenceJobToken;
 use tokens::tokens::non_unique::debug_logs_event_token::DebugLogEventToken;
@@ -54,34 +52,23 @@ use crate::util::lookup::lookup_media_files_as_cdn_url_list_and_map::lookup_medi
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn omni_gen_image_generate_handler(
-  http_request: HttpRequest,
-  request: Json<OmniGenImageCostAndGenerateRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<OmniGenImageGenerateResponse>, CommonWebError> {
-
+pub async fn omni_gen_image_generate_handler(http_request: HttpRequest, request: Json<OmniGenImageCostAndGenerateRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<OmniGenImageGenerateResponse>, CommonWebError> {
   info!("request: {:?}", request);
 
   payments_error_test(&request.prompt.as_deref().unwrap_or(""))?;
 
   let debug_log_event_token = DebugLogEventToken::generate();
 
-  let maybe_prompt_model_type: Option<CommonModelType> = request.model
-    .as_ref()
-    .map(|m| m.to_common_model_type());
+  let maybe_prompt_model_type: Option<CommonModelType> = request.model.as_ref().map(|m| m.to_common_model_type());
 
   // ==================== SESSION ==================== //
 
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_user_session = server_state
-    .session_checker
-    .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-    .await
-    .map_err(|e| {
-      warn!("Session checker error: {:?}", e);
-      CommonWebError::from(e)
-    })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from(e)
+  })?;
 
   let session = match maybe_user_session.as_ref() {
     Some(session) => session,
@@ -90,41 +77,29 @@ pub async fn omni_gen_image_generate_handler(
 
   let user_token = &session.user_token;
 
-  let maybe_avt_token = server_state
-    .avt_cookie_manager
-    .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== MODEL ACCESS CHECK ==================== //
 
-  let user_feature_flags =
-      UserSessionFeatureFlags::new(session.maybe_feature_flags.as_deref());
+  let user_feature_flags = UserSessionFeatureFlags::new(session.maybe_feature_flags.as_deref());
 
   // ==================== IDEMPOTENCY ==================== //
 
-  let idempotency_token = request.idempotency_token.as_deref()
-    .unwrap_or("")
-    .to_string();
+  let idempotency_token = request.idempotency_token.as_deref().unwrap_or("").to_string();
 
   if let Err(reason) = validate_idempotency_token_format(&idempotency_token) {
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(&idempotency_token, &mut *mysql_connection)
-    .await
-    .map_err(|err| {
-      error!("Error inserting idempotency token: {:?}", err);
-      CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
-    })?;
+  insert_idempotency_token(&idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
+  })?;
 
   // ==================== RESOLVE MEDIA TOKENS ==================== //
 
   // Look up media file tokens BEFORE distilling. Pipeline execution should not do I/O.
-  let resolved_media = lookup_media_files_as_cdn_url_list_and_map(
-    &http_request,
-    &mut mysql_connection,
-    server_state.server_environment,
-    request.image_media_tokens.as_deref().unwrap_or(&[]),
-  ).await?;
+  let resolved_media = lookup_media_files_as_cdn_url_list_and_map(&http_request, &mut mysql_connection, server_state.server_environment, request.image_media_tokens.as_deref().unwrap_or(&[])).await?;
 
   // ==================== HYDRATE ROUTER REQUEST ==================== //
 
@@ -135,17 +110,7 @@ pub async fn omni_gen_image_generate_handler(
   let ip_address = get_request_ip(&http_request);
   let request_url = http_request.uri().to_string();
 
-  if let Err(err) = insert_debug_log(InsertDebugLogArgs {
-    apriori_debug_log_event_token: Some(&debug_log_event_token),
-    maybe_creator_user_token: Some(user_token),
-    debug_log_type: DebugLogType::HttpRequest,
-    maybe_log_level: Some(DebugLogLevel::Info),
-    maybe_ip_address: Some(&ip_address),
-    maybe_url: Some(&request_url),
-    message: &serde_json::to_string(&*request).unwrap_or_default(),
-    mysql_executor: &mut *mysql_connection,
-    phantom: Default::default(),
-  }).await {
+  if let Err(err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(&debug_log_event_token), maybe_creator_user_token: Some(user_token), debug_log_type: DebugLogType::HttpRequest, maybe_log_level: Some(DebugLogLevel::Info), maybe_ip_address: Some(&ip_address), maybe_url: Some(&request_url), message: &serde_json::to_string(&*request).unwrap_or_default(), mysql_executor: &mut *mysql_connection, phantom: Default::default() }).await {
     warn!("Failed to insert HTTP request debug log: {:?}", err);
   }
 
@@ -156,21 +121,9 @@ pub async fn omni_gen_image_generate_handler(
   // call — holding a pool slot across that call is what starves the pool and causes PoolTimedOut
   // on unrelated endpoints. We re-acquire below to write the result.
 
-  let debug_log_context = GenerationDebugLogContext {
-    event_token: &debug_log_event_token,
-    user_token,
-    ip_address: &ip_address,
-    request_url: &request_url,
-  };
+  let debug_log_context = GenerationDebugLogContext { event_token: &debug_log_event_token, user_token, ip_address: &ip_address, request_url: &request_url };
 
-  let pipeline_result = run_pipeline_v2(RunPipelineV2Args {
-    router_builder: &router_builder,
-    server_state: &server_state,
-    user_token,
-    resolved_media: &resolved_media,
-    debug_log_context: &debug_log_context,
-    mysql_connection,
-  }).await;
+  let pipeline_result = run_pipeline_v2(RunPipelineV2Args { router_builder: &router_builder, server_state: &server_state, user_token, resolved_media: &resolved_media, debug_log_context: &debug_log_context, mysql_connection }).await;
 
   // ==================== DEBUG LOG: PIPELINE ERROR ==================== //
 
@@ -179,22 +132,12 @@ pub async fn omni_gen_image_generate_handler(
     Err(err) => {
       // Best-effort error log; never mask the original error.
       if let Ok(mut error_log_connection) = server_state.mysql_pool.acquire().await {
-        if let Err(log_err) = insert_debug_log(InsertDebugLogArgs {
-          apriori_debug_log_event_token: Some(&debug_log_event_token),
-          maybe_creator_user_token: Some(user_token),
-          debug_log_type: DebugLogType::BackendFailure,
-          maybe_log_level: Some(DebugLogLevel::Error),
-          maybe_ip_address: Some(&ip_address),
-          maybe_url: Some(&request_url),
-          message: &format!("Image generation pipeline failed: {:?}", err),
-          mysql_executor: &mut *error_log_connection,
-          phantom: Default::default(),
-        }).await {
+        if let Err(log_err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(&debug_log_event_token), maybe_creator_user_token: Some(user_token), debug_log_type: DebugLogType::BackendFailure, maybe_log_level: Some(DebugLogLevel::Error), maybe_ip_address: Some(&ip_address), maybe_url: Some(&request_url), message: &format!("Image generation pipeline failed: {:?}", err), mysql_executor: &mut *error_log_connection, phantom: Default::default() }).await {
           warn!("Failed to insert pipeline error debug log: {:?}", log_err);
         }
       }
       return Err(err);
-    }
+    },
   };
 
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
@@ -206,21 +149,14 @@ pub async fn omni_gen_image_generate_handler(
 
   let maybe_platform_type = get_request_platform_type(&http_request);
 
-  let mut transaction = mysql_connection
-    .begin()
-    .await
-    .map_err(|err| {
-      error!("Error starting MySQL transaction: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("Error starting MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // -- Prompt --
 
-  let generation_mode = if request.image_media_tokens.is_some() {
-    CommonGenerationMode::Edit
-  } else {
-    CommonGenerationMode::Text
-  };
+  let generation_mode = if request.image_media_tokens.is_some() { CommonGenerationMode::Edit } else { CommonGenerationMode::Text };
 
   let prompt_result = insert_prompt(InsertPromptArgs {
     maybe_bitrate: None,
@@ -234,21 +170,22 @@ pub async fn omni_gen_image_generate_handler(
     maybe_other_args: None,
     maybe_generation_mode: Some(generation_mode),
     maybe_aspect_ratio: request.aspect_ratio, // TODO: should be saved from router's decision as it could have changed
-    maybe_resolution: request.resolution,// TODO: should be saved from router's decision as it could have changed
+    maybe_resolution: request.resolution,     // TODO: should be saved from router's decision as it could have changed
     maybe_batch_count: request.image_batch_count.map(|c| c as u8),
-    maybe_generate_audio: None, // NB: Images, not video
+    maybe_generate_audio: None,   // NB: Images, not video
     maybe_duration_seconds: None, // NB: Images, not video
     creator_ip_address: &ip_address,
     mysql_executor: &mut *transaction,
     phantom: Default::default(),
-  }).await;
+  })
+  .await;
 
   let prompt_token = match prompt_result {
     Ok(token) => Some(token),
     Err(err) => {
       warn!("Error inserting prompt: {:?}", err);
       None
-    }
+    },
   };
 
   // -- Prompt context items --
@@ -258,19 +195,12 @@ pub async fn omni_gen_image_generate_handler(
 
     if let Some(ref_tokens) = &request.image_media_tokens {
       for media_token in ref_tokens {
-        context_items.push(PromptContextItem {
-          media_token: media_token.clone(),
-          context_semantic_type: PromptContextSemanticType::Imgref,
-        });
+        context_items.push(PromptContextItem { media_token: media_token.clone(), context_semantic_type: PromptContextSemanticType::Imgref });
       }
     }
 
     if !context_items.is_empty() {
-      if let Err(err) = insert_batch_prompt_context_items(InsertBatchArgs {
-        prompt_token: token.clone(),
-        items: context_items,
-        transaction: &mut transaction,
-      }).await {
+      if let Err(err) = insert_batch_prompt_context_items(InsertBatchArgs { prompt_token: token.clone(), items: context_items, transaction: &mut transaction }).await {
         warn!("Error inserting batch prompt context items: {:?}", err);
       }
     }
@@ -291,52 +221,21 @@ pub async fn omni_gen_image_generate_handler(
       // BytePlus Ultra here, mirror the video-side `kinovi_account` knob.
       let kinovi_version = KinoviVersion::Volcengine;
 
-      let result = insert_seedance2pro_jobs(InsertSeedance2proJobsArgs {
-        primary_order_id: &payload.order_id,
-        maybe_additional_order_ids: payload.maybe_order_ids.as_deref(),
-        maybe_wallet_ledger_entry_token: pipeline_result.maybe_wallet_ledger_entry_token.as_ref(),
-        kinovi_version,
-        shared: SharedJobArgs {
-          apriori_job_token: &pipeline_result.apriori_job_token,
-          idempotency_token: &idempotency_token,
-          user_token,
-          maybe_avt_token: maybe_avt_token.as_ref(),
-          maybe_model_type: request.model.map(|v| v.to_common_model_type()),
-          maybe_prompt_token: prompt_token.as_ref(),
-          maybe_debug_log_event_token: Some(&debug_log_event_token),
-          maybe_platform_type,
-          ip_address: &ip_address,
-          transaction: &mut transaction,
-        },
-      }).await?;
+      let result = insert_seedance2pro_jobs(InsertSeedance2proJobsArgs { primary_order_id: &payload.order_id, maybe_additional_order_ids: payload.maybe_order_ids.as_deref(), maybe_wallet_ledger_entry_token: pipeline_result.maybe_wallet_ledger_entry_token.as_ref(), kinovi_version, shared: SharedJobArgs { apriori_job_token: &pipeline_result.apriori_job_token, idempotency_token: &idempotency_token, user_token, maybe_avt_token: maybe_avt_token.as_ref(), maybe_model_type: request.model.map(|v| v.to_common_model_type()), maybe_prompt_token: prompt_token.as_ref(), maybe_debug_log_event_token: Some(&debug_log_event_token), maybe_platform_type, ip_address: &ip_address, transaction: &mut transaction } }).await?;
       result.primary_job_token
-    }
+    },
     GenerateImageResponse::Fal(payload) => {
       info!("Inserting fal image job with token: {:?}", pipeline_result.apriori_job_token);
       let external_job_id = payload.request_id.clone().unwrap_or_default();
-      insert_fal_job(InsertFalJobArgs {
-        external_job_id: &external_job_id,
-        shared: SharedJobArgs {
-          apriori_job_token: &pipeline_result.apriori_job_token,
-          idempotency_token: &idempotency_token,
-          user_token,
-          maybe_avt_token: maybe_avt_token.as_ref(),
-          maybe_model_type: request.model.map(|v| v.to_common_model_type()),
-          maybe_prompt_token: prompt_token.as_ref(),
-          maybe_debug_log_event_token: Some(&debug_log_event_token),
-          maybe_platform_type,
-          ip_address: &ip_address,
-          transaction: &mut transaction,
-        },
-      }).await?
-    }
+      insert_fal_job(InsertFalJobArgs { external_job_id: &external_job_id, shared: SharedJobArgs { apriori_job_token: &pipeline_result.apriori_job_token, idempotency_token: &idempotency_token, user_token, maybe_avt_token: maybe_avt_token.as_ref(), maybe_model_type: request.model.map(|v| v.to_common_model_type()), maybe_prompt_token: prompt_token.as_ref(), maybe_debug_log_event_token: Some(&debug_log_event_token), maybe_platform_type, ip_address: &ip_address, transaction: &mut transaction } }).await?
+    },
     GenerateImageResponse::Artcraft(payload) => {
       // The omni image pipeline never dispatches via the Artcraft provider
       // itself today (everything routes to Fal or Kinovi), but the response
       // variant exists so we cover it defensively — Artcraft jobs come back
       // already inserted server-side, so just propagate the token.
       payload.inference_job_token.clone()
-    }
+    },
   };
 
   transaction.commit().await.map_err(|err| {
@@ -344,8 +243,5 @@ pub async fn omni_gen_image_generate_handler(
     CommonWebError::from_error(err)
   })?;
 
-  Ok(Json(OmniGenImageGenerateResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  Ok(Json(OmniGenImageGenerateResponse { success: true, inference_job_token: job_token }))
 }

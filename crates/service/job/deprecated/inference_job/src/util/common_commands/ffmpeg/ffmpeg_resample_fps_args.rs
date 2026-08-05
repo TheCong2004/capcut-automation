@@ -23,7 +23,7 @@ impl CommandArgs for FfmpegResampleFpsArgs<'_> {
     command.push_str(" ");
 
     command.push_str(&path_to_string(self.output_video_file));
-    
+
     debug!("ffmpeg arguments: {:?}", &command);
 
     command

@@ -57,7 +57,7 @@ pub use types::string::get_env_string_required;
 mod error;
 mod init;
 mod logging;
-pub (crate) mod types;
+pub(crate) mod types;
 
 #[cfg(test)]
 mod tests_common;

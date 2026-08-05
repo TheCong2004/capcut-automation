@@ -2,7 +2,6 @@
 pub struct RedisKeys;
 
 impl RedisKeys {
-
   // =============== FAKEYOU / TTS / W2L ===============
 
   /// This is a counter incremented with TTS inference.
@@ -101,7 +100,7 @@ impl RedisKeys {
   /// This is a lazy first approximation of the worker -> OBS messaging.
   /// We push new TTS job tokens into a Redis list (with long expiry), and OBS
   /// will dequeue the events in order.
-  #[deprecated(note="Use twitch_tts_job_topic instead (PubSub instead of a Redis list)")]
+  #[deprecated(note = "Use twitch_tts_job_topic instead (PubSub instead of a Redis list)")]
   pub fn twitch_tts_job_queue(twitch_user_id: &str) -> String {
     format!("twitchTtsJobs:{}", twitch_user_id)
   }

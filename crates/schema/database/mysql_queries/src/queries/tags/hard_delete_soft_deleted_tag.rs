@@ -21,9 +21,7 @@ where
 /// `maybe_deleted_at IS NOT NULL` predicate makes a stale token a
 /// no-op. Callers should remove the tag's `media_file_tags` links first
 /// (`delete_media_file_tags_for_tag`).
-pub async fn hard_delete_soft_deleted_tag<'e, 'c: 'e, E>(
-  args: HardDeleteSoftDeletedTagArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn hard_delete_soft_deleted_tag<'e, 'c: 'e, E>(args: HardDeleteSoftDeletedTagArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -37,8 +35,8 @@ WHERE token = ?
     args.tag_token.as_str(),
     args.creator_user_token.as_str(),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(result.rows_affected())
 }

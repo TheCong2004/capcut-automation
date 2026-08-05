@@ -106,95 +106,67 @@ pub struct ListFeaturedMediaFilesArgs<'a> {
 }
 
 pub async fn list_featured_media_files(args: ListFeaturedMediaFilesArgs<'_>) -> AnyhowResult<FeaturedMediaFileListPage> {
-
-  let mut query = query_builder(
-    args.maybe_filter_media_types,
-    args.maybe_filter_media_classes,
-    args.maybe_filter_engine_categories,
-    args.maybe_filter_product_categories,
-    args.limit,
-    args.maybe_offset,
-    args.cursor_is_reversed,
-    args.sort_ascending,
-    args.view_as,
-  );
+  let mut query = query_builder(args.maybe_filter_media_types, args.maybe_filter_media_classes, args.maybe_filter_engine_categories, args.maybe_filter_product_categories, args.limit, args.maybe_offset, args.cursor_is_reversed, args.sort_ascending, args.view_as);
 
   let query = query.build_query_as::<MediaFileListItemInternal>();
 
   let results = query.fetch_all(args.mysql_pool).await?;
 
-  let first_id = results.first()
-      .map(|raw_result| raw_result.id);
+  let first_id = results.first().map(|raw_result| raw_result.id);
 
-  let last_id = results.last()
-      .map(|raw_result| raw_result.id);
+  let last_id = results.last().map(|raw_result| raw_result.id);
 
-  let results = results.into_iter()
-      .map(|record| {
-        FeaturedMediaFileListItem {
-          token: record.token,
-          media_class: record.media_class,
-          media_type: record.media_type,
-          maybe_engine_category: record.maybe_engine_category,
-          maybe_animation_type: record.maybe_animation_type,
-          origin_category: record.origin_category,
-          origin_product_category: record.origin_product_category,
-          maybe_origin_model_type: record.maybe_origin_model_type,
-          maybe_origin_model_token: record.maybe_origin_model_token,
-          maybe_origin_model_title: record.maybe_origin_model_title,
-          public_bucket_directory_hash: record.public_bucket_directory_hash,
-          maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
-          maybe_public_bucket_extension: record.maybe_public_bucket_extension,
-          maybe_creator_user_token: record.maybe_creator_user_token,
-          maybe_creator_username: record.maybe_creator_username,
-          maybe_creator_display_name: record.maybe_creator_display_name,
-          maybe_creator_gravatar_hash: record.maybe_creator_gravatar_hash,
-          maybe_title: record.maybe_title,
-          maybe_text_transcript: record.maybe_text_transcript,
-          maybe_prompt_args: record.maybe_other_prompt_args
+  let results = results
+    .into_iter()
+    .map(|record| {
+      FeaturedMediaFileListItem {
+        token: record.token,
+        media_class: record.media_class,
+        media_type: record.media_type,
+        maybe_engine_category: record.maybe_engine_category,
+        maybe_animation_type: record.maybe_animation_type,
+        origin_category: record.origin_category,
+        origin_product_category: record.origin_product_category,
+        maybe_origin_model_type: record.maybe_origin_model_type,
+        maybe_origin_model_token: record.maybe_origin_model_token,
+        maybe_origin_model_title: record.maybe_origin_model_title,
+        public_bucket_directory_hash: record.public_bucket_directory_hash,
+        maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
+        maybe_public_bucket_extension: record.maybe_public_bucket_extension,
+        maybe_creator_user_token: record.maybe_creator_user_token,
+        maybe_creator_username: record.maybe_creator_username,
+        maybe_creator_display_name: record.maybe_creator_display_name,
+        maybe_creator_gravatar_hash: record.maybe_creator_gravatar_hash,
+        maybe_title: record.maybe_title,
+        maybe_text_transcript: record.maybe_text_transcript,
+        maybe_prompt_args: record.maybe_other_prompt_args
               .as_deref()
               .map(|args| PromptInnerPayload::from_json(args))
               .transpose()
               .ok() // NB: Fail open
               .flatten(),
-          maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
-          creator_set_visibility: record.creator_set_visibility,
-          is_user_upload: i8_to_bool(record.is_user_upload),
-          is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
-          maybe_file_cover_image_public_bucket_hash: record.maybe_file_cover_image_public_bucket_hash,
-          maybe_file_cover_image_public_bucket_prefix: record.maybe_file_cover_image_public_bucket_prefix,
-          maybe_file_cover_image_public_bucket_extension: record.maybe_file_cover_image_public_bucket_extension,
-          comment_count: record.comment_count as u64,
-          favorite_count: record.favorite_count as u64,
-          maybe_ratings_positive_count: record.maybe_ratings_positive_count,
-          maybe_ratings_negative_count: record.maybe_ratings_negative_count,
-          maybe_bookmark_count: record.maybe_bookmark_count,
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-        }
-      })
-      .collect::<Vec<_>>();
+        maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
+        creator_set_visibility: record.creator_set_visibility,
+        is_user_upload: i8_to_bool(record.is_user_upload),
+        is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
+        maybe_file_cover_image_public_bucket_hash: record.maybe_file_cover_image_public_bucket_hash,
+        maybe_file_cover_image_public_bucket_prefix: record.maybe_file_cover_image_public_bucket_prefix,
+        maybe_file_cover_image_public_bucket_extension: record.maybe_file_cover_image_public_bucket_extension,
+        comment_count: record.comment_count as u64,
+        favorite_count: record.favorite_count as u64,
+        maybe_ratings_positive_count: record.maybe_ratings_positive_count,
+        maybe_ratings_negative_count: record.maybe_ratings_negative_count,
+        maybe_bookmark_count: record.maybe_bookmark_count,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+      }
+    })
+    .collect::<Vec<_>>();
 
-  Ok(FeaturedMediaFileListPage {
-    records: results,
-    sort_ascending: !args.cursor_is_reversed,
-    first_id,
-    last_id,
-  })
+  Ok(FeaturedMediaFileListPage { records: results, sort_ascending: !args.cursor_is_reversed, first_id, last_id })
 }
 
-fn query_builder<'a>(
-  maybe_filter_media_types: Option<&HashSet<MediaFileType>>,
-  maybe_filter_media_classes: Option<&HashSet<MediaFileClass>>,
-  maybe_filter_engine_categories: Option<&HashSet<MediaFileEngineCategory>>,
-  maybe_filter_product_categories: Option<&HashSet<MediaFileOriginProductCategory>>,
-  limit: usize,
-  maybe_offset: Option<usize>,
-  cursor_is_reversed: bool,
-  sort_ascending: bool,
-  view_as: ViewAs,
-) -> QueryBuilder<'a, MySql> {
-
+fn query_builder<'a>(maybe_filter_media_types: Option<&HashSet<MediaFileType>>, maybe_filter_media_classes: Option<&HashSet<MediaFileClass>>, maybe_filter_engine_categories: Option<&HashSet<MediaFileEngineCategory>>, maybe_filter_product_categories: Option<&HashSet<MediaFileOriginProductCategory>>, limit: usize, maybe_offset: Option<usize>, cursor_is_reversed: bool, sort_ascending: bool, view_as: ViewAs) -> QueryBuilder<'a, MySql> {
   let mut sort_ascending = sort_ascending;
   // NB: Query cannot be statically checked by sqlx
   let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
@@ -272,7 +244,7 @@ LEFT OUTER JOIN entity_stats
     AND entity_stats.entity_token = m.token
 LEFT OUTER JOIN prompts
     ON prompts.token = m.maybe_prompt_token
-    "#
+    "#,
   );
 
   let mut first_predicate_added = false;
@@ -386,7 +358,7 @@ LEFT OUTER JOIN prompts
       }
       // NB(bt): Actually, mods don't want to see deleted files. We'll improve the moderator UI later.
       query_builder.push(" m.user_deleted_at IS NULL AND m.mod_deleted_at IS NULL ");
-    }
+    },
     ViewAs::AnotherUser => {
       if !first_predicate_added {
         query_builder.push(" WHERE ");
@@ -400,7 +372,7 @@ LEFT OUTER JOIN prompts
       //  incorrect binding and runtime error.
       query_builder.push(" AND m.creator_set_visibility = ");
       query_builder.push_bind(Visibility::Public.to_str());
-    }
+    },
   }
 
   if let Some(offset) = maybe_offset {
@@ -508,7 +480,7 @@ struct MediaFileListItemInternal {
 // full "as" clause).
 impl FromRow<'_, MySqlRow> for MediaFileListItemInternal {
   fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
-    let maybe_creator_user_token : Option<String> = row.try_get("maybe_creator_user_token")?;
+    let maybe_creator_user_token: Option<String> = row.try_get("maybe_creator_user_token")?;
     let maybe_creator_user_token = maybe_creator_user_token.map(|user_token| UserToken::new(user_token));
 
     Ok(Self {

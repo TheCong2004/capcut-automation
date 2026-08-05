@@ -33,7 +33,7 @@ impl StripeSubscriptionStatus {
       StripeSubscriptionStatus::PastDue => "past_due",
       StripeSubscriptionStatus::Trialing => "trialing",
       StripeSubscriptionStatus::Unpaid => "unpaid",
-      StripeSubscriptionStatus::Paused => "paused"
+      StripeSubscriptionStatus::Paused => "paused",
     }
   }
 

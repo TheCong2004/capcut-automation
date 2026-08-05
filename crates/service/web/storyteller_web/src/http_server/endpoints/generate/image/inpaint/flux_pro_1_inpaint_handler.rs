@@ -43,30 +43,17 @@ use utoipa::ToSchema;
     ("request" = FluxPro1InpaintImageRequest, description = "Payload for Request"),
   )
 )]
-pub async fn flux_pro_1_inpaint_image_handler(
-  http_request: HttpRequest,
-  request: Json<FluxPro1InpaintImageRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<FluxPro1InpaintImageResponse>, CommonWebError> {
-
+pub async fn flux_pro_1_inpaint_image_handler(http_request: HttpRequest, request: Json<FluxPro1InpaintImageRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<FluxPro1InpaintImageResponse>, CommonWebError> {
   payments_error_test(&request.prompt.as_deref().unwrap_or(""))?;
-  
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
+
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // TODO: Limit usage for new accounts. Billing, free credits metering, etc.
 
@@ -84,82 +71,55 @@ pub async fn flux_pro_1_inpaint_image_handler(
 
   const CAN_SEE_DELETED: bool = false;
 
-  let media_tokens = vec![
-    request.image_media_token.clone(),
-    request.mask_media_token.clone(),
-  ];
+  let media_tokens = vec![request.image_media_token.clone(), request.mask_media_token.clone()];
 
-  let result = batch_get_media_files_by_tokens_with_connection(
-    &mut mysql_connection,
-    &media_tokens,
-    CAN_SEE_DELETED,
-  ).await;
+  let result = batch_get_media_files_by_tokens_with_connection(&mut mysql_connection, &media_tokens, CAN_SEE_DELETED).await;
 
   let media_files = match result {
     Ok(files) => files,
     Err(err) => {
       error!("Error getting media files by tokens: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   if media_files.len() != media_tokens.len() {
     warn!("Wrong number of media files returned for tokens: {} found for {} tokens", media_files.len(), media_tokens.len());
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("Not all media files could be found. Media files found: {}, tokens provided: {}",
-        media_files.len(), media_tokens.len())));
+    return Err(CommonWebError::BadInputWithSimpleMessage(format!("Not all media files could be found. Media files found: {}, tokens provided: {}", media_files.len(), media_tokens.len())));
   }
 
   let media_domain = get_media_domain(&http_request);
 
-  let image_media_file = media_files.iter()
-      .find(|file| file.token == request.image_media_token)
-      .ok_or_else(|| {
-        warn!("Image media file not found for token: {}", request.image_media_token);
-        CommonWebError::BadInputWithSimpleMessage("Image media file not found".to_string())
-      })?;
+  let image_media_file = media_files.iter().find(|file| file.token == request.image_media_token).ok_or_else(|| {
+    warn!("Image media file not found for token: {}", request.image_media_token);
+    CommonWebError::BadInputWithSimpleMessage("Image media file not found".to_string())
+  })?;
 
-  let mask_media_file = media_files.iter()
-      .find(|file| file.token == request.mask_media_token)
-      .ok_or_else(|| {
-        warn!("Mask media file not found for token: {}", request.mask_media_token);
-        CommonWebError::BadInputWithSimpleMessage("Mask media file not found".to_string())
-      })?;
+  let mask_media_file = media_files.iter().find(|file| file.token == request.mask_media_token).ok_or_else(|| {
+    warn!("Mask media file not found for token: {}", request.mask_media_token);
+    CommonWebError::BadInputWithSimpleMessage("Mask media file not found".to_string())
+  })?;
 
   let image_url = {
-    let public_bucket_path = MediaFileBucketPath::from_object_hash(
-      &image_media_file.public_bucket_directory_hash,
-      image_media_file.maybe_public_bucket_prefix.as_deref(),
-      image_media_file.maybe_public_bucket_extension.as_deref());
+    let public_bucket_path = MediaFileBucketPath::from_object_hash(&image_media_file.public_bucket_directory_hash, image_media_file.maybe_public_bucket_prefix.as_deref(), image_media_file.maybe_public_bucket_extension.as_deref());
 
-    let media_links = MediaLinksBuilder::from_media_path_and_env(
-      media_domain,
-      server_state.server_environment,
-      &public_bucket_path);
+    let media_links = MediaLinksBuilder::from_media_path_and_env(media_domain, server_state.server_environment, &public_bucket_path);
 
     media_links.cdn_url.to_string()
   };
 
   let mask_image_url = {
-    let public_bucket_path = MediaFileBucketPath::from_object_hash(
-      &mask_media_file.public_bucket_directory_hash,
-      mask_media_file.maybe_public_bucket_prefix.as_deref(),
-      mask_media_file.maybe_public_bucket_extension.as_deref());
+    let public_bucket_path = MediaFileBucketPath::from_object_hash(&mask_media_file.public_bucket_directory_hash, mask_media_file.maybe_public_bucket_prefix.as_deref(), mask_media_file.maybe_public_bucket_extension.as_deref());
 
-    let media_links = MediaLinksBuilder::from_media_path_and_env(
-      media_domain,
-      server_state.server_environment,
-      &public_bucket_path);
+    let media_links = MediaLinksBuilder::from_media_path_and_env(media_domain, server_state.server_environment, &public_bucket_path);
 
     media_links.cdn_url.to_string()
   };
 
-  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
-      })?;
+  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
+  })?;
 
   info!("Fal webhook URL: {}", server_state.inference_providers.fal.webhook_url);
 
@@ -171,53 +131,36 @@ pub async fn flux_pro_1_inpaint_image_handler(
     None => FluxPro1InfillNumImages::One, // Default to One
   };
 
-  let args = FluxPro1InfillArgs {
-    request: FluxPro1InfillRequest {
-      prompt: request.prompt.as_deref().unwrap_or("").to_string(),
-      image_url,
-      mask_url: mask_image_url,
-      num_images,
-    },
-    webhook_url: &server_state.inference_providers.fal.webhook_url,
-    api_key: &server_state.inference_providers.fal.api_key,
-  };
+  let args = FluxPro1InfillArgs { request: FluxPro1InfillRequest { prompt: request.prompt.as_deref().unwrap_or("").to_string(), image_url, mask_url: mask_image_url, num_images }, webhook_url: &server_state.inference_providers.fal.webhook_url, api_key: &server_state.inference_providers.fal.api_key };
 
-  let fal_result = enqueue_flux_pro_1_infill_webhook(args)
-      .await
-      .map_err(|err| {
-        warn!("Error calling enqueue_flux_pro_1_infill_webhook: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let fal_result = enqueue_flux_pro_1_infill_webhook(args).await.map_err(|err| {
+    warn!("Error calling enqueue_flux_pro_1_infill_webhook: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let external_job_id = fal_result.request_id
-      .ok_or_else(|| {
-        warn!("Fal request_id is None");
-        CommonWebError::server_error_with_message("Fal request_id is None")
-      })?;
+  let external_job_id = fal_result.request_id.ok_or_else(|| {
+    warn!("Fal request_id is None");
+    CommonWebError::server_error_with_message("Fal request_id is None")
+  })?;
 
   info!("Fal request_id: {}", external_job_id);
 
   let ip_address = get_request_ip(&http_request);
 
-  let mut transaction = mysql_connection
-      .begin()
-      .await
-      .map_err(|err| {
-        error!("Error starting MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("Error starting MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // NB: Don't fail the job if the query fails.
   let prompt_result = insert_prompt(InsertPromptArgs {
     maybe_bitrate: None,
     maybe_apriori_prompt_token: None,
     prompt_type: PromptType::ArtcraftApp,
-    maybe_creator_user_token: maybe_user_session
-        .as_ref()
-        .map(|s| &s.user_token),
+    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
     // TODO(bt,2025-07-31): Should we have an "inpaint" specific variant?
     //  Depends on how we want to model provider / feature matrices, routing, and results going forward.
-    maybe_model_type: Some(CommonModelType::FluxPro1), 
+    maybe_model_type: Some(CommonModelType::FluxPro1),
     maybe_generation_provider: Some(GenerationProvider::Artcraft),
     maybe_positive_prompt: request.prompt.as_deref(),
     maybe_negative_prompt: None,
@@ -236,31 +179,19 @@ pub async fn flux_pro_1_inpaint_image_handler(
     creator_ip_address: &ip_address,
     mysql_executor: &mut *transaction,
     phantom: Default::default(),
-  }).await;
+  })
+  .await;
 
   let prompt_token = match prompt_result {
     Ok(token) => Some(token),
     Err(err) => {
       warn!("Error inserting prompt: {:?}", err);
       None // Don't fail the job if the prompt insertion fails.
-    }
+    },
   };
 
   if let Some(token) = prompt_token.as_ref() {
-    let result = insert_batch_prompt_context_items(InsertBatchArgs {
-      prompt_token: token.clone(),
-      items: vec![
-        PromptContextItem {
-          media_token: image_media_file.token.clone(),
-          context_semantic_type: PromptContextSemanticType::Imgsrc,
-        },
-        PromptContextItem {
-          media_token: mask_media_file.token.clone(),
-          context_semantic_type: PromptContextSemanticType::Imgmask,
-        },
-      ],
-      transaction: &mut transaction,
-    }).await;
+    let result = insert_batch_prompt_context_items(InsertBatchArgs { prompt_token: token.clone(), items: vec![PromptContextItem { media_token: image_media_file.token.clone(), context_semantic_type: PromptContextSemanticType::Imgsrc }, PromptContextItem { media_token: mask_media_file.token.clone(), context_semantic_type: PromptContextSemanticType::Imgmask }], transaction: &mut transaction }).await;
 
     if let Err(err) = result {
       // NB: Fail open.
@@ -268,40 +199,20 @@ pub async fn flux_pro_1_inpaint_image_handler(
     }
   }
 
-  let db_result = insert_generic_inference_job_for_fal_queue(InsertGenericInferenceForFalArgs {
-    uuid_idempotency_token: &request.uuid_idempotency_token,
-    maybe_external_third_party_id: &external_job_id,
-    fal_category: FalCategory::ImageGeneration,
-    maybe_model_type: Some(CommonModelType::FluxPro1),
-    maybe_inference_args: None,
-    maybe_prompt_token: prompt_token.as_ref(),
-    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
-    maybe_avt_token: maybe_avt_token.as_ref(),
-    creator_ip_address: &ip_address,
-    creator_set_visibility: Visibility::Public,
-    maybe_platform_type: get_request_platform_type(&http_request),
-    mysql_executor: &mut *transaction,
-    phantom: Default::default(),
-  }).await;
+  let db_result = insert_generic_inference_job_for_fal_queue(InsertGenericInferenceForFalArgs { uuid_idempotency_token: &request.uuid_idempotency_token, maybe_external_third_party_id: &external_job_id, fal_category: FalCategory::ImageGeneration, maybe_model_type: Some(CommonModelType::FluxPro1), maybe_inference_args: None, maybe_prompt_token: prompt_token.as_ref(), maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token), maybe_avt_token: maybe_avt_token.as_ref(), creator_ip_address: &ip_address, creator_set_visibility: Visibility::Public, maybe_platform_type: get_request_platform_type(&http_request), mysql_executor: &mut *transaction, phantom: Default::default() }).await;
 
   let job_token = match db_result {
     Ok(token) => token,
     Err(err) => {
       warn!("Error inserting generic inference job for FAL queue: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
-  let _r = transaction
-      .commit()
-      .await
-      .map_err(|err| {
-        error!("Error committing MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let _r = transaction.commit().await.map_err(|err| {
+    error!("Error committing MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  Ok(Json(FluxPro1InpaintImageResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  Ok(Json(FluxPro1InpaintImageResponse { success: true, inference_job_token: job_token }))
 }

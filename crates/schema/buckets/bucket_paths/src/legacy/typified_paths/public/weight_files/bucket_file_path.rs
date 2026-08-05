@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crockford::crockford_entropy_lower;
 use crate::legacy::typified_paths::public::public_path::PublicPath;
 
-const ORIGINAL_FILE_BASENAME : &str = "file.bin";
+const ORIGINAL_FILE_BASENAME: &str = "file.bin";
 
 // TODO: Generate these from a macro.
 use crate::legacy::typified_paths::public::weight_files::bucket_directory::WeightFileBucketDirectory;
@@ -25,7 +25,6 @@ pub struct WeightFileBucketPath {
 impl PublicPath for WeightFileBucketPath {}
 
 impl WeightFileBucketPath {
-
   // TODO(bt,2024-01-14): This is temporary standardization. Clean this up.
   pub fn generate_for_tt2_model() -> Self {
     Self::generate_new(Some("tt2_"), Some(".pt"))
@@ -79,13 +78,7 @@ impl WeightFileBucketPath {
 
     let full_object_path = format!("{}/{}", directory.get_directory_path_str(), filename);
 
-    Self {
-      directory,
-      filename,
-      full_object_path,
-      optional_prefix: optional_prefix.map(|p| p.to_string()),
-      optional_extension: optional_extension.map(|e| e.to_string()),
-    }
+    Self { directory, filename, full_object_path, optional_prefix: optional_prefix.map(|p| p.to_string()), optional_extension: optional_extension.map(|e| e.to_string()) }
   }
 
   pub fn get_full_object_path_str(&self) -> &str {

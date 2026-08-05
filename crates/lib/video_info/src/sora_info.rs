@@ -73,17 +73,7 @@ impl SoraInfo {
       return Err(VideoInfoError::NotSora);
     }
 
-    Ok(SoraInfo {
-      producer: "OpenAI".to_string(),
-      model_name: find(data, SORA_MARKER).map(|_| "sora".to_string()),
-      created_description: find_description_containing(data, b"OpenAI")
-        .or_else(|| find_description_containing(data, b"Generated")),
-      digital_source_type: text_after_key(data, b"digitalSourceType"),
-      claim_generator: text_after_key(data, b"claim_generator"),
-      manifest_id: find_prefixed_uuid(data, b"urn:c2pa:"),
-      instance_id: text_after_key(data, b"instanceID"),
-      cert_serial: find_cert_serial(data),
-    })
+    Ok(SoraInfo { producer: "OpenAI".to_string(), model_name: find(data, SORA_MARKER).map(|_| "sora".to_string()), created_description: find_description_containing(data, b"OpenAI").or_else(|| find_description_containing(data, b"Generated")), digital_source_type: text_after_key(data, b"digitalSourceType"), claim_generator: text_after_key(data, b"claim_generator"), manifest_id: find_prefixed_uuid(data, b"urn:c2pa:"), instance_id: text_after_key(data, b"instanceID"), cert_serial: find_cert_serial(data) })
   }
 }
 

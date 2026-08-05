@@ -10,11 +10,7 @@ pub struct NoOpLogger {
 
 impl NoOpLogger {
   pub fn new(log_every_millis: i64) -> Self {
-    Self {
-      last_log_time: Utc.timestamp(0, 0),
-      logless_duration: Duration::milliseconds(log_every_millis),
-      op_count: 0
-    }
+    Self { last_log_time: Utc.timestamp(0, 0), logless_duration: Duration::milliseconds(log_every_millis), op_count: 0 }
   }
 
   pub fn log_after_awhile(&mut self) {
@@ -24,7 +20,7 @@ impl NoOpLogger {
     if delta > self.logless_duration {
       info!("No operations for {:?}. {} operations.", delta, self.op_count);
       self.op_count = 0;
-      self.last_log_time  = now;
+      self.last_log_time = now;
     }
 
     self.op_count += 1;
@@ -37,7 +33,7 @@ impl NoOpLogger {
     if delta > self.logless_duration {
       info!("No operations for {:?}. {} operations: {}", delta, self.op_count, message);
       self.op_count = 0;
-      self.last_log_time  = now;
+      self.last_log_time = now;
     }
 
     self.op_count += 1;

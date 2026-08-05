@@ -17,7 +17,7 @@ pub fn list_archive_files<P: AsRef<Path>>(file_path: P) -> AnyhowResult<Vec<Stri
       Some(path) => path,
       None => {
         return Err(anyhow!("Entry {} has a suspicious path", file.name()));
-      }
+      },
     };
 
     if (*file.name()).ends_with('/') {

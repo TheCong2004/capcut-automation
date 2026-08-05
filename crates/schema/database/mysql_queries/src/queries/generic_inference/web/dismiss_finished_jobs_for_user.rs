@@ -7,12 +7,9 @@ use errors::AnyhowResult;
 use tokens::tokens::users::UserToken;
 
 /// Mark finished jobs as dismissed by the user.
-pub async fn dismiss_finished_jobs_for_user(
-  mysql_connection: &mut PoolConnection<MySql>,
-  user_token: &UserToken
-) -> AnyhowResult<()> {
+pub async fn dismiss_finished_jobs_for_user(mysql_connection: &mut PoolConnection<MySql>, user_token: &UserToken) -> AnyhowResult<()> {
   let query_result = sqlx::query!(
-        r#"
+    r#"
 UPDATE generic_inference_jobs
 SET
   is_dismissed_by_user = TRUE
@@ -27,10 +24,10 @@ AND status IN (
 AND created_at > DATE_SUB(NOW(), INTERVAL 36 HOUR)
 LIMIT 1000
         "#,
-        user_token,
-    )
-      .execute(&mut **mysql_connection)
-      .await;
+    user_token,
+  )
+  .execute(&mut **mysql_connection)
+  .await;
 
   if let Err(err) = query_result {
     return Err(anyhow!("error with dismiss jobs query: {:?}", err));

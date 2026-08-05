@@ -88,7 +88,7 @@ impl MediaFileOriginModelType {
       Self::FaceFusion => "face_fusion",
       Self::F5TTS => "f5_tts",
       Self::LivePortrait => "live_portrait",
-      Self::RvcV2  => "rvc_v2",
+      Self::RvcV2 => "rvc_v2",
       Self::SadTalker => "sad_talker",
       Self::SeedVc => "seed_vc",
       Self::SoVitsSvc => "so_vits_svc",
@@ -133,26 +133,7 @@ impl MediaFileOriginModelType {
   pub fn all_variants() -> BTreeSet<Self> {
     // NB: BTreeSet is sorted
     // NB: BTreeSet::from() isn't const, but not worth using LazyStatic, etc.
-    BTreeSet::from([
-      Self::FaceFusion,
-      Self::F5TTS,
-      Self::LivePortrait,
-      Self::RvcV2,
-      Self::SadTalker,
-      Self::SeedVc,
-      Self::SoVitsSvc,
-      Self::Tacotron2,
-      Self::MocapNet,
-      Self::StyleTTS2,
-      Self::StableDiffusion15,
-      Self::GptSovits,
-      Self::StorytellerStudio,
-      Self::StorytellerStudioImageGen,
-      Self::VideoStyleTransfer,
-      Self::ComfyUi,
-      Self::VallEX,
-      Self::Rerender,
-    ])
+    BTreeSet::from([Self::FaceFusion, Self::F5TTS, Self::LivePortrait, Self::RvcV2, Self::SadTalker, Self::SeedVc, Self::SoVitsSvc, Self::Tacotron2, Self::MocapNet, Self::StyleTTS2, Self::StableDiffusion15, Self::GptSovits, Self::StorytellerStudio, Self::StorytellerStudioImageGen, Self::VideoStyleTransfer, Self::ComfyUi, Self::VallEX, Self::Rerender])
   }
 }
 
@@ -239,7 +220,6 @@ mod tests {
     }
   }
 
-
   mod mechanical_checks {
     use super::*;
 
@@ -261,7 +241,7 @@ mod tests {
     #[test]
     fn serialized_length_ok_for_database() {
       // NB: The media_files table has allocated width for VARCHAR(32), but let's slim it down to 24.
-      const MAX_LENGTH : usize = 24;
+      const MAX_LENGTH: usize = 24;
       for variant in MediaFileOriginModelType::all_variants() {
         let serialized = variant.to_str();
         assert!(serialized.len() > 0, "variant {:?} is too short", variant);

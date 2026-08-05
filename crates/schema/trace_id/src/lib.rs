@@ -106,11 +106,7 @@ mod tests {
       let entropy = &trace_id.as_str()[TRACE_ID_PREFIX.len()..];
       assert_eq!(entropy.len(), TRACE_ID_ENTROPY_CHARS);
       for c in entropy.chars() {
-        assert!(
-          CROCKFORD_LOWERCASE_CHARSET.contains(&(c as u8)),
-          "unexpected character: {}",
-          c
-        );
+        assert!(CROCKFORD_LOWERCASE_CHARSET.contains(&(c as u8)), "unexpected character: {}", c);
       }
     }
 

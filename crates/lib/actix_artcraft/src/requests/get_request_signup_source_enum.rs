@@ -30,12 +30,12 @@ pub fn get_request_signup_source_enum(http_request: &HttpRequest) -> Option<User
           return Some(UserSignupSource::FakeYou);
         }
       }
-    }
+    },
     // Fail open for now.
-    Ok(None) => {}
+    Ok(None) => {},
     Err(err) => {
       warn!("Origin header error: {:?}", err);
-    }
+    },
   }
 
   // NB: We don't want to check the "Host" header because we might have misconfigured
@@ -56,57 +56,43 @@ mod tests {
 
     #[test]
     fn artcraft_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://artcraft.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://artcraft.ai")).to_http_request();
       assert_eq!(get_request_signup_source_enum(&request), Some(UserSignupSource::ArtCraftAiWeb));
     }
 
     #[test]
     fn get_artcraft_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://getartcraft.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://getartcraft.com")).to_http_request();
       assert_eq!(get_request_signup_source_enum(&request), Some(UserSignupSource::ArtCraftGetWeb));
     }
 
     #[test]
     fn api_dot_get_artcraft_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://api.getartcraft.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://api.getartcraft.com")).to_http_request();
       assert_eq!(get_request_signup_source_enum(&request), Some(UserSignupSource::ArtCraftGetWeb));
     }
 
     #[test]
     fn fakeyou_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://fakeyou.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://fakeyou.com")).to_http_request();
       assert_eq!(get_request_signup_source_enum(&request), Some(UserSignupSource::FakeYou));
     }
 
     #[test]
     fn api_dot_fakeyou_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://api.fakeyou.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://api.fakeyou.com")).to_http_request();
       assert_eq!(get_request_signup_source_enum(&request), Some(UserSignupSource::FakeYou));
     }
 
     #[test]
     fn storyteller_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://storyteller.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://storyteller.ai")).to_http_request();
       assert_eq!(get_request_signup_source_enum(&request), Some(UserSignupSource::Storyteller));
     }
 
     #[test]
     fn api_dot_storyteller_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://api.storyteller.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://api.storyteller.ai")).to_http_request();
       assert_eq!(get_request_signup_source_enum(&request), Some(UserSignupSource::Storyteller));
     }
   }

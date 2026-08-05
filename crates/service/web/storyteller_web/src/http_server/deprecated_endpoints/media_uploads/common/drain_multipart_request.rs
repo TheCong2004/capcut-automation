@@ -37,41 +37,36 @@ pub async fn drain_multipart_request(mut multipart_payload: Multipart) -> Anyhow
     let mut field_filename = None;
 
     if let Some(content_disposition) = field.content_disposition() {
-      field_name = content_disposition.get_name()
-          .map(|s| s.to_string());
+      field_name = content_disposition.get_name().map(|s| s.to_string());
       field_filename = content_disposition.get_filename() // NB: Only used for the file bytes.
           .map(|s| s.to_string());
     }
 
     match field_name.as_deref() {
       Some("uuid_idempotency_token") => {
-        uuid_idempotency_token = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading idempotency token: {:}", e);
-              e
-            })?;
+        uuid_idempotency_token = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading idempotency token: {:}", e);
+          e
+        })?;
       },
       Some("dataset_token") => {
-        dataset_token = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading dataset token: {:}", e);
-              e
-            })?;
+        dataset_token = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading dataset token: {:}", e);
+          e
+        })?;
       },
       Some("file") => {
         file_name = field_filename.clone();
-        file_bytes = checked_read_multipart_bytes(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading audio upload: {:}", e);
-              e
-            })?;
+        file_bytes = checked_read_multipart_bytes(&mut field).await.map_err(|e| {
+          warn!("Error reading audio upload: {:}", e);
+          e
+        })?;
       },
       Some("source") => {
-        media_source = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading source: {:}", e);
-              e
-            })?;
+        media_source = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading source: {:}", e);
+          e
+        })?;
       },
       _ => continue,
     }
@@ -89,11 +84,5 @@ pub async fn drain_multipart_request(mut multipart_payload: Multipart) -> Anyhow
     },
   };
 
-  Ok(UploadSampleRequest {
-    uuid_idempotency_token,
-    dataset_token,
-    file_name,
-    file_bytes,
-    media_source,
-  })
+  Ok(UploadSampleRequest { uuid_idempotency_token, dataset_token, file_name, file_bytes, media_source })
 }

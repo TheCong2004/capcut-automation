@@ -38,13 +38,11 @@ use tokens::tokens::wallet_ledger_entries::WalletLedgerEntryToken;
 use crate::errors::database_query_error::DatabaseQueryError;
 use crate::queries::generic_inference::common::job_cost_estimates::JobCostEstimates;
 use crate::payloads::generic_inference_args::generic_inference_args::GenericInferenceArgs;
-use crate::queries::generic_inference::common::insert_full_generic_inference_job_record::{
-  insert_full_generic_inference_job_record,
-  InsertFullGenericInferenceJobRecordArgs,
-};
+use crate::queries::generic_inference::common::insert_full_generic_inference_job_record::{insert_full_generic_inference_job_record, InsertFullGenericInferenceJobRecordArgs};
 
 pub(crate) struct InsertGenericInferenceJobForProviderArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub apriori_job_token: &'e InferenceJobToken,
   pub uuid_idempotency_token: &'e str,
@@ -91,10 +89,9 @@ pub(crate) struct InsertGenericInferenceJobForProviderArgs<'e, 'c, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub(crate) async fn insert_generic_inference_job_for_provider<'e, 'c: 'e, E>(
-  args: InsertGenericInferenceJobForProviderArgs<'e, 'c, E>,
-) -> Result<u64, DatabaseQueryError>
-  where E: 'e + Executor<'c, Database = MySql>
+pub(crate) async fn insert_generic_inference_job_for_provider<'e, 'c: 'e, E>(args: InsertGenericInferenceJobForProviderArgs<'e, 'c, E>) -> Result<u64, DatabaseQueryError>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   insert_full_generic_inference_job_record(InsertFullGenericInferenceJobRecordArgs {
     token: args.apriori_job_token,
@@ -148,6 +145,6 @@ pub(crate) async fn insert_generic_inference_job_for_provider<'e, 'c: 'e, E>(
     requires_keepalive: false,
     max_duration_seconds: 0,
     is_debug_request: false,
-
-  }).await
+  })
+  .await
 }

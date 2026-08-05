@@ -35,7 +35,6 @@ struct SerializeSimpleErrorWithoutMessage<'a> {
   error_code_str: Option<&'a str>,
 }
 
-
 #[derive(Debug, Serialize)]
 struct SerializeSimpleErrorWithMessage<'a> {
   success: bool,
@@ -57,23 +56,8 @@ impl ResponseError for CommonWebError {
 
   fn error_response(&self) -> HttpResponse {
     match self {
-      CommonWebError::BadInputWithSimpleMessage(msg) => {
-        HttpResponse::BadRequest()
-            .json(SerializeSimpleErrorWithMessage {
-              success: false,
-              error_code: self.status_code().as_u16(),
-              error_code_str: self.status_code().canonical_reason(),
-              message: msg,
-            })
-      },
-      _ => {
-        HttpResponseBuilder::new(self.status_code())
-            .json(SerializeSimpleErrorWithoutMessage { 
-              success: false,
-              error_code: self.status_code().as_u16(),
-              error_code_str: self.status_code().canonical_reason(),
-            })
-      }
+      CommonWebError::BadInputWithSimpleMessage(msg) => HttpResponse::BadRequest().json(SerializeSimpleErrorWithMessage { success: false, error_code: self.status_code().as_u16(), error_code_str: self.status_code().canonical_reason(), message: msg }),
+      _ => HttpResponseBuilder::new(self.status_code()).json(SerializeSimpleErrorWithoutMessage { success: false, error_code: self.status_code().as_u16(), error_code_str: self.status_code().canonical_reason() }),
     }
   }
 }

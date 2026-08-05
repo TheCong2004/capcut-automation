@@ -73,7 +73,6 @@ async fn worker_loop(app_handle: &AppHandle, task_database: &TaskDatabase, dispa
 
         fail_pipeline_job(FailPipelineJobArgs { db: task_database.get_connection(), pipeline_job_id: &job_id, failure_message: &err_str }).await?;
 
-
         emit_job_failed(app_handle, JobFailedPayload { job_id: job_id.as_str().to_string(), failed_stage: job.current_stage.to_str().to_string(), error_code: err_code, error_message: err_str });
       }
     }

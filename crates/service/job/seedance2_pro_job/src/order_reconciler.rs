@@ -39,21 +39,14 @@ pub struct OrderReconciler {
 
 impl OrderReconciler {
   pub fn new() -> Self {
-    Self {
-      inner: Arc::new(RwLock::new(HashMap::new())),
-    }
+    Self { inner: Arc::new(RwLock::new(HashMap::new())) }
   }
 
   /// Stage a finished order for reconciliation, but only if it isn't already
   /// staged. Returns `true` if it was newly inserted, `false` if an entry for
   /// this `order_id` was already present (so the poller doesn't re-enqueue an
   /// order the processor is mid-way through, or one it already staged).
-  pub fn push_order(
-    &self,
-    order_id: OrderId,
-    kinovi_order: OrderStatus,
-    database_record: PendingSeedance2ProJob,
-  ) -> bool {
+  pub fn push_order(&self, order_id: OrderId, kinovi_order: OrderStatus, database_record: PendingSeedance2ProJob) -> bool {
     let mut map = self.inner.write().expect("order reconciler lock poisoned");
 
     if map.contains_key(&order_id) {

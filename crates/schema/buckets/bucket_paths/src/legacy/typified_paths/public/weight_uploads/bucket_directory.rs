@@ -7,7 +7,7 @@ use crockford::crockford_entropy_lower;
 use crate::legacy::typified_paths::public::public_path::PublicPath;
 use crate::util::hashed_directory_path_long_string::hashed_directory_path_long_string;
 
-const WEIGHT_UPLOAD_DIRECTORY : &str = "/weight_upload";
+const WEIGHT_UPLOAD_DIRECTORY: &str = "/weight_upload";
 
 /// Directory for user media uploads.
 /// Each uploaded file gets its own directory so that we can store the original
@@ -21,7 +21,6 @@ pub struct WeightUploadDirectory {
 impl PublicPath for WeightUploadDirectory {}
 
 impl WeightUploadDirectory {
-
   pub fn generate_new() -> Self {
     let entropy = crockford_entropy_lower(32);
     Self::from_object_hash(&entropy)
@@ -31,10 +30,7 @@ impl WeightUploadDirectory {
     // TODO: Path construction could be cleaner.
     let middle = hashed_directory_path_long_string(object_hash);
     let directory = format!("{}/{}{}", WEIGHT_UPLOAD_DIRECTORY, middle, object_hash);
-    Self {
-      object_hash: object_hash.to_string(),
-      directory,
-    }
+    Self { object_hash: object_hash.to_string(), directory }
   }
 
   pub fn get_directory_path_str(&self) -> &str {

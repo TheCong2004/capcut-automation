@@ -11,15 +11,8 @@ use enums::by_table::user_spend_events::payment_source::PaymentSource;
 use std::marker::PhantomData;
 use reusable_types::stripe::stripe_subscription_status::StripeSubscriptionStatus;
 
-pub async fn mark_subscription_as_paid(
-  details: &SubscriptionPaidEvent,
-  transaction: &mut sqlx::Transaction<'_, sqlx::MySql>,
-) -> anyhow::Result<()> {
-
-  let maybe_existing_subscription = get_user_subscription_by_stripe_subscription_id_transactional(
-    &details.stripe_subscription_id,
-    transaction,
-  ).await?;
+pub async fn mark_subscription_as_paid(details: &SubscriptionPaidEvent, transaction: &mut sqlx::Transaction<'_, sqlx::MySql>) -> anyhow::Result<()> {
+  let maybe_existing_subscription = get_user_subscription_by_stripe_subscription_id_transactional(&details.stripe_subscription_id, transaction).await?;
 
   // NB: It's possible to receive events out of order.
   // Entirely possible that the subscription object doesn't exist yet.
@@ -31,8 +24,8 @@ pub async fn mark_subscription_as_paid(
         // TODO: We have to mark paid, but this is tricky...
 
         return Ok(()); // Turn this into a no-op. This is stale info.
-      }
-      _ => {} // Fall-through
+      },
+      _ => {}, // Fall-through
     }
   }
 
@@ -70,32 +63,23 @@ pub async fn mark_subscription_as_paid(
 
   upsert.upsert_with_transaction(transaction).await?;
 
-  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_transaction(
-    &details.owner_user_token, 
-    PaymentsNamespace::Artcraft,
-    transaction
-  ).await?;
+  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_transaction(&details.owner_user_token, PaymentsNamespace::Artcraft, transaction).await?;
 
   let wallet_token = match maybe_wallet_token {
     Some(token) => token,
     None => {
       info!("No wallet found for user: {} ; creating a new one...", &details.owner_user_token.as_str());
       create_new_artcraft_wallet_for_owner_user(&details.owner_user_token, transaction).await?
-    }
+    },
   };
 
   let monthly_credits = details.artcraft_subscription.monthly_credits_amount;
-  
+
   let maybe_ledger_ref = details.ledger_event_ref.as_deref();
 
-  info!("Adding {} monthly credits to wallet: {}", monthly_credits , wallet_token.as_str());
+  info!("Adding {} monthly credits to wallet: {}", monthly_credits, wallet_token.as_str());
 
-  let wallet_update = refill_monthly_credits_balance_on_wallet(
-    &wallet_token, 
-    monthly_credits, 
-    maybe_ledger_ref,
-    transaction
-  ).await?;
+  let wallet_update = refill_monthly_credits_balance_on_wallet(&wallet_token, monthly_credits, maybe_ledger_ref, transaction).await?;
 
   // Record the money movement in the spend-events ledger, in this SAME
   // transaction. Idempotent on (payment_source, source_object_id), so a replayed
@@ -120,7 +104,8 @@ pub async fn mark_subscription_as_paid(
     payment_occurred_at: details.payment_occurred_at,
     mysql_executor: &mut **transaction,
     phantom: PhantomData,
-  }).await?;
+  })
+  .await?;
 
   Ok(())
 }

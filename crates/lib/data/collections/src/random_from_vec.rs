@@ -15,16 +15,14 @@ mod tests {
     let selected = random_from_vec(&items).unwrap();
     assert!(items.contains(selected));
 
-    let items = vec!["one", "two", "three"].into_iter()
-        .map(|s| s.to_string())
-        .collect();
+    let items = vec!["one", "two", "three"].into_iter().map(|s| s.to_string()).collect();
     let selected = random_from_vec(&items).unwrap();
     assert!(items.contains(selected));
   }
 
   #[test]
   fn behavior_on_empty() {
-    let items : Vec<String> = vec![];
+    let items: Vec<String> = vec![];
     let selected = random_from_vec(&items);
     assert!(selected.is_none());
   }

@@ -6,19 +6,14 @@ use mysql_queries::queries::generic_inference::job::list_available_generic_infer
 use crate::job::job_loop::process_single_job_error::ProcessSingleJobError;
 use crate::util::extractors::get_polymorphic_args_from_job::get_polymorphic_args_from_job;
 
-pub fn extract_vst_workflow_payload_from_job(
-  job: &AvailableInferenceJob,
-) -> Result<WorkflowArgs, ProcessSingleJobError> {
-
+pub fn extract_vst_workflow_payload_from_job(job: &AvailableInferenceJob) -> Result<WorkflowArgs, ProcessSingleJobError> {
   let polymorphic_args = get_polymorphic_args_from_job(&job)?;
 
   let some_args = match polymorphic_args {
     PolymorphicInferenceArgs::Cu(args) => args,
     _ => {
-      return Err(
-        ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inner args for job!"))
-      );
-    }
+      return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inner args for job!")));
+    },
   };
 
   let args: WorkflowArgs = WorkflowArgs::from(some_args.clone());

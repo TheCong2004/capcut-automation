@@ -25,10 +25,10 @@ impl fmt::Display for BucketClientError {
       Self::IoError(err) => write!(f, "I/O error: {}", err),
       Self::ClientBuilderSetupError(message) => {
         write!(f, "bucket client setup error: {}", message)
-      }
+      },
       Self::UploadFailed { status_code, message } => {
         write!(f, "upload failed (HTTP {}): {}", status_code, message)
-      }
+      },
     }
   }
 }

@@ -24,10 +24,7 @@ pub struct ListUserImpersonationRequestsArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn list_user_impersonation_requests(
-  args: ListUserImpersonationRequestsArgs<'_>,
-) -> Result<Vec<UserImpersonationRequestListItem>, sqlx::Error> {
-
+pub async fn list_user_impersonation_requests(args: ListUserImpersonationRequestsArgs<'_>) -> Result<Vec<UserImpersonationRequestListItem>, sqlx::Error> {
   let limit = args.limit as i64;
 
   let items = match args.maybe_cursor_id {
@@ -58,9 +55,9 @@ LIMIT ?
         cursor_id as u64,
         limit,
       )
-        .fetch_all(args.mysql_pool)
-        .await?
-    }
+      .fetch_all(args.mysql_pool)
+      .await?
+    },
     None => {
       sqlx::query_as!(
         UserImpersonationRequestListItem,
@@ -86,9 +83,9 @@ LIMIT ?
         "#,
         limit,
       )
-        .fetch_all(args.mysql_pool)
-        .await?
-    }
+      .fetch_all(args.mysql_pool)
+      .await?
+    },
   };
 
   Ok(items)

@@ -67,32 +67,19 @@ pub struct DisplayCategory {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn get_category_handler(
-  http_request: HttpRequest,
-  path: Path<GetCategoryPathInfo>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn get_category_handler(http_request: HttpRequest, path: Path<GetCategoryPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   // TODO: We don't have any permissions for categories. This is a proxy.
-  let is_mod = maybe_user_session
-      .map(|session| session.can_ban_users)
-      .unwrap_or(false);
+  let is_mod = maybe_user_session.map(|session| session.can_ban_users).unwrap_or(false);
 
-  let category_lookup_result
-      = get_category_by_token(&path.token, &server_state.mysql_pool).await;
+  let category_lookup_result = get_category_by_token(&path.token, &server_state.mysql_pool).await;
 
   let category = match category_lookup_result {
-    Ok(Some(result)) => {
-      result
-    },
+    Ok(Some(result)) => result,
     Ok(None) => {
       warn!("could not find category");
       return Err(CommonWebError::NotFound);
@@ -125,15 +112,9 @@ pub async fn get_category_handler(
     maybe_mod_comments: if is_mod { category.maybe_mod_comments.clone() } else { None },
   };
 
-  let response = GetCategoryResponse {
-    success: true,
-    category: category_for_response,
-  };
+  let response = GetCategoryResponse { success: true, category: category_for_response };
 
-  let body = serde_json::to_string(&response)
-      .map_err(CommonWebError::from_error)?;
+  let body = serde_json::to_string(&response).map_err(CommonWebError::from_error)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

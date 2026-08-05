@@ -17,49 +17,28 @@ use enums::common::generation::common_bitrate::CommonBitrate as CommonBitrateEnu
 use enums::common::generation::common_resolution::CommonResolution as CommonResolutionEnum;
 use enums::common::generation::common_video_model::CommonVideoModel as CommonVideoModelEnum;
 
-pub fn hydrate_to_router_request(
-  request: &OmniApiVideoGenerateRequest,
-) -> Result<GenerateVideoRequestBuilder, CommonWebError> {
-  let api_model = request.model
-    .as_ref()
-    .ok_or_else(|| CommonWebError::BadInputWithSimpleMessage(
-      "model is required".to_string(),
-    ))?;
+pub fn hydrate_to_router_request(request: &OmniApiVideoGenerateRequest) -> Result<GenerateVideoRequestBuilder, CommonWebError> {
+  let api_model = request.model.as_ref().ok_or_else(|| CommonWebError::BadInputWithSimpleMessage("model is required".to_string()))?;
 
   let model = convert_model(api_model)?;
 
-  let aspect_ratio = request.aspect_ratio
-    .as_ref()
-    .map(convert_aspect_ratio)
-    .transpose()?;
+  let aspect_ratio = request.aspect_ratio.as_ref().map(convert_aspect_ratio).transpose()?;
 
-  let resolution = request.resolution
-    .as_ref()
-    .map(convert_resolution)
-    .transpose()?;
+  let resolution = request.resolution.as_ref().map(convert_resolution).transpose()?;
 
-  let bitrate = request.bitrate
-    .as_ref()
-    .map(convert_bitrate)
-    .transpose()?;
+  let bitrate = request.bitrate.as_ref().map(convert_bitrate).transpose()?;
 
   Ok(GenerateVideoRequestBuilder {
     model,
     provider: RouterProvider::Artcraft,
     prompt: request.prompt.clone(),
     negative_prompt: request.negative_prompt.clone(),
-    start_frame: request.start_frame_image_media_token.clone()
-      .map(ImageRef::MediaFileToken),
-    end_frame: request.end_frame_image_media_token.clone()
-      .map(ImageRef::MediaFileToken),
-    reference_images: request.reference_image_media_tokens.clone()
-      .map(ImageListRef::MediaFileTokens),
-    reference_videos: request.reference_video_media_tokens.clone()
-      .map(VideoListRef::MediaFileTokens),
-    reference_audio: request.reference_audio_media_tokens.clone()
-      .map(AudioListRef::MediaFileTokens),
-    reference_character_tokens: request.reference_character_tokens.clone()
-      .map(CharacterListRef::CharacterTokens),
+    start_frame: request.start_frame_image_media_token.clone().map(ImageRef::MediaFileToken),
+    end_frame: request.end_frame_image_media_token.clone().map(ImageRef::MediaFileToken),
+    reference_images: request.reference_image_media_tokens.clone().map(ImageListRef::MediaFileTokens),
+    reference_videos: request.reference_video_media_tokens.clone().map(VideoListRef::MediaFileTokens),
+    reference_audio: request.reference_audio_media_tokens.clone().map(AudioListRef::MediaFileTokens),
+    reference_character_tokens: request.reference_character_tokens.clone().map(CharacterListRef::CharacterTokens),
     resolution,
     aspect_ratio,
     bitrate,
@@ -71,48 +50,24 @@ pub fn hydrate_to_router_request(
   })
 }
 
-fn convert_model(
-  model: &CommonVideoModelEnum,
-) -> Result<RouterVideoModel, CommonWebError> {
+fn convert_model(model: &CommonVideoModelEnum) -> Result<RouterVideoModel, CommonWebError> {
   let json = serde_json::to_string(model)?;
-  serde_json::from_str(&json).map_err(|e| {
-    CommonWebError::BadInputWithSimpleMessage(
-      format!("Unsupported video model: {}", e),
-    )
-  })
+  serde_json::from_str(&json).map_err(|e| CommonWebError::BadInputWithSimpleMessage(format!("Unsupported video model: {}", e)))
 }
 
-fn convert_aspect_ratio(
-  ar: &CommonAspectRatioEnum,
-) -> Result<RouterAspectRatio, CommonWebError> {
+fn convert_aspect_ratio(ar: &CommonAspectRatioEnum) -> Result<RouterAspectRatio, CommonWebError> {
   let json = serde_json::to_string(ar)?;
-  serde_json::from_str(&json).map_err(|e| {
-    CommonWebError::BadInputWithSimpleMessage(
-      format!("Unsupported aspect ratio: {}", e),
-    )
-  })
+  serde_json::from_str(&json).map_err(|e| CommonWebError::BadInputWithSimpleMessage(format!("Unsupported aspect ratio: {}", e)))
 }
 
-fn convert_resolution(
-  res: &CommonResolutionEnum,
-) -> Result<RouterResolution, CommonWebError> {
+fn convert_resolution(res: &CommonResolutionEnum) -> Result<RouterResolution, CommonWebError> {
   let json = serde_json::to_string(res)?;
-  serde_json::from_str(&json).map_err(|e| {
-    CommonWebError::BadInputWithSimpleMessage(
-      format!("Unsupported resolution: {}", e),
-    )
-  })
+  serde_json::from_str(&json).map_err(|e| CommonWebError::BadInputWithSimpleMessage(format!("Unsupported resolution: {}", e)))
 }
 
-fn convert_bitrate(
-  bitrate: &CommonBitrateEnum,
-) -> Result<RouterBitrate, CommonWebError> {
+fn convert_bitrate(bitrate: &CommonBitrateEnum) -> Result<RouterBitrate, CommonWebError> {
   let json = serde_json::to_string(bitrate)?;
-  serde_json::from_str(&json).map_err(|e| {
-    CommonWebError::BadInputWithSimpleMessage(
-      format!("Unsupported bitrate: {}", e),
-    )
-  })
+  serde_json::from_str(&json).map_err(|e| CommonWebError::BadInputWithSimpleMessage(format!("Unsupported bitrate: {}", e)))
 }
 
 #[cfg(test)]
@@ -124,20 +79,14 @@ mod tests {
 
     #[test]
     fn high_is_hydrated() {
-      let request = OmniApiVideoGenerateRequest {
-        bitrate: Some(CommonBitrateEnum::High),
-        ..base_request()
-      };
+      let request = OmniApiVideoGenerateRequest { bitrate: Some(CommonBitrateEnum::High), ..base_request() };
       let builder = hydrate_to_router_request(&request).expect("hydrate should succeed");
       assert_eq!(builder.bitrate, Some(RouterBitrate::High));
     }
 
     #[test]
     fn normal_is_hydrated() {
-      let request = OmniApiVideoGenerateRequest {
-        bitrate: Some(CommonBitrateEnum::Normal),
-        ..base_request()
-      };
+      let request = OmniApiVideoGenerateRequest { bitrate: Some(CommonBitrateEnum::Normal), ..base_request() };
       let builder = hydrate_to_router_request(&request).expect("hydrate should succeed");
       assert_eq!(builder.bitrate, Some(RouterBitrate::Normal));
     }
@@ -150,29 +99,6 @@ mod tests {
   }
 
   fn base_request() -> OmniApiVideoGenerateRequest {
-    OmniApiVideoGenerateRequest {
-      idempotency_token: None,
-      model: Some(CommonVideoModelEnum::Seedance2p0),
-      prompt: None,
-      negative_prompt: None,
-      start_frame_image_media_token: None,
-      start_frame_image_url: None,
-      end_frame_image_media_token: None,
-      end_frame_image_url: None,
-      reference_image_media_tokens: None,
-      reference_image_urls: None,
-      reference_video_media_tokens: None,
-      reference_video_urls: None,
-      reference_audio_media_tokens: None,
-      reference_audio_urls: None,
-      reference_character_tokens: None,
-      resolution: None,
-      aspect_ratio: None,
-      bitrate: None,
-      quality: None,
-      duration_seconds: None,
-      video_batch_count: None,
-      generate_audio: None,
-    }
+    OmniApiVideoGenerateRequest { idempotency_token: None, model: Some(CommonVideoModelEnum::Seedance2p0), prompt: None, negative_prompt: None, start_frame_image_media_token: None, start_frame_image_url: None, end_frame_image_media_token: None, end_frame_image_url: None, reference_image_media_tokens: None, reference_image_urls: None, reference_video_media_tokens: None, reference_video_urls: None, reference_audio_media_tokens: None, reference_audio_urls: None, reference_character_tokens: None, resolution: None, aspect_ratio: None, bitrate: None, quality: None, duration_seconds: None, video_batch_count: None, generate_audio: None }
   }
 }

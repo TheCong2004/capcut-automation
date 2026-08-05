@@ -14,14 +14,14 @@ use crate::middleware::disabled_endpoint_filter::disabled_error::DisabledError;
 // 2. Middleware's call method gets called with normal request.
 
 pub struct DisabledEndpointFilterMiddleware<S> {
-  pub (crate) service: S,
-  pub (crate) disabled_endpoints: DisabledEndpoints,
+  pub(crate) service: S,
+  pub(crate) disabled_endpoints: DisabledEndpoints,
 }
 
 impl<S, B> Service<ServiceRequest> for DisabledEndpointFilterMiddleware<S>
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;

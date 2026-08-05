@@ -69,8 +69,8 @@ LIMIT 25000
     "#,
     InferenceJobExternalThirdParty::GrokApi.to_str(),
   )
-    .fetch_all(pool)
-    .await?;
+  .fetch_all(pool)
+  .await?;
 
   let jobs = records
     .into_iter()
@@ -80,20 +80,10 @@ LIMIT 25000
         None => {
           warn!("PendingGrokApiJob has no request_id, skipping");
           return None;
-        }
+        },
       };
 
-      Some(PendingGrokApiJob {
-        job_token: record.job_token,
-        request_id,
-        maybe_creator_user_token: record.maybe_creator_user_token,
-        maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-        creator_ip_address: record.creator_ip_address,
-        creator_set_visibility: record.creator_set_visibility,
-        maybe_prompt_token: record.maybe_prompt_token,
-        maybe_wallet_ledger_entry_token: record.maybe_wallet_ledger_entry_token,
-        maybe_platform_type: record.maybe_platform_type,
-      })
+      Some(PendingGrokApiJob { job_token: record.job_token, request_id, maybe_creator_user_token: record.maybe_creator_user_token, maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token, creator_ip_address: record.creator_ip_address, creator_set_visibility: record.creator_set_visibility, maybe_prompt_token: record.maybe_prompt_token, maybe_wallet_ledger_entry_token: record.maybe_wallet_ledger_entry_token, maybe_platform_type: record.maybe_platform_type })
     })
     .collect();
 

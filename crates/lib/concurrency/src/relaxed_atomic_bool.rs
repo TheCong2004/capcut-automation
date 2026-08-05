@@ -6,14 +6,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// with interior mutability.
 #[derive(Clone)]
 pub struct RelaxedAtomicBool {
-  value: Arc<AtomicBool>
+  value: Arc<AtomicBool>,
 }
 
 impl RelaxedAtomicBool {
   pub fn new(value: bool) -> Self {
-    Self {
-      value: Arc::new(AtomicBool::new(value)),
-    }
+    Self { value: Arc::new(AtomicBool::new(value)) }
   }
 
   pub fn get(&self) -> bool {
@@ -61,7 +59,6 @@ mod tests {
 
   #[test]
   fn test_share_threads_write() {
-
     // NB: This is mainly to test that the code compiles
     let keep_looping = RelaxedAtomicBool::new(true);
     let another = keep_looping.clone();

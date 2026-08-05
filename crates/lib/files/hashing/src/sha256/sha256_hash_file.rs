@@ -23,17 +23,11 @@ pub mod tests {
 
   #[test]
   fn test_sha256_hash_file_1() {
-    assert_eq!(
-      "8d593e85d8c30620b57af0734c010a8cd00083a5a2ffd1ffb91f2c9e85d8535d",
-      sha256_hash_file("../../../../test_data/audio/aac/golden_sun_elemental_stars_cyanne.aac")
-          .unwrap());
+    assert_eq!("8d593e85d8c30620b57af0734c010a8cd00083a5a2ffd1ffb91f2c9e85d8535d", sha256_hash_file("../../../../test_data/audio/aac/golden_sun_elemental_stars_cyanne.aac").unwrap());
   }
 
   #[test]
   fn test_sha256_hash_file_2() {
-    assert_eq!(
-      "452812e5b5269f74b13175e0ef739255ee094f55c9d45a9336ed129cf7c66f8e",
-      sha256_hash_file("../../../../test_data/video/webm/laser_pong.webm")
-          .unwrap());
+    assert_eq!("452812e5b5269f74b13175e0ef739255ee094f55c9d45a9336ed129cf7c66f8e", sha256_hash_file("../../../../test_data/video/webm/laser_pong.webm").unwrap());
   }
 }

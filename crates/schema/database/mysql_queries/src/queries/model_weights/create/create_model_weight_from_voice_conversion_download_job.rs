@@ -37,13 +37,8 @@ pub struct CreateModelWeightArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn create_model_weight_from_voice_conversion_download_job(
-  args: CreateModelWeightArgs<'_>,
-) -> AnyhowResult<(u64, ModelWeightToken)> {
-
-  let weights_token = args.maybe_use_model_weights_token
-      .map(|token| token.clone())
-      .unwrap_or_else(|| ModelWeightToken::generate());
+pub async fn create_model_weight_from_voice_conversion_download_job(args: CreateModelWeightArgs<'_>) -> AnyhowResult<(u64, ModelWeightToken)> {
+  let weights_token = args.maybe_use_model_weights_token.map(|token| token.clone()).unwrap_or_else(|| ModelWeightToken::generate());
 
   let mut transaction = args.mysql_pool.begin().await?;
 
@@ -55,7 +50,7 @@ pub async fn create_model_weight_from_voice_conversion_download_job(
   // - version = 0
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO model_weights
 SET
   token = ?,
@@ -83,28 +78,24 @@ SET
 
   maybe_migration_old_model_token = ?
         "#,
-      &weights_token,
-      args.weights_type,
-      args.weights_category,
-      args.title,
-
-      args.original_download_url,
-      args.original_filename,
-      args.file_size_bytes,
-      args.file_checksum_sha2,
-
-      args.creator_user_token,
-      args.creator_ip_address,
-      args.creator_set_visibility.to_str(),
-
-      args.public_bucket_hash,
-      args.maybe_public_bucket_prefix,
-      args.maybe_public_bucket_extension,
-
-      args.maybe_old_voice_conversion_model_token,
-    )
-      .execute(&mut *transaction)
-      .await;
+    &weights_token,
+    args.weights_type,
+    args.weights_category,
+    args.title,
+    args.original_download_url,
+    args.original_filename,
+    args.file_size_bytes,
+    args.file_checksum_sha2,
+    args.creator_user_token,
+    args.creator_ip_address,
+    args.creator_set_visibility.to_str(),
+    args.public_bucket_hash,
+    args.maybe_public_bucket_prefix,
+    args.maybe_public_bucket_extension,
+    args.maybe_old_voice_conversion_model_token,
+  )
+  .execute(&mut *transaction)
+  .await;
 
   let model_weights_record_id = match query_result {
     Ok(res) => res.last_insert_id(),
@@ -112,17 +103,17 @@ SET
   };
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO model_weights_extension_voice_conversion_details
 SET
   model_weights_token = ?,
   has_index_file = ?
         "#,
-      &weights_token,
-      args.has_index_file
-    )
-      .execute(&mut *transaction)
-      .await;
+    &weights_token,
+    args.has_index_file
+  )
+  .execute(&mut *transaction)
+  .await;
 
   match query_result {
     Ok(_res) => {},

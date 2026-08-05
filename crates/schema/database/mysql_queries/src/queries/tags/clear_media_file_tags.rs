@@ -19,9 +19,7 @@ where
 /// Backs the clear endpoint, and the set endpoints when the requested
 /// tag set is empty. Returns the number of links deleted. (Tags orphaned
 /// by this are not deleted.)
-pub async fn clear_media_file_tags<'e, 'c: 'e, E>(
-  args: ClearMediaFileTagsArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn clear_media_file_tags<'e, 'c: 'e, E>(args: ClearMediaFileTagsArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -29,9 +27,7 @@ where
     return Ok(0);
   }
 
-  let mut builder = QueryBuilder::<MySql>::new(
-    "DELETE FROM media_file_tags WHERE user_token = ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("DELETE FROM media_file_tags WHERE user_token = ");
   builder.push_bind(args.user_token.as_str());
 
   builder.push(" AND media_file_token IN (");

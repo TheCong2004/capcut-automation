@@ -16,11 +16,9 @@ pub struct FfprobeCommandRunner {
 
 impl FfprobeCommandRunner {
   pub fn from_env() -> AnyhowResult<Self> {
-    let maybe_command = easyenv::get_env_string_optional(
-      "FFPROBE_COMMAND");
+    let maybe_command = easyenv::get_env_string_optional("FFPROBE_COMMAND");
 
-    let maybe_executable = easyenv::get_env_pathbuf_optional(
-      "FFPROBE_EXECUTABLE");
+    let maybe_executable = easyenv::get_env_pathbuf_optional("FFPROBE_EXECUTABLE");
 
     let executable_or_command = match maybe_command {
       Some(command) => ExecutableOrShellCommand::BashShellCommand(command),
@@ -29,20 +27,11 @@ impl FfprobeCommandRunner {
         None => {
           warn!("Neither executable or command supplied, using bash command `ffprobe`.");
           ExecutableOrShellCommand::BashShellCommand("ffprobe".to_string())
-        }
+        },
       },
     };
 
-    Ok(Self {
-      command_runner: CommandRunner {
-        executable_or_command,
-        maybe_execution_directory: None,
-        env_var_policy: EnvVarPolicy::CopyNone,
-        maybe_virtual_env_activation_command: None,
-        maybe_docker_options: None,
-        maybe_execution_timeout: None,
-      },
-    })
+    Ok(Self { command_runner: CommandRunner { executable_or_command, maybe_execution_directory: None, env_var_policy: EnvVarPolicy::CopyNone, maybe_virtual_env_activation_command: None, maybe_docker_options: None, maybe_execution_timeout: None } })
   }
 
   // TODO(bt,2024-04-17): Actual type bounds, eg. where F: FfmpegCommand + CommandArgs

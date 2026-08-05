@@ -10,7 +10,6 @@ pub struct SmtpEmailSender {
 }
 
 impl SmtpEmailSender {
-
   // NB: To set this up for Gmail:
   //
   //  - https://support.google.com/a/answer/2956491?hl=en&fl=1&sjid=8333642123536524043-NA
@@ -20,11 +19,7 @@ impl SmtpEmailSender {
   //  - https://support.google.com/mail/thread/5621336/bad-credentials-using-gmail-smtp?hl=en
   //
   pub fn new(relay: &str, username: String, password: String) -> AnyhowResult<Self> {
-    Ok(Self {
-      mailer: SmtpTransport::relay(relay)?
-          .credentials(Credentials::new(username, password))
-          .build()
-    })
+    Ok(Self { mailer: SmtpTransport::relay(relay)?.credentials(Credentials::new(username, password)).build() })
   }
 
   pub fn send_message(&self, message: &Message) -> AnyhowResult<Response> {

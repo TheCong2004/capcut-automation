@@ -170,8 +170,7 @@ impl FormatReader for WavReader {
         // Determine the number of complete frames remaining in the data chunk.
         let num_frames_left = if pos < self.data_end_pos {
             (self.data_end_pos - pos) / u64::from(self.frame_len)
-        }
-        else {
+        } else {
             0
         };
 
@@ -221,8 +220,7 @@ impl FormatReader for WavReader {
                 // known, the seek cannot be completed.
                 if let Some(sample_rate) = params.sample_rate {
                     TimeBase::new(1, sample_rate).calc_timestamp(time)
-                }
-                else {
+                } else {
                     return seek_error(SeekErrorKind::Unseekable);
                 }
             }
@@ -260,8 +258,7 @@ impl FormatReader for WavReader {
             let current_pos = self.reader.pos();
             if seek_pos >= current_pos {
                 self.reader.ignore_bytes(seek_pos - current_pos)?;
-            }
-            else {
+            } else {
                 return seek_error(SeekErrorKind::ForwardOnly);
             }
         }
@@ -287,8 +284,7 @@ fn read_info_chunk(source: &mut MediaSourceStream, len: u32) -> Result<MetadataR
         if let Some(RiffInfoListChunks::Info(info)) = chunk {
             let parsed_info = info.parse(source)?;
             metadata_builder.add_tag(parsed_info.tag);
-        }
-        else {
+        } else {
             break;
         }
     }

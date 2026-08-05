@@ -22,8 +22,8 @@ pub struct IpBanRecordForList {
 // We can reengineer with growth.
 pub async fn list_ip_bans(mysql_pool: &MySqlPool) -> AnyhowResult<Vec<IpBanRecordForList>> {
   let maybe_results = sqlx::query_as!(
-      IpBanRecordForList,
-        r#"
+    IpBanRecordForList,
+    r#"
 SELECT
     ip_bans.ip_address,
 
@@ -46,21 +46,17 @@ JOIN users as mod_users
 WHERE
     ip_bans.deleted_at IS NULL
         "#,
-    )
-      .fetch_all(mysql_pool)
-      .await;
+  )
+  .fetch_all(mysql_pool)
+  .await;
 
   match maybe_results {
-    Err(err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          Ok(Vec::new())
-        },
-        _ => {
-          warn!("list ip bans db error: {:?}", err);
-          Err(anyhow!("error with query: {:?}", err))
-        }
-      }
+    Err(err) => match err {
+      sqlx::Error::RowNotFound => Ok(Vec::new()),
+      _ => {
+        warn!("list ip bans db error: {:?}", err);
+        Err(anyhow!("error with query: {:?}", err))
+      },
     },
     Ok(results) => Ok(results),
   }

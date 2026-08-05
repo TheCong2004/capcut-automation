@@ -10,12 +10,8 @@ pub struct DisabledEndpoints {
 }
 
 impl DisabledEndpoints {
-
   pub fn new(exact_match: ExactMatchDisabledEndpoints, prefix: PrefixDisabledEndpoints) -> Self {
-    Self {
-      exact_match_endpoints: Arc::new(exact_match),
-      prefix_endpoints: Arc::new(prefix),
-    }
+    Self { exact_match_endpoints: Arc::new(exact_match), prefix_endpoints: Arc::new(prefix) }
   }
 
   pub fn endpoint_is_disabled(&self, endpoint: &str) -> bool {

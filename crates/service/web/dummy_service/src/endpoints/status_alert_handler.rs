@@ -52,43 +52,21 @@ pub enum StatusAlertCategory {
   DownForMaintenance,
 }
 
-pub async fn status_alert_handler(
-  server_state: web::Data<Arc<ServerState>>
-) -> HttpResponse {
-  let maybe_category = server_state
-      .flags
-      .maybe_status_alert_category
-      .as_deref()
-      .map(|category| category_to_enum(&category))
-      .flatten();
+pub async fn status_alert_handler(server_state: web::Data<Arc<ServerState>>) -> HttpResponse {
+  let maybe_category = server_state.flags.maybe_status_alert_category.as_deref().map(|category| category_to_enum(&category)).flatten();
 
-  let maybe_message = server_state
-      .flags
-      .maybe_status_alert_custom_message
-      .as_deref()
-      .map(|message| message.trim().to_string());
+  let maybe_message = server_state.flags.maybe_status_alert_custom_message.as_deref().map(|message| message.trim().to_string());
 
   let maybe_alert = match (maybe_category, maybe_message) {
     (None, None) => None,
-    (category, message) => Some(StatusAlertInfo {
-      maybe_category: category,
-      maybe_message: message,
-    }),
+    (category, message) => Some(StatusAlertInfo { maybe_category: category, maybe_message: message }),
   };
 
-  let response = StatusAlertResponse {
-    success: true,
-    maybe_alert,
-    refresh_interval_millis: REFRESH_INTERVAL.as_millis() as u64,
-  };
+  let response = StatusAlertResponse { success: true, maybe_alert, refresh_interval_millis: REFRESH_INTERVAL.as_millis() as u64 };
 
   match serde_json::to_string(&response) {
-    Ok(body) => HttpResponse::Ok()
-        .content_type("application/json")
-        .body(body),
-    Err(_err) => HttpResponse::Ok()
-        .content_type("application/json")
-        .body("{\"success\": false}"),
+    Ok(body) => HttpResponse::Ok().content_type("application/json").body(body),
+    Err(_err) => HttpResponse::Ok().content_type("application/json").body("{\"success\": false}"),
   }
 }
 

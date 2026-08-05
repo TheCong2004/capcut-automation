@@ -28,22 +28,13 @@ const MAX_ACTIVE_CODES: usize = 5;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn create_referral_code_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  request: web::Json<CreateReferralCodeRequest>,
-) -> Result<Json<CreateReferralCodeResponse>, CommonWebError> {
-  let mut mysql_connection = server_state.mysql_pool.acquire().await
-    .map_err(|e| CommonWebError::from(e))?;
+pub async fn create_referral_code_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, request: web::Json<CreateReferralCodeRequest>) -> Result<Json<CreateReferralCodeResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| CommonWebError::from(e))?;
 
-  let maybe_user_session = server_state
-    .session_checker
-    .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-    .await
-    .map_err(|e| {
-      warn!("Session checker error: {:?}", e);
-      CommonWebError::from(e)
-    })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) if !session.is_banned => session,
@@ -61,62 +52,41 @@ pub async fn create_referral_code_handler(
   let code = request.code.trim().to_string();
 
   if code.is_empty() {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "Referral code cannot be empty".to_string(),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage("Referral code cannot be empty".to_string()));
   }
 
   if code.len() > 32 {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "Referral code must be 32 characters or fewer".to_string(),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage("Referral code must be 32 characters or fewer".to_string()));
   }
 
   if !code.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '-') {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "Referral code may only contain letters, numbers, underscores, periods, and dashes".to_string(),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage("Referral code may only contain letters, numbers, underscores, periods, and dashes".to_string()));
   }
 
   let code_lowercase = code.to_lowercase();
 
   // Check the user doesn't already have too many active codes.
-  let existing = list_referral_codes_for_user(user_token, &mut *mysql_connection).await
-    .map_err(|e| CommonWebError::from(e))?;
+  let existing = list_referral_codes_for_user(user_token, &mut *mysql_connection).await.map_err(|e| CommonWebError::from(e))?;
 
   if existing.len() >= MAX_ACTIVE_CODES {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("You can have at most {} active referral codes. Delete one first.", MAX_ACTIVE_CODES),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage(format!("You can have at most {} active referral codes. Delete one first.", MAX_ACTIVE_CODES)));
   }
 
   // Insert the code. If code_lowercase is already taken, we get a duplicate key error.
-  let result = create_referral_code(
-    CreateReferralCodeArgs {
-      owner_user_token: user_token,
-      code: &code,
-      code_lowercase: &code_lowercase,
-    },
-    &mut *mysql_connection,
-  ).await;
+  let result = create_referral_code(CreateReferralCodeArgs { owner_user_token: user_token, code: &code, code_lowercase: &code_lowercase }, &mut *mysql_connection).await;
 
   let token = match result {
     Ok(token) => token,
-    Err(err) => return match err {
-      DatabaseInsertError::DuplicateKeyError => {
-        return Err(CommonWebError::BadInputWithSimpleMessage(
-          "This referral code is already in use".to_string(),
-        ));
-      },
-      DatabaseInsertError::SqlxError(e) => Err(CommonWebError::from(e)),
-      DatabaseInsertError::AnyhowError(e) => Err(CommonWebError::from_anyhow_error(e)),
+    Err(err) => {
+      return match err {
+        DatabaseInsertError::DuplicateKeyError => {
+          return Err(CommonWebError::BadInputWithSimpleMessage("This referral code is already in use".to_string()));
+        },
+        DatabaseInsertError::SqlxError(e) => Err(CommonWebError::from(e)),
+        DatabaseInsertError::AnyhowError(e) => Err(CommonWebError::from_anyhow_error(e)),
+      }
     },
   };
 
-  Ok(Json(CreateReferralCodeResponse {
-    success: true,
-    token,
-    code,
-    code_lowercase,
-  }))
+  Ok(Json(CreateReferralCodeResponse { success: true, token, code, code_lowercase }))
 }

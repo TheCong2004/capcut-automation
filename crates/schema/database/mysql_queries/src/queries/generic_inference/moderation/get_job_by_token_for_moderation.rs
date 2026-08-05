@@ -87,9 +87,7 @@ struct RawRow {
   updated_at: DateTime<Utc>,
 }
 
-pub async fn get_job_by_token_for_moderation<'e, 'c: 'e, E>(
-  args: GetJobByTokenForModerationArgs<'e, 'c, E>,
-) -> Result<Option<ModerationJobDetails>, sqlx::Error>
+pub async fn get_job_by_token_for_moderation<'e, 'c: 'e, E>(args: GetJobByTokenForModerationArgs<'e, 'c, E>) -> Result<Option<ModerationJobDetails>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -133,8 +131,8 @@ WHERE token = ?
     "#,
     args.job_token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
   Ok(maybe_row.map(|row| ModerationJobDetails {
     token: row.token,

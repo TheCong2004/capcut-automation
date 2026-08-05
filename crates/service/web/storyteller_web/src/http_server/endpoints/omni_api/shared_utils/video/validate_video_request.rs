@@ -4,9 +4,7 @@ use crate::http_server::endpoints::omni_api::shared_utils::video::validate_when_
 use artcraft_api_defs::omni_api::generate_requests::omni_api_video_generate_request::OmniApiVideoGenerateRequest;
 
 /// Validate requests before they incur user costs or send API requests
-pub fn validate_video_request(
-  request: &OmniApiVideoGenerateRequest,
-) -> Result<(), CommonWebError> {
+pub fn validate_video_request(request: &OmniApiVideoGenerateRequest) -> Result<(), CommonWebError> {
   validate_when_image_required(request)?;
   validate_seedance_2p0_limits(request)?;
   Ok(())

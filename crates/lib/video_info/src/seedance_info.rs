@@ -16,10 +16,7 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 
 use crate::error::VideoInfoError;
-use crate::scan::{
-  decode_base64url, find, find_cert_serial, find_org_identifier, find_prefixed_uuid, find_rfc3339,
-  text_after_key, text_after_key_from,
-};
+use crate::scan::{decode_base64url, find, find_cert_serial, find_org_identifier, find_prefixed_uuid, find_rfc3339, text_after_key, text_after_key_from};
 
 // ── Markers in the embedded C2PA manifest ──
 
@@ -156,8 +153,7 @@ impl SeedanceInfo {
     let vendor_end = find(data, vendor_marker).map(|i| i + vendor_marker.len()).unwrap_or(0);
 
     // model_name is required for a meaningful Seedance manifest.
-    let model_name = text_after_key(data, b"model_name")
-      .ok_or_else(|| VideoInfoError::MalformedManifest("missing model_name".to_string()))?;
+    let model_name = text_after_key(data, b"model_name").ok_or_else(|| VideoInfoError::MalformedManifest("missing model_name".to_string()))?;
 
     if !model_name.contains("seedance") {
       // The vendor marker is present but the model isn't Seedance — treat as
@@ -165,54 +161,25 @@ impl SeedanceInfo {
       return Err(VideoInfoError::NotSeedance);
     }
 
-    let generated_at = find_rfc3339(data)
-      .ok_or_else(|| VideoInfoError::MalformedManifest("missing generation timestamp".to_string()))?;
-    let generated_at_utc = DateTime::parse_from_rfc3339(&generated_at)
-      .ok()
-      .map(|dt| dt.with_timezone(&Utc));
+    let generated_at = find_rfc3339(data).ok_or_else(|| VideoInfoError::MalformedManifest("missing generation timestamp".to_string()))?;
+    let generated_at_utc = DateTime::parse_from_rfc3339(&generated_at).ok().map(|dt| dt.with_timezone(&Utc));
 
     let (model_brand, model_version, is_fast, is_lite) = parse_model_name(&model_name);
 
     let log_id = text_after_key(data, b"log_id");
-    let log_id_decoded_hex = log_id
-      .as_deref()
-      .and_then(decode_base64url)
-      .map(|bytes| bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>());
+    let log_id_decoded_hex = log_id.as_deref().and_then(decode_base64url).map(|bytes| bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>());
 
     let software_agent_version = text_after_key_from(data, b"version", vendor_end);
 
     let claim_generator = find(data, b"c2pa-rs").map(|_| "c2pa-rs".to_string());
-    let claim_generator_version = find(data, b"c2pa-rs")
-      .and_then(|i| text_after_key_from(data, b"version", i + b"c2pa-rs".len()));
+    let claim_generator_version = find(data, b"c2pa-rs").and_then(|i| text_after_key_from(data, b"version", i + b"c2pa-rs".len()));
 
     let (signer_org_id, signer_country) = match find_org_identifier(data) {
       Some((org_id, country)) => (Some(org_id), Some(country.to_string())),
       None => (None, None),
     };
 
-    Ok(SeedanceInfo {
-      platform,
-      software_agent,
-      software_agent_version,
-      model_name,
-      model_brand,
-      model_version,
-      is_fast,
-      is_lite,
-      generated_at,
-      generated_at_utc,
-      log_id,
-      log_id_decoded_hex,
-      digital_source_type: text_after_key(data, b"digitalSourceType"),
-      claim_generator,
-      claim_generator_version,
-      manifest_id: find_prefixed_uuid(data, b"urn:c2pa:"),
-      instance_id: find_prefixed_uuid(data, b"xmp:iid:"),
-      signer_email: find_signer_email(data),
-      signer_org_id,
-      signer_country,
-      cert_serial: find_cert_serial(data),
-    })
+    Ok(SeedanceInfo { platform, software_agent, software_agent_version, model_name, model_brand, model_version, is_fast, is_lite, generated_at, generated_at_utc, log_id, log_id_decoded_hex, digital_source_type: text_after_key(data, b"digitalSourceType"), claim_generator, claim_generator_version, manifest_id: find_prefixed_uuid(data, b"urn:c2pa:"), instance_id: find_prefixed_uuid(data, b"xmp:iid:"), signer_email: find_signer_email(data), signer_org_id, signer_country, cert_serial: find_cert_serial(data) })
   }
 }
 
@@ -226,9 +193,7 @@ impl SeedanceInfo {
 /// The version is the leading run of numeric segments after `seedance-`, so a
 /// trailing variant token (`fast`/`lite`) doesn't leak into it.
 fn parse_model_name(model_name: &str) -> (Option<String>, Option<String>, bool, bool) {
-  let brand = model_name.split("-seedance").next()
-    .filter(|s| !s.is_empty() && *s != model_name)
-    .map(|s| s.to_string());
+  let brand = model_name.split("-seedance").next().filter(|s| !s.is_empty() && *s != model_name).map(|s| s.to_string());
 
   let mut version = None;
   let mut is_fast = false;
@@ -236,11 +201,7 @@ fn parse_model_name(model_name: &str) -> (Option<String>, Option<String>, bool, 
   if let Some(after) = model_name.split("seedance-").nth(1) {
     let segments: Vec<&str> = after.split('-').collect();
     // Leading numeric segments form the version: ["1","0"] → "1.0".
-    let nums: Vec<&str> = segments
-      .iter()
-      .take_while(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
-      .copied()
-      .collect();
+    let nums: Vec<&str> = segments.iter().take_while(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())).copied().collect();
     if !nums.is_empty() {
       version = Some(nums.join("."));
     }
@@ -248,7 +209,7 @@ fn parse_model_name(model_name: &str) -> (Option<String>, Option<String>, bool, 
       match *segment {
         "fast" => is_fast = true,
         "lite" => is_lite = true,
-        _ => {}
+        _ => {},
       }
     }
   }
@@ -331,11 +292,7 @@ mod tests {
 
   #[test]
   fn parses_volcengine_fast() {
-    let data = synth_manifest(
-      "Volcengine_Ark_CN", "doubao-seedance-2-0-fast",
-      "2026-06-19T01:32:58Z", "ATIAA7b8D_iKjF32GukAAAAA",
-      "certificate_center@volcengine.com", "NTRCN-91110108MA01R70K8D",
-    );
+    let data = synth_manifest("Volcengine_Ark_CN", "doubao-seedance-2-0-fast", "2026-06-19T01:32:58Z", "ATIAA7b8D_iKjF32GukAAAAA", "certificate_center@volcengine.com", "NTRCN-91110108MA01R70K8D");
     let info = SeedanceInfo::from_bytes(&data).expect("should parse");
     assert_eq!(info.platform, SeedancePlatform::Volcengine);
     assert_eq!(info.signer_org_id.as_deref(), Some("NTRCN-91110108MA01R70K8D"));
@@ -362,11 +319,7 @@ mod tests {
 
   #[test]
   fn parses_byteplus_non_fast() {
-    let data = synth_manifest(
-      "BytePlus_ModelArk", "dreamina-seedance-2-0",
-      "2026-06-19T01:27:48Z", "ATMAA7b36J8cLZO2iUkAAAAA",
-      "certificate@byteplus.com", "NTRSG-202024632W",
-    );
+    let data = synth_manifest("BytePlus_ModelArk", "dreamina-seedance-2-0", "2026-06-19T01:27:48Z", "ATMAA7b36J8cLZO2iUkAAAAA", "certificate@byteplus.com", "NTRSG-202024632W");
     let info = SeedanceInfo::from_bytes(&data).expect("should parse");
     assert_eq!(info.platform, SeedancePlatform::BytePlus);
     assert_eq!(info.model_brand.as_deref(), Some("dreamina"));
@@ -381,11 +334,7 @@ mod tests {
 
   #[test]
   fn parses_seedance_1_0_lite() {
-    let data = synth_manifest(
-      "Volcengine_Ark_CN", "doubao-seedance-1-0-lite",
-      "2026-06-19T01:30:00Z", "ATIAA7b8D_iKjF32GukAAAAA",
-      "certificate_center@volcengine.com", "NTRCN-91110108MA01R70K8D",
-    );
+    let data = synth_manifest("Volcengine_Ark_CN", "doubao-seedance-1-0-lite", "2026-06-19T01:30:00Z", "ATIAA7b8D_iKjF32GukAAAAA", "certificate_center@volcengine.com", "NTRCN-91110108MA01R70K8D");
     let info = SeedanceInfo::from_bytes(&data).expect("should parse");
     assert_eq!(info.model_name, "doubao-seedance-1-0-lite");
     assert_eq!(info.model_brand.as_deref(), Some("doubao"));
@@ -399,7 +348,7 @@ mod tests {
   fn non_seedance_returns_not_seedance() {
     let data = b"....ftypisom....just a normal mp4 with no provenance....";
     match SeedanceInfo::from_bytes(data) {
-      Err(VideoInfoError::NotSeedance) => {}
+      Err(VideoInfoError::NotSeedance) => {},
       other => panic!("expected NotSeedance, got {:?}", other),
     }
   }
@@ -410,7 +359,7 @@ mod tests {
     let mut data = Vec::new();
     data.extend_from_slice(b"....Volcengine_Ark_CN....2026-06-19T01:32:58Z....");
     match SeedanceInfo::from_bytes(&data) {
-      Err(VideoInfoError::MalformedManifest(_)) => {}
+      Err(VideoInfoError::MalformedManifest(_)) => {},
       other => panic!("expected MalformedManifest, got {:?}", other),
     }
   }

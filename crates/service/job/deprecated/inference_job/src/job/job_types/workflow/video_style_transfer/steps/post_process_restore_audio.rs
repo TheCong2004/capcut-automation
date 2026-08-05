@@ -13,31 +13,15 @@ pub struct PostProcessRestoreVideoArgs<'a> {
 }
 
 /// NB: Purposefully infallible.
-pub fn post_process_restore_audio(
-  args: PostProcessRestoreVideoArgs<'_>
-) -> () {
+pub fn post_process_restore_audio(args: PostProcessRestoreVideoArgs<'_>) -> () {
   info!("Restoring audio...");
 
   // Use the original downloaded video if we didn't trim and resample it.
   let input_video_file = args.videos.primary_video.input_video();
 
-  let output_video_fs_path_restored = args.videos
-      .primary_video
-      .comfy_output_video_path
-      .with_extension("_restored.mp4");
+  let output_video_fs_path_restored = args.videos.primary_video.comfy_output_video_path.with_extension("_restored.mp4");
 
-  let command_exit_status = args
-      .comfy_deps
-      .ffmpeg_command_runner
-      .run_with_subprocess(RunAsSubprocessArgs {
-        args: Box::new(&FfmpegAudioReplaceArgs {
-          input_video_file: &args.videos.primary_video.comfy_output_video_path,
-          input_audio_file: &input_video_file,
-          output_video_file: &output_video_fs_path_restored,
-        }),
-        stderr: StreamRedirection::None,
-        stdout: StreamRedirection::None,
-      });
+  let command_exit_status = args.comfy_deps.ffmpeg_command_runner.run_with_subprocess(RunAsSubprocessArgs { args: Box::new(&FfmpegAudioReplaceArgs { input_video_file: &args.videos.primary_video.comfy_output_video_path, input_audio_file: &input_video_file, output_video_file: &output_video_fs_path_restored }), stderr: StreamRedirection::None, stdout: StreamRedirection::None });
 
   let mut use_restored_audio = true;
 

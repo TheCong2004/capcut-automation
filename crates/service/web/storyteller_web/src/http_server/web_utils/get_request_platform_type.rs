@@ -4,24 +4,24 @@ use actix_web::HttpRequest;
 use enums::common::platform_type::PlatformType;
 
 /// User-Agent prefix sent by the ArtCraft desktop (Tauri) client, eg. "storyteller-client/1.0".
-const DESKTOP_CLIENT_USER_AGENT_PREFIX : &str = "storyteller-client";
+const DESKTOP_CLIENT_USER_AGENT_PREFIX: &str = "storyteller-client";
 
 /// User-Agent prefix sent by the curl CLI tool, eg. "curl/8.7.1".
-const CURL_USER_AGENT_PREFIX : &str = "curl";
+const CURL_USER_AGENT_PREFIX: &str = "curl";
 
 /// User-Agent prefix sent by the Python `requests` library.
 /// Modern releases send "python-requests/2.31.0" (optionally followed by
 /// "CPython/x.y.z OS/release" in older releases, eg.
 /// "python-requests/0.14.2 CPython/2.7.3 Linux/3.2.0"). Some early releases
 /// sent the bare "python-requests.org", which shares this prefix.
-const PYTHON_REQUESTS_USER_AGENT_PREFIX : &str = "python-requests";
+const PYTHON_REQUESTS_USER_AGENT_PREFIX: &str = "python-requests";
 
 /// User-Agent prefix sent by Postman, eg. "PostmanRuntime/7.36.0".
 /// All known Postman Runtime versions (2.x through 8.x) use this form.
 /// (Compared case-insensitively.)
-const POSTMAN_USER_AGENT_PREFIX : &str = "postmanruntime";
+const POSTMAN_USER_AGENT_PREFIX: &str = "postmanruntime";
 
-const USER_AGENT_HEADER_NAME : HeaderName = HeaderName::from_static("user-agent");
+const USER_AGENT_HEADER_NAME: HeaderName = HeaderName::from_static("user-agent");
 
 /// Infer the calling platform from the request's User-Agent header.
 ///
@@ -30,10 +30,8 @@ const USER_AGENT_HEADER_NAME : HeaderName = HeaderName::from_static("user-agent"
 /// CLI/API tools (curl, python-requests, Postman) are flagged as such, and
 /// anything else is assumed to be a browser.
 pub fn get_request_platform_type(http_request: &HttpRequest) -> Option<PlatformType> {
-  let header_map : &HeaderMap = http_request.headers();
-  let user_agent = header_map.get(USER_AGENT_HEADER_NAME)?
-      .to_str()
-      .ok()?;
+  let header_map: &HeaderMap = http_request.headers();
+  let user_agent = header_map.get(USER_AGENT_HEADER_NAME)?.to_str().ok()?;
 
   platform_type_from_user_agent(user_agent)
 }
@@ -65,7 +63,7 @@ mod tests {
 
   use super::*;
 
-  const CHROME_USER_AGENT : &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+  const CHROME_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
   mod request_header_tests {
@@ -78,37 +76,27 @@ mod tests {
 
     #[test]
     fn desktop_client_user_agent() {
-      assert_eq!(
-        platform_type_for_user_agent_header("storyteller-client/1.0"),
-        Some(PlatformType::DesktopApp));
+      assert_eq!(platform_type_for_user_agent_header("storyteller-client/1.0"), Some(PlatformType::DesktopApp));
     }
 
     #[test]
     fn curl_user_agent() {
-      assert_eq!(
-        platform_type_for_user_agent_header("curl/8.7.1"),
-        Some(PlatformType::Curl));
+      assert_eq!(platform_type_for_user_agent_header("curl/8.7.1"), Some(PlatformType::Curl));
     }
 
     #[test]
     fn python_requests_user_agent() {
-      assert_eq!(
-        platform_type_for_user_agent_header("python-requests/2.31.0"),
-        Some(PlatformType::PythonRequests));
+      assert_eq!(platform_type_for_user_agent_header("python-requests/2.31.0"), Some(PlatformType::PythonRequests));
     }
 
     #[test]
     fn postman_user_agent() {
-      assert_eq!(
-        platform_type_for_user_agent_header("PostmanRuntime/7.36.0"),
-        Some(PlatformType::Postman));
+      assert_eq!(platform_type_for_user_agent_header("PostmanRuntime/7.36.0"), Some(PlatformType::Postman));
     }
 
     #[test]
     fn browser_user_agent() {
-      assert_eq!(
-        platform_type_for_user_agent_header(CHROME_USER_AGENT),
-        Some(PlatformType::Web));
+      assert_eq!(platform_type_for_user_agent_header(CHROME_USER_AGENT), Some(PlatformType::Web));
     }
   }
 
@@ -146,12 +134,8 @@ mod tests {
       assert_eq!(platform_type_from_user_agent("python-requests/2.31.0"), Some(PlatformType::PythonRequests));
       assert_eq!(platform_type_from_user_agent("python-requests/2.32.3"), Some(PlatformType::PythonRequests));
       // Older releases appended runtime and OS details.
-      assert_eq!(
-        platform_type_from_user_agent("python-requests/0.14.2 CPython/2.7.3 Linux/3.2.0-armv7l"),
-        Some(PlatformType::PythonRequests));
-      assert_eq!(
-        platform_type_from_user_agent("python-requests/1.1.0 CPython/2.6.6 Linux/2.6.32-431.3.1.el6.x86_64"),
-        Some(PlatformType::PythonRequests));
+      assert_eq!(platform_type_from_user_agent("python-requests/0.14.2 CPython/2.7.3 Linux/3.2.0-armv7l"), Some(PlatformType::PythonRequests));
+      assert_eq!(platform_type_from_user_agent("python-requests/1.1.0 CPython/2.6.6 Linux/2.6.32-431.3.1.el6.x86_64"), Some(PlatformType::PythonRequests));
       // Some early releases sent the bare project domain.
       assert_eq!(platform_type_from_user_agent("python-requests.org"), Some(PlatformType::PythonRequests));
       // Case-insensitive.
@@ -187,9 +171,7 @@ mod tests {
   }
 
   fn platform_type_for_user_agent_header(user_agent: &str) -> Option<PlatformType> {
-    let http_request = TestRequest::default()
-        .insert_header(("user-agent", user_agent))
-        .to_http_request();
+    let http_request = TestRequest::default().insert_header(("user-agent", user_agent)).to_http_request();
     get_request_platform_type(&http_request)
   }
 

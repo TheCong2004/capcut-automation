@@ -20,7 +20,7 @@ pub struct SubmitJobRequest<'a> {
 pub struct SubmitJobResponse {
   /// On success, the job ID is returned.
   pub maybe_job_id: Option<String>,
-  
+
   /// On error, we have a list of error messages.
   pub maybe_errors: Option<Vec<SubmitJobError>>,
 }
@@ -32,10 +32,7 @@ pub struct SubmitJobError {
 }
 
 pub async fn submit_job(req: SubmitJobRequest<'_>) -> Result<SubmitJobResponse, MidjourneyError> {
-  let client = Client::builder()
-      .emulation(Emulation::Firefox139)
-      .build()
-      .map_err(|err| MidjourneyClientError::WreqError(err))?;
+  let client = Client::builder().emulation(Emulation::Firefox139).build().map_err(|err| MidjourneyClientError::WreqError(err))?;
 
   let referer = format!("https://{}", req.hostname.as_str());
 
@@ -49,19 +46,7 @@ pub async fn submit_job(req: SubmitJobRequest<'_>) -> Result<SubmitJobResponse, 
     return Err(MidjourneyClientError::CookieTooShort.into());
   }
 
-  let mut http_request = client.post(url)
-      .header("cookie", cookie_header)
-      .header("Referer", &referer)
-      .header("Referrer-Policy", "origin-when-cross-origin")
-      .header("accept", "*/*")
-      .header("accept-language", "en-US,en;q=0.8")
-      .header("content-type", "application/json")
-      .header("priority", "u=1, i")
-      .header("sec-ch-ua-mobile", "?0")
-      .header("sec-fetch-dest", "empty")
-      .header("sec-fetch-mode", "cors")
-      .header("sec-fetch-site", "same-origin")
-      .header("x-csrf-protection", "1");
+  let mut http_request = client.post(url).header("cookie", cookie_header).header("Referer", &referer).header("Referrer-Policy", "origin-when-cross-origin").header("accept", "*/*").header("accept-language", "en-US,en;q=0.8").header("content-type", "application/json").header("priority", "u=1, i").header("sec-ch-ua-mobile", "?0").header("sec-fetch-dest", "empty").header("sec-fetch-mode", "cors").header("sec-fetch-site", "same-origin").header("x-csrf-protection", "1");
 
   #[derive(Serialize)]
   struct F {
@@ -89,31 +74,11 @@ pub async fn submit_job(req: SubmitJobRequest<'_>) -> Result<SubmitJobResponse, 
     prompt: String,
   }
 
-  let body = RawRequest {
-    f: F {
-      mode: "fast".to_string(),
-      private: false,
-    },
-    channelId: req.channel_id.to_string(),
-    metadata: Metadata {
-      imagePrompts: 0,
-      imageReferences: 0,
-      characterReferences: 0,
-      depthReferences: 0,
-      lightboxOpen: "".to_string(),
-    },
-    t: "imagine".to_string(),
-    prompt: req.prompt.to_string(),
-  };
+  let body = RawRequest { f: F { mode: "fast".to_string(), private: false }, channelId: req.channel_id.to_string(), metadata: Metadata { imagePrompts: 0, imageReferences: 0, characterReferences: 0, depthReferences: 0, lightboxOpen: "".to_string() }, t: "imagine".to_string(), prompt: req.prompt.to_string() };
 
-  let http_request  = http_request
-      .json(&body)
-      .build()
-      .map_err(|err| MidjourneyClientError::WreqError(err))?;
+  let http_request = http_request.json(&body).build().map_err(|err| MidjourneyClientError::WreqError(err))?;
 
-  let response = client.execute(http_request)
-      .await
-      .map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
+  let response = client.execute(http_request).await.map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
 
   let status = response.status();
 
@@ -123,8 +88,7 @@ pub async fn submit_job(req: SubmitJobRequest<'_>) -> Result<SubmitJobResponse, 
   //   }
   // }
 
-  let response_body = &response.text().await
-      .map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
+  let response_body = &response.text().await.map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
 
   if !status.is_success() {
     if let Err(err) = filter_cloudflare_errors(status.as_u16(), &response_body) {
@@ -169,33 +133,23 @@ pub async fn submit_job(req: SubmitJobRequest<'_>) -> Result<SubmitJobResponse, 
     failure: Option<Vec<FailurePayload>>,
   }
 
-  let response = serde_json::from_str::<RawResponse>(response_body)
-      .map_err(|err| MidjourneyApiError::DeserializationError(err))?;
+  let response = serde_json::from_str::<RawResponse>(response_body).map_err(|err| MidjourneyApiError::DeserializationError(err))?;
 
-  let maybe_job_id = response.success
-      .get(0)
-      .map(|s| s.job_id.clone());
-  
+  let maybe_job_id = response.success.get(0).map(|s| s.job_id.clone());
+
   if maybe_job_id.is_none() {
     warn!("No job id found in body: {:?}", response_body);
   }
 
   let mut maybe_errors = None;
-  
+
   if let Some(failures) = response.failure.as_ref() {
     if !failures.is_empty() {
-      maybe_errors = Some(failures.iter()
-          .map(|f| SubmitJobError { 
-            error_type: Some(f.r#type.clone()), 
-            message: Some(f.message.clone()), 
-          }).collect());
+      maybe_errors = Some(failures.iter().map(|f| SubmitJobError { error_type: Some(f.r#type.clone()), message: Some(f.message.clone()) }).collect());
     }
   }
 
-  Ok(SubmitJobResponse {
-    maybe_job_id,
-    maybe_errors,
-  })
+  Ok(SubmitJobResponse { maybe_job_id, maybe_errors })
 }
 
 #[cfg(test)]
@@ -213,17 +167,11 @@ mod tests {
     let cookie_header = read_to_trimmed_string("/Users/bt/secrets/midjourney/cookie.txt")?;
     let channel_id = read_to_trimmed_string("/Users/bt/secrets/midjourney/channel_id.txt")?;
 
-    let result = submit_job(SubmitJobRequest {
-      prompt: "a modern n64 console",
-      channel_id: &channel_id,
-      cookie_header,
-      hostname: MidjourneyHostname::Standard,
-    }).await?;
+    let result = submit_job(SubmitJobRequest { prompt: "a modern n64 console", channel_id: &channel_id, cookie_header, hostname: MidjourneyHostname::Standard }).await?;
 
     println!("Response: {:?}", result);
 
     assert_eq!(1, 2);
-
 
     Ok(())
   }

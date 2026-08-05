@@ -6,31 +6,23 @@ use std::path::Path;
 use errors::AnyhowResult;
 
 pub struct PrefixDisabledEndpoints {
-  endpoint_prefixes: HashSet<String>
+  endpoint_prefixes: HashSet<String>,
 }
 
 impl PrefixDisabledEndpoints {
   pub fn new() -> Self {
-    Self {
-      endpoint_prefixes: HashSet::new()
-    }
+    Self { endpoint_prefixes: HashSet::new() }
   }
 
   pub fn from_set(endpoint_prefixes: HashSet<String>) -> Self {
-    Self {
-      endpoint_prefixes,
-    }
+    Self { endpoint_prefixes }
   }
 
   pub fn load_from_file<P: AsRef<Path>>(path: P) -> AnyhowResult<Self> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
-    let lines = reader.lines()
-        .filter_map(|line| line.ok())
-        .map(|line| line.trim().to_string())
-        .filter(|line| !(line.starts_with("#") || line.is_empty()))
-        .collect::<HashSet<String>>();
+    let lines = reader.lines().filter_map(|line| line.ok()).map(|line| line.trim().to_string()).filter(|line| !(line.starts_with("#") || line.is_empty())).collect::<HashSet<String>>();
 
     Ok(Self::from_set(lines))
   }
@@ -40,8 +32,7 @@ impl PrefixDisabledEndpoints {
   }
 
   pub fn endpoint_is_disabled(&self, endpoint: &str) -> bool {
-    self.endpoint_prefixes.iter()
-        .any(|prefix| endpoint.starts_with(prefix))
+    self.endpoint_prefixes.iter().any(|prefix| endpoint.starts_with(prefix))
   }
 
   pub fn len(&self) -> usize {

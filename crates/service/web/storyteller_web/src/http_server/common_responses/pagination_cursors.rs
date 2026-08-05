@@ -8,7 +8,6 @@ use utoipa::ToSchema;
 /// See `PaginationPage` for the other type of pagination.
 #[derive(Serialize, ToSchema)]
 pub struct PaginationCursors {
-
   /// The "next" cursor.
   /// This is an opaque (typically even encrypted) handle.
   pub maybe_next: Option<String>,
@@ -28,11 +27,7 @@ mod tests {
   #[test]
   fn test_serialize_empty_json() {
     // Make sure this interface doesn't change.
-    let pagination = PaginationCursors {
-      maybe_next: None,
-      maybe_previous: None,
-      cursor_is_reversed: false,
-    };
+    let pagination = PaginationCursors { maybe_next: None, maybe_previous: None, cursor_is_reversed: false };
 
     let json = serde_json::to_string(&pagination).expect("serialization");
 
@@ -42,11 +37,7 @@ mod tests {
   #[test]
   fn test_serialize_full_json() {
     // Make sure this interface doesn't change.
-    let pagination = PaginationCursors {
-      maybe_next: Some("foo".to_string()),
-      maybe_previous: Some("bar".to_string()),
-      cursor_is_reversed: true,
-    };
+    let pagination = PaginationCursors { maybe_next: Some("foo".to_string()), maybe_previous: Some("bar".to_string()), cursor_is_reversed: true };
 
     let json = serde_json::to_string(&pagination).expect("serialization");
 

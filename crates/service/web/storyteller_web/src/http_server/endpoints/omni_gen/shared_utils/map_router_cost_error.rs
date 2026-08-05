@@ -13,17 +13,15 @@ pub fn map_router_cost_error(error: ArtcraftRouterError) -> CommonWebError {
     ArtcraftRouterError::InvalidInput(reason) => {
       warn!("Cost estimate rejected: {}", reason);
       CommonWebError::BadInputWithSimpleMessage(reason.to_string())
-    }
-    ArtcraftRouterError::Client(_)
-    | ArtcraftRouterError::UnsupportedModel(_)
-    | ArtcraftRouterError::UnsupportedProviderAndModelForNewApi(_) => {
+    },
+    ArtcraftRouterError::Client(_) | ArtcraftRouterError::UnsupportedModel(_) | ArtcraftRouterError::UnsupportedProviderAndModelForNewApi(_) => {
       // NB: Don't leak configuration details.
       warn!("Cost estimate rejected: {}", error);
       CommonWebError::BadInputWithSimpleMessage("Bad input for model".to_string())
-    }
+    },
     _ => {
       warn!("Cost estimate failed: {}", error);
       CommonWebError::from_error(error)
-    }
+    },
   }
 }

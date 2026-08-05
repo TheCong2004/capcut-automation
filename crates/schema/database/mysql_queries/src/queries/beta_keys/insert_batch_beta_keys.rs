@@ -24,8 +24,8 @@ pub struct InsertBatchArgs<'a> {
 }
 
 pub async fn insert_batch_beta_keys<'a, 'b>(args: InsertBatchArgs<'a>) -> AnyhowResult<()> {
-
-  let mut query_builder = QueryBuilder::new(r#"
+  let mut query_builder = QueryBuilder::new(
+    r#"
     INSERT INTO beta_keys (
       token,
       product,
@@ -34,7 +34,8 @@ pub async fn insert_batch_beta_keys<'a, 'b>(args: InsertBatchArgs<'a>) -> Anyhow
       maybe_referrer_user_token,
       maybe_notes
     ) VALUES
-  "#);
+  "#,
+  );
 
   for (i, beta_key) in args.beta_keys.iter().enumerate() {
     let token = BetaKeyToken::generate();
@@ -67,7 +68,7 @@ pub async fn insert_batch_beta_keys<'a, 'b>(args: InsertBatchArgs<'a>) -> Anyhow
 
   let query = query_builder.build();
 
-  let query_result  = query.execute(args.mysql_pool).await;
+  let query_result = query.execute(args.mysql_pool).await;
 
   match query_result {
     Ok(_) => Ok(()),

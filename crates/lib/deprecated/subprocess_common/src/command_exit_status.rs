@@ -19,7 +19,6 @@ pub enum CommandExitStatus {
 }
 
 impl CommandExitStatus {
-
   pub fn from_exit_status(exit_status: ExitStatus) -> Self {
     match exit_status {
       ExitStatus::Exited(0) => CommandExitStatus::Success,
@@ -54,7 +53,7 @@ mod tests {
     assert_eq!(CommandExitStatus::Failure.is_success(), false);
     assert_eq!(CommandExitStatus::Timeout.is_success(), false);
     assert_eq!(CommandExitStatus::Unknown.is_success(), false);
-    assert_eq!(CommandExitStatus::FailureWithReason{ reason: "foo".to_string() }.is_success(), false);
+    assert_eq!(CommandExitStatus::FailureWithReason { reason: "foo".to_string() }.is_success(), false);
   }
 
   #[test]

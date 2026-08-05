@@ -12,10 +12,6 @@ pub struct AnimateXDependencies {
 
 impl AnimateXDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      process_frames_command: AnimateXProcessFramesCommand::new_from_env()?,
-      inference_command: AnimateXInferenceCommand::new_from_env()?,
-      model_directory_path: easyenv::get_env_pathbuf_required("ANIMATE_X_MODEL_DIRECTORY_PATH")?,
-    })
+    Ok(Self { process_frames_command: AnimateXProcessFramesCommand::new_from_env()?, inference_command: AnimateXInferenceCommand::new_from_env()?, model_directory_path: easyenv::get_env_pathbuf_required("ANIMATE_X_MODEL_DIRECTORY_PATH")? })
   }
 }

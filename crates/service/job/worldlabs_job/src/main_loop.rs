@@ -39,28 +39,18 @@ async fn run_poll_iteration(deps: &JobDependencies) -> anyhow::Result<()> {
   for job in &pending_jobs {
     let operation_id = OperationId(job.operation_id.clone());
 
-    let operation = match get_operation(GetOperationArgs {
-      creds: &deps.worldlabs_creds,
-      operation_id: &operation_id,
-      request_timeout: Some(Duration::from_secs(30)),
-    }).await {
+    let operation = match get_operation(GetOperationArgs { creds: &deps.worldlabs_creds, operation_id: &operation_id, request_timeout: Some(Duration::from_secs(30)) }).await {
       Ok(op) => op,
       Err(err) => {
-        warn!(
-          "Error polling WorldLabs operation {} for job {}: {:?}",
-          job.operation_id, job.job_token.as_str(), err
-        );
+        warn!("Error polling WorldLabs operation {} for job {}: {:?}", job.operation_id, job.job_token.as_str(), err);
         continue;
-      }
+      },
     };
 
     // 3. Check if the operation has an error.
     if let Some(ref op_error) = operation.error {
       let reason = op_error.message.as_deref().unwrap_or("unknown error");
-      info!(
-        "Operation {} failed: {}. Processing job {} as failed.",
-        job.operation_id, reason, job.job_token.as_str()
-      );
+      info!("Operation {} failed: {}. Processing job {} as failed.", job.operation_id, reason, job.job_token.as_str());
       process_failed_job(deps, job, reason).await;
       continue;
     }
@@ -68,24 +58,15 @@ async fn run_poll_iteration(deps: &JobDependencies) -> anyhow::Result<()> {
     // 4. Check if the operation is done.
     if !operation.done {
       // Still in progress — check again next poll.
-      info!(
-        "Operation {} for job {} is still in progress.",
-        job.operation_id, job.job_token.as_str()
-      );
+      info!("Operation {} for job {} is still in progress.", job.operation_id, job.job_token.as_str());
       continue;
     }
 
     // 5. Operation is done — process the result.
-    info!(
-      "Operation {} completed, processing job {}.",
-      job.operation_id, job.job_token.as_str()
-    );
+    info!("Operation {} completed, processing job {}.", job.operation_id, job.job_token.as_str());
 
     if let Err(err) = process_successful_job(deps, job, &operation).await {
-      warn!(
-        "Error processing completed operation {} for job {}: {:?}",
-        job.operation_id, job.job_token.as_str(), err
-      );
+      warn!("Error processing completed operation {} for job {}: {:?}", job.operation_id, job.job_token.as_str(), err);
       let _ = deps.job_stats.increment_failure_count();
     } else {
       let _ = deps.job_stats.increment_success_count();

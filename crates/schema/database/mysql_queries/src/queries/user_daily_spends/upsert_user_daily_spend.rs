@@ -26,9 +26,7 @@ where
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn upsert_user_daily_spend<'e, 'c: 'e, E>(
-  args: UpsertUserDailySpendArgs<'e, 'c, E>,
-) -> Result<(), sqlx::Error>
+pub async fn upsert_user_daily_spend<'e, 'c: 'e, E>(args: UpsertUserDailySpendArgs<'e, 'c, E>) -> Result<(), sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -66,8 +64,8 @@ ON DUPLICATE KEY UPDATE
     args.payment_count,
     args.credits_granted,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(())
 }

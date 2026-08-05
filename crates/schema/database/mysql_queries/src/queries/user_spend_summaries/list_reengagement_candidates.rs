@@ -31,9 +31,7 @@ where
 }
 
 /// Users that need re-engagement, highest re-engagement score first.
-pub async fn list_reengagement_candidates<'e, 'c: 'e, E>(
-  args: ListReengagementCandidatesArgs<'e, 'c, E>,
-) -> Result<Vec<ReengagementCandidate>, sqlx::Error>
+pub async fn list_reengagement_candidates<'e, 'c: 'e, E>(args: ListReengagementCandidatesArgs<'e, 'c, E>) -> Result<Vec<ReengagementCandidate>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -62,8 +60,8 @@ LIMIT ? OFFSET ?
     args.limit,
     args.offset,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

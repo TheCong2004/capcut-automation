@@ -17,17 +17,13 @@ pub struct Args<'a> {
 }
 
 pub fn ffmpeg_trim_and_resample(args: Args<'_>) -> AnyhowResult<()> {
+  let maybe_start_offset = args.maybe_start_offset.map(|duration| ffmpeg_timestamp_from_duration(duration));
 
-  let maybe_start_offset = args.maybe_start_offset
-      .map(|duration| ffmpeg_timestamp_from_duration(duration));
+  let maybe_end_offset = args.maybe_end_offset.map(|duration| ffmpeg_timestamp_from_duration(duration));
 
-  let maybe_end_offset = args.maybe_end_offset
-      .map(|duration| ffmpeg_timestamp_from_duration(duration));
+  let maybe_new_frame_rate = args.maybe_new_frame_rate.map(|fps| format!("{}", fps));
 
-  let maybe_new_frame_rate = args.maybe_new_frame_rate
-      .map(|fps| format!("{}", fps));
-
-  let mut command= Command::new("ffmpeg");
+  let mut command = Command::new("ffmpeg");
 
   command.arg("-i").arg(&args.video_input_path);
 
@@ -53,9 +49,7 @@ pub fn ffmpeg_trim_and_resample(args: Args<'_>) -> AnyhowResult<()> {
 
   info!("Calling ffmpeg...");
 
-  let output = command
-      .arg(&args.video_output_path)
-      .output()?;
+  let output = command.arg(&args.video_output_path).output()?;
 
   if !output.status.success() {
     error!("bad exit status: {}", output.status);

@@ -18,9 +18,7 @@ where
 /// prompt. Used as a cover-image fallback for mesh/splat generations whose
 /// webhook payload carries no thumbnail: the image the user generated the
 /// model from stands in as the cover.
-pub async fn get_first_imageref_for_prompt<'e, 'c: 'e, E>(
-  args: GetFirstImagerefForPromptArgs<'e, 'c, E>,
-) -> Result<Option<MediaFileToken>, sqlx::Error>
+pub async fn get_first_imageref_for_prompt<'e, 'c: 'e, E>(args: GetFirstImagerefForPromptArgs<'e, 'c, E>) -> Result<Option<MediaFileToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -40,8 +38,8 @@ LIMIT 1
     "#,
     args.prompt_token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
   Ok(result.map(|r| r.media_token))
 }

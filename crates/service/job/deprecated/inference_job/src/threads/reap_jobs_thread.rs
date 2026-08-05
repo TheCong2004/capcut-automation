@@ -6,9 +6,7 @@ use std::time::Duration;
 
 const WAIT_BETWEEN_REAPING_SECONDS: u64 = 60 * 2; // 2 minutes
 
-pub async fn reap_jobs_thread(
-  mysql_pool: MySqlPool,
-) -> ! {
+pub async fn reap_jobs_thread(mysql_pool: MySqlPool) -> ! {
   info!("Database job reaping thread starting...");
 
   loop {
@@ -25,9 +23,7 @@ pub async fn reap_jobs_thread(
   }
 }
 
-pub async fn do_reap_jobs(
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<()> {
+pub async fn do_reap_jobs(mysql_pool: &MySqlPool) -> AnyhowResult<()> {
   reap_stale_fakeyou_jobs(mysql_pool).await?;
   Ok(())
 }

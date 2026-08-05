@@ -21,30 +21,23 @@ pub struct PodInfo {
 pub fn list_pods() -> AnyhowResult<Vec<PodInfo>> {
   info!("kube-pod-cleanup");
 
-  let output = Command::new("kubectl")
-      .args(["get", "pods"])
-      .output()?;
+  let output = Command::new("kubectl").args(["get", "pods"]).output()?;
 
   let stdout = String::from_utf8(output.stdout)?;
 
   parse_pod_status_output(&stdout)
 }
 
-const LIST_POD_REGEX : Lazy<Regex> = Lazy::new(|| {
-  Regex::new(r"(\S+)\s+(\S+)\s+(\S+)\s+((\d+\s\(\S+ ago\))|(\S+))\s+(\S+).*")
-      .expect("regex should parse")
-});
+const LIST_POD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\S+)\s+(\S+)\s+(\S+)\s+((\d+\s\(\S+ ago\))|(\S+))\s+(\S+).*").expect("regex should parse"));
 
 fn parse_pod_status_output(stdout: &str) -> AnyhowResult<Vec<PodInfo>> {
   // Parse `kubectl get pods` lines
   let regex = LIST_POD_REGEX; // NB: To pass lint on const interior mutability (???)
 
-  let lines = stdout.split("\n")
-      .into_iter()
-      .map(|line| line.trim().to_string())
-      .collect::<Vec<String>>();
+  let lines = stdout.split("\n").into_iter().map(|line| line.trim().to_string()).collect::<Vec<String>>();
 
-  Ok(lines.iter()
+  Ok(
+    lines.iter()
       .filter_map(|line| {
         regex.captures(line)
       })
@@ -63,7 +56,8 @@ fn parse_pod_status_output(stdout: &str) -> AnyhowResult<Vec<PodInfo>> {
           age: age.to_string(),
         }
       })
-      .collect::<Vec<_>>())
+      .collect::<Vec<_>>(),
+  )
 }
 
 #[cfg(test)]
@@ -81,31 +75,12 @@ storyteller-web-8566f9bdc5-247d4   0/1     Error                    0           
 storyteller-web-8566f9bdc5-25lw6   0/1     Evicted                  0               2d16h
     "#;
 
-    let pods = parse_pod_status_output(example_output_lines)
-        .expect("should parse");
+    let pods = parse_pod_status_output(example_output_lines).expect("should parse");
 
-    assert_eq!(pods.get(0).unwrap().clone(), PodInfo {
-      name: "analytics-job-b8cbf88bd-c5ghc".to_string(),
-      ready: "1/1".to_string(),
-      status: "Running".to_string(),
-      restarts: "0".to_string(),
-      age: "90d".to_string(),
-    });
+    assert_eq!(pods.get(0).unwrap().clone(), PodInfo { name: "analytics-job-b8cbf88bd-c5ghc".to_string(), ready: "1/1".to_string(), status: "Running".to_string(), restarts: "0".to_string(), age: "90d".to_string() });
 
-    assert_eq!(pods.get(1).unwrap().clone(), PodInfo {
-      name: "storyteller-web-8566f9bdc5-2kv6v".to_string(),
-      ready: "1/1".to_string(),
-      status: "Running".to_string(),
-      restarts: "4 (2d12h ago)".to_string(),
-      age: "4d23h".to_string(),
-    });
+    assert_eq!(pods.get(1).unwrap().clone(), PodInfo { name: "storyteller-web-8566f9bdc5-2kv6v".to_string(), ready: "1/1".to_string(), status: "Running".to_string(), restarts: "4 (2d12h ago)".to_string(), age: "4d23h".to_string() });
 
-    assert_eq!(pods.get(2).unwrap().clone(), PodInfo {
-      name: "storyteller-web-8566f9bdc5-2fzlt".to_string(),
-      ready: "0/1".to_string(),
-      status: "ContainerStatusUnknown".to_string(),
-      restarts: "1".to_string(),
-      age: "6d12h".to_string(),
-    });
+    assert_eq!(pods.get(2).unwrap().clone(), PodInfo { name: "storyteller-web-8566f9bdc5-2fzlt".to_string(), ready: "0/1".to_string(), status: "ContainerStatusUnknown".to_string(), restarts: "1".to_string(), age: "6d12h".to_string() });
   }
 }

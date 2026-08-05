@@ -18,16 +18,14 @@ pub struct BannedCidrFilter {
 
 impl BannedCidrFilter {
   pub fn new(cidr_bans: BannedCidrSet) -> Self {
-    Self {
-      cidr_bans,
-    }
+    Self { cidr_bans }
   }
 }
 
 impl<S, B> Transform<S, ServiceRequest> for BannedCidrFilter
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;
@@ -39,4 +37,3 @@ impl<S, B> Transform<S, ServiceRequest> for BannedCidrFilter
     ok(BannedCidrFilterMiddleware { service, cidr_bans: self.cidr_bans.clone() })
   }
 }
-

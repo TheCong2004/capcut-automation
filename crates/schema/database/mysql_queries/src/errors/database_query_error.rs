@@ -1,21 +1,20 @@
-
 // TODO(bt,2024-10-01): This is only used for inserts into the idempotency table. We should move or rename it.
 #[derive(Debug)]
-#[deprecated(note="This is an old error type.")]
+#[deprecated(note = "This is an old error type.")]
 pub enum DatabaseQueryError {
   /// A duplicate idempotency token error occurred.
   /// This should be surfaced as a 400 to the user.
-  #[deprecated(note="This is an old error type.")]
+  #[deprecated(note = "This is an old error type.")]
   IdempotencyDuplicateKeyError,
 
   /// An uncategorized error occurred.
   /// This will likely result in a 500 for the user.
-  #[deprecated(note="This is an old error type.")]
+  #[deprecated(note = "This is an old error type.")]
   SqlxError(sqlx::Error),
 
   /// An uncategorized non-database error occurred.
   /// This will likely result in a 500 for the user.
-  #[deprecated(note="This is an old error type.")]
+  #[deprecated(note = "This is an old error type.")]
   AnyhowError(anyhow::Error),
 }
 

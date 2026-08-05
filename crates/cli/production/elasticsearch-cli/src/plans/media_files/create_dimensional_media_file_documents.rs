@@ -18,16 +18,12 @@ use mysql_queries::queries::media_files::list::list_media_files_for_elastic_sear
 use mysql_queries::queries::model_weights::list::list_model_weights_for_elastic_search_backfill_using_cursor::{list_model_weights_for_elastic_search_backfill_using_cursor, ModelWeightForElasticsearchRecord};
 use storyteller_root::get_storyteller_rust_root;
 
-pub async fn create_dimensional_media_file_documents(
-  mysql: &Pool<MySql>,
-  elasticsearch: &Elasticsearch
-) -> AnyhowResult<()> {
-
+pub async fn create_dimensional_media_file_documents(mysql: &Pool<MySql>, elasticsearch: &Elasticsearch) -> AnyhowResult<()> {
   info!("Create dimensional media file documents.");
 
   // TODO(bt, 2024-01-10): expose this as a CLI flag
-  const DELETE_EXISTING_INDEX : bool = true;
-  const PAGE_SIZE : usize = 1000;
+  const DELETE_EXISTING_INDEX: bool = true;
+  const PAGE_SIZE: usize = 1000;
 
   create_media_file_index(&elasticsearch, DELETE_EXISTING_INDEX).await?;
 
@@ -40,19 +36,7 @@ pub async fn create_dimensional_media_file_documents(
       mysql_pool: mysql,
       page_size: PAGE_SIZE,
       cursor,
-      maybe_filter_engine_categories: Some(&HashSet::from_iter(vec![
-        MediaFileEngineCategory::Animation,
-        MediaFileEngineCategory::Character,
-        MediaFileEngineCategory::Creature,
-        MediaFileEngineCategory::Expression,
-        MediaFileEngineCategory::ImagePlane,
-        MediaFileEngineCategory::Location,
-        MediaFileEngineCategory::Object,
-        MediaFileEngineCategory::Scene,
-        MediaFileEngineCategory::SetDressing,
-        MediaFileEngineCategory::Skybox,
-        MediaFileEngineCategory::VideoPlane,
-      ])),
+      maybe_filter_engine_categories: Some(&HashSet::from_iter(vec![MediaFileEngineCategory::Animation, MediaFileEngineCategory::Character, MediaFileEngineCategory::Creature, MediaFileEngineCategory::Expression, MediaFileEngineCategory::ImagePlane, MediaFileEngineCategory::Location, MediaFileEngineCategory::Object, MediaFileEngineCategory::Scene, MediaFileEngineCategory::SetDressing, MediaFileEngineCategory::Skybox, MediaFileEngineCategory::VideoPlane])),
       maybe_filter_media_types: Some(&HashSet::from_iter(vec![
         // Engine types
         MediaFileType::Csv,
@@ -64,11 +48,9 @@ pub async fn create_dimensional_media_file_documents(
         MediaFileType::Jpg,
         MediaFileType::Png,
       ])),
-      maybe_filter_media_classes: Some(&HashSet::from_iter(vec![
-        MediaFileClass::Image,
-        MediaFileClass::Dimensional,
-      ])),
-    }).await?;
+      maybe_filter_media_classes: Some(&HashSet::from_iter(vec![MediaFileClass::Image, MediaFileClass::Dimensional])),
+    })
+    .await?;
 
     info!("Results length: {}", results.len());
 
@@ -84,7 +66,7 @@ pub async fn create_dimensional_media_file_documents(
       None => {
         warn!("No final ID at cursor {cursor}");
         break;
-      }
+      },
     }
 
     for result in results {
@@ -142,27 +124,16 @@ async fn create_document_from_record(elasticsearch: &Elasticsearch, record: Medi
     is_deleted,
   };
 
-  let op : BulkOperation<_> = BulkOperation::index(&document)
-      .id(document.get_document_id())
-      .into();
+  let op: BulkOperation<_> = BulkOperation::index(&document).id(document.get_document_id()).into();
 
-  let response = elasticsearch
-      .bulk(BulkParts::Index(MEDIA_FILE_INDEX))
-      .body(vec![op])
-      .send()
-      .await?;
+  let response = elasticsearch.bulk(BulkParts::Index(MEDIA_FILE_INDEX)).body(vec![op]).send().await?;
 
   let json: Value = response.json().await?;
 
   let had_errors = json["errors"].as_bool().unwrap_or(false);
 
   if had_errors {
-    let failed: Vec<&Value> = json["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|v| !v["error"].is_null())
-        .collect();
+    let failed: Vec<&Value> = json["items"].as_array().unwrap().iter().filter(|v| !v["error"].is_null()).collect();
 
     // TODO: retry failures
     error!("Errors during indexing. Failures: {}", failed.len());
@@ -173,22 +144,15 @@ async fn create_document_from_record(elasticsearch: &Elasticsearch, record: Medi
 
 // NB: Adapted from elasticsearch crate examples source
 async fn create_media_file_index(client: &Elasticsearch, delete_existing: bool) -> AnyhowResult<()> {
-
   info!("Creating model media file index...");
 
-  let index_path = get_storyteller_rust_root()
-      .join("_database/elasticsearch/index_definitions/media_files_v1.json");
+  let index_path = get_storyteller_rust_root().join("_database/elasticsearch/index_definitions/media_files_v1.json");
 
   info!("Reading index file: {:?}", index_path);
 
   let index_definition = read_to_string(index_path)?;
 
-  create_index_if_not_exists(CreateIndexArgs {
-    client,
-    index_name: MEDIA_FILE_INDEX,
-    index_definition: &index_definition,
-    delete_existing,
-  }).await?;
+  create_index_if_not_exists(CreateIndexArgs { client, index_name: MEDIA_FILE_INDEX, index_definition: &index_definition, delete_existing }).await?;
 
   Ok(())
 }

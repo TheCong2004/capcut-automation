@@ -31,18 +31,7 @@ async fn main() -> AnyhowResult<()> {
   let _ = rustls::crypto::ring::default_provider().install_default();
 
   // init_all_with_default_logging(None);
-  Builder::new()
-      .format(|buf, record| {
-        writeln!(
-          buf,
-          "{} [{}] {}",
-          Local::now().format("%Y-%m-%dT%H:%M:%S"),
-          record.level(),
-          record.args()
-        )
-      })
-      .filter(None, LevelFilter::Info)
-      .init();
+  Builder::new().format(|buf, record| writeln!(buf, "{} [{}] {}", Local::now().format("%Y-%m-%dT%H:%M:%S"), record.level(), record.args())).filter(None, LevelFilter::Info).init();
 
   let command = parse_cli_args()?;
 
@@ -51,9 +40,7 @@ async fn main() -> AnyhowResult<()> {
   // The path is resolved relative to the current working directory — log the
   // absolute path so a "not found" is actionable.
   let secrets_filename = ".env-db-backfill-secrets";
-  let secrets_path = std::env::current_dir()
-      .map(|dir| dir.join(secrets_filename))
-      .unwrap_or_else(|_| std::path::PathBuf::from(secrets_filename));
+  let secrets_path = std::env::current_dir().map(|dir| dir.join(secrets_filename)).unwrap_or_else(|_| std::path::PathBuf::from(secrets_filename));
   info!("Loading secrets from: {}", secrets_path.display());
   // NB: We deliberately do NOT use `dotenv` here. Its parser treats `$`, spaces,
   // and `\` as special INSIDE the value (quoted or not), which mangles DB
@@ -68,11 +55,11 @@ async fn main() -> AnyhowResult<()> {
     Command::CalculateModelWeightsUsages => {
       let mysql = get_mysql("MYSQL_PRODUCTION_URL").await?;
       run_migration(mysql).await?
-    }
+    },
     Command::CalculateLegacyTtsResultsUsages => {
       let mysql = get_mysql("MYSQL_PRODUCTION_URL").await?;
       calculate_legacy_tts_result_usages(mysql).await?
-    }
+    },
     Command::BackfillUserSpendEvents => {
       // Read pool = the replica (source); write pool = your target DB (local in
       // a dry run, prod when you go live). Stripe key = the ArtCraft account.
@@ -81,7 +68,7 @@ async fn main() -> AnyhowResult<()> {
       let write_pool = get_mysql("MYSQL_WRITE_URL").await?;
       let stripe = StripeApi::new(easyenv::get_env_string_required("STRIPE_ARTCRAFT_SECRET_KEY")?)?;
       backfill_user_spend_events(&read_pool, &write_pool, &stripe, sub_args).await?;
-    }
+    },
   }
 
   Ok(())
@@ -94,8 +81,7 @@ async fn main() -> AnyhowResult<()> {
 /// spaces, `\`, or `#` inside the value — so DB URLs and generated passwords
 /// pass through unchanged.
 fn load_secrets_file(path: &std::path::Path) -> AnyhowResult<()> {
-  let contents = std::fs::read_to_string(path)
-      .map_err(|err| anyhow::anyhow!("Could not read secrets file at {} : {}", path.display(), err))?;
+  let contents = std::fs::read_to_string(path).map_err(|err| anyhow::anyhow!("Could not read secrets file at {} : {}", path.display(), err))?;
 
   let mut loaded_keys: Vec<String> = Vec::new();
   for (line_index, raw_line) in contents.lines().enumerate() {
@@ -108,7 +94,7 @@ fn load_secrets_file(path: &std::path::Path) -> AnyhowResult<()> {
       None => {
         warn!("secrets {}:{}: ignoring line without '=': {:?}", path.display(), line_index + 1, line);
         continue;
-      }
+      },
     };
     if key.is_empty() {
       warn!("secrets {}:{}: ignoring empty key", path.display(), line_index + 1);
@@ -118,13 +104,7 @@ fn load_secrets_file(path: &std::path::Path) -> AnyhowResult<()> {
     loaded_keys.push(key.to_string());
   }
 
-  info!(
-    "Loaded {} key(s) from {} ({} bytes): [{}]",
-    loaded_keys.len(),
-    path.display(),
-    contents.len(),
-    loaded_keys.join(", "),
-  );
+  info!("Loaded {} key(s) from {} ({} bytes): [{}]", loaded_keys.len(), path.display(), contents.len(), loaded_keys.join(", "),);
 
   Ok(())
 }
@@ -140,10 +120,7 @@ mod secrets_loader_tests {
     let line = r#"MYSQL_READ_URL=mysql://user:p$ss w#x@host:25060/db?ssl-mode=required"#;
     let (key, value) = line.split_once('=').unwrap();
     assert_eq!(key.trim(), "MYSQL_READ_URL");
-    assert_eq!(
-      strip_matching_quotes(value.trim()),
-      "mysql://user:p$ss w#x@host:25060/db?ssl-mode=required",
-    );
+    assert_eq!(strip_matching_quotes(value.trim()), "mysql://user:p$ss w#x@host:25060/db?ssl-mode=required",);
   }
 
   #[test]
@@ -152,7 +129,7 @@ mod secrets_loader_tests {
     assert_eq!(strip_matching_quotes("'abc'"), "abc");
     assert_eq!(strip_matching_quotes("abc"), "abc");
     assert_eq!(strip_matching_quotes("\"abc'"), "\"abc'"); // mismatched: untouched
-    assert_eq!(strip_matching_quotes("\""), "\"");          // single char: untouched
+    assert_eq!(strip_matching_quotes("\""), "\""); // single char: untouched
   }
 }
 
@@ -175,10 +152,7 @@ async fn get_mysql(env_var_name: &str) -> AnyhowResult<Pool<MySql>> {
   // (e.g. whether a database path is present) without leaking the password.
   info!("Connecting to MySQL {env_var_name}: {}", redact_db_url(&url));
 
-  let pool = MySqlPoolOptions::new()
-      .max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 20)?)
-      .connect(&url)
-      .await?;
+  let pool = MySqlPoolOptions::new().max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 20)?).connect(&url).await?;
 
   Ok(pool)
 }

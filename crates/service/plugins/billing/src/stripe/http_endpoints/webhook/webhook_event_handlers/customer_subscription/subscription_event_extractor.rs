@@ -55,14 +55,12 @@ pub struct SubscriptionSummary {
 pub fn subscription_summary_extractor(subscription: &Subscription) -> AnyhowResult<SubscriptionSummary> {
   let subscription_id = subscription.id.to_string();
   // NB: Our internal user token.
-  let maybe_user_token = subscription.metadata.get(METADATA_USER_TOKEN)
-      .map(|t| t.to_string());
+  let maybe_user_token = subscription.metadata.get(METADATA_USER_TOKEN).map(|t| t.to_string());
 
   error!("SUBSCRIPTION EVENT USER TOKEN: {:?}", maybe_user_token);
 
   if subscription.items.data.len() != 1 {
-    return Err(anyhow!("Too many items in subscription {} : {}",
-      subscription_id, subscription.items.data.len()));
+    return Err(anyhow!("Too many items in subscription {} : {}", subscription_id, subscription.items.data.len()));
   }
 
   let item = match subscription.items.data.first() {
@@ -92,23 +90,7 @@ pub fn subscription_summary_extractor(subscription: &Subscription) -> AnyhowResu
   let maybe_cancel_at = subscription.cancel_at.map(|t| NaiveDateTime::from_timestamp(t, 0));
   let maybe_canceled_at = subscription.canceled_at.map(|t| NaiveDateTime::from_timestamp(t, 0));
 
-  Ok(SubscriptionSummary {
-    user_token: maybe_user_token,
-    stripe_subscription_id: subscription_id,
-    stripe_is_production: subscription.livemode,
-    stripe_customer_id: expand_customer_id(&subscription.customer),
-    stripe_subscription_status: subscription_status_to_reusable_type(subscription.status),
-    cancel_at_period_end: subscription.cancel_at_period_end,
-    stripe_product_id: expand_product_id(product),
-    stripe_price_id: price.id.to_string(),
-    subscription_is_active: subscription.status == SubscriptionStatus::Active,
-    subscription_interval: recurring_interval_to_reusable_type(recurring.interval),
-    subscription_start_date: start_date,
-    current_billing_period_start: period_start,
-    current_billing_period_end: period_end,
-    maybe_cancel_at,
-    maybe_canceled_at,
-  })
+  Ok(SubscriptionSummary { user_token: maybe_user_token, stripe_subscription_id: subscription_id, stripe_is_production: subscription.livemode, stripe_customer_id: expand_customer_id(&subscription.customer), stripe_subscription_status: subscription_status_to_reusable_type(subscription.status), cancel_at_period_end: subscription.cancel_at_period_end, stripe_product_id: expand_product_id(product), stripe_price_id: price.id.to_string(), subscription_is_active: subscription.status == SubscriptionStatus::Active, subscription_interval: recurring_interval_to_reusable_type(recurring.interval), subscription_start_date: start_date, current_billing_period_start: period_start, current_billing_period_end: period_end, maybe_cancel_at, maybe_canceled_at })
 }
 
 #[cfg(test)]
@@ -144,7 +126,7 @@ mod tests {
 
     let subscription = serde_json::from_str::<Subscription>(json).unwrap();
 
-    let summary= subscription_summary_extractor(&subscription).unwrap();
+    let summary = subscription_summary_extractor(&subscription).unwrap();
 
     assert_eq!(summary.user_token, Some("U:TOKEN".to_string()));
     assert_eq!(summary.stripe_subscription_id, "sub_1LhA3MEU5se17MekeWvmTNyk".to_string());
@@ -189,7 +171,7 @@ mod tests {
 
     let subscription = serde_json::from_str::<Subscription>(json).unwrap();
 
-    let summary= subscription_summary_extractor(&subscription).unwrap();
+    let summary = subscription_summary_extractor(&subscription).unwrap();
 
     assert_eq!(summary.user_token, Some("U:token".to_string()));
     assert_eq!(summary.stripe_subscription_id, "sub_1Lh1wvEU5se17Mekx72OzAzs".to_string());
@@ -234,7 +216,7 @@ mod tests {
 
     let subscription = serde_json::from_str::<Subscription>(json).unwrap();
 
-    let summary= subscription_summary_extractor(&subscription).unwrap();
+    let summary = subscription_summary_extractor(&subscription).unwrap();
 
     assert_eq!(summary.user_token, Some("U:TOKEN".to_string()));
     assert_eq!(summary.stripe_subscription_id, "sub_1LhA3MEU5se17MekeWvmTNyk".to_string());
@@ -406,7 +388,7 @@ mod tests {
 
     let subscription = serde_json::from_str::<Subscription>(json).unwrap();
 
-    let summary= subscription_summary_extractor(&subscription).unwrap();
+    let summary = subscription_summary_extractor(&subscription).unwrap();
 
     // NB: It was scheduled to cancel at the end of the billing period and remains active for now
     //  These are the fields we don't expect to be impacted as the subscription remains active.

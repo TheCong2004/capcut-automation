@@ -48,55 +48,48 @@ pub async fn drain_multipart_request(mut multipart_payload: Multipart) -> Anyhow
     let mut field_filename = None;
 
     if let Some(content_disposition) = field.content_disposition() {
-      field_name = content_disposition.get_name()
-          .map(|s| s.to_string());
+      field_name = content_disposition.get_name().map(|s| s.to_string());
       field_filename = content_disposition.get_filename() // NB: Only used for the file bytes.
           .map(|s| s.to_string());
     }
 
     match field_name.as_deref() {
       Some("uuid_idempotency_token") => {
-        uuid_idempotency_token = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading uuid_idempotency_token: {:}", &e);
-              e
-            })?;
+        uuid_idempotency_token = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading uuid_idempotency_token: {:}", &e);
+          e
+        })?;
       },
       Some("file") => {
         file_name = field_filename.clone();
-        file_bytes = checked_read_multipart_bytes(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading file: {:}", &e);
-              e
-            })?;
+        file_bytes = checked_read_multipart_bytes(&mut field).await.map_err(|e| {
+          warn!("Error reading file: {:}", &e);
+          e
+        })?;
       },
       Some("source") => {
-        media_source = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading source: {:}", &e);
-              e
-            })?;
+        media_source = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading source: {:}", &e);
+          e
+        })?;
       },
       Some("title") => {
-        title = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading title: {:}", &e);
-              e
-            })?;
+        title = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading title: {:}", &e);
+          e
+        })?;
       },
       Some("visibility") => {
-        visibility = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading visibility: {:}", &e);
-              e
-            })?;
+        visibility = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading visibility: {:}", &e);
+          e
+        })?;
       },
       Some("maybe_generation_provider") => {
-        generation_provider = read_multipart_field_as_text(&mut field).await
-            .map_err(|e| {
-              warn!("Error reading maybe_generation_provider: {:}", &e);
-              e
-            })?;
+        generation_provider = read_multipart_field_as_text(&mut field).await.map_err(|e| {
+          warn!("Error reading maybe_generation_provider: {:}", &e);
+          e
+        })?;
       },
       _ => continue,
     }
@@ -114,17 +107,7 @@ pub async fn drain_multipart_request(mut multipart_payload: Multipart) -> Anyhow
     },
   };
 
-  let maybe_generation_provider = generation_provider.as_deref()
-      .map(|s| try_parse_generation_provider(s))
-      .flatten();
+  let maybe_generation_provider = generation_provider.as_deref().map(|s| try_parse_generation_provider(s)).flatten();
 
-  Ok(MediaFileUploadData {
-    uuid_idempotency_token,
-    file_name,
-    file_bytes,
-    media_source,
-    title,
-    visibility,
-    maybe_generation_provider,
-  })
+  Ok(MediaFileUploadData { uuid_idempotency_token, file_name, file_bytes, media_source, title, visibility, maybe_generation_provider })
 }

@@ -118,7 +118,6 @@ pub struct JobInstanceInfo {
 
   pub container: ContainerEnvironment,
   pub container_db: ContainerEnvironmentArg, // Same info, but for database.
-
 }
 
 pub struct DatabaseDependencies {

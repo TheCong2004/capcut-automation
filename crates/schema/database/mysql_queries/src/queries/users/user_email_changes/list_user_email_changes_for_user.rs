@@ -78,9 +78,7 @@ struct RawUserEmailChangeRow {
 /// user (`maybe_changed_by_user_token`). The actor join is a LEFT JOIN so
 /// rows where there is no acting user (e.g. self-service changes) still
 /// come back.
-pub async fn list_user_email_changes_for_user<'e, 'c: 'e, E>(
-  args: ListUserEmailChangesForUserArgs<'e, 'c, E>,
-) -> Result<Vec<UserEmailChangeRow>, sqlx::Error>
+pub async fn list_user_email_changes_for_user<'e, 'c: 'e, E>(args: ListUserEmailChangesForUserArgs<'e, 'c, E>) -> Result<Vec<UserEmailChangeRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -126,9 +124,9 @@ LIMIT ?
         cursor_id,
         limit,
       )
-        .fetch_all(args.mysql_executor)
-        .await?
-    }
+      .fetch_all(args.mysql_executor)
+      .await?
+    },
     None => {
       sqlx::query_as!(
         RawUserEmailChangeRow,
@@ -162,47 +160,27 @@ LIMIT ?
         args.user_token.as_str(),
         limit,
       )
-        .fetch_all(args.mysql_executor)
-        .await?
-    }
+      .fetch_all(args.mysql_executor)
+      .await?
+    },
   };
 
-  let results = rows.into_iter().map(|row| {
-    let user = UserDisplay {
-      token: row.user_token,
-      username: row.user_username,
-      display_name: row.user_display_name,
-      gravatar_hash: row.user_gravatar_hash,
-    };
+  let results = rows
+    .into_iter()
+    .map(|row| {
+      let user = UserDisplay { token: row.user_token, username: row.user_username, display_name: row.user_display_name, gravatar_hash: row.user_gravatar_hash };
 
-    // The four actor columns come from the same LEFT JOIN row, so they are
-    // either all `Some` (matched user row) or all `None` (no actor token or
-    // the user row was hard-deleted) together.
-    let maybe_changed_by_user = match (
-      row.maybe_changed_by_user_token,
-      row.maybe_changed_by_user_username,
-      row.maybe_changed_by_user_display_name,
-      row.maybe_changed_by_user_gravatar_hash,
-    ) {
-      (Some(token), Some(username), Some(display_name), Some(gravatar_hash)) => Some(UserDisplay {
-        token,
-        username,
-        display_name,
-        gravatar_hash,
-      }),
-      _ => None,
-    };
+      // The four actor columns come from the same LEFT JOIN row, so they are
+      // either all `Some` (matched user row) or all `None` (no actor token or
+      // the user row was hard-deleted) together.
+      let maybe_changed_by_user = match (row.maybe_changed_by_user_token, row.maybe_changed_by_user_username, row.maybe_changed_by_user_display_name, row.maybe_changed_by_user_gravatar_hash) {
+        (Some(token), Some(username), Some(display_name), Some(gravatar_hash)) => Some(UserDisplay { token, username, display_name, gravatar_hash }),
+        _ => None,
+      };
 
-    UserEmailChangeRow {
-      id: row.id,
-      old_email: row.old_email,
-      new_email: row.new_email,
-      ip_address: row.ip_address,
-      created_at: row.created_at,
-      user,
-      maybe_changed_by_user,
-    }
-  }).collect();
+      UserEmailChangeRow { id: row.id, old_email: row.old_email, new_email: row.new_email, ip_address: row.ip_address, created_at: row.created_at, user, maybe_changed_by_user }
+    })
+    .collect();
 
   Ok(results)
 }

@@ -3,21 +3,18 @@ use regex::Regex;
 
 use primitives::truncate_str::truncate_str;
 
-const MAX_LENGTH : usize = 100;
+const MAX_LENGTH: usize = 100;
 const PARENS_AND_BRACKETS_REGEX: Lazy<Regex> = Lazy::new(|| {
   Regex::new(concat!(
-    r"[\(\[]", // Start delimiter: ( or [
+    r"[\(\[]",         // Start delimiter: ( or [
     r"[^\\()\\[\\]]*", // In-between content
-    r"[\)\]]" // End delimiter: ) or ]
-  )).unwrap()
+    r"[\)\]]"          // End delimiter: ) or ]
+  ))
+  .unwrap()
 });
 
-const INVALID_CHARACTER_REGEX: Lazy<Regex> = Lazy::new(|| {
-  Regex::new(r"\s+").unwrap()
-});
-const SPACE_AND_DASH_COLLAPSE_REGEX: Lazy<Regex> = Lazy::new(|| {
-  Regex::new(r"[\s\-]+").unwrap()
-});
+const INVALID_CHARACTER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s+").unwrap());
+const SPACE_AND_DASH_COLLAPSE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\s\-]+").unwrap());
 
 const ENDING_NOISE_REGEX: Lazy<Regex> = Lazy::new(|| {
   // Any non-word characters at the end of the string
@@ -32,10 +29,7 @@ const VERSION_REGEX: Lazy<Regex> = Lazy::new(|| {
   Regex::new(r"(?i)(v)(er(si[oó]n)?)?\s*\d+\.?\d*").unwrap()
 });
 
-const UNSAFE_CONTROL_CODE_REGEX: Lazy<Regex> = Lazy::new(|| {
-  Regex::new(r"[\u0000-\u001F\u007F-\u009F]").unwrap()
-});
-
+const UNSAFE_CONTROL_CODE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\u0000-\u001F\u007F-\u009F]").unwrap());
 
 /// Convert a model title to a URL slug.
 pub fn title_to_url_slug(title: &str) -> Option<String> {
@@ -48,35 +42,7 @@ pub fn title_to_url_slug(title: &str) -> Option<String> {
   // { , } , | , \ , ^ , ~ , [ , ] , and `
   // Unsafe characters " < > % { } | \ ^ `
   // Reserved Characters : / ? # [ ] @ ! $ & ' ( ) * + , ; =
-  let title = title.replace(&[
-    '!',
-    '#',
-    '%',
-    '&',
-    '(',
-    ')',
-    '+',
-    ',',
-    '.',
-    '/',
-    ':',
-    ';',
-    '<',
-    '=',
-    '>',
-    '?',
-    '@',
-    '[',
-    '\"',
-    '\'',
-    ']',
-    '^',
-    '`',
-    '{',
-    '|',
-    '}',
-    '~',
-  ][..], " ");
+  let title = title.replace(&['!', '#', '%', '&', '(', ')', '+', ',', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\"', '\'', ']', '^', '`', '{', '|', '}', '~'][..], " ");
 
   let title = UNSAFE_CONTROL_CODE_REGEX.replace_all(title.trim(), "");
   let title = SPACE_AND_DASH_COLLAPSE_REGEX.replace_all(title.trim(), "-");
@@ -86,11 +52,7 @@ pub fn title_to_url_slug(title: &str) -> Option<String> {
     return None;
   }
 
-  let title = if title.len() > MAX_LENGTH {
-    truncate_str(&title, MAX_LENGTH).to_string()
-  } else {
-    title.to_string()
-  };
+  let title = if title.len() > MAX_LENGTH { truncate_str(&title, MAX_LENGTH).to_string() } else { title.to_string() };
 
   Some(title)
 }
@@ -180,10 +142,10 @@ mod tests {
 
   #[test]
   fn removes_parens() {
-    assert_expected("donald-trump", "Donald Trump (Angry)" );
+    assert_expected("donald-trump", "Donald Trump (Angry)");
     assert_expected("lionel-messi", "Lionel Messi. (Español 2020 - 2023.)");
     assert_expected("mariano-closs", "Mariano Closs (Relator de fútbol Argentino)");
-    assert_expected("mariano-closs","Mariano Closs (full version)");
+    assert_expected("mariano-closs", "Mariano Closs (full version)");
     assert_expected("naruto-uzumaki", "Naruto Uzumaki (Part 1)");
     assert_expected("waldemaro-martínez", "Waldemaro Martínez. (Locutor de DJ, Latin American Spanish.)");
   }
@@ -233,7 +195,6 @@ mod tests {
     assert_expected("vocal-planet-old-man-blues", "Vocal planet, old man blues");
     assert_expected("roxanne-wolf", "Roxanne Wolf (Five Nights at Freddy's: Security Breach, Marta Svetek)");
     assert_expected("hollyhock-manheim-mannheim-guerrero-robinson-zilberschlag-hsung-fonzerelli-mcquack", "Hollyhock Manheim-Mannheim-Guerrero-Robinson-Zilberschlag-Hsung-Fonzerelli-McQuack");
-
   }
 
   //#[test]

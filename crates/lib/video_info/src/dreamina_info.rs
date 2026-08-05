@@ -62,8 +62,7 @@ impl DreaminaInfo {
   pub fn from_bytes(data: &[u8]) -> Result<DreaminaInfo, VideoInfoError> {
     let product = json_str_field(data, "product");
     let source_info = json_str_field(data, "source_info");
-    let is_dreamina = product.as_deref() == Some("dreamina")
-      || source_info.as_deref() == Some("dreamina");
+    let is_dreamina = product.as_deref() == Some("dreamina") || source_info.as_deref() == Some("dreamina");
     if !is_dreamina {
       return Err(VideoInfoError::NotDreamina);
     }
@@ -78,18 +77,7 @@ impl DreaminaInfo {
       (None, None)
     };
 
-    Ok(DreaminaInfo {
-      product: product.unwrap_or_else(|| "dreamina".to_string()),
-      export_type: json_str_field(data, "exportType"),
-      os: json_str_field(data, "os"),
-      source_info,
-      aigc_label_type: json_int_field(data, "aigc_label_type"),
-      video_id: find_vid_token(data),
-      has_c2pa,
-      signer_org_id,
-      signer_country,
-      cert_serial: if has_c2pa { find_cert_serial(data) } else { None },
-    })
+    Ok(DreaminaInfo { product: product.unwrap_or_else(|| "dreamina".to_string()), export_type: json_str_field(data, "exportType"), os: json_str_field(data, "os"), source_info, aigc_label_type: json_int_field(data, "aigc_label_type"), video_id: find_vid_token(data), has_c2pa, signer_org_id, signer_country, cert_serial: if has_c2pa { find_cert_serial(data) } else { None } })
   }
 }
 
@@ -98,10 +86,7 @@ fn find_vid_token(data: &[u8]) -> Option<String> {
   const PREFIX: &[u8] = b"vid:";
   let i = find(data, PREFIX)?;
   let start = i + PREFIX.len();
-  let end = (start..data.len())
-    .take_while(|&j| data[j].is_ascii_alphanumeric())
-    .last()
-    .map(|j| j + 1)?;
+  let end = (start..data.len()).take_while(|&j| data[j].is_ascii_alphanumeric()).last().map(|j| j + 1)?;
   if end == start {
     return None;
   }

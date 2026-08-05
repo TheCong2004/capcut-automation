@@ -87,7 +87,6 @@ pub struct NotificationDetails {
 }
 
 impl NotificationDetails {
-
   /// Return a key that can group notifications for deduplication,
   /// which will prevent spamming the same page over and over.
   pub fn to_deduplication_key(&self) -> String {
@@ -105,12 +104,7 @@ impl NotificationDetails {
   /// 4. HTTP context
   /// 5. Service tokens
   /// 6. Application/service identity and hostname
-  pub(crate) fn build_enriched_description(
-    &self,
-    application_name: Option<&str>,
-    service_id: Option<&str>,
-    hostname: Option<&str>,
-  ) -> Option<String> {
+  pub(crate) fn build_enriched_description(&self, application_name: Option<&str>, service_id: Option<&str>, hostname: Option<&str>) -> Option<String> {
     let mut sections: Vec<String> = Vec::new();
 
     // 1. User-provided description
@@ -146,11 +140,7 @@ impl NotificationDetails {
       sections.push(identity_section);
     }
 
-    if sections.is_empty() {
-      None
-    } else {
-      Some(sections.join("\n\n"))
-    }
+    if sections.is_empty() { None } else { Some(sections.join("\n\n")) }
   }
 
   /// Format the error chain from the boxed error, walking the source chain.
@@ -276,24 +266,20 @@ impl NotificationDetails {
   }
 
   /// Format the application name, service ID, and hostname.
-  fn format_app_identity(
-    application_name: Option<&str>,
-    service_id: Option<&str>,
-    hostname: Option<&str>,
-  ) -> Option<String> {
+  fn format_app_identity(application_name: Option<&str>, service_id: Option<&str>, hostname: Option<&str>) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
 
     match (application_name, service_id) {
       (Some(name), Some(id)) => {
         parts.push(format!("Application: {} (service_id: {})", name, id));
-      }
+      },
       (Some(name), None) => {
         parts.push(format!("Application: {}", name));
-      }
+      },
       (None, Some(id)) => {
         parts.push(format!("Service ID: {}", id));
-      }
-      (None, None) => {}
+      },
+      (None, None) => {},
     }
 
     if let Some(h) = hostname {

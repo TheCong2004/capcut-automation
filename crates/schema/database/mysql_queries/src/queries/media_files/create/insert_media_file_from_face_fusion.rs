@@ -45,10 +45,7 @@ pub struct InsertFaceFusionArgs<'a> {
   pub worker_cluster: &'a str,
 }
 
-pub async fn insert_media_file_from_face_fusion(
-  args: InsertFaceFusionArgs<'_>
-) -> AnyhowResult<MediaFileToken>
-{
+pub async fn insert_media_file_from_face_fusion(args: InsertFaceFusionArgs<'_>) -> AnyhowResult<MediaFileToken> {
   let extra_media_info = MediaFileExtraInfo::F(args.face_fusion_video_info.clone());
 
   let (new_media_token, _id) = insert_media_file_generic_from_job(InsertFromJobArgs {
@@ -101,7 +98,8 @@ pub async fn insert_media_file_from_face_fusion(
     maybe_mod_user_token: None,
     maybe_scene_source_media_file_token: None,
     is_intermediate_system_file: false,
-  }).await?;
+  })
+  .await?;
 
   Ok(new_media_token)
 }

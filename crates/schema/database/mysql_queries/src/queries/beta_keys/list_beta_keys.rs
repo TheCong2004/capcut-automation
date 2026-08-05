@@ -69,15 +69,7 @@ pub async fn list_beta_keys(args: ListBetaKeysArgs<'_>) -> AnyhowResult<BetaKeyL
   /// Let's figure out how many results we could have returned total
   let count_fields = select_total_count_field();
 
-  let mut count_query_builder = query_builder(
-    count_fields,
-    args.filter_to_referrer_user_token,
-    args.filter_to_keys,
-    false,
-    args.page_index,
-    args.page_size,
-    args.sort_ascending,
-  );
+  let mut count_query_builder = query_builder(count_fields, args.filter_to_referrer_user_token, args.filter_to_keys, false, args.page_index, args.page_size, args.sort_ascending);
 
   info!("count query: {:?}", count_query_builder.sql());
 
@@ -89,53 +81,19 @@ pub async fn list_beta_keys(args: ListBetaKeysArgs<'_>) -> AnyhowResult<BetaKeyL
   /// Now fetch the actual results with all the fields
   let result_fields = select_result_fields();
 
-  let mut query = query_builder(
-    result_fields,
-    args.filter_to_referrer_user_token,
-    args.filter_to_keys,
-    true,
-    args.page_index,
-    args.page_size,
-    args.sort_ascending,
-  );
+  let mut query = query_builder(result_fields, args.filter_to_referrer_user_token, args.filter_to_keys, true, args.page_index, args.page_size, args.sort_ascending);
 
   info!("actual query: {:?}", query.sql());
 
   let query = query.build_query_as::<BetaKeyListItemInternal>();
   let results = query.fetch_all(args.mysql_pool).await?;
 
-  let results = results.into_iter()
-      .map(|record| {
-        BetaKeyListItem {
-          token: record.token,
-          product: record.product,
-          key_value: record.key_value,
-          creator_user_token: record.creator_user_token,
-          creator_username: record.creator_username,
-          creator_display_name: record.creator_display_name,
-          creator_gravatar_hash: record.creator_gravatar_hash,
-          maybe_referrer_user_token: record.maybe_referrer_user_token,
-          maybe_referrer_username: record.maybe_referrer_username,
-          maybe_referrer_display_name: record.maybe_referrer_display_name,
-          maybe_referrer_gravatar_hash: record.maybe_referrer_gravatar_hash,
-          maybe_redeemer_user_token: record.maybe_redeemer_user_token,
-          maybe_redeemer_username: record.maybe_redeemer_username,
-          maybe_redeemer_display_name: record.maybe_redeemer_display_name,
-          maybe_redeemer_gravatar_hash: record.maybe_redeemer_gravatar_hash,
-          is_distributed: i8_to_bool(record.is_distributed),
-          maybe_notes: record.maybe_notes,
-          created_at: record.created_at,
-          maybe_redeemed_at: record.maybe_redeemed_at,
-        }
-      })
-      .collect::<Vec<_>>();
+  let results = results
+    .into_iter()
+    .map(|record| BetaKeyListItem { token: record.token, product: record.product, key_value: record.key_value, creator_user_token: record.creator_user_token, creator_username: record.creator_username, creator_display_name: record.creator_display_name, creator_gravatar_hash: record.creator_gravatar_hash, maybe_referrer_user_token: record.maybe_referrer_user_token, maybe_referrer_username: record.maybe_referrer_username, maybe_referrer_display_name: record.maybe_referrer_display_name, maybe_referrer_gravatar_hash: record.maybe_referrer_gravatar_hash, maybe_redeemer_user_token: record.maybe_redeemer_user_token, maybe_redeemer_username: record.maybe_redeemer_username, maybe_redeemer_display_name: record.maybe_redeemer_display_name, maybe_redeemer_gravatar_hash: record.maybe_redeemer_gravatar_hash, is_distributed: i8_to_bool(record.is_distributed), maybe_notes: record.maybe_notes, created_at: record.created_at, maybe_redeemed_at: record.maybe_redeemed_at })
+    .collect::<Vec<_>>();
 
-  Ok(BetaKeyListPage {
-    records: results,
-    sort_ascending: args.sort_ascending,
-    current_page: args.page_index,
-    total_page_count: number_of_pages,
-  })
+  Ok(BetaKeyListPage { records: results, sort_ascending: args.sort_ascending, current_page: args.page_index, total_page_count: number_of_pages })
 }
 
 fn select_result_fields() -> &'static str {
@@ -175,23 +133,12 @@ fn select_total_count_field() -> &'static str {
   "#
 }
 
-fn query_builder<'a>(
-  select_fields: &'a str,
-
-  filter_to_referrer_user_token: Option<&'a UserToken>,
-  filter_to_keys: FilterToKeys,
-
-  enforce_limits: bool,
-  page_index: usize,
-  page_size: usize,
-  sort_ascending: bool,
-) -> QueryBuilder<'a, MySql> {
-
+fn query_builder<'a>(select_fields: &'a str, filter_to_referrer_user_token: Option<&'a UserToken>, filter_to_keys: FilterToKeys, enforce_limits: bool, page_index: usize, page_size: usize, sort_ascending: bool) -> QueryBuilder<'a, MySql> {
   let mut sort_ascending = sort_ascending;
 
   // NB: Query cannot be statically checked by sqlx
-  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
-    format!(r#"
+  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
+    r#"
 SELECT
   {select_fields}
 
@@ -223,7 +170,7 @@ LEFT OUTER JOIN users AS redeemer
   }
 
   match filter_to_keys {
-    FilterToKeys::All => {} // No-op
+    FilterToKeys::All => {}, // No-op
     FilterToKeys::Redeemed | FilterToKeys::Unredeemed => {
       if !first_predicate_added {
         query_builder.push(" WHERE ");
@@ -237,36 +184,36 @@ LEFT OUTER JOIN users AS redeemer
       } else {
         query_builder.push(" b.maybe_redeemed_at IS NULL ");
       }
-    }
+    },
   }
 
-//  if let Some(offset) = maybe_offset {
-//    if !first_predicate_added {
-//      query_builder.push(" WHERE ");
-//      first_predicate_added = true;
-//    } else {
-//      query_builder.push(" AND ");
-//    }
-//
-//    if sort_ascending {
-//      if cursor_is_reversed {
-//        // NB: We're searching backwards.
-//        query_builder.push(" b.id < ");
-//        sort_ascending = !sort_ascending;
-//      } else {
-//        query_builder.push(" b.id > ");
-//      }
-//    } else {
-//      if cursor_is_reversed {
-//        // NB: We're searching backwards.
-//        query_builder.push(" b.id > ");
-//        sort_ascending = !sort_ascending;
-//      } else {
-//        query_builder.push(" b.id < ");
-//      }
-//    }
-//    query_builder.push_bind(offset as i64);
-//  }
+  //  if let Some(offset) = maybe_offset {
+  //    if !first_predicate_added {
+  //      query_builder.push(" WHERE ");
+  //      first_predicate_added = true;
+  //    } else {
+  //      query_builder.push(" AND ");
+  //    }
+  //
+  //    if sort_ascending {
+  //      if cursor_is_reversed {
+  //        // NB: We're searching backwards.
+  //        query_builder.push(" b.id < ");
+  //        sort_ascending = !sort_ascending;
+  //      } else {
+  //        query_builder.push(" b.id > ");
+  //      }
+  //    } else {
+  //      if cursor_is_reversed {
+  //        // NB: We're searching backwards.
+  //        query_builder.push(" b.id > ");
+  //        sort_ascending = !sort_ascending;
+  //      } else {
+  //        query_builder.push(" b.id < ");
+  //      }
+  //    }
+  //    query_builder.push_bind(offset as i64);
+  //  }
 
   if sort_ascending {
     query_builder.push(" ORDER BY b.id ASC ");
@@ -274,7 +221,7 @@ LEFT OUTER JOIN users AS redeemer
     query_builder.push(" ORDER BY b.id DESC ");
   }
 
-//  query_builder.push(format!(" LIMIT {limit} "));
+  //  query_builder.push(format!(" LIMIT {limit} "));
 
   if enforce_limits {
     let offset = page_index * page_size;
@@ -315,13 +262,13 @@ struct BetaKeyListItemInternal {
 
 impl FromRow<'_, MySqlRow> for BetaKeyListItemInternal {
   fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
-    let creator_user_token : String = row.try_get("creator_user_token")?;
+    let creator_user_token: String = row.try_get("creator_user_token")?;
     let creator_user_token = UserToken::new(creator_user_token);
 
-    let maybe_referrer_user_token : Option<String> = row.try_get("maybe_referrer_user_token")?;
+    let maybe_referrer_user_token: Option<String> = row.try_get("maybe_referrer_user_token")?;
     let maybe_referrer_user_token = maybe_referrer_user_token.map(|user_token| UserToken::new(user_token));
 
-    let maybe_redeemer_user_token : Option<String> = row.try_get("maybe_redeemer_user_token")?;
+    let maybe_redeemer_user_token: Option<String> = row.try_get("maybe_redeemer_user_token")?;
     let maybe_redeemer_user_token = maybe_redeemer_user_token.map(|user_token| UserToken::new(user_token));
 
     Ok(Self {

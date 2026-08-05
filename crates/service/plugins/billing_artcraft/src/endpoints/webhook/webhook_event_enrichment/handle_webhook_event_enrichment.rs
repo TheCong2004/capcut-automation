@@ -16,77 +16,48 @@ use sqlx::{MySql, Transaction};
 use stripe::Client;
 use stripe_webhook::{Event, EventObject};
 
-pub async fn handle_webhook_event_enrichment(
-  stripe_event_descriptor: &StripeEventDescriptor,
-  stripe_client: &Client,
-  server_environment: ServerEnvironment,
-  webhook_payload: Event,
-) -> Result<EnrichedWebhookEvent, StripeArtcraftWebhookError> {
-
+pub async fn handle_webhook_event_enrichment(stripe_event_descriptor: &StripeEventDescriptor, stripe_client: &Client, server_environment: ServerEnvironment, webhook_payload: Event) -> Result<EnrichedWebhookEvent, StripeArtcraftWebhookError> {
   if let Some(summary) = ignore_known_unwanted_events(&webhook_payload) {
-    return Ok(EnrichedWebhookEvent {
-      maybe_billing_action: None,
-      webhook_event_log_summary: summary,
-    });
+    return Ok(EnrichedWebhookEvent { maybe_billing_action: None, webhook_event_log_summary: summary });
   }
 
   let mut unhandled_event_type = false;
 
-  let mut webhook_summary = WebhookEventLogSummary {
-    maybe_user_token: None,
-    maybe_event_entity_id: None,
-    maybe_stripe_customer_id: None,
-    action_was_taken: false,
-    should_ignore_retry: false,
-  };
+  let mut webhook_summary = WebhookEventLogSummary { maybe_user_token: None, maybe_event_entity_id: None, maybe_stripe_customer_id: None, action_was_taken: false, should_ignore_retry: false };
 
   match webhook_payload.data.object {
-
     // =============== PAYMENT INTENTS ===============
-
     EventObject::PaymentIntentSucceeded(payment_intent) => {
       // `payment_intent.succeeded` is responsible for enabling one-off payments (eg. credits packs).
       // We'll ignore any payment intents from subscription invoices and let other event handlers
       // fulfill subscription states.
       info!("Event {}, data: {:?}", stripe_event_descriptor, payment_intent);
 
-      return payment_intent_succeeded_extractor(
-        &stripe_event_descriptor,
-        &payment_intent,
-        server_environment,
-        stripe_client,
-      ).await;
-    }
+      return payment_intent_succeeded_extractor(&stripe_event_descriptor, &payment_intent, server_environment, stripe_client).await;
+    },
 
     // =============== INVOICES ===============
-
     EventObject::InvoicePaid(invoice) => {
       // Invoices are for subscriptions, not one-off charges and purchases.
       // This is the *required* event that enables the subscription!
       // These are fired on an interval - whatever the billing cadence is.
       info!("Event: {}, data: {:?}", stripe_event_descriptor, invoice);
 
-      return invoice_paid_extractor(
-        &stripe_event_descriptor,
-        &invoice,
-        server_environment,
-        stripe_client
-      ).await;
-    }
+      return invoice_paid_extractor(&stripe_event_descriptor, &invoice, server_environment, stripe_client).await;
+    },
 
     EventObject::InvoicePaymentFailed(_invoice) => {
       // TODO: Halt service.
       //  When we detect invoice payment failures, we need to disable subscription services.
       // info!("Event: {:?}, data: {:?}", stripe_event_descriptor, invoice);
-    }
+    },
 
     EventObject::InvoiceCreated(_invoice) => {
       // TODO: We need to respond to this so we don't hold payments up by 72 hours!
       //  See: https://stripe.com/docs/billing/subscriptions/webhooks
-    }
+    },
 
     // =============== CUSTOMER SUBSCRIPTIONS ===============
-
     EventObject::CustomerSubscriptionCreated(subscription) => {
       // DO NOT USE TO PROVISION SERVICE.
       //
@@ -98,30 +69,20 @@ pub async fn handle_webhook_event_enrichment(
       // This is good for the overall subscription state, renewal dates, etc.
       //
       info!("Event: {}, data: {:?}", stripe_event_descriptor, subscription);
-      return customer_subscription_created_extractor(
-        &subscription,
-        server_environment,
-      ).await;
-    }
+      return customer_subscription_created_extractor(&subscription, server_environment).await;
+    },
 
     EventObject::CustomerSubscriptionUpdated(subscription) => {
       info!("Event: {}, data: {:?}", stripe_event_descriptor, subscription);
-      return customer_subscription_updated_extractor(
-        &subscription,
-        server_environment,
-      ).await;
-    }
+      return customer_subscription_updated_extractor(&subscription, server_environment).await;
+    },
 
     EventObject::CustomerSubscriptionDeleted(subscription) => {
       info!("Event: {}, data: {:?}", stripe_event_descriptor, subscription);
-      return customer_subscription_deleted_extractor(
-        &subscription,
-        server_environment,
-      ).await;
-    }
+      return customer_subscription_deleted_extractor(&subscription, server_environment).await;
+    },
 
     // =============== Ignored ===============
-
     _ => {
       unhandled_event_type = true;
     },
@@ -135,8 +96,5 @@ pub async fn handle_webhook_event_enrichment(
     warn!("Unhandled Stripe webhook event : {}", &stripe_event_descriptor);
   }
 
-  Ok(EnrichedWebhookEvent {
-    maybe_billing_action: None,
-    webhook_event_log_summary: webhook_summary,
-  })
+  Ok(EnrichedWebhookEvent { maybe_billing_action: None, webhook_event_log_summary: webhook_summary })
 }

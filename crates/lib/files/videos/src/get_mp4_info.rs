@@ -51,7 +51,7 @@ pub fn get_mp4_info<T: Seek + Read>(reader: T, file_size: u64) -> AnyhowResult<M
           width = track.width();
           height = track.height();
         }
-      }
+      },
       Err(err) => {
         warn!("Error determining track type: {:?}", err);
         continue;
@@ -60,12 +60,7 @@ pub fn get_mp4_info<T: Seek + Read>(reader: T, file_size: u64) -> AnyhowResult<M
     }
   }
 
-  Ok(Mp4Info {
-    framerate,
-    duration_millis: mp4.duration().as_millis(),
-    width,
-    height,
-  })
+  Ok(Mp4Info { framerate, duration_millis: mp4.duration().as_millis(), width, height })
 }
 
 #[cfg(test)]
@@ -79,8 +74,7 @@ pub mod tests {
 
   #[test]
   pub fn test_decode_mp4() {
-    let filename = test_file_path("test_data/video/mp4/golden_sun_garoh.mp4")
-        .expect("path should exist");
+    let filename = test_file_path("test_data/video/mp4/golden_sun_garoh.mp4").expect("path should exist");
 
     let file = File::open(filename).expect("file should open");
     let size = file.metadata().expect("should be able to grab metadata").len();

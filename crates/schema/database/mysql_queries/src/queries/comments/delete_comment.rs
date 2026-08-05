@@ -10,15 +10,10 @@ pub enum DeleteCommentAs {
   ObjectOwner,
 }
 
-pub async fn delete_comment<'e, 'c, E>(
-  comment_token: &'e CommentToken,
-  delete_as: DeleteCommentAs,
-  mysql_executor: E
-)
-  -> AnyhowResult<()>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn delete_comment<'e, 'c, E>(comment_token: &'e CommentToken, delete_as: DeleteCommentAs, mysql_executor: E) -> AnyhowResult<()>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-
   match delete_as {
     DeleteCommentAs::Author => {
       sqlx::query!(
@@ -33,7 +28,7 @@ LIMIT 1
         "#,
         comment_token
       )
-    }
+    },
     DeleteCommentAs::Moderator => {
       sqlx::query!(
         r#"
@@ -47,9 +42,8 @@ LIMIT 1
         "#,
         comment_token
       )
-    }
+    },
     DeleteCommentAs::ObjectOwner => {
-
       sqlx::query!(
         r#"
 UPDATE comments
@@ -62,10 +56,10 @@ LIMIT 1
         "#,
         comment_token
       )
-    }
+    },
   }
-      .execute(mysql_executor)
-      .await?;
+  .execute(mysql_executor)
+  .await?;
 
   Ok(())
 }

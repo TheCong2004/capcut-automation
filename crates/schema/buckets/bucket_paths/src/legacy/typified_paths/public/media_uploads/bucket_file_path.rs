@@ -5,7 +5,7 @@ use crockford::crockford_entropy_lower;
 use crate::legacy::typified_paths::public::media_uploads::bucket_directory::MediaUploadDirectory;
 use crate::legacy::typified_paths::public::public_path::PublicPath;
 
-const ORIGINAL_FILE_BASENAME : &str = "original_upload.bin";
+const ORIGINAL_FILE_BASENAME: &str = "original_upload.bin";
 
 // TODO: Generate these from a macro.
 
@@ -21,7 +21,6 @@ pub struct MediaUploadOriginalFilePath {
 impl PublicPath for MediaUploadOriginalFilePath {}
 
 impl MediaUploadOriginalFilePath {
-
   #[deprecated(note = "Use media_files records and MediaFileBucketPath instead. media_uploads records are DEPRECATED.")]
   pub fn generate_new() -> Self {
     let entropy = crockford_entropy_lower(32);
@@ -33,10 +32,7 @@ impl MediaUploadOriginalFilePath {
     // TODO: Path construction could be cleaner.
     let directory = MediaUploadDirectory::from_object_hash(hash);
     let full_object_path = format!("{}/{}", directory.get_directory_path_str(), ORIGINAL_FILE_BASENAME);
-    Self {
-      directory,
-      full_object_path,
-    }
+    Self { directory, full_object_path }
   }
 
   #[deprecated(note = "Use media_files records and MediaFileBucketPath instead. media_uploads records are DEPRECATED.")]

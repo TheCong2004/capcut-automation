@@ -14,16 +14,8 @@ pub fn get_service_request_ip_address(request: &ServiceRequest) -> String {
     None => {
       // If we're running without the upstream Rust proxy, we can grab 'x-forwarded-for', which is
       // populated by the DigitalOcean load balancer.
-      let ip_address_and_port = request.connection_info()
-          .peer_addr()
-          .unwrap_or("")
-          .to_string();
-      let ip_address = ip_address_and_port.split(":")
-          .collect::<Vec<&str>>()
-          .get(0)
-          .copied()
-          .unwrap_or("")
-          .to_string();
+      let ip_address_and_port = request.connection_info().peer_addr().unwrap_or("").to_string();
+      let ip_address = ip_address_and_port.split(":").collect::<Vec<&str>>().get(0).copied().unwrap_or("").to_string();
       ip_address
     },
   }

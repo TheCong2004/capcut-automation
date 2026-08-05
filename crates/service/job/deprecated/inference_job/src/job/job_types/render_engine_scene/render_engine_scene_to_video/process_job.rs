@@ -29,8 +29,8 @@ use crate::job::job_types::render_engine_scene::render_engine_scene_to_video::co
 use crate::state::job_dependencies::JobDependencies;
 use crate::util::downloaders::maybe_download_file_from_bucket::{maybe_download_file_from_bucket, MaybeDownloadArgs};
 
-const BUCKET_FILE_EXTENSION : &str = ".mp4";
-const BUCKET_FRAMES_FILE_EXTENSION : &str = ".zip";
+const BUCKET_FILE_EXTENSION: &str = ".mp4";
+const BUCKET_FRAMES_FILE_EXTENSION: &str = ".zip";
 
 pub struct BvhToWorkflowJobArgs<'a> {
   pub job_dependencies: &'a JobDependencies,
@@ -42,81 +42,51 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
   let job = args.job;
   let media_file = args.media_file;
 
-  let mut job_progress_reporter = args.job_dependencies
-      .clients
-      .job_progress_reporter
-      .new_generic_inference(job.inference_job_token.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
+  let mut job_progress_reporter = args.job_dependencies.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let model_dependencies = args
-      .job_dependencies
-      .job
-      .job_specific_dependencies
-      .maybe_convert_bvh_to_workflow_dependencies
-      .as_ref()
-      .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing BvhToWorkflow dependencies".to_string())))?;
+  let model_dependencies = args.job_dependencies.job.job_specific_dependencies.maybe_convert_bvh_to_workflow_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing BvhToWorkflow dependencies".to_string())))?;
 
   // ==================== TEMP DIR ==================== //
 
   let work_temp_dir = format!("temp_file_convert_{}", job.id.0);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let work_temp_dir = args.job_dependencies
-      .fs
-      .scoped_temp_dir_creator_for_work
-      .new_tempdir(&work_temp_dir)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let work_temp_dir = args.job_dependencies.fs.scoped_temp_dir_creator_for_work.new_tempdir(&work_temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   // ==================== DOWNLOAD MEDIA FILE ==================== //
 
   info!("Download media for conversion...");
 
-  let asset_filename = get_asset_filename(&media_file)
-      .ok_or(ProcessSingleJobError::Other(anyhow!("media_file has the wrong file type")))?;
+  let asset_filename = get_asset_filename(&media_file).ok_or(ProcessSingleJobError::Other(anyhow!("media_file has the wrong file type")))?;
 
   let original_media_upload_fs_path = {
     let original_media_file_fs_path = work_temp_dir.path().join(asset_filename);
 
-    let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-      &media_file.public_bucket_directory_hash,
-      media_file.maybe_public_bucket_prefix.as_deref(),
-      media_file.maybe_public_bucket_extension.as_deref());
+    let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&media_file.public_bucket_directory_hash, media_file.maybe_public_bucket_prefix.as_deref(), media_file.maybe_public_bucket_extension.as_deref());
 
     let bucket_object_path = media_file_bucket_path.to_full_object_pathbuf();
 
-    info!("Downloading media to bucket path: {:?} to filesystem path: {:?}",
-      &bucket_object_path,
-      &original_media_file_fs_path);
+    info!("Downloading media to bucket path: {:?} to filesystem path: {:?}", &bucket_object_path, &original_media_file_fs_path);
 
-    maybe_download_file_from_bucket(MaybeDownloadArgs {
-      name_or_description_of_file: "media upload (original file)",
-      final_filesystem_file_path: &original_media_file_fs_path,
-      bucket_object_path: &bucket_object_path,
-      bucket_client: &args.job_dependencies.buckets.public_bucket_client,
-      job_progress_reporter: &mut job_progress_reporter,
-      job_progress_update_description: "downloading",
-      job_id: job.id.0,
-      scoped_tempdir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work,
-      maybe_existing_file_minimum_size_required: None,
-    }).await?;
+    maybe_download_file_from_bucket(MaybeDownloadArgs { name_or_description_of_file: "media upload (original file)", final_filesystem_file_path: &original_media_file_fs_path, bucket_object_path: &bucket_object_path, bucket_client: &args.job_dependencies.buckets.public_bucket_client, job_progress_reporter: &mut job_progress_reporter, job_progress_update_description: "downloading", job_id: job.id.0, scoped_tempdir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work, maybe_existing_file_minimum_size_required: None }).await?;
 
     original_media_file_fs_path
   };
 
   // ==================== SETUP FOR CONVERSION / HANDLE ARGS ==================== //
 
-  job_progress_reporter.log_status("running conversion")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("running conversion").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let maybe_args = job.maybe_inference_args
-      .as_ref()
-      .map(|args| args.args.as_ref())
-      .flatten()
-      .map(|args| match args {
-        PolymorphicInferenceArgs::Es(args) => Some(args),
-        _ => None,
-      })
-      .flatten();
+  let maybe_args = job
+    .maybe_inference_args
+    .as_ref()
+    .map(|args| args.args.as_ref())
+    .flatten()
+    .map(|args| match args {
+      PolymorphicInferenceArgs::Es(args) => Some(args),
+      _ => None,
+    })
+    .flatten();
 
   let mut maybe_camera = None;
   let mut maybe_camera_speed = None;
@@ -137,21 +107,13 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
   let execution_start_time = Instant::now();
 
   let command_exit_status = {
-    model_dependencies
-        .command_runner
-        .run_with_subprocess(RunAsSubprocessArgs {
-          args: Box::new(&RenderEngineSceneToVideoCommandArgs {
-            input_file: &original_media_upload_fs_path,
-            output_directory: &output_directory,
-            maybe_camera: maybe_camera.as_deref(),
-            maybe_camera_speed,
-            maybe_skybox: maybe_skybox.as_deref(),
-          }),
-          //maybe_stderr_output_file: Some(FileOrCreate::NewFileWithName(&stderr_output_file)),
-          // NB(bt,2024-02-29): Bevy's stdout goes to stderr, so we can't capture the semantics we want
-          stderr: StreamRedirection::None,
-          stdout: StreamRedirection::None,
-        })
+    model_dependencies.command_runner.run_with_subprocess(RunAsSubprocessArgs {
+      args: Box::new(&RenderEngineSceneToVideoCommandArgs { input_file: &original_media_upload_fs_path, output_directory: &output_directory, maybe_camera: maybe_camera.as_deref(), maybe_camera_speed, maybe_skybox: maybe_skybox.as_deref() }),
+      //maybe_stderr_output_file: Some(FileOrCreate::NewFileWithName(&stderr_output_file)),
+      // NB(bt,2024-02-29): Bevy's stdout goes to stderr, so we can't capture the semantics we want
+      stderr: StreamRedirection::None,
+      stdout: StreamRedirection::None,
+    })
   };
 
   let execution_duration = Instant::now().duration_since(execution_start_time);
@@ -187,28 +149,19 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
 
   info!("Interrogating result file properties...");
 
-  let file_size_bytes = file_size(&output_video_file)
-      .map_err(|err| ProcessSingleJobError::Other(err))?;
+  let file_size_bytes = file_size(&output_video_file).map_err(|err| ProcessSingleJobError::Other(err))?;
 
-  let maybe_mimetype = get_mimetype_for_file(&output_video_file)
-      .map_err(|err| ProcessSingleJobError::from_io_error(err))?
-      .map(|mime| mime.to_string());
+  let maybe_mimetype = get_mimetype_for_file(&output_video_file).map_err(|err| ProcessSingleJobError::from_io_error(err))?.map(|mime| mime.to_string());
 
   info!("Calculating sha256...");
 
-  let file_checksum = sha256_hash_file(&output_video_file)
-      .map_err(|err| {
-        ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-      })?;
+  let file_checksum = sha256_hash_file(&output_video_file).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
   // ==================== UPLOAD AUDIO TO BUCKET ==================== //
 
-  job_progress_reporter.log_status("uploading result")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("uploading result").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let result_video_bucket_location = MediaFileBucketPath::generate_new(
-    None,
-    Some(BUCKET_FILE_EXTENSION));
+  let result_video_bucket_location = MediaFileBucketPath::generate_new(None, Some(BUCKET_FILE_EXTENSION));
 
   let result_bucket_object_pathbuf = result_video_bucket_location.to_full_object_pathbuf();
 
@@ -216,16 +169,9 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
 
   info!("Uploading media file...");
 
-  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(
-    &result_bucket_object_pathbuf,
-    &output_video_file,
-    "video/mp4")
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&result_bucket_object_pathbuf, &output_video_file, "video/mp4").await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let result_zip_bucket_location = MediaFileBucketPath::from_object_hash(&result_video_bucket_location.get_object_hash(),
-    None,
-    Some(".zip"));
+  let result_zip_bucket_location = MediaFileBucketPath::from_object_hash(&result_video_bucket_location.get_object_hash(), None, Some(".zip"));
 
   let result_bucket_object_pathbuf = result_zip_bucket_location.to_full_object_pathbuf();
 
@@ -233,12 +179,7 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
 
   info!("Uploading media file...");
 
-  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(
-    &result_bucket_object_pathbuf,
-    &output_frames_zip_file,
-  "application/zip")
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&result_bucket_object_pathbuf, &output_frames_zip_file, "application/zip").await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
   safe_delete_file(&output_video_file);
   safe_delete_file(&output_frames_zip_file);
@@ -257,9 +198,7 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
     pool: &args.job_dependencies.db.mysql_pool,
     job: &job,
     media_class: MediaFileClass::Video,
-    media_type: maybe_mimetype.as_deref()
-        .and_then(MediaFileType::try_from_mime_type)
-        .unwrap_or(MediaFileType::Video), // Coarse fallback for unrecognized mimes
+    media_type: maybe_mimetype.as_deref().and_then(MediaFileType::try_from_mime_type).unwrap_or(MediaFileType::Video), // Coarse fallback for unrecognized mimes
     origin_category: MediaFileOriginCategory::Processed,
     origin_product_category: MediaFileOriginProductCategory::Mocap,
     maybe_origin_model_type: None,
@@ -290,8 +229,8 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
     maybe_scene_source_media_file_token: None, // TODO: The scene token should be available, but we might not revisit this job
     is_intermediate_system_file: false,
   })
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  .await
+  .map_err(|e| ProcessSingleJobError::Other(e))?;
 
   info!("VC Done.");
 
@@ -305,19 +244,11 @@ pub async fn process_job(args: BvhToWorkflowJobArgs<'_>) -> Result<JobSuccessRes
   //      ProcessSingleJobError::Other(anyhow!("error publishing event"))
   //    })?;
 
-  job_progress_reporter.log_status("done")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  info!("Job {:?} complete success! Downloaded, executed successfully, and uploaded. Saved record: {}, Result Token: {}",
-        job.id, id, &inference_result_token);
+  info!("Job {:?} complete success! Downloaded, executed successfully, and uploaded. Saved record: {}, Result Token: {}", job.id, id, &inference_result_token);
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::MediaFile,
-      entity_token: inference_result_token.to_string(),
-    }),
-    inference_duration: execution_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::MediaFile, entity_token: inference_result_token.to_string() }), inference_duration: execution_duration })
 }
 
 /// Storyteller Engine uses the file extension to determine engine behavior,

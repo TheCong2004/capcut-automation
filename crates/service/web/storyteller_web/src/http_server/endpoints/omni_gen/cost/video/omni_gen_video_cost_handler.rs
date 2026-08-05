@@ -19,10 +19,7 @@ use artcraft_router::api::router_provider::RouterProvider;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn omni_gen_video_cost_handler(
-  _http_request: HttpRequest,
-  request: Json<OmniGenVideoCostAndGenerateRequest>,
-) -> Result<Json<OmniGenVideoCostResponse>, CommonWebError> {
+pub async fn omni_gen_video_cost_handler(_http_request: HttpRequest, request: Json<OmniGenVideoCostAndGenerateRequest>) -> Result<Json<OmniGenVideoCostResponse>, CommonWebError> {
   // NB: Deliberately no input validation here. The UI polls this endpoint
   // while the user is still composing the request (no prompt typed, nothing
   // attached), and pricing is a total function of the model and options.
@@ -31,21 +28,9 @@ pub async fn omni_gen_video_cost_handler(
 
   builder.provider = RouterProvider::Artcraft; // NB: User is paying for ArtCraft credits / generation
 
-  let estimate = builder.build2()
-    .map_err(map_router_cost_error)?
-    .estimate_cost()
-    .map_err(map_router_cost_error)?;
+  let estimate = builder.build2().map_err(map_router_cost_error)?.estimate_cost().map_err(map_router_cost_error)?;
 
-  Ok(Json(OmniGenVideoCostResponse {
-    success: true,
-    cost_in_credits: estimate.cost_in_credits,
-    cost_in_usd_cents: estimate.cost_in_usd_cents,
-    is_free: estimate.is_free,
-    is_unlimited: estimate.is_unlimited,
-    is_rate_limited: estimate.is_rate_limited,
-    has_watermark: estimate.has_watermark,
-    failures_are_refunded: estimate.failures_are_refunded,
-  }))
+  Ok(Json(OmniGenVideoCostResponse { success: true, cost_in_credits: estimate.cost_in_credits, cost_in_usd_cents: estimate.cost_in_usd_cents, is_free: estimate.is_free, is_unlimited: estimate.is_unlimited, is_rate_limited: estimate.is_rate_limited, has_watermark: estimate.has_watermark, failures_are_refunded: estimate.failures_are_refunded }))
 }
 
 #[cfg(test)]
@@ -67,26 +52,15 @@ mod tests {
     /// error that surfaced as a 500).
     #[tokio::test]
     async fn grok_1p5_without_an_image_gets_a_quote() {
-      let response = post_cost_request(base_request(CommonVideoModel::GrokImagineVideo1p5))
-        .await
-        .expect("image-less grok 1.5 cost estimate should succeed");
+      let response = post_cost_request(base_request(CommonVideoModel::GrokImagineVideo1p5)).await.expect("image-less grok 1.5 cost estimate should succeed");
       assert!(response.success);
       assert!(response.cost_in_credits.unwrap() > 0);
     }
 
     #[tokio::test]
     async fn bare_model_gets_a_quote_for_representative_models() {
-      for model in [
-        CommonVideoModel::GrokImagineVideo,
-        CommonVideoModel::Kling3p0Pro,
-        CommonVideoModel::Seedance2p0,
-        CommonVideoModel::Sora2,
-        CommonVideoModel::Veo3p1,
-        CommonVideoModel::ViduQ3,
-      ] {
-        let response = post_cost_request(base_request(model))
-          .await
-          .unwrap_or_else(|e| panic!("bare-model cost estimate should succeed for {model:?}: {e:?}"));
+      for model in [CommonVideoModel::GrokImagineVideo, CommonVideoModel::Kling3p0Pro, CommonVideoModel::Seedance2p0, CommonVideoModel::Sora2, CommonVideoModel::Veo3p1, CommonVideoModel::ViduQ3] {
+        let response = post_cost_request(base_request(model)).await.unwrap_or_else(|e| panic!("bare-model cost estimate should succeed for {model:?}: {e:?}"));
         assert!(response.cost_in_credits.unwrap() > 0, "no cost for {model:?}");
       }
     }
@@ -100,43 +74,17 @@ mod tests {
       // grok_video has no Artcraft route in the router; this must surface
       // as a 400, not a 500 (it 500'd in production before the
       // map_router_cost_error mapping).
-      let err = post_cost_request(base_request(CommonVideoModel::GrokVideo))
-        .await
-        .expect_err("unroutable model should be rejected");
+      let err = post_cost_request(base_request(CommonVideoModel::GrokVideo)).await.expect_err("unroutable model should be rejected");
       assert_eq!(err.status_code(), StatusCode::BAD_REQUEST);
     }
   }
 
-  async fn post_cost_request(
-    body: OmniGenVideoCostAndGenerateRequest,
-  ) -> Result<OmniGenVideoCostResponse, CommonWebError> {
-    let http_request = TestRequest::post()
-      .uri("/v1/omni_gen/cost/video")
-      .to_http_request();
-    omni_gen_video_cost_handler(http_request, Json(body))
-      .await
-      .map(Json::into_inner)
+  async fn post_cost_request(body: OmniGenVideoCostAndGenerateRequest) -> Result<OmniGenVideoCostResponse, CommonWebError> {
+    let http_request = TestRequest::post().uri("/v1/omni_gen/cost/video").to_http_request();
+    omni_gen_video_cost_handler(http_request, Json(body)).await.map(Json::into_inner)
   }
 
   fn base_request(model: CommonVideoModel) -> OmniGenVideoCostAndGenerateRequest {
-    OmniGenVideoCostAndGenerateRequest {
-      idempotency_token: None,
-      model: Some(model),
-      prompt: None,
-      negative_prompt: None,
-      start_frame_image_media_token: None,
-      end_frame_image_media_token: None,
-      reference_image_media_tokens: None,
-      reference_video_media_tokens: None,
-      reference_audio_media_tokens: None,
-      reference_character_tokens: None,
-      resolution: None,
-      aspect_ratio: None,
-      bitrate: None,
-      quality: None,
-      duration_seconds: None,
-      video_batch_count: None,
-      generate_audio: None,
-    }
+    OmniGenVideoCostAndGenerateRequest { idempotency_token: None, model: Some(model), prompt: None, negative_prompt: None, start_frame_image_media_token: None, end_frame_image_media_token: None, reference_image_media_tokens: None, reference_video_media_tokens: None, reference_audio_media_tokens: None, reference_character_tokens: None, resolution: None, aspect_ratio: None, bitrate: None, quality: None, duration_seconds: None, video_batch_count: None, generate_audio: None }
   }
 }

@@ -8,11 +8,7 @@ use crate::http_server::common_responses::media::cdn_link;
 use crate::http_server::common_responses::media::media_domain::MediaDomain;
 
 #[deprecated(note = "This is tied to GCP and is legacy.")]
-pub fn bucket_url_from_media_path(
-  bucket_path: &MediaFileBucketPath,
-  domain: MediaDomain,
-  server_environment: ServerEnvironment,
-) -> AnyhowResult<Url> {
+pub fn bucket_url_from_media_path(bucket_path: &MediaFileBucketPath, domain: MediaDomain, server_environment: ServerEnvironment) -> AnyhowResult<Url> {
   let path = bucket_path.get_full_object_path_str();
   let host = cdn_link::get_cdn_host(domain, server_environment);
   let url = format!("{host}{path}");
@@ -34,15 +30,13 @@ mod tests {
   fn test_production() {
     let bucket_path = MediaFileBucketPath::from_object_hash("test", Some("pre_"), Some(".ext"));
 
-    assert_eq!(bucket_url_from_media_path(&bucket_path, MediaDomain::FakeYou, ServerEnvironment::Production).unwrap(),
-               Url::parse("https://cdn-2.fakeyou.com/media/t/e/s/test/pre_test.ext").unwrap());
+    assert_eq!(bucket_url_from_media_path(&bucket_path, MediaDomain::FakeYou, ServerEnvironment::Production).unwrap(), Url::parse("https://cdn-2.fakeyou.com/media/t/e/s/test/pre_test.ext").unwrap());
   }
 
   #[test]
   fn test_development() {
     let bucket_path = MediaFileBucketPath::from_object_hash("test", Some("pre_"), Some(".ext"));
 
-    assert_eq!(bucket_url_from_media_path(&bucket_path, MediaDomain::FakeYou, ServerEnvironment::Development).unwrap(),
-               Url::parse("https://pub-c8a4a5bdbdb048f286b77bdf9f786ff2.r2.dev/media/t/e/s/test/pre_test.ext").unwrap());
+    assert_eq!(bucket_url_from_media_path(&bucket_path, MediaDomain::FakeYou, ServerEnvironment::Development).unwrap(), Url::parse("https://pub-c8a4a5bdbdb048f286b77bdf9f786ff2.r2.dev/media/t/e/s/test/pre_test.ext").unwrap());
   }
 }

@@ -31,7 +31,7 @@ impl Display for WalletRefundError {
       WalletRefundError::WalletNotFound => write!(f, "Wallet not found"),
       WalletRefundError::NotADeductEntry(entry_type) => {
         write!(f, "Cannot refund a non-deduct ledger entry: {:?}", entry_type)
-      }
+      },
       WalletRefundError::SelectError(err) => write!(f, "Database select error: {}", err),
       WalletRefundError::SqlxError(err) => write!(f, "Database error: {}", err),
     }

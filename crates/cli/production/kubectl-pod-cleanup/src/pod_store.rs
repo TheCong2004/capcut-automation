@@ -14,61 +14,47 @@ pub struct PodStore {
 
 impl PodStore {
   pub fn new() -> Self {
-    Self {
-      pod_names: Arc::new(RwLock::new(HashSet::new()))
-    }
+    Self { pod_names: Arc::new(RwLock::new(HashSet::new())) }
   }
 
   pub fn from_names(pod_names: Vec<String>) -> Self {
-    Self {
-      pod_names: Arc::new(RwLock::new(HashSet::from_iter(pod_names)))
-    }
+    Self { pod_names: Arc::new(RwLock::new(HashSet::from_iter(pod_names))) }
   }
 
   pub fn replace_pods(&self, pod_names: Vec<String>) -> AnyhowResult<()> {
     match self.pod_names.write() {
-      Err(err) => {
-        Err(anyhow!("lock error: {:?}", err))
-      }
+      Err(err) => Err(anyhow!("lock error: {:?}", err)),
       Ok(mut write) => {
         write.clear();
         write.extend(pod_names);
         Ok(())
-      }
+      },
     }
   }
 
   pub fn grab_batch(&self, batch_size: usize) -> AnyhowResult<HashSet<String>> {
     match self.pod_names.read() {
-      Err(err) => {
-        Err(anyhow!("lock error: {:?}", err))
-      }
+      Err(err) => Err(anyhow!("lock error: {:?}", err)),
       Ok(read) => {
-        let mut batch : HashSet<String> = HashSet::with_capacity(batch_size);
-        let choices = read.iter()
-            .choose_multiple(&mut thread_rng(), batch_size)
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
+        let mut batch: HashSet<String> = HashSet::with_capacity(batch_size);
+        let choices = read.iter().choose_multiple(&mut thread_rng(), batch_size).iter().map(|s| s.to_string()).collect::<Vec<String>>();
 
         batch.extend(choices);
 
         Ok(batch)
-      }
+      },
     }
   }
 
   pub fn expunge_pods(&self, pod_names: &Vec<String>) -> AnyhowResult<()> {
     match self.pod_names.write() {
-      Err(err) => {
-        Err(anyhow!("lock error: {:?}", err))
-      }
+      Err(err) => Err(anyhow!("lock error: {:?}", err)),
       Ok(mut write) => {
         for pod_name in pod_names {
           write.remove(pod_name);
         }
         Ok(())
-      }
+      },
     }
   }
 }
@@ -79,9 +65,7 @@ mod tests {
 
   #[test]
   fn test_grab_batch() {
-    let pod_names = vec!["foo", "bar", "bin", "baz"].into_iter()
-        .map(|n| n.to_string())
-        .collect::<Vec<_>>();
+    let pod_names = vec!["foo", "bar", "bin", "baz"].into_iter().map(|n| n.to_string()).collect::<Vec<_>>();
 
     let pod_names = PodStore::from_names(pod_names);
 
@@ -95,9 +79,7 @@ mod tests {
 
   #[test]
   fn test_expunge_pods() {
-    let pod_names = vec!["foo", "bar", "bin", "baz"].into_iter()
-        .map(|n| n.to_string())
-        .collect::<Vec<_>>();
+    let pod_names = vec!["foo", "bar", "bin", "baz"].into_iter().map(|n| n.to_string()).collect::<Vec<_>>();
 
     let pod_names = PodStore::from_names(pod_names);
 

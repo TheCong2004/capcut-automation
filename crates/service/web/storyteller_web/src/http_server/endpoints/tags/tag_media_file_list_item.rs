@@ -63,11 +63,7 @@ pub struct TagMediaFileListItem {
   pub updated_at: DateTime<Utc>,
 }
 
-pub fn tag_media_file_row_to_list_item(
-  row: MediaFileListRow,
-  media_domain: MediaDomain,
-  server_environment: ServerEnvironment,
-) -> TagMediaFileListItem {
+pub fn tag_media_file_row_to_list_item(row: MediaFileListRow, media_domain: MediaDomain, server_environment: ServerEnvironment) -> TagMediaFileListItem {
   let (media_links, cover_image) = build_media_links_and_cover(&row, media_domain, server_environment);
 
   TagMediaFileListItem {

@@ -30,17 +30,10 @@ async fn copy_model(model: &WholeTtsModelRecord, deps: &Deps) -> AnyhowResult<Co
 
   let new_model_bucket_path = WeightFileBucketPath::generate_for_tt2_model();
 
-  deps.bucket_production_public.upload_filename_with_content_type(
-    &new_model_bucket_path.get_full_object_path_str(),
-    &model_temp_fs_path,
-    "application/octet-stream").await?;
+  deps.bucket_production_public.upload_filename_with_content_type(&new_model_bucket_path.get_full_object_path_str(), &model_temp_fs_path, "application/octet-stream").await?;
 
   safe_delete_file(&model_temp_fs_path);
   safe_delete_directory(&temp_dir);
 
-  Ok(CopiedTtsFileData {
-    bucket_path: new_model_bucket_path,
-    file_sha_hash: file_checksum,
-  })
+  Ok(CopiedTtsFileData { bucket_path: new_model_bucket_path, file_sha_hash: file_checksum })
 }
-

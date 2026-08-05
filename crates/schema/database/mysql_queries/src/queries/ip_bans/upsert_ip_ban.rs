@@ -13,7 +13,7 @@ pub struct UpsertIpBanArgs<'a> {
 
 pub async fn upsert_ip_ban(args: UpsertIpBanArgs<'_>) -> AnyhowResult<()> {
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO
     ip_address_bans
 SET
@@ -29,24 +29,22 @@ ON DUPLICATE KEY UPDATE
     mod_user_token = ?,
     mod_notes = ?
         "#,
-      // Insert
-      args.ip_address,
-      args.maybe_target_user_token,
-      args.mod_user_token,
-      args.mod_notes,
-      // Update
-      args.ip_address,
-      args.maybe_target_user_token,
-      args.mod_user_token,
-      args.mod_notes,
-    )
-      .execute(args.mysql_pool)
-      .await;
+    // Insert
+    args.ip_address,
+    args.maybe_target_user_token,
+    args.mod_user_token,
+    args.mod_notes,
+    // Update
+    args.ip_address,
+    args.maybe_target_user_token,
+    args.mod_user_token,
+    args.mod_notes,
+  )
+  .execute(args.mysql_pool)
+  .await;
 
   match query_result {
     Ok(_) => Ok(()),
-    Err(err) => {
-      Err(anyhow!("error with query: {:?}", err))
-    }
+    Err(err) => Err(anyhow!("error with query: {:?}", err)),
   }
 }

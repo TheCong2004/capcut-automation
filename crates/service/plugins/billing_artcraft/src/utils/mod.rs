@@ -1,4 +1,4 @@
-pub (crate) mod metadata;
+pub(crate) mod metadata;
 pub mod artcraft_stripe_config;
 pub mod common_web_error;
 pub mod create_checkout;

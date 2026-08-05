@@ -15,12 +15,12 @@ pub struct CreateCategoryArgs<'a> {
   pub can_directly_have_models: bool,
   pub can_have_subcategories: bool,
   pub can_only_mods_apply: bool,
-  pub mysql_pool: &'a MySqlPool
+  pub mysql_pool: &'a MySqlPool,
 }
 
 pub async fn create_category(args: CreateCategoryArgs<'_>) -> AnyhowResult<()> {
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO model_categories
 SET
     token = ?,
@@ -38,7 +38,6 @@ SET
     can_have_subcategories = ?,
     can_only_mods_apply = ?
         "#,
-
     args.category_token,
     args.idempotency_token,
     args.model_type,
@@ -52,8 +51,8 @@ SET
     args.can_have_subcategories,
     args.can_only_mods_apply
   )
-      .execute(args.mysql_pool)
-      .await;
+  .execute(args.mysql_pool)
+  .await;
 
   match query_result {
     Ok(_) => Ok(()),

@@ -11,9 +11,7 @@ pub struct ProductByWeekStore {
 
 impl ProductByWeekStore {
   pub fn new() -> Self {
-    Self {
-      free_uses_per_product_map: HashMap::new(),
-    }
+    Self { free_uses_per_product_map: HashMap::new() }
   }
 
   pub fn set_use_count(&mut self, key: ProductByWeekSubkey, count: u64) {
@@ -40,9 +38,7 @@ impl ProductByWeekStore {
       let count = free_uses_per_product_map.entry(key.clone()).or_insert(0);
       *count = (*count).max(*value);
     }
-    Self {
-      free_uses_per_product_map,
-    }
+    Self { free_uses_per_product_map }
   }
 }
 

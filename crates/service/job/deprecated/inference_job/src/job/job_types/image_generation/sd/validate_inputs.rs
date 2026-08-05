@@ -8,27 +8,23 @@ use crate::job::job_types::image_generation::sd::process_job::StableDiffusionPro
 use crate::util::extractors::get_polymorphic_args_from_job::get_polymorphic_args_from_job;
 
 pub async fn validate_inputs(args: StableDiffusionProcessArgs<'_>) -> Result<(), ProcessSingleJobError> {
+  let polymorphic_args = get_polymorphic_args_from_job(&args.job)?;
 
-    let polymorphic_args = get_polymorphic_args_from_job(&args.job)?;
+  let sd_args = match polymorphic_args {
+    PolymorphicInferenceArgs::Ig(args) => args,
+    _ => {
+      return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inner args for job!")));
+    },
+  };
 
-    let sd_args = match polymorphic_args {
-        PolymorphicInferenceArgs::Ig(args) => args,
-        _ => {
-            return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inner args for job!")));
-        }
-    };
+  let stable_diffusion_args: StableDiffusionArgs = StableDiffusionArgs::from(sd_args.clone());
 
-    let stable_diffusion_args: StableDiffusionArgs = StableDiffusionArgs::from(sd_args.clone());
+  if stable_diffusion_args.type_of_inference == "checkpoint" {
+  } else if stable_diffusion_args.type_of_inference == "lora" {
+  } else if stable_diffusion_args.type_of_inference == "inference" {
+  } else {
+    return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inference type for job!")));
+  }
 
-    if stable_diffusion_args.type_of_inference == "checkpoint" {
-        
-    } else if stable_diffusion_args.type_of_inference == "lora" {
-
-    } else if stable_diffusion_args.type_of_inference == "inference" {
-        
-    } else {
-        return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inference type for job!")));
-    }
-
-    Ok(())
+  Ok(())
 }

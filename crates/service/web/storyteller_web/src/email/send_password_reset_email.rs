@@ -13,9 +13,7 @@ pub struct SendPasswordResetEmailArgs<'a> {
   pub domain_branding: DomainBranding,
 }
 
-pub async fn send_password_reset_email(
-  args: SendPasswordResetEmailArgs<'_>
-) -> AnyhowResult<()> {
+pub async fn send_password_reset_email(args: SendPasswordResetEmailArgs<'_>) -> AnyhowResult<()> {
   let resend = Resend::new(&args.resend_api_key);
 
   let to = [args.email_address_destination];
@@ -23,22 +21,19 @@ pub async fn send_password_reset_email(
   let subject = "ArtCraft Password Reset";
 
   let from_address = match args.domain_branding {
-    DomainBranding::ArtCraftDotAi |
-    DomainBranding::GetArtCraft => "ArtCraft <noreply@getartcraft.com>",
+    DomainBranding::ArtCraftDotAi | DomainBranding::GetArtCraft => "ArtCraft <noreply@getartcraft.com>",
     DomainBranding::FakeYou => "FakeYou <noreply@fakeyou.com>",
     DomainBranding::Storyteller => "FakeYou <noreply@fakeyou.com>",
   };
 
   let platform = match args.domain_branding {
-    DomainBranding::ArtCraftDotAi |
-    DomainBranding::GetArtCraft => "ArtCraft",
+    DomainBranding::ArtCraftDotAi | DomainBranding::GetArtCraft => "ArtCraft",
     DomainBranding::FakeYou => "FakeYou",
     DomainBranding::Storyteller => "Storyteller.ai",
   };
 
   let team_name = match args.domain_branding {
-    DomainBranding::ArtCraftDotAi |
-    DomainBranding::GetArtCraft => "ArtCraft Team",
+    DomainBranding::ArtCraftDotAi | DomainBranding::GetArtCraft => "ArtCraft Team",
     DomainBranding::FakeYou => "FakeYou Team",
     DomainBranding::Storyteller => "Storyteller.ai Team",
   };
@@ -56,7 +51,8 @@ pub async fn send_password_reset_email(
   let link = get_password_reset_url(args.verification_token, url);
   let code = args.verification_token;
 
-  let html_message = format!(r#"
+  let html_message = format!(
+    r#"
       We received a request to reset your password on {platform}.
       If this wasn't you, you can safely ignore this email.
       <br />
@@ -71,10 +67,10 @@ pub async fn send_password_reset_email(
       <br />
       <br />
       {team_name}
-    "#);
+    "#
+  );
 
-  let email = CreateEmailBaseOptions::new(from_address, to, subject)
-      .with_html(&html_message);
+  let email = CreateEmailBaseOptions::new(from_address, to, subject).with_html(&html_message);
 
   let _email = resend.emails.send(email).await?;
 

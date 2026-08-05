@@ -31,11 +31,11 @@ use crate::state::job_dependencies::JobDependencies;
 use crate::util::downloaders::maybe_download_file_from_bucket::{maybe_download_file_from_bucket, MaybeDownloadArgs};
 
 // Flag to control GLB vs GLTF uploading
-const UPLOAD_AS_GLB : bool = true;
+const UPLOAD_AS_GLB: bool = true;
 
 // GLTF is two files - one json, one binary
 const BUCKET_GLTF_FILE_EXTENSION: &str = ".gltf";
-const BUFFER_BIN_FILE_EXTENSION : &str = ".bin";
+const BUFFER_BIN_FILE_EXTENSION: &str = ".bin";
 
 // GLB is one binary file
 const BUCKET_GLB_FILE_EXTENSION: &str = ".glb";
@@ -51,30 +51,16 @@ pub async fn process_job(args: FbxToGltfJobArgs<'_>) -> Result<JobSuccessResult,
   let job = args.job;
   let media_file = args.media_file;
 
-  let mut job_progress_reporter = args.job_dependencies
-      .clients
-      .job_progress_reporter
-      .new_generic_inference(job.inference_job_token.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
+  let mut job_progress_reporter = args.job_dependencies.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let model_dependencies = args
-      .job_dependencies
-      .job
-      .job_specific_dependencies
-      .maybe_convert_fbx_to_gltf_dependencies
-      .as_ref()
-      .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing ConvertFbx2Gltf dependencies".to_string())))?;
+  let model_dependencies = args.job_dependencies.job.job_specific_dependencies.maybe_convert_fbx_to_gltf_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing ConvertFbx2Gltf dependencies".to_string())))?;
 
   // ==================== TEMP DIR ==================== //
 
   let work_temp_dir = format!("temp_file_convert_{}", job.id.0);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let work_temp_dir = args.job_dependencies
-      .fs
-      .scoped_temp_dir_creator_for_work
-      .new_tempdir(&work_temp_dir)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let work_temp_dir = args.job_dependencies.fs.scoped_temp_dir_creator_for_work.new_tempdir(&work_temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   // ==================== DOWNLOAD MEDIA FILE ==================== //
 
@@ -83,35 +69,20 @@ pub async fn process_job(args: FbxToGltfJobArgs<'_>) -> Result<JobSuccessResult,
   let original_media_upload_fs_path = {
     let original_media_file_fs_path = work_temp_dir.path().join("original.fbx");
 
-    let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-          &media_file.public_bucket_directory_hash,
-          media_file.maybe_public_bucket_prefix.as_deref(),
-          media_file.maybe_public_bucket_extension.as_deref());
+    let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&media_file.public_bucket_directory_hash, media_file.maybe_public_bucket_prefix.as_deref(), media_file.maybe_public_bucket_extension.as_deref());
 
     let bucket_object_path = media_file_bucket_path.to_full_object_pathbuf();
 
     info!("Downloading media to bucket path: {:?}", &bucket_object_path);
 
-    maybe_download_file_from_bucket(MaybeDownloadArgs {
-      name_or_description_of_file: "media upload (original file)",
-      final_filesystem_file_path: &original_media_file_fs_path,
-      bucket_object_path: &bucket_object_path,
-      bucket_client: &args.job_dependencies.buckets.public_bucket_client,
-      job_progress_reporter: &mut job_progress_reporter,
-      job_progress_update_description: "downloading",
-      job_id: job.id.0,
-      scoped_tempdir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work,
-      maybe_existing_file_minimum_size_required: None,
-    }).await?;
+    maybe_download_file_from_bucket(MaybeDownloadArgs { name_or_description_of_file: "media upload (original file)", final_filesystem_file_path: &original_media_file_fs_path, bucket_object_path: &bucket_object_path, bucket_client: &args.job_dependencies.buckets.public_bucket_client, job_progress_reporter: &mut job_progress_reporter, job_progress_update_description: "downloading", job_id: job.id.0, scoped_tempdir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work, maybe_existing_file_minimum_size_required: None }).await?;
 
     original_media_file_fs_path
   };
 
   // ==================== SETUP FOR CONVERSION ==================== //
 
-  job_progress_reporter.log_status("running conversion")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
-
+  job_progress_reporter.log_status("running conversion").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // ==================== RUN INFERENCE SCRIPT ==================== //
 
@@ -127,19 +98,7 @@ pub async fn process_job(args: FbxToGltfJobArgs<'_>) -> Result<JobSuccessResult,
 
   let execution_start_time = Instant::now();
 
-  let command_exit_status = {
-    model_dependencies
-        .command_runner
-        .run_with_subprocess(RunAsSubprocessArgs {
-          args: Box::new(&FbxToGltfCommandArgs {
-            input_file: &original_media_upload_fs_path,
-            output_directory: &output_directory,
-            binary: true,
-          }),
-          stderr: StreamRedirection::File(FileOrCreate::NewFileWithName(&stderr_output_file)),
-          stdout: StreamRedirection::None,
-        })
-  };
+  let command_exit_status = { model_dependencies.command_runner.run_with_subprocess(RunAsSubprocessArgs { args: Box::new(&FbxToGltfCommandArgs { input_file: &original_media_upload_fs_path, output_directory: &output_directory, binary: true }), stderr: StreamRedirection::File(FileOrCreate::NewFileWithName(&stderr_output_file)), stdout: StreamRedirection::None }) };
 
   let execution_duration = Instant::now().duration_since(execution_start_time);
 
@@ -169,11 +128,7 @@ pub async fn process_job(args: FbxToGltfJobArgs<'_>) -> Result<JobSuccessResult,
     return Err(error);
   }
 
-  let upload_details = if UPLOAD_AS_GLB {
-    validate_and_upload_glb(&args, &mut job_progress_reporter, &output_directory_actual).await?
-  } else {
-    validate_and_upload_gltf(&args, &mut job_progress_reporter, &output_directory_actual).await?
-  };
+  let upload_details = if UPLOAD_AS_GLB { validate_and_upload_glb(&args, &mut job_progress_reporter, &output_directory_actual).await? } else { validate_and_upload_gltf(&args, &mut job_progress_reporter, &output_directory_actual).await? };
 
   // ==================== CLEANUP FILES ==================== //
 
@@ -219,8 +174,8 @@ pub async fn process_job(args: FbxToGltfJobArgs<'_>) -> Result<JobSuccessResult,
     maybe_scene_source_media_file_token: None,
     is_intermediate_system_file: false,
   })
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  .await
+  .map_err(|e| ProcessSingleJobError::Other(e))?;
 
   info!("Fbx2Gltf Done.");
 
@@ -234,19 +189,11 @@ pub async fn process_job(args: FbxToGltfJobArgs<'_>) -> Result<JobSuccessResult,
   //      ProcessSingleJobError::Other(anyhow!("error publishing event"))
   //    })?;
 
-  job_progress_reporter.log_status("done")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  info!("Job {:?} complete success! Downloaded, executed successfully, and uploaded. Saved record: {}, Result Token: {}",
-        job.id, id, &inference_result_token);
+  info!("Job {:?} complete success! Downloaded, executed successfully, and uploaded. Saved record: {}, Result Token: {}", job.id, id, &inference_result_token);
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::MediaFile,
-      entity_token: inference_result_token.to_string(),
-    }),
-    inference_duration: execution_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::MediaFile, entity_token: inference_result_token.to_string() }), inference_duration: execution_duration })
 }
 
 struct UploadDetails {
@@ -257,10 +204,7 @@ struct UploadDetails {
   bucket_location: MediaFileBucketPath,
 }
 
-
-async fn validate_and_upload_glb(args: &FbxToGltfJobArgs<'_>, job_progress_reporter: &mut Box<dyn JobProgressReporter>,
-                                  output_directory_actual: &PathBuf) -> Result<UploadDetails, ProcessSingleJobError>
-{
+async fn validate_and_upload_glb(args: &FbxToGltfJobArgs<'_>, job_progress_reporter: &mut Box<dyn JobProgressReporter>, output_directory_actual: &PathBuf) -> Result<UploadDetails, ProcessSingleJobError> {
   // ==================== CHECK ALL FILES EXIST AND GET METADATA ==================== //
 
   // NB: FBX2GLTF creates multiple files in the directory
@@ -273,28 +217,19 @@ async fn validate_and_upload_glb(args: &FbxToGltfJobArgs<'_>, job_progress_repor
 
   info!("Interrogating result file properties...");
 
-  let file_size_bytes = file_size(&output_file)
-      .map_err(|err| ProcessSingleJobError::Other(err))?;
+  let file_size_bytes = file_size(&output_file).map_err(|err| ProcessSingleJobError::Other(err))?;
 
-  let maybe_mimetype = get_mimetype_for_file(&output_file)
-      .map_err(|err| ProcessSingleJobError::from_io_error(err))?
-      .map(|mime| mime.to_string());
+  let maybe_mimetype = get_mimetype_for_file(&output_file).map_err(|err| ProcessSingleJobError::from_io_error(err))?.map(|mime| mime.to_string());
 
   info!("Calculating sha256...");
 
-  let file_checksum = sha256_hash_file(&output_file)
-      .map_err(|err| {
-        ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-      })?;
+  let file_checksum = sha256_hash_file(&output_file).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
   // ==================== UPLOAD GLB TO BUCKET ==================== //
 
-  job_progress_reporter.log_status("uploading output.glb")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("uploading output.glb").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let bucket_location = MediaFileBucketPath::generate_new(
-    None,
-    Some(BUCKET_GLTF_FILE_EXTENSION));
+  let bucket_location = MediaFileBucketPath::generate_new(None, Some(BUCKET_GLTF_FILE_EXTENSION));
 
   let bucket_object_pathbuf = bucket_location.to_full_object_pathbuf();
 
@@ -302,28 +237,15 @@ async fn validate_and_upload_glb(args: &FbxToGltfJobArgs<'_>, job_progress_repor
 
   info!("Uploading...");
 
-  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(
-    &bucket_object_pathbuf,
-    &output_file,
-    "model/gltf+binary")
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&bucket_object_pathbuf, &output_file, "model/gltf+binary").await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // Cleanup
   safe_delete_file(&output_file);
 
-  Ok(UploadDetails {
-    media_type: MediaFileType::Glb,
-    size_bytes: file_size_bytes,
-    maybe_mimetype,
-    checksum: file_checksum,
-    bucket_location,
-  })
+  Ok(UploadDetails { media_type: MediaFileType::Glb, size_bytes: file_size_bytes, maybe_mimetype, checksum: file_checksum, bucket_location })
 }
 
-async fn validate_and_upload_gltf(args: &FbxToGltfJobArgs<'_>, job_progress_reporter: &mut Box<dyn JobProgressReporter>,
-                                  output_directory_actual: &PathBuf) -> Result<UploadDetails, ProcessSingleJobError>
-{
+async fn validate_and_upload_gltf(args: &FbxToGltfJobArgs<'_>, job_progress_reporter: &mut Box<dyn JobProgressReporter>, output_directory_actual: &PathBuf) -> Result<UploadDetails, ProcessSingleJobError> {
   // ==================== CHECK ALL FILES EXIST AND GET METADATA ==================== //
 
   // NB: FBX2GLTF creates multiple files in the directory
@@ -338,28 +260,19 @@ async fn validate_and_upload_gltf(args: &FbxToGltfJobArgs<'_>, job_progress_repo
 
   info!("Interrogating result file properties...");
 
-  let gltf_file_size_bytes = file_size(&output_gltf_file)
-      .map_err(|err| ProcessSingleJobError::Other(err))?;
+  let gltf_file_size_bytes = file_size(&output_gltf_file).map_err(|err| ProcessSingleJobError::Other(err))?;
 
-  let maybe_gltf_mimetype = get_mimetype_for_file(&output_gltf_file)
-      .map_err(|err| ProcessSingleJobError::from_io_error(err))?
-      .map(|mime| mime.to_string());
+  let maybe_gltf_mimetype = get_mimetype_for_file(&output_gltf_file).map_err(|err| ProcessSingleJobError::from_io_error(err))?.map(|mime| mime.to_string());
 
   info!("Calculating sha256...");
 
-  let gltf_file_checksum = sha256_hash_file(&output_gltf_file)
-      .map_err(|err| {
-        ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-      })?;
+  let gltf_file_checksum = sha256_hash_file(&output_gltf_file).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
   // ==================== UPLOAD GLTF TO BUCKET ==================== //
 
-  job_progress_reporter.log_status("uploading output.gltf")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("uploading output.gltf").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let result_gtlf_bucket_location = MediaFileBucketPath::generate_new(
-    None,
-    Some(BUCKET_GLTF_FILE_EXTENSION));
+  let result_gtlf_bucket_location = MediaFileBucketPath::generate_new(None, Some(BUCKET_GLTF_FILE_EXTENSION));
 
   let result_gltf_bucket_object_pathbuf = result_gtlf_bucket_location.to_full_object_pathbuf();
 
@@ -367,23 +280,14 @@ async fn validate_and_upload_gltf(args: &FbxToGltfJobArgs<'_>, job_progress_repo
 
   info!("Uploading...");
 
-  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(
-    &result_gltf_bucket_object_pathbuf,
-    &output_gltf_file,
-    "model/gltf+json")
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&result_gltf_bucket_object_pathbuf, &output_gltf_file, "model/gltf+json").await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // ==================== UPLOAD BIN TO BUCKET ==================== //
 
-  job_progress_reporter.log_status("uploading buffer.bin")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("uploading buffer.bin").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // NB: Reuse same object hash, just change the extension.
-  let result_buffer_bucket_location = MediaFileBucketPath::from_object_hash(
-    result_gtlf_bucket_location.get_object_hash(),
-    None,
-    Some(BUFFER_BIN_FILE_EXTENSION));
+  let result_buffer_bucket_location = MediaFileBucketPath::from_object_hash(result_gtlf_bucket_location.get_object_hash(), None, Some(BUFFER_BIN_FILE_EXTENSION));
 
   let result_buffer_bucket_object_pathbuf = result_buffer_bucket_location.to_full_object_pathbuf();
 
@@ -391,22 +295,11 @@ async fn validate_and_upload_gltf(args: &FbxToGltfJobArgs<'_>, job_progress_repo
 
   info!("Uploading...");
 
-  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(
-    &result_buffer_bucket_object_pathbuf,
-    &output_buffer_file,
-    "application/octet-stream")
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&result_buffer_bucket_object_pathbuf, &output_buffer_file, "application/octet-stream").await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // Cleanup
   safe_delete_file(&output_buffer_file);
   safe_delete_file(&output_gltf_file);
 
-  Ok(UploadDetails {
-    media_type: MediaFileType::Gltf,
-    size_bytes: gltf_file_size_bytes,
-    maybe_mimetype: maybe_gltf_mimetype,
-    checksum: gltf_file_checksum,
-    bucket_location: result_gtlf_bucket_location,
-  })
+  Ok(UploadDetails { media_type: MediaFileType::Gltf, size_bytes: gltf_file_size_bytes, maybe_mimetype: maybe_gltf_mimetype, checksum: gltf_file_checksum, bucket_location: result_gtlf_bucket_location })
 }

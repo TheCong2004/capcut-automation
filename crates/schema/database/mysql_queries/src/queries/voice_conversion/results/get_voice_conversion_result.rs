@@ -104,32 +104,21 @@ pub struct VoiceConversionResultRecordRaw {
   pub mod_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn get_voice_conversion_result(
-  voice_conversion_result_token: &str,
-  can_see_deleted: bool,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<VoiceConversionResult>> {
+pub async fn get_voice_conversion_result(voice_conversion_result_token: &str, can_see_deleted: bool, mysql_pool: &MySqlPool) -> AnyhowResult<Option<VoiceConversionResult>> {
+  let maybe_record = if can_see_deleted { select_including_deleted(voice_conversion_result_token, mysql_pool).await } else { select_without_deleted(voice_conversion_result_token, mysql_pool).await };
 
-  let maybe_record = if can_see_deleted {
-    select_including_deleted(voice_conversion_result_token, mysql_pool).await
-  } else {
-    select_without_deleted(voice_conversion_result_token, mysql_pool).await
-  };
-
-  let ir : VoiceConversionResultRecordRaw = match maybe_record {
+  let ir: VoiceConversionResultRecordRaw = match maybe_record {
     Ok(inference_result) => inference_result,
-    Err(ref err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          warn!("tts result not found: {:?}", &err);
-          return Ok(None);
-        },
-        _ => {
-          warn!("tts result query error: {:?}", &err);
-          return Err(anyhow!("database error"));
-        }
-      }
-    }
+    Err(ref err) => match err {
+      sqlx::Error::RowNotFound => {
+        warn!("tts result not found: {:?}", &err);
+        return Ok(None);
+      },
+      _ => {
+        warn!("tts result query error: {:?}", &err);
+        return Err(anyhow!("database error"));
+      },
+    },
   };
 
   let ir_for_response = VoiceConversionResult {
@@ -151,8 +140,7 @@ pub async fn get_voice_conversion_result(
     // NB: Fail open/public since we're already looking at it
     public_bucket_hash: ir.public_bucket_hash,
 
-    creator_set_visibility: Visibility::from_str(&ir.creator_set_visibility)
-        .unwrap_or(Visibility::Public),
+    creator_set_visibility: Visibility::from_str(&ir.creator_set_visibility).unwrap_or(Visibility::Public),
 
     generated_by_worker: ir.generated_by_worker.unwrap_or("unknown".to_string()),
 
@@ -164,27 +152,16 @@ pub async fn get_voice_conversion_result(
     created_at: ir.created_at,
     updated_at: ir.updated_at,
 
-    maybe_moderator_fields: Some(VoiceConversionResultModeratorFields {
-      model_creator_is_banned:
-      nullable_i8_to_bool(ir.maybe_model_creator_is_banned, false),
-      result_creator_is_banned_if_user:
-      nullable_i8_to_bool(ir.maybe_creator_is_banned, false),
-      result_creator_ip_address: ir.creator_ip_address,
-      result_creator_deleted_at: ir.user_deleted_at,
-      mod_deleted_at: ir.mod_deleted_at,
-    }),
+    maybe_moderator_fields: Some(VoiceConversionResultModeratorFields { model_creator_is_banned: nullable_i8_to_bool(ir.maybe_model_creator_is_banned, false), result_creator_is_banned_if_user: nullable_i8_to_bool(ir.maybe_creator_is_banned, false), result_creator_ip_address: ir.creator_ip_address, result_creator_deleted_at: ir.user_deleted_at, mod_deleted_at: ir.mod_deleted_at }),
   };
 
   Ok(Some(ir_for_response))
 }
 
-async fn select_including_deleted(
-  voice_conversion_result_token: &str,
-  mysql_pool: &MySqlPool
-) -> Result<VoiceConversionResultRecordRaw, sqlx::Error> {
+async fn select_including_deleted(voice_conversion_result_token: &str, mysql_pool: &MySqlPool) -> Result<VoiceConversionResultRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      VoiceConversionResultRecordRaw,
-        r#"
+    VoiceConversionResultRecordRaw,
+    r#"
 SELECT
     voice_conversion_results.token as `voice_conversion_result_token: tokens::tokens::voice_conversion_results::VoiceConversionResultToken`,
 
@@ -229,19 +206,16 @@ LEFT OUTER JOIN users as model_users
 WHERE
     voice_conversion_results.token = ?
         "#,
-      voice_conversion_result_token
-    )
-      .fetch_one(mysql_pool)
-      .await // TODO: This will return error if it doesn't exist
+    voice_conversion_result_token
+  )
+  .fetch_one(mysql_pool)
+  .await // TODO: This will return error if it doesn't exist
 }
 
-async fn select_without_deleted(
-  voice_conversion_result_token: &str,
-  mysql_pool: &MySqlPool
-) -> Result<VoiceConversionResultRecordRaw, sqlx::Error> {
+async fn select_without_deleted(voice_conversion_result_token: &str, mysql_pool: &MySqlPool) -> Result<VoiceConversionResultRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      VoiceConversionResultRecordRaw,
-        r#"
+    VoiceConversionResultRecordRaw,
+    r#"
 SELECT
     voice_conversion_results.token as `voice_conversion_result_token: tokens::tokens::voice_conversion_results::VoiceConversionResultToken`,
 
@@ -288,8 +262,8 @@ WHERE
     AND voice_conversion_results.user_deleted_at IS NULL
     AND voice_conversion_results.mod_deleted_at IS NULL
         "#,
-      voice_conversion_result_token
-    )
-      .fetch_one(mysql_pool)
-      .await // TODO: This will return error if it doesn't exist
+    voice_conversion_result_token
+  )
+  .fetch_one(mysql_pool)
+  .await // TODO: This will return error if it doesn't exist
 }

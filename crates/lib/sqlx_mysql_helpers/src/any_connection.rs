@@ -33,7 +33,7 @@ pub enum MySqlHandleRef<'a> {
 //  }
 //}
 
-impl <'a> MySqlHandleMixedRef<'a> {
+impl<'a> MySqlHandleMixedRef<'a> {
   /// Consume the handle and return a connection.
   pub async fn to_discrete_connection(self) -> AnyhowResult<PoolConnection<MySql>> {
     match self {
@@ -63,8 +63,6 @@ impl <'a> MySqlHandleMixedRef<'a> {
 //  maybe_owned: Option<PoolConnection<MySql>>,
 //  reference: &'a mut PoolConnection<MySql>,
 //}
-
-
 
 // TODO:
 //impl <'a> MySqlConnectionRef<'a> {

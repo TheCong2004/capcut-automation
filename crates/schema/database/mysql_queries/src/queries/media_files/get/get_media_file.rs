@@ -42,7 +42,6 @@ pub struct MediaFile {
 
   // TODO: Other media details (file size, dimensions, duration, etc.)
   // TODO: Provenance data (product, upload vs inference, model details and foreign keys)
-
   pub maybe_batch_token: Option<BatchGenerationToken>,
 
   pub maybe_style_transfer_source_media_file_token: Option<MediaFileToken>,
@@ -105,7 +104,6 @@ pub struct MediaFile {
 
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
-
   // pub maybe_moderator_fields: Option<MediaFileModeratorFields>,
 }
 
@@ -187,7 +185,6 @@ pub struct MediaFileRaw {
 
   //pub model_is_mod_approved: bool, // converted
   //pub maybe_mod_user_token: Option<String>,
-
   pub maybe_ratings_positive_count: Option<u32>,
   pub maybe_ratings_negative_count: Option<u32>,
   pub maybe_bookmark_count: Option<u32>,
@@ -198,41 +195,16 @@ pub struct MediaFileRaw {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn get_media_file(
-  media_file_token: &MediaFileToken,
-  can_see_deleted: bool,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<MediaFile>> {
-  get_media_file_with_transactor(
-    media_file_token,
-    can_see_deleted,
-    Transactor::for_pool(mysql_pool)
-  ).await
+pub async fn get_media_file(media_file_token: &MediaFileToken, can_see_deleted: bool, mysql_pool: &MySqlPool) -> AnyhowResult<Option<MediaFile>> {
+  get_media_file_with_transactor(media_file_token, can_see_deleted, Transactor::for_pool(mysql_pool)).await
 }
 
-pub async fn get_media_file_with_connection(
-  media_file_token: &MediaFileToken,
-  can_see_deleted: bool,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<Option<MediaFile>> {
-  get_media_file_with_transactor(
-    media_file_token,
-    can_see_deleted,
-    Transactor::for_connection(mysql_connection)
-  ).await
+pub async fn get_media_file_with_connection(media_file_token: &MediaFileToken, can_see_deleted: bool, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<MediaFile>> {
+  get_media_file_with_transactor(media_file_token, can_see_deleted, Transactor::for_connection(mysql_connection)).await
 }
 
-pub async fn get_media_file_with_transactor(
-  media_file_token: &MediaFileToken,
-  can_see_deleted: bool,
-  transactor: Transactor<'_, '_>,
-) -> AnyhowResult<Option<MediaFile>> {
-
-  let record = if can_see_deleted {
-    select_including_deleted(media_file_token, transactor).await
-  } else {
-    select_without_deleted(media_file_token, transactor).await
-  };
+pub async fn get_media_file_with_transactor(media_file_token: &MediaFileToken, can_see_deleted: bool, transactor: Transactor<'_, '_>) -> AnyhowResult<Option<MediaFile>> {
+  let record = if can_see_deleted { select_including_deleted(media_file_token, transactor).await } else { select_without_deleted(media_file_token, transactor).await };
 
   let record = match record {
     Ok(Some(record)) => record,
@@ -242,7 +214,7 @@ pub async fn get_media_file_with_transactor(
         sqlx::Error::RowNotFound => Ok(None),
         _ => Err(anyhow!("database error: {:?}", err)),
       }
-    }
+    },
   };
 
   let maybe_prompt_args = record.maybe_other_prompt_args
@@ -290,9 +262,7 @@ pub async fn get_media_file_with_transactor(
     maybe_model_weight_creator_username: record.maybe_model_weight_creator_username,
     maybe_model_weight_creator_display_name: record.maybe_model_weight_creator_display_name,
     maybe_model_weight_creator_gravatar_hash: record.maybe_model_weight_creator_gravatar_hash,
-    extra_media_file_info: record.extra_file_modification_info
-        .map(|info| MediaFileExtraInfo::from_json_str(&info).ok())
-        .flatten(), // NB: Fail open. Do not fail the query if we can't hydrate the JSON.
+    extra_media_file_info: record.extra_file_modification_info.map(|info| MediaFileExtraInfo::from_json_str(&info).ok()).flatten(), // NB: Fail open. Do not fail the query if we can't hydrate the JSON.
     public_bucket_directory_hash: record.public_bucket_directory_hash,
     maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
     maybe_public_bucket_extension: record.maybe_public_bucket_extension,
@@ -305,13 +275,10 @@ pub async fn get_media_file_with_transactor(
   }))
 }
 
-async fn select_including_deleted(
-  media_file_token: &MediaFileToken,
-  transactor: Transactor<'_, '_>,
-) -> Result<Option<MediaFileRaw>, sqlx::Error> {
+async fn select_including_deleted(media_file_token: &MediaFileToken, transactor: Transactor<'_, '_>) -> Result<Option<MediaFileRaw>, sqlx::Error> {
   let query = sqlx::query_as!(
-      MediaFileRaw,
-        r#"
+    MediaFileRaw,
+    r#"
 SELECT
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
 
@@ -406,19 +373,13 @@ LEFT OUTER JOIN featured_items
 WHERE
     m.token = ?
         "#,
-      media_file_token
-    );
+    media_file_token
+  );
 
   let result = match transactor {
-    Transactor::Pool { pool } => {
-      query.fetch_one(pool).await
-    },
-    Transactor::Connection { connection } => {
-      query.fetch_one(connection).await
-    },
-    Transactor::Transaction { transaction } => {
-      query.fetch_one(&mut **transaction).await
-    },
+    Transactor::Pool { pool } => query.fetch_one(pool).await,
+    Transactor::Connection { connection } => query.fetch_one(connection).await,
+    Transactor::Transaction { transaction } => query.fetch_one(&mut **transaction).await,
   };
 
   let maybe_record = transform_optional_result(result)?;
@@ -426,13 +387,10 @@ WHERE
   Ok(maybe_record)
 }
 
-async fn select_without_deleted(
-  media_file_token: &MediaFileToken,
-  transactor: Transactor<'_, '_>,
-) -> Result<Option<MediaFileRaw>, sqlx::Error> {
+async fn select_without_deleted(media_file_token: &MediaFileToken, transactor: Transactor<'_, '_>) -> Result<Option<MediaFileRaw>, sqlx::Error> {
   let query = sqlx::query_as!(
-      MediaFileRaw,
-        r#"
+    MediaFileRaw,
+    r#"
 SELECT
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
 
@@ -530,19 +488,13 @@ WHERE
     AND m.user_deleted_at IS NULL
     AND m.mod_deleted_at IS NULL
         "#,
-      media_file_token
-    );
+    media_file_token
+  );
 
   let result = match transactor {
-    Transactor::Pool { pool } => {
-      query.fetch_one(pool).await
-    },
-    Transactor::Connection { connection } => {
-      query.fetch_one(connection).await
-    },
-    Transactor::Transaction { transaction } => {
-      query.fetch_one(&mut **transaction).await
-    },
+    Transactor::Pool { pool } => query.fetch_one(pool).await,
+    Transactor::Connection { connection } => query.fetch_one(connection).await,
+    Transactor::Transaction { transaction } => query.fetch_one(&mut **transaction).await,
   };
 
   let maybe_record = transform_optional_result(result)?;

@@ -92,38 +92,22 @@ pub struct UploadSpzMediaFileSuccessResponse {
     ),
   )
 )]
-pub async fn upload_spz_media_file_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(mut form): MultipartForm<UploadSpzMediaFileForm>,
-) -> Result<Json<UploadSpzMediaFileSuccessResponse>, MediaFileUploadError> {
-
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+pub async fn upload_spz_media_file_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(mut form): MultipartForm<UploadSpzMediaFileForm>) -> Result<Json<UploadSpzMediaFileSuccessResponse>, MediaFileUploadError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let maybe_user_token = maybe_user_session
-      .as_ref()
-      .map(|session| session.get_user_token());
+  let maybe_user_token = maybe_user_session.as_ref().map(|session| session.get_user_token());
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== BANNED USERS ==================== //
 
@@ -152,27 +136,16 @@ pub async fn upload_spz_media_file_handler(
     return Err(MediaFileUploadError::BadInput(reason));
   }
 
-  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        MediaFileUploadError::BadInput("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    MediaFileUploadError::BadInput("invalid idempotency token".to_string())
+  })?;
 
   // ==================== UPLOAD METADATA ==================== //
 
-  let maybe_title = form.maybe_title
-      .map(|title| title.trim().to_string())
-      .filter(|title| !title.is_empty());
+  let maybe_title = form.maybe_title.map(|title| title.trim().to_string()).filter(|title| !title.is_empty());
 
-  let creator_set_visibility = form.maybe_visibility
-      .map(|visibility| visibility.0)
-      .or_else(|| {
-        maybe_user_session
-            .as_ref()
-            .map(|user_session| user_session.preferred_tts_result_visibility)
-      })
-      .unwrap_or(Visibility::default());
+  let creator_set_visibility = form.maybe_visibility.map(|visibility| visibility.0).or_else(|| maybe_user_session.as_ref().map(|user_session| user_session.preferred_tts_result_visibility)).unwrap_or(Visibility::default());
 
   // ==================== USER DATA ==================== //
 
@@ -180,57 +153,41 @@ pub async fn upload_spz_media_file_handler(
 
   // ==================== FILE VALIDATION ==================== //
 
-  let maybe_filename = form.file.file_name.as_deref()
-      .as_deref()
-      .map(|filename| PathBuf::from(filename));
+  let maybe_filename = form.file.file_name.as_deref().as_deref().map(|filename| PathBuf::from(filename));
 
-  let filename_lowercase = maybe_filename
-      .as_ref()
-      .and_then(|f| f.to_str())
-      .map(|s| s.to_ascii_lowercase())
-      .unwrap_or_default();
+  let filename_lowercase = maybe_filename.as_ref().and_then(|f| f.to_str()).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
 
   // Validate file extension
   if !filename_lowercase.ends_with(".spz") {
-    return Err(MediaFileUploadError::BadInput(
-      "File must have .spz extension".to_string()
-    ));
+    return Err(MediaFileUploadError::BadInput("File must have .spz extension".to_string()));
   }
 
   let mut file_bytes = Vec::new();
-  form.file.file.read_to_end(&mut file_bytes)
-      .map_err(|e| {
-        error!("Problem reading file: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  form.file.file.read_to_end(&mut file_bytes).map_err(|e| {
+    error!("Problem reading file: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   // Validate mimetype (SPZ files are gzip-compressed)
   let detected_mimetype = get_mimetype_for_bytes(file_bytes.as_ref());
 
   if detected_mimetype != Some(GZIP_MIME_TYPE) {
-    return Err(MediaFileUploadError::BadInput(
-      "SPZ file must be gzip-compressed".to_string()
-    ));
+    return Err(MediaFileUploadError::BadInput("SPZ file must be gzip-compressed".to_string()));
   }
 
   let file_size_bytes = file_bytes.len();
 
-  let hash = sha256_hash_bytes(&file_bytes)
-      .map_err(|io_error| {
-        error!("Problem hashing bytes: {:?}", io_error);
-        MediaFileUploadError::ServerError
-      })?;
+  let hash = sha256_hash_bytes(&file_bytes).map_err(|io_error| {
+    error!("Problem hashing bytes: {:?}", io_error);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== UPLOAD AND SAVE ==================== //
 
   // Check for WorldLabs ceramic SPZ files
   let is_world_labs_spz = filename_lowercase.contains("ceramic") && filename_lowercase.ends_with(".spz");
 
-  let extension = if is_world_labs_spz {
-    CERAMIC_SPZ_EXTENSION
-  } else {
-    SPZ_EXTENSION
-  };
+  let extension = if is_world_labs_spz { CERAMIC_SPZ_EXTENSION } else { SPZ_EXTENSION };
 
   const PREFIX: Option<&str> = Some("artcraft_");
 
@@ -238,47 +195,19 @@ pub async fn upload_spz_media_file_handler(
 
   info!("Uploading SPZ media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    file_bytes.as_ref(),
-    GZIP_MIME_TYPE)
-      .await
-      .map_err(|e| {
-        warn!("Upload SPZ bytes to bucket error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), file_bytes.as_ref(), GZIP_MIME_TYPE).await.map_err(|e| {
+    warn!("Upload SPZ bytes to bucket error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let maybe_generation_provider = form.maybe_generation_provider
-      .as_ref()
-      .and_then(|text| try_parse_generation_provider(text.as_ref()));
+  let maybe_generation_provider = form.maybe_generation_provider.as_ref().and_then(|text| try_parse_generation_provider(text.as_ref()));
 
-  let media_token = MediaFileInsertBuilder::new()
-      .media_file_class(MediaFileClass::Splat)
-      .media_file_type(MediaFileType::Spz)
-      .maybe_creator_user(maybe_user_token)
-      .maybe_creator_anonymous_visitor(maybe_avt_token.as_ref())
-      .creator_ip_address(&ip_address)
-      .creator_set_visibility(creator_set_visibility)
-      .media_file_origin_category(MediaFileOriginCategory::Upload)
-      .mime_type(GZIP_MIME_TYPE)
-      .file_size_bytes(file_size_bytes as u64)
-      .checksum_sha2(&hash)
-      .maybe_title(maybe_title.as_deref())
-      .is_intermediate_system_file(false)
-      .public_bucket_directory_hash(&public_upload_path)
-      .maybe_origin_filename(form.file.file_name.as_deref())
-      .maybe_generation_provider(maybe_generation_provider)
-      .insert_pool(&server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        warn!("New SPZ file creation DB error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  let media_token = MediaFileInsertBuilder::new().media_file_class(MediaFileClass::Splat).media_file_type(MediaFileType::Spz).maybe_creator_user(maybe_user_token).maybe_creator_anonymous_visitor(maybe_avt_token.as_ref()).creator_ip_address(&ip_address).creator_set_visibility(creator_set_visibility).media_file_origin_category(MediaFileOriginCategory::Upload).mime_type(GZIP_MIME_TYPE).file_size_bytes(file_size_bytes as u64).checksum_sha2(&hash).maybe_title(maybe_title.as_deref()).is_intermediate_system_file(false).public_bucket_directory_hash(&public_upload_path).maybe_origin_filename(form.file.file_name.as_deref()).maybe_generation_provider(maybe_generation_provider).insert_pool(&server_state.mysql_pool).await.map_err(|err| {
+    warn!("New SPZ file creation DB error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   info!("new SPZ media file token: {:?}", &media_token);
 
-  Ok(Json(UploadSpzMediaFileSuccessResponse {
-    success: true,
-    media_file_token: media_token,
-  }))
+  Ok(Json(UploadSpzMediaFileSuccessResponse { success: true, media_file_token: media_token }))
 }

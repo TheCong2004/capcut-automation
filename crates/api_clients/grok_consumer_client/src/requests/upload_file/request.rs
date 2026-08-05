@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 #[derive(Serialize)]
-pub (super) struct UploadFileRequest {
+pub(super) struct UploadFileRequest {
   #[serde(rename = "fileName")]
   pub file_name: String,
 
@@ -15,4 +15,3 @@ pub (super) struct UploadFileRequest {
   #[serde(rename = "fileSource")]
   pub file_source: String,
 }
-

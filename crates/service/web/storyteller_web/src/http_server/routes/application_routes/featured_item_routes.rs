@@ -10,29 +10,10 @@ use crate::http_server::endpoints::featured_items::get_is_featured_item_handler:
 
 // ==================== FEATURED ITEM ROUTES ====================
 
-pub fn add_featured_item_routes<T, B> (app: App<T>) -> App<T>
+pub fn add_featured_item_routes<T, B>(app: App<T>) -> App<T>
 where
-    B: MessageBody,
-    T: ServiceFactory<
-      ServiceRequest,
-      Config = (),
-      Response = ServiceResponse<B>,
-      Error = Error,
-      InitError = (),
-    >,
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
-  app.service(web::scope("/v1/featured_item")
-      .service(web::resource("/create")
-          .route(web::post().to(create_featured_item_handler))
-          .route(web::head().to(|| HttpResponse::Ok()))
-      )
-      .service(web::resource("/delete")
-          .route(web::delete().to(delete_featured_item_handler))
-          .route(web::head().to(|| HttpResponse::Ok()))
-      )
-      .service(web::resource("/is_featured/{entity_type}/{entity_token}")
-          .route(web::get().to(get_is_featured_item_handler))
-          .route(web::head().to(|| HttpResponse::Ok()))
-      )
-  )
+  app.service(web::scope("/v1/featured_item").service(web::resource("/create").route(web::post().to(create_featured_item_handler)).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/delete").route(web::delete().to(delete_featured_item_handler)).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/is_featured/{entity_type}/{entity_token}").route(web::get().to(get_is_featured_item_handler)).route(web::head().to(|| HttpResponse::Ok()))))
 }

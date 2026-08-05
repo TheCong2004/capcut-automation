@@ -14,11 +14,11 @@ pub async fn calculate_old_model_analytics_loop(job_state: JobState) -> AnyhowRe
     match calculate_old_model_analytics(&job_state).await {
       Ok(_) => {
         tokio::time::sleep(Duration::from_millis(job_state.sleep_config.between_job_batch_wait_millis)).await;
-      }
+      },
       Err(e) => {
         error!("Error: {:?}", e);
         tokio::time::sleep(Duration::from_millis(job_state.sleep_config.between_error_wait_millis)).await;
-      }
+      },
     }
   }
 }

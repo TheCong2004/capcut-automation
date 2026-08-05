@@ -14,9 +14,7 @@ pub fn test_synthetic_failure_reason(prompt: &str) -> Option<SyntheticFailure> {
     return None;
   }
 
-  let maybe_category = prompt
-      .split_whitespace()
-      .find_map(|word| FrontendFailureCategory::from_str(word).ok());
+  let maybe_category = prompt.split_whitespace().find_map(|word| FrontendFailureCategory::from_str(word).ok());
 
   let category = maybe_category.unwrap_or(FrontendFailureCategory::GenerationFailed);
 
@@ -25,7 +23,9 @@ pub fn test_synthetic_failure_reason(prompt: &str) -> Option<SyntheticFailure> {
     frontend_failure_message: Some(
       "This was a simulated failure. This message comes from the backend and \
       database to simulate a dynamic failure message. This message could in \
-      theory be anything.".to_string()),
+      theory be anything."
+        .to_string(),
+    ),
   })
 }
 
@@ -41,8 +41,7 @@ pub fn is_job_failure_test(prompt: &str) -> bool {
 mod tests {
   use super::*;
 
-  const EXPECTED_FAILURE_MESSAGE: &str =
-      "This was a simulated failure. This message comes from the backend and \
+  const EXPECTED_FAILURE_MESSAGE: &str = "This was a simulated failure. This message comes from the backend and \
       database to simulate a dynamic failure message. This message could in \
       theory be anything.";
 

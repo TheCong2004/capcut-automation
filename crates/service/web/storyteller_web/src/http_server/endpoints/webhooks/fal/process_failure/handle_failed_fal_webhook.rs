@@ -17,22 +17,8 @@ use sqlx::MySql;
 /// Handle a FAL webhook with status ERROR.
 ///
 /// Looks up the job by request_id and marks it as failed using the parsed error data.
-pub async fn handle_failed_fal_webhook(
-  server_state: &ServerState,
-  mysql_connection: &mut PoolConnection<MySql>,
-  request_id: &str,
-  error_data: &ErrorData,
-  maybe_top_level_error: Option<&str>,
-  raw_body: &str,
-) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
-
-  info!(
-    "FAL webhook ERROR for request_id {}: top_level_error={:?}, error_type={:?}, message={:?}",
-    request_id,
-    maybe_top_level_error,
-    error_data.error_type,
-    error_data.message,
-  );
+pub async fn handle_failed_fal_webhook(server_state: &ServerState, mysql_connection: &mut PoolConnection<MySql>, request_id: &str, error_data: &ErrorData, maybe_top_level_error: Option<&str>, raw_body: &str) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
+  info!("FAL webhook ERROR for request_id {}: top_level_error={:?}, error_type={:?}, message={:?}", request_id, maybe_top_level_error, error_data.error_type, error_data.message,);
 
   // Look up the job record.
   let job = match get_inference_job_by_fal_id_from_connection(request_id, mysql_connection).await {
@@ -40,26 +26,16 @@ pub async fn handle_failed_fal_webhook(
     Ok(None) => {
       warn!("Could not find job record by fal request_id: {}", request_id);
       return Err(CommonWebError::NotFound);
-    }
+    },
     Err(err) => {
       error!("Error querying job record for request_id {}: {:?}", request_id, err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   // Insert debug log for the webhook payload.
   if let Some(debug_log_event_token) = &job.maybe_debug_log_event_token {
-    if let Err(err) = insert_debug_log(InsertDebugLogArgs {
-      apriori_debug_log_event_token: Some(debug_log_event_token),
-      maybe_creator_user_token: job.maybe_creator_user_token.as_ref(),
-      debug_log_type: DebugLogType::FalWebhook,
-      maybe_log_level: Some(DebugLogLevel::Error),
-      maybe_ip_address: None,
-      maybe_url: None,
-      message: raw_body,
-      mysql_executor: &mut **mysql_connection,
-      phantom: Default::default(),
-    }).await {
+    if let Err(err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(debug_log_event_token), maybe_creator_user_token: job.maybe_creator_user_token.as_ref(), debug_log_type: DebugLogType::FalWebhook, maybe_log_level: Some(DebugLogLevel::Error), maybe_ip_address: None, maybe_url: None, message: raw_body, mysql_executor: &mut **mysql_connection, phantom: Default::default() }).await {
       warn!("Failed to insert Fal webhook debug log: {:?}", err);
     }
   }
@@ -73,48 +49,18 @@ pub async fn handle_failed_fal_webhook(
     "Unknown FAL error".to_string()
   };
 
-  let internal_failure_reason = format!(
-    "FAL request_id={}, top_level_error={:?}, error_type={:?}, message={:?}",
-    request_id,
-    maybe_top_level_error,
-    error_data.error_type,
-    error_data.message,
-  );
+  let internal_failure_reason = format!("FAL request_id={}, top_level_error={:?}, error_type={:?}, message={:?}", request_id, maybe_top_level_error, error_data.error_type, error_data.message,);
 
-  let failure_category = guess_failure_category(
-    error_data.error_type.as_ref(),
-    error_data.message.as_deref(),
-  );
+  let failure_category = guess_failure_category(error_data.error_type.as_ref(), error_data.message.as_deref());
 
-  info!(
-    "Marking job {} as failed for request_id {}. Category: {:?}, Reason: {}",
-    job.job_token.as_str(),
-    request_id,
-    failure_category,
-    public_failure_reason,
-  );
+  info!("Marking job {} as failed for request_id {}. Category: {:?}, Reason: {}", job.job_token.as_str(), request_id, failure_category, public_failure_reason,);
 
-  if let Err(err) = mark_job_failed_by_token_from_connection(MarkJobFailedByTokenFromConnectionArgs {
-    mysql_connection,
-    job_token: &job.job_token,
-    maybe_public_failure_reason: Some(&public_failure_reason),
-    internal_debugging_failure_reason: &internal_failure_reason,
-    maybe_frontend_failure_category: Some(failure_category),
-  }).await {
-    error!(
-      "Error marking job {} as failed for request_id {}: {:?}",
-      job.job_token.as_str(),
-      request_id,
-      err,
-    );
+  if let Err(err) = mark_job_failed_by_token_from_connection(MarkJobFailedByTokenFromConnectionArgs { mysql_connection, job_token: &job.job_token, maybe_public_failure_reason: Some(&public_failure_reason), internal_debugging_failure_reason: &internal_failure_reason, maybe_frontend_failure_category: Some(failure_category) }).await {
+    error!("Error marking job {} as failed for request_id {}: {:?}", job.job_token.as_str(), request_id, err,);
     return Err(CommonWebError::from_anyhow_error(err));
   }
 
-  info!(
-    "Job {} marked as failed for request_id {}.",
-    job.job_token.as_str(),
-    request_id,
-  );
+  info!("Job {} marked as failed for request_id {}.", job.job_token.as_str(), request_id,);
 
   Ok(SimpleGenericJsonSuccess::wrapped(true))
 }
@@ -125,10 +71,7 @@ pub async fn handle_failed_fal_webhook(
 /// human-readable message) to a frontend failure category.
 ///
 /// Returns `GenerationFailed` as the default if the error type is None or unrecognized.
-fn guess_failure_category(
-  error_type: Option<&WebhookErrorType>,
-  maybe_message: Option<&str>,
-) -> FrontendFailureCategory {
+fn guess_failure_category(error_type: Option<&WebhookErrorType>, maybe_message: Option<&str>) -> FrontendFailureCategory {
   match error_type {
     Some(WebhookErrorType::ContentPolicyViolation) => FrontendFailureCategory::RuleBansUserContent,
     Some(WebhookErrorType::FaceDetectionError) => FrontendFailureCategory::FaceNotDetected,
@@ -137,11 +80,8 @@ fn guess_failure_category(
     Some(WebhookErrorType::ImageTooSmall) => FrontendFailureCategory::ImageDimensionsTooSmall,
     // `input_value_error` / `value_error` are generic validation errors; the
     // message carries the specifics.
-    Some(WebhookErrorType::InputValueError)
-    | Some(WebhookErrorType::ValueError) => guess_validation_failure_category(maybe_message),
-    Some(WebhookErrorType::NoMediaGenerated)
-    | Some(WebhookErrorType::ImageLoadError)
-    | Some(WebhookErrorType::FileDownloadError) => FrontendFailureCategory::GenerationFailed,
+    Some(WebhookErrorType::InputValueError) | Some(WebhookErrorType::ValueError) => guess_validation_failure_category(maybe_message),
+    Some(WebhookErrorType::NoMediaGenerated) | Some(WebhookErrorType::ImageLoadError) | Some(WebhookErrorType::FileDownloadError) => FrontendFailureCategory::GenerationFailed,
     _ => FrontendFailureCategory::GenerationFailed,
   }
 }
@@ -175,12 +115,10 @@ fn guess_validation_failure_category(maybe_message: Option<&str>) -> FrontendFai
 mod tests {
   use super::*;
 
-  const NO_FOREGROUND_SUBJECT_MESSAGE: &str =
-      "No foreground subject could be detected in the input image after background removal. \
+  const NO_FOREGROUND_SUBJECT_MESSAGE: &str = "No foreground subject could be detected in the input image after background removal. \
        Provide an image with a clear, visible subject against a plain or distinct background.";
 
-  const FBX_ONLY_MESSAGE: &str =
-      "Part generation only supports FBX format. Please provide an FBX file or use \
+  const FBX_ONLY_MESSAGE: &str = "Part generation only supports FBX format. Please provide an FBX file or use \
        /convert-format to convert your model to FBX first.";
 
   mod guess_failure_category_tests {
@@ -188,47 +126,32 @@ mod tests {
 
     #[test]
     fn input_value_error_with_no_foreground_subject_message() {
-      let category = guess_failure_category(
-        Some(&WebhookErrorType::InputValueError),
-        Some(NO_FOREGROUND_SUBJECT_MESSAGE),
-      );
+      let category = guess_failure_category(Some(&WebhookErrorType::InputValueError), Some(NO_FOREGROUND_SUBJECT_MESSAGE));
       assert_eq!(category, FrontendFailureCategory::NoForegroundSubjectDetected);
     }
 
     #[test]
     fn value_error_with_fbx_only_message() {
-      let category = guess_failure_category(
-        Some(&WebhookErrorType::ValueError),
-        Some(FBX_ONLY_MESSAGE),
-      );
+      let category = guess_failure_category(Some(&WebhookErrorType::ValueError), Some(FBX_ONLY_MESSAGE));
       assert_eq!(category, FrontendFailureCategory::FormatNotSupported);
     }
 
     #[test]
     fn input_value_error_with_fbx_only_message() {
       // Both generic validation error types share the message classifier.
-      let category = guess_failure_category(
-        Some(&WebhookErrorType::InputValueError),
-        Some(FBX_ONLY_MESSAGE),
-      );
+      let category = guess_failure_category(Some(&WebhookErrorType::InputValueError), Some(FBX_ONLY_MESSAGE));
       assert_eq!(category, FrontendFailureCategory::FormatNotSupported);
     }
 
     #[test]
     fn input_value_error_with_other_message() {
-      let category = guess_failure_category(
-        Some(&WebhookErrorType::InputValueError),
-        Some("Field `num_gaussians` must be a positive integer."),
-      );
+      let category = guess_failure_category(Some(&WebhookErrorType::InputValueError), Some("Field `num_gaussians` must be a positive integer."));
       assert_eq!(category, FrontendFailureCategory::GenerationFailed);
     }
 
     #[test]
     fn value_error_with_other_message() {
-      let category = guess_failure_category(
-        Some(&WebhookErrorType::ValueError),
-        Some("Input file could not be parsed."),
-      );
+      let category = guess_failure_category(Some(&WebhookErrorType::ValueError), Some("Input file could not be parsed."));
       assert_eq!(category, FrontendFailureCategory::GenerationFailed);
     }
 
@@ -240,10 +163,7 @@ mod tests {
 
     #[test]
     fn content_policy_violation_ignores_message() {
-      let category = guess_failure_category(
-        Some(&WebhookErrorType::ContentPolicyViolation),
-        Some(NO_FOREGROUND_SUBJECT_MESSAGE),
-      );
+      let category = guess_failure_category(Some(&WebhookErrorType::ContentPolicyViolation), Some(NO_FOREGROUND_SUBJECT_MESSAGE));
       assert_eq!(category, FrontendFailureCategory::RuleBansUserContent);
     }
 

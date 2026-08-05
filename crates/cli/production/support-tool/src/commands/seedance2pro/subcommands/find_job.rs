@@ -23,12 +23,7 @@ pub async fn run(state: &Seedance2ProState, args: FindJobArgs) -> anyhow::Result
     page += 1;
     info!("Fetching page {} (cursor: {:?})...", page, cursor);
 
-    let result = poll_orders(PollOrdersArgs {
-      session: &session,
-      cursor,
-      host_override: None,
-    }).await
-      .map_err(|err| anyhow!("Error polling orders on page {}: {:?}", page, err))?;
+    let result = poll_orders(PollOrdersArgs { session: &session, cursor, host_override: None }).await.map_err(|err| anyhow!("Error polling orders on page {}: {:?}", page, err))?;
 
     for order in &result.orders {
       if order.order_id == args.token {

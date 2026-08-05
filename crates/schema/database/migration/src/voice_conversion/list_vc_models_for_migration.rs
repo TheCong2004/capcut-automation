@@ -13,26 +13,16 @@ use tokens::tokens::users::UserToken;
 /// List VC models
 /// This is for the voice conversion model list page.
 /// Since we're listing, we have to use a flag to determine which query to perform.
-pub async fn list_vc_models_for_migration(
-  mysql_connection: &mut PoolConnection<MySql>,
-  use_weights_table: bool,
-) -> AnyhowResult<Vec<VcModelForList>> {
+pub async fn list_vc_models_for_migration(mysql_connection: &mut PoolConnection<MySql>, use_weights_table: bool) -> AnyhowResult<Vec<VcModelForList>> {
   // NB: This is temporary migration code as we switch from the `voice_conversion_models` table to the `model_weights` table.
   if use_weights_table {
-    let models = list_model_weights_for_voice_conversion(
-      mysql_connection).await?;
+    let models = list_model_weights_for_voice_conversion(mysql_connection).await?;
 
-    Ok(models.into_iter()
-        .map(|model| VcModelForList::ModelWeight(model))
-        .collect())
-
+    Ok(models.into_iter().map(|model| VcModelForList::ModelWeight(model)).collect())
   } else {
-    let models = list_voice_conversion_models_with_connection(
-      mysql_connection, None).await?;
+    let models = list_voice_conversion_models_with_connection(mysql_connection, None).await?;
 
-    Ok(models.into_iter()
-        .map(|model| VcModelForList::LegacyVoiceConversion(model))
-        .collect())
+    Ok(models.into_iter().map(|model| VcModelForList::LegacyVoiceConversion(model)).collect())
   }
 }
 
@@ -126,7 +116,7 @@ impl VcModelForList {
     }
   }
 
-  pub fn creator_set_visibility(&self) -> Visibility{
+  pub fn creator_set_visibility(&self) -> Visibility {
     match self {
       VcModelForList::LegacyVoiceConversion(ref model) => model.creator_set_visibility,
       VcModelForList::ModelWeight(ref model) => model.creator_set_visibility,

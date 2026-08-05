@@ -27,27 +27,18 @@ pub struct SetUserRoleRequest {
   user_role_slug: String,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn set_user_role_handler(
-  http_request: HttpRequest,
-  path: Path<SetUserRolePathInfo>,
-  request: web::Json<SetUserRoleRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn set_user_role_handler(http_request: HttpRequest, path: Path<SetUserRolePathInfo>, request: web::Json<SetUserRoleRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: This is not the correct permission
@@ -57,23 +48,18 @@ pub async fn set_user_role_handler(
   }
 
   // TODO: This is lazy and inefficient
-  let user_roles = list_user_roles(&server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        warn!("error listing roles: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let user_roles = list_user_roles(&server_state.mysql_pool).await.map_err(|err| {
+    warn!("error listing roles: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let role_exists = user_roles.into_iter()
-      .find(|user_role| user_role.slug == request.user_role_slug)
-      .is_some();
+  let role_exists = user_roles.into_iter().find(|user_role| user_role.slug == request.user_role_slug).is_some();
 
   if !role_exists {
     return Err(CommonWebError::BadInputWithSimpleMessage("invalid user role".to_string()));
   }
 
-  let user_lookup_result =
-      get_user_profile_by_username(&path.username, &server_state.mysql_pool).await;
+  let user_lookup_result = get_user_profile_by_username(&path.username, &server_state.mysql_pool).await;
 
   let target_user = match user_lookup_result {
     Ok(Some(result)) => result,
@@ -81,21 +67,17 @@ pub async fn set_user_role_handler(
     Err(err) => {
       warn!("lookup error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
-  let query_result = set_user_role(
-    &target_user.user_token,
-    &request.user_role_slug,
-    &server_state.mysql_pool,
-  ).await;
+  let query_result = set_user_role(&target_user.user_token, &request.user_role_slug, &server_state.mysql_pool).await;
 
   match query_result {
     Ok(_) => {},
     Err(err) => {
       warn!("unable to update user role: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   Ok(simple_json_success())

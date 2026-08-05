@@ -31,53 +31,33 @@ const BUCKET_FILE_PREFIX: &str = "fakeyou_";
 const BUCKET_FILE_EXTENSION: &str = ".wav";
 const MIME_TYPE: &str = "audio/wav";
 
-pub async fn process_single_gpt_sovits_tts_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
+pub async fn process_single_gpt_sovits_tts_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
+  let mut job_progress_reporter = job_dependencies.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let mut job_progress_reporter = job_dependencies
-    .clients
-    .job_progress_reporter
-    .new_generic_inference(job.inference_job_token.as_str())
-    .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
-
-  let gpt_sovits_deps = job_dependencies
-    .job
-    .job_specific_dependencies
-    .maybe_gpt_sovits_dependencies
-    .as_ref()
-    .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing GPT-Sovits dependencies".to_string())))?;
+  let gpt_sovits_deps = job_dependencies.job.job_specific_dependencies.maybe_gpt_sovits_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing GPT-Sovits dependencies".to_string())))?;
 
   let job_args = check_and_validate_job(job)?;
 
   let work_temp_dir = format!("temp_gpt_sovits_tts_{}", job.id.0);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let work_temp_dir = job_dependencies
-    .fs
-    .scoped_temp_dir_creator_for_work
-    .new_tempdir(&work_temp_dir)
-    .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let work_temp_dir = job_dependencies.fs.scoped_temp_dir_creator_for_work.new_tempdir(&work_temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   let output_dir = work_temp_dir.path().join("output");
   let output_file_path = output_dir.join("GPTSoVITS_1.wav");
 
   if !output_dir.exists() {
-    std::fs::create_dir_all(&output_dir)
-      .map_err(|err| ProcessSingleJobError::IoError(err))?;
+    std::fs::create_dir_all(&output_dir).map_err(|err| ProcessSingleJobError::IoError(err))?;
   }
 
   if output_file_path.exists() {
-    std::fs::remove_file(&output_file_path)
-      .map_err(|err| ProcessSingleJobError::IoError(err))?;
+    std::fs::remove_file(&output_file_path).map_err(|err| ProcessSingleJobError::IoError(err))?;
   }
 
   let input_text = job_args.input_text;
   let gpt_sovits_model = job_args.gpt_sovits_model;
 
-  let model_record = get_weight_by_token(&gpt_sovits_model, false, &job_dependencies.db.mysql_pool)
-    .await?.ok_or_else(|| ProcessSingleJobError::ModelDeleted)?;
+  let model_record = get_weight_by_token(&gpt_sovits_model, false, &job_dependencies.db.mysql_pool).await?.ok_or_else(|| ProcessSingleJobError::ModelDeleted)?;
 
   let model_token = model_record.token.clone();
   let weights_file_bucket_directory = WeightFileBucketDirectory::from_object_hash(&model_record.public_bucket_hash);
@@ -87,21 +67,13 @@ pub async fn process_single_gpt_sovits_tts_job(
   // TODO(KS): Expose this as configuration
   let force_download = job.attempt_count > 2;
 
-  download_package(
-    gpt_sovits_model,
-    &weights_file_bucket_directory,
-    &weights_directory,
-    &job_dependencies.buckets.public_bucket_client,
-    &job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads,
-    force_download,
-  ).await?;
+  download_package(gpt_sovits_model, &weights_file_bucket_directory, &weights_directory, &job_dependencies.buckets.public_bucket_client, &job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads, force_download).await?;
 
   let stderr_output_file = work_temp_dir.path().join("stderr.txt");
   let stdout_output_file = work_temp_dir.path().join("stdout.txt");
   let text_input_fs_path = work_temp_dir.path().join("inference_input.txt");
 
-  std::fs::write(&text_input_fs_path, &input_text)
-    .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  std::fs::write(&text_input_fs_path, &input_text).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   let gpt_model_path = weights_directory.join(format!("{}{}", model_token.as_str(), GptSovitsPackageFileType::GptModel.get_expected_package_suffix()));
   let sovits_model_path = weights_directory.join(format!("{}{}", model_token.as_str(), GptSovitsPackageFileType::SovitsCheckpoint.get_expected_package_suffix()));
@@ -109,33 +81,17 @@ pub async fn process_single_gpt_sovits_tts_job(
   let reference_transcript_path = weights_directory.join(format!("{}{}", model_token.as_str(), GptSovitsPackageFileType::ReferenceTranscript.get_expected_package_suffix()));
 
   // NB: Reference files might not exist.
-  let (reference_audio_path, reference_transcript_path) =
-      match (reference_audio_path.exists(), reference_transcript_path.exists()) {
-        (true, true) => (Some(reference_audio_path), Some(reference_transcript_path)),
-        (true, false) => (Some(reference_audio_path), None),
-        _ => (None, None),
-      };
+  let (reference_audio_path, reference_transcript_path) = match (reference_audio_path.exists(), reference_transcript_path.exists()) {
+    (true, true) => (Some(reference_audio_path), Some(reference_transcript_path)),
+    (true, false) => (Some(reference_audio_path), None),
+    _ => (None, None),
+  };
 
-  const DEFAULT_LANGUAGE : &str = "english";
+  const DEFAULT_LANGUAGE: &str = "english";
 
   let inference_start_time = Instant::now();
 
-  let command_exit_status = gpt_sovits_deps
-    .inference_command
-    .execute_inference(InferenceArgs{
-      stderr_output_file: &stderr_output_file,
-      stdout_output_file: &stdout_output_file,
-      input_text_file: &text_input_fs_path,
-      gpt_model_path: &gpt_model_path,
-      sovits_model_path: &sovits_model_path,
-      reference_audio_path: reference_audio_path.as_deref(),
-      reference_transcript_path: reference_transcript_path.as_deref(),
-      reference_language: Some(DEFAULT_LANGUAGE),
-      output_file_path: &output_file_path,
-      maybe_reference_free: None,
-      maybe_temperature: None,
-      maybe_target_language: Some(DEFAULT_LANGUAGE),
-    });
+  let command_exit_status = gpt_sovits_deps.inference_command.execute_inference(InferenceArgs { stderr_output_file: &stderr_output_file, stdout_output_file: &stdout_output_file, input_text_file: &text_input_fs_path, gpt_model_path: &gpt_model_path, sovits_model_path: &sovits_model_path, reference_audio_path: reference_audio_path.as_deref(), reference_transcript_path: reference_transcript_path.as_deref(), reference_language: Some(DEFAULT_LANGUAGE), output_file_path: &output_file_path, maybe_reference_free: None, maybe_temperature: None, maybe_target_language: Some(DEFAULT_LANGUAGE) });
 
   let inference_duration = Instant::now().duration_since(inference_start_time);
 
@@ -167,17 +123,7 @@ pub async fn process_single_gpt_sovits_tts_job(
     if truncate_seconds > 0 {
       let truncated_audio_output_path = output_dir.join("truncated.wav");
 
-      let command_exit_status = gpt_sovits_deps
-          .ffmpeg_command_runner
-          .run_with_subprocess(RunAsSubprocessArgs {
-            args: Box::new(&FfmpegAudioTruncateArgs {
-              input_audio_file: &output_file_path,
-              output_audio_file: &truncated_audio_output_path,
-              truncate_seconds: truncate_seconds as usize,
-            }),
-            stderr: StreamRedirection::Pipe,
-            stdout: StreamRedirection::Pipe,
-          });
+      let command_exit_status = gpt_sovits_deps.ffmpeg_command_runner.run_with_subprocess(RunAsSubprocessArgs { args: Box::new(&FfmpegAudioTruncateArgs { input_audio_file: &output_file_path, output_audio_file: &truncated_audio_output_path, truncate_seconds: truncate_seconds as usize }), stderr: StreamRedirection::Pipe, stdout: StreamRedirection::Pipe });
 
       if !command_exit_status.is_success() {
         warn!("Error truncating audio file. Exit status: {:?}", command_exit_status);
@@ -194,13 +140,12 @@ pub async fn process_single_gpt_sovits_tts_job(
 
   // ==================== DECODE AUDIO FILE ==================== //
 
-  let maybe_audio_info = decode_basic_audio_file_info(
-    &audio_for_upload_path, Some(MIME_TYPE), Some("wav"))
-      .map_err(|err| {
-        warn!("Error decoding audio info: {:?}", err);
-        err
-      })
-      .ok(); // Fail open
+  let maybe_audio_info = decode_basic_audio_file_info(&audio_for_upload_path, Some(MIME_TYPE), Some("wav"))
+    .map_err(|err| {
+      warn!("Error decoding audio info: {:?}", err);
+      err
+    })
+    .ok(); // Fail open
 
   let mut maybe_duration_millis = None;
   let mut maybe_audio_codec_name = None;
@@ -217,10 +162,7 @@ pub async fn process_single_gpt_sovits_tts_job(
 
   info!("Uploading media ...");
 
-  let result_bucket_location = MediaFileBucketPath::generate_new(
-    Some(BUCKET_FILE_PREFIX),
-    Some(BUCKET_FILE_EXTENSION)
-  );
+  let result_bucket_location = MediaFileBucketPath::generate_new(Some(BUCKET_FILE_PREFIX), Some(BUCKET_FILE_EXTENSION));
 
   let result_bucket_object_pathbuf = result_bucket_location.to_full_object_pathbuf();
 
@@ -228,58 +170,21 @@ pub async fn process_single_gpt_sovits_tts_job(
   info!("Upload File Path: {:?}", &audio_for_upload_path);
   info!("Upload Bucket Path: {:?}", result_bucket_object_pathbuf);
 
-  job_dependencies.buckets.public_bucket_client
-    .upload_filename_with_content_type(
-      &result_bucket_object_pathbuf,
-      &audio_for_upload_path,
-      &MIME_TYPE
-    )
-    .await
-    .map_err(|e| ProcessSingleJobError::Other(e))?;
-  
+  job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&result_bucket_object_pathbuf, &audio_for_upload_path, &MIME_TYPE).await.map_err(|e| ProcessSingleJobError::Other(e))?;
+
   // ==================== UPLOAD AUDIO TO BUCKET ====================
 
   info!("Calculating sha256...");
 
-  let file_checksum = sha256_hash_file(&audio_for_upload_path).map_err(|err| {
-    ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-  })?;
+  let file_checksum = sha256_hash_file(&audio_for_upload_path).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
-  let file_size_bytes = file_size(&audio_for_upload_path).map_err(|err|
-    ProcessSingleJobError::Other(err)
-  )?;
+  let file_size_bytes = file_size(&audio_for_upload_path).map_err(|err| ProcessSingleJobError::Other(err))?;
 
   job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let media_file_token = insert_media_file_from_gptsovits(InsertGptSoVitsArgs {
-    pool: &job_dependencies.db.mysql_pool,
-    job: &job,
-    model_token: &model_token,
-    text_transcript: &input_text,
-    media_type: MediaFileType::Wav,
-    maybe_mime_type: Some(&MIME_TYPE),
-    maybe_audio_encoding: maybe_audio_codec_name.as_deref(),
-    maybe_duration_millis,
-    file_size_bytes,
-    sha256_checksum: &file_checksum,
-    public_bucket_directory_hash: result_bucket_location.get_object_hash(),
-    maybe_public_bucket_prefix: result_bucket_location.get_optional_prefix(),
-    maybe_public_bucket_extension: result_bucket_location.get_optional_extension(),
-    is_on_prem: job_dependencies.job.info.container.is_on_prem,
-    worker_hostname: &job_dependencies.job.info.container.hostname,
-    worker_cluster: &job_dependencies.job.info.container.cluster_name,
-  }).await.map_err(|e| ProcessSingleJobError::Other(e))?;
+  let media_file_token = insert_media_file_from_gptsovits(InsertGptSoVitsArgs { pool: &job_dependencies.db.mysql_pool, job: &job, model_token: &model_token, text_transcript: &input_text, media_type: MediaFileType::Wav, maybe_mime_type: Some(&MIME_TYPE), maybe_audio_encoding: maybe_audio_codec_name.as_deref(), maybe_duration_millis, file_size_bytes, sha256_checksum: &file_checksum, public_bucket_directory_hash: result_bucket_location.get_object_hash(), maybe_public_bucket_prefix: result_bucket_location.get_optional_prefix(), maybe_public_bucket_extension: result_bucket_location.get_optional_extension(), is_on_prem: job_dependencies.job.info.container.is_on_prem, worker_hostname: &job_dependencies.job.info.container.hostname, worker_cluster: &job_dependencies.job.info.container.cluster_name }).await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  info!(
-    "Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model token: {}",
-    job.id,
-    &media_file_token);
+  info!("Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model token: {}", job.id, &media_file_token);
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::MediaFile,
-      entity_token: media_file_token.to_string(),
-    }),
-    inference_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::MediaFile, entity_token: media_file_token.to_string() }), inference_duration })
 }

@@ -89,96 +89,68 @@ impl fmt::Display for DeleteUserBookmarkError {
     (status = 500, description = "Server error", body = DeleteUserBookmarkError),
   ),
 )]
-pub async fn delete_user_bookmark_handler(
-  http_request: HttpRequest,
-  path: Path<DeleteUserBookmarkPathInfo>,
-  _request: Json<DeleteUserBookmarkRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SimpleGenericJsonSuccess>, DeleteUserBookmarkError> {
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        DeleteUserBookmarkError::ServerError
-      })?;
+pub async fn delete_user_bookmark_handler(http_request: HttpRequest, path: Path<DeleteUserBookmarkPathInfo>, _request: Json<DeleteUserBookmarkRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, DeleteUserBookmarkError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    DeleteUserBookmarkError::ServerError
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        DeleteUserBookmarkError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    DeleteUserBookmarkError::ServerError
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       return Err(DeleteUserBookmarkError::NotAuthorized);
-    }
+    },
   };
 
-  let mut transaction = mysql_connection.begin().await
-      .map_err(|err| {
-        error!("error creating transaction: {:?}", err);
-        DeleteUserBookmarkError::ServerError
-      })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("error creating transaction: {:?}", err);
+    DeleteUserBookmarkError::ServerError
+  })?;
 
-  let user_bookmark = get_user_bookmark_transactional_locking(
-    BookmarkIdentifier::BookmarkToken(&path.user_bookmark_token),
-    &mut *transaction
-  ).await
-      .map_err(|err| {
-        error!("error getting user bookmark: {:?}", err);
-        DeleteUserBookmarkError::ServerError
-      })?
-      .ok_or_else(|| {
-        info!("bookmark not found");
-        DeleteUserBookmarkError::NotFound
-      })?;
+  let user_bookmark = get_user_bookmark_transactional_locking(BookmarkIdentifier::BookmarkToken(&path.user_bookmark_token), &mut *transaction)
+    .await
+    .map_err(|err| {
+      error!("error getting user bookmark: {:?}", err);
+      DeleteUserBookmarkError::ServerError
+    })?
+    .ok_or_else(|| {
+      info!("bookmark not found");
+      DeleteUserBookmarkError::NotFound
+    })?;
 
-  let delete_result = delete_user_bookmark(
-    &path.user_bookmark_token,
-    &user_session.user_token,
-    &mut *transaction,
-  ).await;
+  let delete_result = delete_user_bookmark(&path.user_bookmark_token, &user_session.user_token, &mut *transaction).await;
 
   // Decrement only if we're deleting a non-deleted bookmark
   let decrement_bookmark_count = user_bookmark.maybe_deleted_at.is_none();
 
   if decrement_bookmark_count {
     // NB: Not all bookmarkable things have stats (eg. deprecated record types don't have stats).
-    let maybe_stats_entity_token =
-        StatsEntityToken::from_bookmark_entity_type_and_token(
-          user_bookmark.entity_type, &user_bookmark.entity_token);
+    let maybe_stats_entity_token = StatsEntityToken::from_bookmark_entity_type_and_token(user_bookmark.entity_type, &user_bookmark.entity_token);
 
     if let Some(stats_entity_token) = maybe_stats_entity_token {
-      upsert_entity_stats_on_bookmark_event(UpsertEntityStatsArgs {
-        stats_entity_token: &stats_entity_token,
-        action: BookmarkAction::Delete,
-        mysql_executor: &mut *transaction,
-        phantom: Default::default(),
-
-      }).await.map_err(|err| {
+      upsert_entity_stats_on_bookmark_event(UpsertEntityStatsArgs { stats_entity_token: &stats_entity_token, action: BookmarkAction::Delete, mysql_executor: &mut *transaction, phantom: Default::default() }).await.map_err(|err| {
         error!("error recording stats: {:?}", err);
         DeleteUserBookmarkError::ServerError
       })?;
     }
   }
 
-  transaction.commit().await
-      .map_err(|err| {
-        error!("error committing transaction: {:?}", err);
-        DeleteUserBookmarkError::ServerError
-      })?;
+  transaction.commit().await.map_err(|err| {
+    error!("error committing transaction: {:?}", err);
+    DeleteUserBookmarkError::ServerError
+  })?;
 
   match delete_result {
     Ok(_) => {},
     Err(err) => {
       warn!("Update tts mod approval status DB error: {:?}", err);
       return Err(DeleteUserBookmarkError::ServerError);
-    }
+    },
   };
 
   Ok(Json(SimpleGenericJsonSuccess { success: true }))

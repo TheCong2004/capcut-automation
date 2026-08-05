@@ -11,10 +11,10 @@ use subprocess_common::docker_options::DockerOptions;
 pub struct HifiGanSoftVcModelCheckCommand {
   /// Where the HifiGan (softvc version) code lives
   hifigan_softvc_root_code_directory: String,
-  
+
   /// eg. `source python/bin/activate`
   maybe_virtual_env_activation_command: Option<String>,
-  
+
   hifigan_softvc_model_check_script_name: String,
 
   /// If this is run under Docker (eg. in development), these are the options.
@@ -22,26 +22,11 @@ pub struct HifiGanSoftVcModelCheckCommand {
 }
 
 impl HifiGanSoftVcModelCheckCommand {
-  pub fn new(
-    hifigan_softvc_root_code_directory: &str,
-    maybe_virtual_env_activation_command: Option<&str>,
-    hifigan_softvc_model_check_script_name: &str,
-    maybe_docker_options: Option<DockerOptions>,
-  ) -> Self {
-    Self {
-      hifigan_softvc_root_code_directory: hifigan_softvc_root_code_directory.to_string(),
-      maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()),
-      hifigan_softvc_model_check_script_name: hifigan_softvc_model_check_script_name.to_string(),
-      maybe_docker_options,
-    }
+  pub fn new(hifigan_softvc_root_code_directory: &str, maybe_virtual_env_activation_command: Option<&str>, hifigan_softvc_model_check_script_name: &str, maybe_docker_options: Option<DockerOptions>) -> Self {
+    Self { hifigan_softvc_root_code_directory: hifigan_softvc_root_code_directory.to_string(), maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()), hifigan_softvc_model_check_script_name: hifigan_softvc_model_check_script_name.to_string(), maybe_docker_options }
   }
 
-  pub fn execute<P: AsRef<Path>>(
-    &self,
-    checkpoint_path: P,
-    output_metadata_filename: P,
-  ) -> AnyhowResult<()> {
-
+  pub fn execute<P: AsRef<Path>>(&self, checkpoint_path: P, output_metadata_filename: P) -> AnyhowResult<()> {
     let mut command = String::new();
     command.push_str(&format!("cd {}", self.hifigan_softvc_root_code_directory));
 
@@ -65,15 +50,9 @@ impl HifiGanSoftVcModelCheckCommand {
 
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
-    let mut p = Popen::create(&command_parts, PopenConfig {
-      ..Default::default()
-    })?;
+    let mut p = Popen::create(&command_parts, PopenConfig { ..Default::default() })?;
 
     info!("Pid : {:?}", p.pid());
 

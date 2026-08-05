@@ -12,28 +12,21 @@ pub struct PostProcessAddWatermarkArgs<'a> {
 }
 
 /// NB: Purposefully infallible.
-pub fn post_process_add_watermark(
-  args: PostProcessAddWatermarkArgs<'_>
-) -> () {
+pub fn post_process_add_watermark(args: PostProcessAddWatermarkArgs<'_>) -> () {
   // TODO(bt, 2024-03-01): Interrogate account for premium
   // TODO(bt, 2024-04-21): Combine this ffmpeg processing with the previous step
 
   info!("Adding watermark...");
 
-  let output_video_fs_path_watermark = args.videos
-      .primary_video
-      .comfy_output_video_path
-      .with_extension("_watermark.mp4");
+  let output_video_fs_path_watermark = args.videos.primary_video.comfy_output_video_path.with_extension("_watermark.mp4");
 
-  let command_exit_status = args.comfy_deps
-      .ffmpeg_watermark_command
-      .execute(WatermarkArgs {
-        video_path: args.videos.primary_video.video_to_watermark(),
-        maybe_override_logo_path: None,
-        alpha: 0.6,
-        scale: 0.1, // NB: 0.1 is good for the Storyteller logo @ 2653x512 placed on 1024x576 output.
-        output_path: &output_video_fs_path_watermark,
-      });
+  let command_exit_status = args.comfy_deps.ffmpeg_watermark_command.execute(WatermarkArgs {
+    video_path: args.videos.primary_video.video_to_watermark(),
+    maybe_override_logo_path: None,
+    alpha: 0.6,
+    scale: 0.1, // NB: 0.1 is good for the Storyteller logo @ 2653x512 placed on 1024x576 output.
+    output_path: &output_video_fs_path_watermark,
+  });
 
   let mut use_watermarked_file = true;
 

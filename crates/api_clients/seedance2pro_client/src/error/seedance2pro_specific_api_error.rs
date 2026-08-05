@@ -9,10 +9,7 @@ pub enum Seedance2ProSpecificApiError {
   UnauthorizedSessionExpired,
 
   /// The account does not have enough credits to perform the operation.
-  BillingError {
-    status_code: StatusCode,
-    body: String,
-  },
+  BillingError { status_code: StatusCode, body: String },
 }
 
 impl Error for Seedance2ProSpecificApiError {}

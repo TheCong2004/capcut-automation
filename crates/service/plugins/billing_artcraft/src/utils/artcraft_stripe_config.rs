@@ -25,14 +25,6 @@ pub struct ArtcraftStripeConfigWithClient {
 
 impl ArtcraftStripeConfig {
   pub fn to_config_with_client(&self) -> ArtcraftStripeConfigWithClient {
-    ArtcraftStripeConfigWithClient {
-      stripe_account_id: self.stripe_account_id.clone(),
-      secret_key: self.secret_key.clone(),
-      secret_webhook_signing_key: self.secret_webhook_signing_key.clone(),
-      checkout_success_url: self.checkout_success_url.clone(),
-      checkout_cancel_url: self.checkout_cancel_url.clone(),
-      portal_return_url: self.portal_return_url.clone(),
-      client: Client::new(self.secret_key.clone()),
-    }
+    ArtcraftStripeConfigWithClient { stripe_account_id: self.stripe_account_id.clone(), secret_key: self.secret_key.clone(), secret_webhook_signing_key: self.secret_webhook_signing_key.clone(), checkout_success_url: self.checkout_success_url.clone(), checkout_cancel_url: self.checkout_cancel_url.clone(), portal_return_url: self.portal_return_url.clone(), client: Client::new(self.secret_key.clone()) }
   }
 }

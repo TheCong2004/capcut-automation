@@ -99,8 +99,7 @@ impl<'a> PagePackets<'a> {
 
         if self.data.len() > discard {
             Some(&self.data[discard..])
-        }
-        else {
+        } else {
             None
         }
     }

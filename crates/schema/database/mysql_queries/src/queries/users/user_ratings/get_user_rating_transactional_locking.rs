@@ -16,12 +16,9 @@ pub struct UserRating {
 }
 
 /// Look up the user rating
-pub async fn get_user_rating_transactional_locking<'e, 'c, E>(
-  user_token : &'e UserToken,
-  user_rating_entity: &'e UserRatingEntity,
-  mysql_executor: E,
-) -> AnyhowResult<Option<UserRating>>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn get_user_rating_transactional_locking<'e, 'c, E>(user_token: &'e UserToken, user_rating_entity: &'e UserRatingEntity, mysql_executor: E) -> AnyhowResult<Option<UserRating>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let entity_type = user_rating_entity.get_entity_type();
   let entity_token = user_rating_entity.get_entity_token_str();
@@ -29,8 +26,8 @@ pub async fn get_user_rating_transactional_locking<'e, 'c, E>(
   // NB: LEFT OUTER JOIN does not require entity_stats to be present, but will lock it under
   // SELECT...FOR UPDATE if the row exists.
   let maybe_result = sqlx::query_as!(
-      InternalUserRatingRecord,
-        r#"
+    InternalUserRatingRecord,
+    r#"
 SELECT
     r.rating_value as `rating_value: enums::by_table::user_ratings::rating_value::UserRatingValue`,
     r.created_at,
@@ -52,26 +49,22 @@ LIMIT 1
 
 FOR UPDATE
         "#,
-      user_token.as_str(),
-      entity_type,
-      entity_token,
-    )
-      .fetch_one(mysql_executor)
-      .await;
+    user_token.as_str(),
+    entity_type,
+    entity_token,
+  )
+  .fetch_one(mysql_executor)
+  .await;
 
   match maybe_result {
-    Ok(record) => Ok(Some(UserRating {
-      rating_value: record.rating_value,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
-    })),
+    Ok(record) => Ok(Some(UserRating { rating_value: record.rating_value, created_at: record.created_at, updated_at: record.updated_at })),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(None),
       _ => {
         error!("error querying job record: {:?}", err);
         Err(anyhow!("error querying job record: {:?}", err))
-      }
-    }
+      },
+    },
   }
 }
 

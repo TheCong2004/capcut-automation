@@ -45,29 +45,18 @@ pub struct TerminateInferenceJobSuccessResponse {
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn terminate_inference_job_handler(
-  http_request: HttpRequest,
-  path: Path<TerminateInferenceJobPathInfo>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<TerminateInferenceJobSuccessResponse>, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        warn!("Could not acquire DB pool: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn terminate_inference_job_handler(http_request: HttpRequest, path: Path<TerminateInferenceJobPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<TerminateInferenceJobSuccessResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    warn!("Could not acquire DB pool: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let maybe_status = get_inference_job_status_from_connection(
-    &path.token, &mut mysql_connection).await;
+  let maybe_status = get_inference_job_status_from_connection(&path.token, &mut mysql_connection).await;
 
   let job_status = match maybe_status {
     Ok(Some(record)) => record,
@@ -75,13 +64,10 @@ pub async fn terminate_inference_job_handler(
     Err(err) => {
       error!("tts job query error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
-  let maybe_user_tokens = maybe_user_session
-      .as_ref()
-      .and_then(|session| Some(session.user_token.clone()))
-      .zip(job_status.user_details.maybe_creator_user_token.clone());
+  let maybe_user_tokens = maybe_user_session.as_ref().and_then(|session| Some(session.user_token.clone())).zip(job_status.user_details.maybe_creator_user_token.clone());
 
   if let Some((session_user_token, job_user_token)) = maybe_user_tokens {
     if session_user_token != job_user_token {
@@ -95,16 +81,12 @@ pub async fn terminate_inference_job_handler(
     }
   }
 
-  mark_generic_inference_job_cancelled_by_user(&mut mysql_connection, &path.token)
-      .await
-      .map_err(|err| {
-        error!("tts job query error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  mark_generic_inference_job_cancelled_by_user(&mut mysql_connection, &path.token).await.map_err(|err| {
+    error!("tts job query error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let response = TerminateInferenceJobSuccessResponse {
-    success: true,
-  };
+  let response = TerminateInferenceJobSuccessResponse { success: true };
 
   Ok(Json(response))
 }

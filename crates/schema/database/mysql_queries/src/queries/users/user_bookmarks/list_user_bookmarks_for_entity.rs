@@ -22,16 +22,12 @@ pub struct UserBookmark {
   pub maybe_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn list_user_bookmarks_for_entity(
-  user_bookmark_entity_token: UserBookmarkEntityToken,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Vec<UserBookmark>> {
-
+pub async fn list_user_bookmarks_for_entity(user_bookmark_entity_token: UserBookmarkEntityToken, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<UserBookmark>> {
   let (entity_type, entity_token) = user_bookmark_entity_token.get_composite_keys();
 
-  let maybe_results= sqlx::query_as!(
-      RawUserBookmarkRecord,
-        r#"
+  let maybe_results = sqlx::query_as!(
+    RawUserBookmarkRecord,
+    r#"
 SELECT
     f.token as `token: tokens::tokens::user_bookmarks::UserBookmarkToken`,
     f.user_token as `user_token: tokens::tokens::users::UserToken`,
@@ -54,11 +50,11 @@ WHERE
 ORDER BY f.id DESC
 LIMIT 50
         "#,
-      entity_type,
-      entity_token
-    )
-      .fetch_all(mysql_pool)
-      .await;
+    entity_type,
+    entity_token
+  )
+  .fetch_all(mysql_pool)
+  .await;
 
   match maybe_results {
     Err(err) => match err {
@@ -66,11 +62,9 @@ LIMIT 50
       _ => {
         warn!("list user_bookmarks db error: {:?}", err);
         Err(anyhow!("error with query: {:?}", err))
-      }
+      },
     },
-    Ok(results) => Ok(results.into_iter()
-        .map(|user_bookmark| user_bookmark.into_public_type())
-        .collect()),
+    Ok(results) => Ok(results.into_iter().map(|user_bookmark| user_bookmark.into_public_type()).collect()),
   }
 }
 
@@ -89,15 +83,6 @@ pub struct RawUserBookmarkRecord {
 
 impl RawUserBookmarkRecord {
   pub fn into_public_type(self) -> UserBookmark {
-    UserBookmark {
-      token: self.token,
-      user_token: self.user_token,
-      username: self.username,
-      user_display_name: self.user_display_name,
-      user_gravatar_hash: self.user_gravatar_hash,
-      created_at: self.created_at,
-      updated_at: self.updated_at,
-      maybe_deleted_at: self.deleted_at,
-    }
+    UserBookmark { token: self.token, user_token: self.user_token, username: self.username, user_display_name: self.user_display_name, user_gravatar_hash: self.user_gravatar_hash, created_at: self.created_at, updated_at: self.updated_at, maybe_deleted_at: self.deleted_at }
   }
 }

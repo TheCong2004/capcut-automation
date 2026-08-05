@@ -41,24 +41,10 @@ enum StudioModelPipeline<'a> {
   StableAnimator(&'a StableAnimatorDependencies),
 }
 
-pub async fn process_single_studio_gen2_job(
-  deps: &JobDependencies,
-  job: &AvailableInferenceJob
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
+pub async fn process_single_studio_gen2_job(deps: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
+  let mut job_progress_reporter = deps.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let mut job_progress_reporter = deps
-      .clients
-      .job_progress_reporter
-      .new_generic_inference(job.inference_job_token.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
-
-  let gen2_deps = deps
-      .job
-      .job_specific_dependencies
-      .maybe_studio_gen2_dependencies
-      .as_ref()
-      .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing Studio Gen2 dependencies".to_string())))?;
-
+  let gen2_deps = deps.job.job_specific_dependencies.maybe_studio_gen2_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing Studio Gen2 dependencies".to_string())))?;
 
   // ==================== UNPACK + VALIDATE INFERENCE ARGS ==================== //
 
@@ -75,31 +61,21 @@ pub async fn process_single_studio_gen2_job(
   info!("Input path: {:?}", &work_paths.input_dir.path());
   info!("Output path: {:?}", &work_paths.output_dir.path());
 
-  let remote_cloud_file_client = RemoteCloudFileClient::get_remote_cloud_file_client()
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!("failed to get remote cloud file client: {:?}", e)))?;
+  let remote_cloud_file_client = RemoteCloudFileClient::get_remote_cloud_file_client().await.map_err(|e| ProcessSingleJobError::Other(anyhow!("failed to get remote cloud file client: {:?}", e)))?;
 
   info!("Grabbing mysql connection from pool");
 
-  let mut mysql_connection = deps.db.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        warn!("Could not acquire DB pool: {:?}", e);
-        ProcessSingleJobError::Other(anyhow!("Could not acquire DB pool: {:?}", e))
-      })?;
+  let mut mysql_connection = deps.db.mysql_pool.acquire().await.map_err(|e| {
+    warn!("Could not acquire DB pool: {:?}", e);
+    ProcessSingleJobError::Other(anyhow!("Could not acquire DB pool: {:?}", e))
+  })?;
 
-  let studio_args = job.maybe_inference_args
-      .as_ref()
-      .map(|args| args.args.as_ref())
-      .flatten()
-      .ok_or_else(|| ProcessSingleJobError::Other(anyhow!("Job args not found")))
-      .map(|poly_args| match poly_args {
-        S2(args) => Ok(args),
-        _ => return Err(ProcessSingleJobError::Other(anyhow!("Studio Gen2 args not found"))),
-      })??;
+  let studio_args = job.maybe_inference_args.as_ref().map(|args| args.args.as_ref()).flatten().ok_or_else(|| ProcessSingleJobError::Other(anyhow!("Job args not found"))).map(|poly_args| match poly_args {
+    S2(args) => Ok(args),
+    _ => return Err(ProcessSingleJobError::Other(anyhow!("Studio Gen2 args not found"))),
+  })??;
 
   info!("Studio args: {:?}", studio_args);
-
 
   // ==================== DOWNLOAD IMAGE ==================== //
 
@@ -108,17 +84,12 @@ pub async fn process_single_studio_gen2_job(
   match studio_args.image_file.as_ref() {
     None => return Err(ProcessSingleJobError::Other(anyhow!("image_file not set"))),
     Some(media_token) => {
-      unaltered_image_file = download_file_for_studio(DownloadFileForStudioArgs {
-        media_token,
-        input_paths: &work_paths,
-        remote_cloud_file_client: &remote_cloud_file_client,
-        filename_without_extension: "input_image",
-      }, Transactor::for_connection(&mut mysql_connection)).await?;
+      unaltered_image_file = download_file_for_studio(DownloadFileForStudioArgs { media_token, input_paths: &work_paths, remote_cloud_file_client: &remote_cloud_file_client, filename_without_extension: "input_image" }, Transactor::for_connection(&mut mysql_connection)).await?;
 
       info!("Downloaded image to {:?}", &unaltered_image_file.file_path);
-    }
+    },
   }
-  
+
   assert_file_is_image(&unaltered_image_file)?;
 
   // ==================== DOWNLOAD VIDEO ==================== //
@@ -128,17 +99,12 @@ pub async fn process_single_studio_gen2_job(
   match studio_args.video_file.as_ref() {
     None => return Err(ProcessSingleJobError::Other(anyhow!("video_file not set"))),
     Some(media_token) => {
-      unaltered_video_file = download_file_for_studio(DownloadFileForStudioArgs {
-        media_token,
-        input_paths: &work_paths,
-        remote_cloud_file_client: &remote_cloud_file_client,
-        filename_without_extension: "input_video",
-      }, Transactor::for_connection(&mut mysql_connection)).await?;
+      unaltered_video_file = download_file_for_studio(DownloadFileForStudioArgs { media_token, input_paths: &work_paths, remote_cloud_file_client: &remote_cloud_file_client, filename_without_extension: "input_video" }, Transactor::for_connection(&mut mysql_connection)).await?;
 
       info!("Downloaded video to {:?}", &unaltered_video_file.file_path);
-    }
+    },
   }
-  
+
   assert_file_is_video(&unaltered_video_file)?;
 
   //if let Ok(Some(dimensions)) = ffprobe_get_dimensions(&videos.primary_video.original_download_path) {
@@ -153,29 +119,14 @@ pub async fn process_single_studio_gen2_job(
   let unaltered_video_path = unaltered_video_file.file_path.clone();
   let resample_output_video_path = work_paths.output_dir.path().join("resampled_input.mp4");
 
-  let maybe_duration_and_fps
-      = (studio_args.trim_duration_millis, studio_args.fps);
+  let maybe_duration_and_fps = (studio_args.trim_duration_millis, studio_args.fps);
 
-  let maybe_ffmpeg_args : Option<Box<dyn CommandArgs>> =
-      match maybe_duration_and_fps {
-        (Some(duration_millis), Some(fps)) => Some(Box::new(FfmpegResampleFpsAndDurationArgs {
-          input_video_file: &unaltered_video_path,
-          output_video_file: &resample_output_video_path,
-          fps: fps as usize,
-          trim_to_duration: Duration::from_millis(duration_millis),
-        })),
-        (Some(duration_millis), None) => Some(Box::new(FfmpegResampleDurationArgs {
-          input_video_file: &unaltered_video_path,
-          output_video_file: &resample_output_video_path,
-          trim_to_duration: Duration::from_millis(duration_millis),
-        })),
-        (None, Some(fps)) => Some(Box::new(FfmpegResampleFpsArgs {
-          input_video_file: &unaltered_video_path,
-          output_video_file: &resample_output_video_path,
-          fps: fps as usize,
-        })),
-        (None, None) => None,
-      };
+  let maybe_ffmpeg_args: Option<Box<dyn CommandArgs>> = match maybe_duration_and_fps {
+    (Some(duration_millis), Some(fps)) => Some(Box::new(FfmpegResampleFpsAndDurationArgs { input_video_file: &unaltered_video_path, output_video_file: &resample_output_video_path, fps: fps as usize, trim_to_duration: Duration::from_millis(duration_millis) })),
+    (Some(duration_millis), None) => Some(Box::new(FfmpegResampleDurationArgs { input_video_file: &unaltered_video_path, output_video_file: &resample_output_video_path, trim_to_duration: Duration::from_millis(duration_millis) })),
+    (None, Some(fps)) => Some(Box::new(FfmpegResampleFpsArgs { input_video_file: &unaltered_video_path, output_video_file: &resample_output_video_path, fps: fps as usize })),
+    (None, None) => None,
+  };
 
   let inference_input_video_path;
 
@@ -184,16 +135,11 @@ pub async fn process_single_studio_gen2_job(
       // No new resampled file.
       inference_input_video_path = unaltered_video_file.file_path.clone();
       info!("Not resampling video file. Will use the following as input: {:?}", &inference_input_video_path);
-    }
+    },
     Some(ffmpeg_args) => {
       info!("Resampling video file. Will use the following args to ffmpeg: {:?}", &ffmpeg_args.to_command_string());
 
-      let command_exit_status = gen2_deps.ffmpeg
-          .run_with_subprocess(RunAsSubprocessArgs {
-            args: Box::new(ffmpeg_args),
-            stderr: StreamRedirection::None,
-            stdout: StreamRedirection::None,
-          });
+      let command_exit_status = gen2_deps.ffmpeg.run_with_subprocess(RunAsSubprocessArgs { args: Box::new(ffmpeg_args), stderr: StreamRedirection::None, stdout: StreamRedirection::None });
 
       if !command_exit_status.is_success() {
         inference_input_video_path = unaltered_video_file.file_path.clone();
@@ -202,7 +148,7 @@ pub async fn process_single_studio_gen2_job(
         inference_input_video_path = resample_output_video_path.clone();
         info!("Video resample successful. Will use the following as input: {:?}", &inference_input_video_path);
       }
-    }
+    },
   }
 
   // ========================= RESIZE IMAGE ======================== //
@@ -233,8 +179,7 @@ pub async fn process_single_studio_gen2_job(
 
   info!("Preparing for studio inference...");
 
-  job_progress_reporter.log_status("running inference")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("running inference").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   let stderr_output_file = work_paths.output_dir.path().join("stderr.txt");
   let stdout_output_file = work_paths.output_dir.path().join("stdout.txt");
@@ -246,11 +191,11 @@ pub async fn process_single_studio_gen2_job(
   match studio_job_type {
     StudioModelPipeline::None => {
       return Err(ProcessSingleJobError::Other(anyhow!("Studio job type not set")));
-    }
+    },
     StudioModelPipeline::AnimateX(deps) => {
       info!("Running Studio Gen2 pose frame generation (Animate-X)...");
 
-      let pose_pkl_dir= work_paths.output_dir.path().join("pose_pickle_data");
+      let pose_pkl_dir = work_paths.output_dir.path().join("pose_pickle_data");
       create_dir_all_if_missing(&pose_pkl_dir)?;
 
       let pose_pkl_file = pose_pkl_dir.join("pose.pkl");
@@ -263,40 +208,31 @@ pub async fn process_single_studio_gen2_job(
 
       let inference_start_time = Instant::now();
 
-      let command_exit_status = deps
-          .process_frames_command
-          .execute_inference(ProcessFramesArgs {
-            stderr_output_file: &stderr_output_file,
-            stdout_output_file: &stdout_output_file,
-            model_directory: &deps.model_directory_path,
-            source_video_path: &inference_input_video_path,
-            saved_pose_pkl_dir: &pose_pkl_dir,
-            saved_pose_frames_dir: &pose_frames_dir,
-            saved_original_frames_dir: &original_frames_dir,
-          }).await;
+      let command_exit_status = deps.process_frames_command.execute_inference(ProcessFramesArgs { stderr_output_file: &stderr_output_file, stdout_output_file: &stdout_output_file, model_directory: &deps.model_directory_path, source_video_path: &inference_input_video_path, saved_pose_pkl_dir: &pose_pkl_dir, saved_pose_frames_dir: &pose_frames_dir, saved_original_frames_dir: &original_frames_dir }).await;
 
       info!("Running Studio Gen2 inference (Animate-X)...");
 
       let command_exit_status = deps
-          .inference_command
-          .execute_inference(AnimateXInferenceArgs {
-            stderr_output_file: &stderr_output_file,
-            stdout_output_file: &stdout_output_file,
-            model_directory: &deps.model_directory_path,
-            image_file: &inference_input_image_path,
-            saved_pose_pkl_file: &pose_pkl_file,
-            saved_pose_frames_dir: &pose_frames_dir,
-            saved_original_frames_dir: &original_frames_dir,
-            width: studio_args.tensor_image_width,
-            height: studio_args.tensor_image_height,
-            //width: maybe_dimensions.as_ref().map(|m| m.width as u64),
-            //height: maybe_dimensions.as_ref().map(|m| m.height as u64),
-            max_frames: studio_args.max_frames,
-            result_filename: &video_output_path,
-          }).await;
+        .inference_command
+        .execute_inference(AnimateXInferenceArgs {
+          stderr_output_file: &stderr_output_file,
+          stdout_output_file: &stdout_output_file,
+          model_directory: &deps.model_directory_path,
+          image_file: &inference_input_image_path,
+          saved_pose_pkl_file: &pose_pkl_file,
+          saved_pose_frames_dir: &pose_frames_dir,
+          saved_original_frames_dir: &original_frames_dir,
+          width: studio_args.tensor_image_width,
+          height: studio_args.tensor_image_height,
+          //width: maybe_dimensions.as_ref().map(|m| m.width as u64),
+          //height: maybe_dimensions.as_ref().map(|m| m.height as u64),
+          max_frames: studio_args.max_frames,
+          result_filename: &video_output_path,
+        })
+        .await;
 
       inference_duration = Instant::now().duration_since(inference_start_time);
-    }
+    },
     StudioModelPipeline::StableAnimator(deps) => {
       let pose_frames_dir = work_paths.output_dir.path().join("pose_frames");
       create_dir_all_if_missing(&pose_frames_dir)?;
@@ -308,31 +244,13 @@ pub async fn process_single_studio_gen2_job(
 
       let inference_start_time = Instant::now();
 
-      let command_exit_status = deps
-          .command
-          .execute_inference(
-            InferenceArgs {
-              stderr_output_file: &stderr_output_file,
-              stdout_output_file: &stdout_output_file,
-              start_image_path: &inference_input_image_path,
-              pre_pose_video_path: Some(inference_input_video_path.as_ref()),
-              pose_images_dir: &pose_frames_dir,
-              frame_output_dir: &video_frames_output_dir,
-              video_output_path: &video_output_path,
-              pretrained_model_name_or_path: &deps.pretrained_model_name_or_path,
-              posenet_model_name_or_path: &deps.posenet_model_name_or_path,
-              face_encoder_model_name_or_path: &deps.face_encoder_model_name_or_path,
-              unet_model_name_or_path: &deps.unet_model_name_or_path,
-              output_width: studio_args.output_width,
-              output_height: studio_args.output_height,
-              output_fps: studio_args.fps,
-            }).await;
+      let command_exit_status = deps.command.execute_inference(InferenceArgs { stderr_output_file: &stderr_output_file, stdout_output_file: &stdout_output_file, start_image_path: &inference_input_image_path, pre_pose_video_path: Some(inference_input_video_path.as_ref()), pose_images_dir: &pose_frames_dir, frame_output_dir: &video_frames_output_dir, video_output_path: &video_output_path, pretrained_model_name_or_path: &deps.pretrained_model_name_or_path, posenet_model_name_or_path: &deps.posenet_model_name_or_path, face_encoder_model_name_or_path: &deps.face_encoder_model_name_or_path, unet_model_name_or_path: &deps.unet_model_name_or_path, output_width: studio_args.output_width, output_height: studio_args.output_height, output_fps: studio_args.fps }).await;
 
       inference_duration = Instant::now().duration_since(inference_start_time);
 
       info!("Inference command exited with status: {:?}", command_exit_status);
       info!("Inference took duration to complete: {:?}", &inference_duration);
-    }
+    },
   }
 
   // check stdout for success and check if file exists
@@ -362,13 +280,9 @@ pub async fn process_single_studio_gen2_job(
     maybe_debug_sleep(studio_args).await;
 
     // NB: Forcing generic type to `&Path` with turbofish
-    safe_delete_possible_files_and_directories::<&Path>(&[
-      Some(work_paths.input_dir.path()),
-      Some(work_paths.output_dir.path()),
-    ]);
+    safe_delete_possible_files_and_directories::<&Path>(&[Some(work_paths.input_dir.path()), Some(work_paths.output_dir.path())]);
 
-    return Err(ProcessSingleJobError::Other(anyhow!("Output file did not exist: {:?}",
-            &video_output_path)));
+    return Err(ProcessSingleJobError::Other(anyhow!("Output file did not exist: {:?}", &video_output_path)));
   }
 
   //// ==================== COPY BACK AUDIO ==================== //
@@ -393,36 +307,25 @@ pub async fn process_single_studio_gen2_job(
 
   // ==================== VALIDATE AND SAVE RESULTS ======================== //
 
-  let result = validate_and_save_results(SaveResultsArgs {
-    job,
-    deps: &deps,
-    gen2_deps,
-    studio_args,
-    output_video_path: &video_output_path,
-    job_progress_reporter: &mut job_progress_reporter,
-    inference_duration,
-  }).await;
+  let result = validate_and_save_results(SaveResultsArgs { job, deps: &deps, gen2_deps, studio_args, output_video_path: &video_output_path, job_progress_reporter: &mut job_progress_reporter, inference_duration }).await;
 
   let media_file_token = match result {
     Ok(token) => token,
     Err(err) => {
       error!("Error validating and saving results: {:?}", err);
-      
+
       print_work_dirs(&work_paths);
       maybe_debug_sleep(studio_args).await;
 
       // NB: Forcing generic type to `&Path` with turbofish
-      safe_delete_possible_files_and_directories::<&Path>(&[
-        Some(work_paths.input_dir.path()),
-        Some(work_paths.output_dir.path()),
-      ]);
+      safe_delete_possible_files_and_directories::<&Path>(&[Some(work_paths.input_dir.path()), Some(work_paths.output_dir.path())]);
 
       return Err(err);
-    }
+    },
   };
 
   // ==================== CLEANUP/ DELETE TEMP FILES ==================== //
-  
+
   info!("Inference took duration to complete: {:?}", &inference_duration);
 
   print_work_dirs(&work_paths);
@@ -431,29 +334,19 @@ pub async fn process_single_studio_gen2_job(
   info!("Cleaning up temporary files...");
 
   // NB: Forcing generic type to `&Path` with turbofish
-  safe_delete_possible_files_and_directories::<&Path>(&[
-    Some(work_paths.input_dir.path()),
-    Some(work_paths.output_dir.path()),
-  ]);
+  safe_delete_possible_files_and_directories::<&Path>(&[Some(work_paths.input_dir.path()), Some(work_paths.output_dir.path())]);
 
   // ==================== DONE ==================== //
 
   info!("Studio Gen2 Done.");
 
-  job_progress_reporter.log_status("done")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   info!("Result video media token: {:?}", &media_file_token);
 
   info!("Job {:?} complete success!", job.id);
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::MediaFile,
-      entity_token: media_file_token.to_string(),
-    }),
-    inference_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::MediaFile, entity_token: media_file_token.to_string() }), inference_duration })
 }
 
 async fn maybe_debug_sleep(args: &StudioGen2Payload) {
@@ -492,14 +385,14 @@ async fn maybe_debug_sleep(args: &StudioGen2Payload) {
 //            maybe_scope_by_job_category: None,
 //            mysql_pool: mysql_pool,
 //          }).await;
-//          
+//
 //          if let Ok(res) = result {
 //            if res.job_count > 0 {
 //              return;
 //            }
 //          }
 //        }
-//        
+//
 //        tokio::time::sleep(Duration::from_millis(1000)).await
 //      },
 //    }
@@ -513,22 +406,14 @@ fn print_work_dirs(work_dirs: &StudioGen2Dirs) {
 
 fn assert_file_is_image(file: &DownloadDetails) -> Result<(), ProcessSingleJobError> {
   match file.media_file.media_type {
-    MediaFileType::Image |
-    MediaFileType::Jpg |
-    MediaFileType::Png |
-    MediaFileType::Gif => Ok(()),
-    _ => Err(ProcessSingleJobError::Other(anyhow!(
-      "Wrong file type for image: {:?} and token: {:?}", 
-      file.media_file.media_type, file.media_file.token)))
+    MediaFileType::Image | MediaFileType::Jpg | MediaFileType::Png | MediaFileType::Gif => Ok(()),
+    _ => Err(ProcessSingleJobError::Other(anyhow!("Wrong file type for image: {:?} and token: {:?}", file.media_file.media_type, file.media_file.token))),
   }
 }
 
 fn assert_file_is_video(file: &DownloadDetails) -> Result<(), ProcessSingleJobError> {
   match file.media_file.media_type {
-    MediaFileType::Video |
-    MediaFileType::Mp4 => Ok(()),
-    _ => Err(ProcessSingleJobError::Other(anyhow!(
-      "Wrong file type for video: {:?} and token: {:?}", 
-      file.media_file.media_type, file.media_file.token)))
+    MediaFileType::Video | MediaFileType::Mp4 => Ok(()),
+    _ => Err(ProcessSingleJobError::Other(anyhow!("Wrong file type for video: {:?} and token: {:?}", file.media_file.media_type, file.media_file.token))),
   }
 }

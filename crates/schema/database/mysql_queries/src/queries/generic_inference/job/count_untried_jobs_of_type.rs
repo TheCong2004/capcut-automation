@@ -27,18 +27,12 @@ pub struct CountUntriedJobsOfTypeArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn count_untried_jobs_of_type(
-  args: CountUntriedJobsOfTypeArgs<'_>,
-)
-  -> AnyhowResult<UntriedJobCount>
-{
+pub async fn count_untried_jobs_of_type(args: CountUntriedJobsOfTypeArgs<'_>) -> AnyhowResult<UntriedJobCount> {
   let query = perform_query(args).await;
 
   let result = query?;
-  
-  Ok(UntriedJobCount {
-    job_count: result.job_count as usize,
-  })
+
+  Ok(UntriedJobCount { job_count: result.job_count as usize })
 }
 
 async fn perform_query(args: CountUntriedJobsOfTypeArgs<'_>) -> Result<UntriedJobCountRawInternal, sqlx::Error> {
@@ -47,8 +41,7 @@ async fn perform_query(args: CountUntriedJobsOfTypeArgs<'_>) -> Result<UntriedJo
 
   let query = sqlx::query_as::<_, UntriedJobCountRawInternal>(&query);
 
-  query.fetch_one(args.mysql_pool)
-      .await
+  query.fetch_one(args.mysql_pool).await
 }
 
 // TODO(bt,2024-01-25): Make QueryBuilder
@@ -72,38 +65,48 @@ WHERE
   (
     attempt_count = 0
   )
-"#.to_string();
+"#
+  .to_string();
 
   if let Some(job_types) = args.maybe_scope_by_job_type {
     if !job_types.is_empty() {
-      query.push_str(&format!(r#"
+      query.push_str(&format!(
+        r#"
       AND
       (
         job_type IN ({})
       )
-    "#, job_type_predicate(job_types)));
+    "#,
+        job_type_predicate(job_types)
+      ));
     }
   }
 
   if let Some(model_types) = args.maybe_scope_by_model_type {
     if !model_types.is_empty() {
-      query.push_str(&format!(r#"
+      query.push_str(&format!(
+        r#"
       AND
       (
         maybe_model_type IN ({})
       )
-    "#, model_type_predicate(model_types)));
+    "#,
+        model_type_predicate(model_types)
+      ));
     }
   }
 
   if let Some(inference_categories) = args.maybe_scope_by_job_category {
     if !inference_categories.is_empty() {
-      query.push_str(&format!(r#"
+      query.push_str(&format!(
+        r#"
       AND
       (
         inference_category IN ({})
       )
-    "#, inference_category_predicate(&inference_categories)));
+    "#,
+        inference_category_predicate(&inference_categories)
+      ));
     }
   }
 
@@ -119,10 +122,7 @@ struct UntriedJobCountRawInternal {
 /// Return a comma-separated predicate, since SQLx does not yet support WHERE IN(?) for Vec<T>, etc.
 /// Issue: https://github.com/launchbadge/sqlx/issues/875
 fn job_type_predicate(types: &BTreeSet<InferenceJobType>) -> String {
-  let mut vec = types.iter()
-      .map(|ty| ty.to_str())
-      .map(|ty| format!("\"{}\"", ty))
-      .collect::<Vec<String>>();
+  let mut vec = types.iter().map(|ty| ty.to_str()).map(|ty| format!("\"{}\"", ty)).collect::<Vec<String>>();
   vec.sort(); // NB: For the benefit of tests.
   vec.join(", ")
 }
@@ -130,10 +130,7 @@ fn job_type_predicate(types: &BTreeSet<InferenceJobType>) -> String {
 /// Return a comma-separated predicate, since SQLx does not yet support WHERE IN(?) for Vec<T>, etc.
 /// Issue: https://github.com/launchbadge/sqlx/issues/875
 fn model_type_predicate(types: &BTreeSet<InferenceModelType>) -> String {
-  let mut vec = types.iter()
-      .map(|ty| ty.to_str())
-      .map(|ty| format!("\"{}\"", ty))
-      .collect::<Vec<String>>();
+  let mut vec = types.iter().map(|ty| ty.to_str()).map(|ty| format!("\"{}\"", ty)).collect::<Vec<String>>();
   vec.sort(); // NB: For the benefit of tests.
   vec.join(", ")
 }
@@ -141,10 +138,7 @@ fn model_type_predicate(types: &BTreeSet<InferenceModelType>) -> String {
 /// Return a comma-separated predicate, since SQLx does not yet support WHERE IN(?) for Vec<T>, etc.
 /// Issue: https://github.com/launchbadge/sqlx/issues/875
 fn inference_category_predicate(categories: &BTreeSet<InferenceCategory>) -> String {
-  let mut vec = categories.iter()
-      .map(|ty| ty.to_str())
-      .map(|ty| format!("\"{}\"", ty))
-      .collect::<Vec<String>>();
+  let mut vec = categories.iter().map(|ty| ty.to_str()).map(|ty| format!("\"{}\"", ty)).collect::<Vec<String>>();
   vec.sort(); // NB: For the benefit of tests.
   vec.join(", ")
 }
@@ -166,17 +160,12 @@ mod tests {
     assert_eq!(job_type_predicate(&types), "".to_string());
 
     // One
-    let types = BTreeSet::from([
-      InferenceJobType::RvcV2,
-    ]);
+    let types = BTreeSet::from([InferenceJobType::RvcV2]);
 
     assert_eq!(job_type_predicate(&types), "\"rvc_v2\"".to_string());
 
     // Multiple
-    let types = BTreeSet::from([
-      InferenceJobType::MocapNet,
-      InferenceJobType::RvcV2,
-    ]);
+    let types = BTreeSet::from([InferenceJobType::MocapNet, InferenceJobType::RvcV2]);
     assert_eq!(job_type_predicate(&types), "\"mocap_net\", \"rvc_v2\"".to_string());
   }
 
@@ -187,17 +176,12 @@ mod tests {
     assert_eq!(model_type_predicate(&types), "".to_string());
 
     // One
-    let types = BTreeSet::from([
-      InferenceModelType::RvcV2,
-    ]);
+    let types = BTreeSet::from([InferenceModelType::RvcV2]);
 
     assert_eq!(model_type_predicate(&types), "\"rvc_v2\"".to_string());
 
     // Multiple
-    let types = BTreeSet::from([
-      InferenceModelType::RvcV2,
-      InferenceModelType::SoVitsSvc,
-    ]);
+    let types = BTreeSet::from([InferenceModelType::RvcV2, InferenceModelType::SoVitsSvc]);
     assert_eq!(model_type_predicate(&types), "\"rvc_v2\", \"so_vits_svc\"".to_string());
   }
 
@@ -208,16 +192,11 @@ mod tests {
     assert_eq!(inference_category_predicate(&types), "".to_string());
 
     // Some
-    let types = BTreeSet::from([
-      InferenceCategory::VoiceConversion,
-    ]);
+    let types = BTreeSet::from([InferenceCategory::VoiceConversion]);
 
     assert_eq!(inference_category_predicate(&types), "\"voice_conversion\"".to_string());
     // All
-    let types = BTreeSet::from([
-      InferenceCategory::TextToSpeech,
-      InferenceCategory::VoiceConversion,
-    ]);
+    let types = BTreeSet::from([InferenceCategory::TextToSpeech, InferenceCategory::VoiceConversion]);
     assert_eq!(inference_category_predicate(&types), "\"text_to_speech\", \"voice_conversion\"".to_string());
   }
 }

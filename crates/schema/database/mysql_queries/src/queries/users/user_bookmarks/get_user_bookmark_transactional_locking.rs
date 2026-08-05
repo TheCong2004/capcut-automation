@@ -29,48 +29,35 @@ pub enum BookmarkIdentifier<'a> {
 
 /// Use SELECT FOR UPDATE to lock the rows for the duration of the transaction.
 /// We're locking two tables at once: https://stackoverflow.com/a/38545378
-pub async fn get_user_bookmark_transactional_locking<'e, 'c, E>(
-    bookmark_identifier: BookmarkIdentifier<'e>,
-    mysql_executor: E
-) -> AnyhowResult<Option<UserBookmark>>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn get_user_bookmark_transactional_locking<'e, 'c, E>(bookmark_identifier: BookmarkIdentifier<'e>, mysql_executor: E) -> AnyhowResult<Option<UserBookmark>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let maybe_results = match bookmark_identifier {
-    BookmarkIdentifier::EntityTypeAndToken(bookmark_entity_token) => {
-      query_by_entity(mysql_executor, bookmark_entity_token).await
-    }
-    BookmarkIdentifier::BookmarkToken(bookmark_token) => {
-      query_by_bookmark_token(mysql_executor, bookmark_token).await
-    }
+    BookmarkIdentifier::EntityTypeAndToken(bookmark_entity_token) => query_by_entity(mysql_executor, bookmark_entity_token).await,
+    BookmarkIdentifier::BookmarkToken(bookmark_token) => query_by_bookmark_token(mysql_executor, bookmark_token).await,
   };
 
   match maybe_results {
-    Ok(user_bookmark) => Ok(Some(UserBookmark {
-      token: user_bookmark.token,
-      entity_type: user_bookmark.entity_type,
-      entity_token: user_bookmark.entity_token,
-      user_token: user_bookmark.user_token,
-      created_at: user_bookmark.created_at,
-      updated_at: user_bookmark.updated_at,
-      maybe_deleted_at: user_bookmark.deleted_at,
-    })),
+    Ok(user_bookmark) => Ok(Some(UserBookmark { token: user_bookmark.token, entity_type: user_bookmark.entity_type, entity_token: user_bookmark.entity_token, user_token: user_bookmark.user_token, created_at: user_bookmark.created_at, updated_at: user_bookmark.updated_at, maybe_deleted_at: user_bookmark.deleted_at })),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(None),
       _ => Err(anyhow!("Error querying for IP ban: {:?}", err)),
-    }
+    },
   }
 }
 
-async fn query_by_entity<'e, 'c, E>(mysql_executor: E, bookmark_entity_token: &UserBookmarkEntityToken)
-  -> Result<RawUserBookmark, Error> where E: 'e + Executor<'c, Database=MySql>
+async fn query_by_entity<'e, 'c, E>(mysql_executor: E, bookmark_entity_token: &UserBookmarkEntityToken) -> Result<RawUserBookmark, Error>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let (entity_type, entity_token) = bookmark_entity_token.get_composite_keys();
 
   // NB: LEFT OUTER JOIN does not require entity_stats to be present, but will lock it under
   // SELECT...FOR UPDATE if the row exists.
   sqlx::query_as!(
-        RawUserBookmark,
-          r#"
+    RawUserBookmark,
+    r#"
   SELECT
       b.token as `token: tokens::tokens::user_bookmarks::UserBookmarkToken`,
 
@@ -96,22 +83,23 @@ async fn query_by_entity<'e, 'c, E>(mysql_executor: E, bookmark_entity_token: &U
       AND b.entity_token = ?
   FOR UPDATE
           "#,
-        entity_type.to_str(),
-        entity_token
-      )
-      .fetch_one(mysql_executor)
-      .await
+    entity_type.to_str(),
+    entity_token
+  )
+  .fetch_one(mysql_executor)
+  .await
 }
 
-async fn query_by_bookmark_token<'e, 'c, E>(mysql_executor: E, bookmark_token: &UserBookmarkToken)
-  -> Result<RawUserBookmark, Error> where E: 'e + Executor<'c, Database=MySql>
+async fn query_by_bookmark_token<'e, 'c, E>(mysql_executor: E, bookmark_token: &UserBookmarkToken) -> Result<RawUserBookmark, Error>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   // NB(1): LEFT OUTER JOIN does not require entity_stats to be present, but will lock it under
   // SELECT...FOR UPDATE if the row exists.
   // NB(2): We're joining the record against itself to lock on (entity_type,entity_token)
   sqlx::query_as!(
-        RawUserBookmark,
-          r#"
+    RawUserBookmark,
+    r#"
   SELECT
       b2.token as `token: tokens::tokens::user_bookmarks::UserBookmarkToken`,
 
@@ -142,10 +130,10 @@ async fn query_by_bookmark_token<'e, 'c, E>(mysql_executor: E, bookmark_token: &
 
   FOR UPDATE
           "#,
-        bookmark_token
-      )
-      .fetch_one(mysql_executor)
-      .await
+    bookmark_token
+  )
+  .fetch_one(mysql_executor)
+  .await
 }
 
 pub struct RawUserBookmark {

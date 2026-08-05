@@ -20,18 +20,15 @@ pub struct StudioGen2Dependencies {
 
 impl StudioGen2Dependencies {
   pub fn setup() -> AnyhowResult<Self> {
+    let animate_x = match easyenv::get_env_bool_optional("ANIMATE_X_ENABLED") {
+      Some(true) => Some(AnimateXDependencies::setup()?),
+      _ => None,
+    };
 
-    let animate_x =
-        match easyenv::get_env_bool_optional("ANIMATE_X_ENABLED") {
-          Some(true) => Some(AnimateXDependencies::setup()?),
-          _ => None,
-        };
-    
-    let stable_animator =
-        match easyenv::get_env_bool_optional("STABLE_ANIMATOR_ENABLED") {
-          Some(true) => Some(StableAnimatorDependencies::setup()?),
-          _ => None,
-        };
+    let stable_animator = match easyenv::get_env_bool_optional("STABLE_ANIMATOR_ENABLED") {
+      Some(true) => Some(StableAnimatorDependencies::setup()?),
+      _ => None,
+    };
 
     Ok(Self {
       watermarks: WatermarkConfigs::from_env()?,
@@ -39,7 +36,7 @@ impl StudioGen2Dependencies {
       // TODO: Configurability of input/output dirs
       input_directory: PathBuf::from("/tmp/input"),
       output_directory: PathBuf::from("/tmp/output"),
-      
+
       ffmpeg: FfmpegCommandRunner::from_env()?,
 
       animate_x,

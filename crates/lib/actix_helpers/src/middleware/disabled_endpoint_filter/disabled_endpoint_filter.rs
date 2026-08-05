@@ -18,16 +18,14 @@ pub struct DisabledEndpointFilter {
 
 impl DisabledEndpointFilter {
   pub fn new(disabled_endpoints: DisabledEndpoints) -> Self {
-    Self {
-      disabled_endpoints,
-    }
+    Self { disabled_endpoints }
   }
 }
 
 impl<S, B> Transform<S, ServiceRequest> for DisabledEndpointFilter
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;

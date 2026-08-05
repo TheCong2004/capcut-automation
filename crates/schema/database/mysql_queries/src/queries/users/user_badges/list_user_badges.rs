@@ -20,17 +20,14 @@ struct RawDbUserBadgeForList {
   title: String,
   description: String,
   image_url: String,
-  user_created_at : DateTime<Utc>,
+  user_created_at: DateTime<Utc>,
 }
 
-pub async fn list_user_badges(
-  mysql_connector: &mut PoolConnection<MySql>,
-  user_token: &str,
-) -> AnyhowResult<Vec<UserBadgeForList>> {
+pub async fn list_user_badges(mysql_connector: &mut PoolConnection<MySql>, user_token: &str) -> AnyhowResult<Vec<UserBadgeForList>> {
   info!("listing user badges");
   let maybe_user_badges = sqlx::query_as!(
-      RawDbUserBadgeForList,
-        r#"
+    RawDbUserBadgeForList,
+    r#"
 SELECT
     badges.slug,
     badges.title,
@@ -45,12 +42,12 @@ ON
 WHERE
     user_badges.user_token = ?
         "#,
-        user_token
-      )
-      .fetch_all(&mut **mysql_connector)
-      .await;
+    user_token
+  )
+  .fetch_all(&mut **mysql_connector)
+  .await;
 
-  let user_badges : Vec<RawDbUserBadgeForList> = match maybe_user_badges {
+  let user_badges: Vec<RawDbUserBadgeForList> = match maybe_user_badges {
     Ok(badges) => badges,
     Err(err) => {
       warn!("Error: {:?}", err);
@@ -59,20 +56,10 @@ WHERE
         _ => {
           warn!("user badges query error: {:?}", err);
           return Err(anyhow!("error querying user badges"));
-        }
+        },
       }
-    }
+    },
   };
 
-  Ok(user_badges.into_iter()
-      .map(|badge| {
-        UserBadgeForList {
-          slug: badge.slug,
-          title: badge.title,
-          description: badge.description,
-          image_url: badge.image_url,
-          granted_at: badge.user_created_at,
-        }
-      })
-      .collect::<Vec<UserBadgeForList>>())
+  Ok(user_badges.into_iter().map(|badge| UserBadgeForList { slug: badge.slug, title: badge.title, description: badge.description, image_url: badge.image_url, granted_at: badge.user_created_at }).collect::<Vec<UserBadgeForList>>())
 }

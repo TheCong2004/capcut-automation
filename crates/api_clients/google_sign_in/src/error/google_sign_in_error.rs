@@ -9,7 +9,6 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug)]
 pub enum GoogleSignInError {
   // ── Cert download (Google's JWK endpoint) ──
-
   /// HTTP error talking to Google's JWK cert endpoint.
   CertDownloadHttpError(reqwest::Error),
 
@@ -17,7 +16,6 @@ pub enum GoogleSignInError {
   CertDownloadBadStatus(reqwest::StatusCode),
 
   // ── JWK parse ──
-
   /// Failed to parse Google's JWK payload as JSON.
   JwkJsonParseFailed(serde_json::Error),
 
@@ -32,7 +30,6 @@ pub enum GoogleSignInError {
   JwkNoKeysFound,
 
   // ── JWT header decode ──
-
   /// JWT was malformed — couldn't split off the header segment.
   JwtMalformed,
 
@@ -44,7 +41,6 @@ pub enum GoogleSignInError {
   JwtHeaderJsonParseFailed(serde_json::Error),
 
   // ── JWT claim verification ──
-
   /// JWT carried no `kid` and the keymap is empty — no key to verify with.
   JwtNoKeyId,
 
@@ -66,7 +62,6 @@ pub enum GoogleSignInError {
   JwtVerifyFailed(String),
 
   // ── Claims helpers ──
-
   /// `audience_matches()` was called on claims that have no audience field.
   AudienceMissing,
 }

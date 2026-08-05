@@ -17,78 +17,65 @@ use crate::queries::generic_inference::job::list_available_generic_inference_job
 use crate::queries::generic_synthetic_ids::transactional_increment_generic_synthetic_id::transactional_increment_generic_synthetic_id;
 
 pub struct InsertArgs<'a> {
-    pub pool: &'a MySqlPool,
-    pub job: &'a AvailableInferenceJob,
+  pub pool: &'a MySqlPool,
+  pub job: &'a AvailableInferenceJob,
 
-    pub maybe_mime_type: Option<&'a str>,
-    pub file_size_bytes: u64,
-    pub sha256_checksum: &'a str,
-    // TODO: Media duration.
-    //pub duration_millis: u64,
+  pub maybe_mime_type: Option<&'a str>,
+  pub file_size_bytes: u64,
+  pub sha256_checksum: &'a str,
+  // TODO: Media duration.
+  //pub duration_millis: u64,
+  /// What product generated the result.
+  pub maybe_product_category: Option<MediaFileOriginProductCategory>,
+  pub maybe_model_type: Option<MediaFileOriginModelType>,
 
-    /// What product generated the result.
-    pub maybe_product_category: Option<MediaFileOriginProductCategory>,
-    pub maybe_model_type: Option<MediaFileOriginModelType>,
+  pub maybe_title: Option<&'a str>,
+  pub maybe_style_transfer_source_media_file_token: Option<&'a MediaFileToken>,
+  pub maybe_scene_source_media_file_token: Option<&'a MediaFileToken>,
 
-    pub maybe_title: Option<&'a str>,
-    pub maybe_style_transfer_source_media_file_token: Option<&'a MediaFileToken>,
-    pub maybe_scene_source_media_file_token: Option<&'a MediaFileToken>,
+  pub maybe_prompt_token: Option<&'a PromptToken>,
 
-    pub maybe_prompt_token: Option<&'a PromptToken>,
+  pub public_bucket_directory_hash: &'a str,
+  pub maybe_public_bucket_prefix: Option<&'a str>,
+  pub maybe_public_bucket_extension: Option<&'a str>,
 
-    pub public_bucket_directory_hash: &'a str,
-    pub maybe_public_bucket_prefix: Option<&'a str>,
-    pub maybe_public_bucket_extension: Option<&'a str>,
+  pub is_on_prem: bool,
+  pub worker_hostname: &'a str,
+  pub worker_cluster: &'a str,
 
-    pub is_on_prem: bool,
-    pub worker_hostname: &'a str,
-    pub worker_cluster: &'a str,
-
-    pub extra_file_modification_info: Option<&'a str>,
+  pub extra_file_modification_info: Option<&'a str>,
 }
 
-pub async fn insert_media_file_from_comfy_ui(args: InsertArgs<'_>) -> AnyhowResult<(MediaFileToken, u64)>
-{
-    let result_token = MediaFileToken::generate();
+pub async fn insert_media_file_from_comfy_ui(args: InsertArgs<'_>) -> AnyhowResult<(MediaFileToken, u64)> {
+  let result_token = MediaFileToken::generate();
 
-    let mut maybe_creator_file_synthetic_id : Option<u64> = None;
-    let mut maybe_creator_category_synthetic_id : Option<u64> = None;
+  let mut maybe_creator_file_synthetic_id: Option<u64> = None;
+  let mut maybe_creator_category_synthetic_id: Option<u64> = None;
 
-    let mut transaction = args.pool.begin().await?;
+  let mut transaction = args.pool.begin().await?;
 
-    if let Some(creator_user_token) = args.job.maybe_creator_user_token.as_deref() {
-        let user_token = UserToken::new_from_str(creator_user_token);
+  if let Some(creator_user_token) = args.job.maybe_creator_user_token.as_deref() {
+    let user_token = UserToken::new_from_str(creator_user_token);
 
-        let next_media_file_id = transactional_increment_generic_synthetic_id(
-            &user_token,
-            IdCategory::MediaFile,
-            &mut transaction
-        ).await?;
+    let next_media_file_id = transactional_increment_generic_synthetic_id(&user_token, IdCategory::MediaFile, &mut transaction).await?;
 
-        let next_comfy_ui_id = transactional_increment_generic_synthetic_id(
-            &user_token,
-            IdCategory::WorkflowResult,
-            &mut transaction
-        ).await?;
+    let next_comfy_ui_id = transactional_increment_generic_synthetic_id(&user_token, IdCategory::WorkflowResult, &mut transaction).await?;
 
-        maybe_creator_file_synthetic_id = Some(next_media_file_id);
-        maybe_creator_category_synthetic_id = Some(next_comfy_ui_id);
-    }
+    maybe_creator_file_synthetic_id = Some(next_media_file_id);
+    maybe_creator_category_synthetic_id = Some(next_comfy_ui_id);
+  }
 
-    const ORIGIN_CATEGORY : MediaFileOriginCategory = MediaFileOriginCategory::Inference;
+  const ORIGIN_CATEGORY: MediaFileOriginCategory = MediaFileOriginCategory::Inference;
 
-    let product = args.maybe_product_category
-        .unwrap_or(MediaFileOriginProductCategory::Unknown);
+  let product = args.maybe_product_category.unwrap_or(MediaFileOriginProductCategory::Unknown);
 
-    let maybe_model_type = args.maybe_model_type.map(|m| m.to_str());
+  let maybe_model_type = args.maybe_model_type.map(|m| m.to_str());
 
-    let media_type = args.maybe_mime_type
-        .and_then(MediaFileType::try_from_mime_type)
-        .unwrap_or(MediaFileType::Video); // Coarse fallback for unrecognized mimes
+  let media_type = args.maybe_mime_type.and_then(MediaFileType::try_from_mime_type).unwrap_or(MediaFileType::Video); // Coarse fallback for unrecognized mimes
 
-    let record_id = {
-        let query_result = sqlx::query!(
-        r#"
+  let record_id = {
+    let query_result = sqlx::query!(
+      r#"
 INSERT INTO media_files
 SET
   token = ?,
@@ -131,61 +118,48 @@ SET
 
         "#,
       result_token.as_str(),
-
       MediaFileClass::Video.to_str(),
       media_type.to_str(),
-
       ORIGIN_CATEGORY.to_str(),
       product.to_str(),
       maybe_model_type,
-
       args.maybe_mime_type,
       args.file_size_bytes,
-
       args.sha256_checksum,
-
       args.maybe_style_transfer_source_media_file_token.map(|t| t.as_str()),
       args.maybe_scene_source_media_file_token.map(|t| t.as_str()),
-
       args.maybe_title,
       args.maybe_prompt_token.map(|e| e.as_str()),
-
       args.public_bucket_directory_hash,
       args.maybe_public_bucket_prefix,
       args.maybe_public_bucket_extension,
-
       args.job.maybe_creator_user_token,
       args.job.maybe_creator_anonymous_visitor_token,
       args.job.creator_ip_address,
-
       args.job.creator_set_visibility.to_str(),
       args.extra_file_modification_info,
-
       maybe_creator_file_synthetic_id,
       maybe_creator_category_synthetic_id,
-
       args.is_on_prem,
       args.worker_hostname,
       args.worker_cluster
     )
-            .execute(&mut *transaction)
-            .await;
+    .execute(&mut *transaction)
+    .await;
 
-        let record_id = match query_result {
-            Ok(res) => {
-                res.last_insert_id()
-            },
-            Err(err) => {
-                // TODO: handle better
-                //transaction.rollback().await?;
-                return Err(anyhow!("Mysql error: {:?}", err));
-            }
-        };
-
-        record_id
+    let record_id = match query_result {
+      Ok(res) => res.last_insert_id(),
+      Err(err) => {
+        // TODO: handle better
+        //transaction.rollback().await?;
+        return Err(anyhow!("Mysql error: {:?}", err));
+      },
     };
 
-    transaction.commit().await?;
+    record_id
+  };
 
-    Ok((result_token, record_id))
+  transaction.commit().await?;
+
+  Ok((result_token, record_id))
 }

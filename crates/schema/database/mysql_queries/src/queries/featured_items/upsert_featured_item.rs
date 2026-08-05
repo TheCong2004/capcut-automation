@@ -7,7 +7,8 @@ use composite_identifiers::by_table::featured_items::featured_item_entity::Featu
 use errors::AnyhowResult;
 
 pub struct UpsertFeaturedItemArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub entity: &'e FeaturedItemEntity,
 
@@ -18,17 +19,14 @@ pub struct UpsertFeaturedItemArgs<'e, 'c, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn upsert_featured_item<'e, 'c : 'e, E>(
-    args: UpsertFeaturedItemArgs<'e, 'c, E>,
-)
-    -> AnyhowResult<()>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn upsert_featured_item<'e, 'c: 'e, E>(args: UpsertFeaturedItemArgs<'e, 'c, E>) -> AnyhowResult<()>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-
   let (entity_type, entity_token) = args.entity.get_composite_keys();
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO featured_items
 SET
   entity_type = ?,
@@ -36,11 +34,11 @@ SET
 ON DUPLICATE KEY UPDATE
   deleted_at = NULL
         "#,
-      entity_type,
-      entity_token,
-    )
-      .execute(args.mysql_executor)
-      .await;
+    entity_type,
+    entity_token,
+  )
+  .execute(args.mysql_executor)
+  .await;
 
   let _record_id = match query_result {
     Ok(res) => res.last_insert_id(),

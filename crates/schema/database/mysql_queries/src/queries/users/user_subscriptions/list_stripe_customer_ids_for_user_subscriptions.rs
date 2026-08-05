@@ -12,10 +12,7 @@ pub struct UserSubscriptionStripeCustomerId {
 
 /// List the distinct stripe customer ids across all of a user's subscriptions
 /// (current and historical), across all payments namespaces.
-pub async fn list_stripe_customer_ids_for_user_subscriptions(
-  user_token: &UserToken,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<Vec<UserSubscriptionStripeCustomerId>, sqlx::Error> {
+pub async fn list_stripe_customer_ids_for_user_subscriptions(user_token: &UserToken, connection: &mut PoolConnection<MySql>) -> Result<Vec<UserSubscriptionStripeCustomerId>, sqlx::Error> {
   let records = sqlx::query_as!(
     UserSubscriptionStripeCustomerId,
     r#"
@@ -33,8 +30,8 @@ ORDER BY subscription_namespace ASC, maybe_stripe_customer_id ASC
     "#,
     user_token.as_str(),
   )
-      .fetch_all(&mut **connection)
-      .await?;
+  .fetch_all(&mut **connection)
+  .await?;
 
   Ok(records)
 }

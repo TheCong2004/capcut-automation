@@ -17,9 +17,7 @@ use tokens::tokens::users::UserToken;
 
 use crate::billing::wallets::attempt_wallet_deduction::attempt_wallet_deduction_else_common_web_error;
 use crate::http_server::common_responses::common_web_error::CommonWebError;
-use crate::http_server::endpoints::generate::common::generation_debug_logs::{
-  insert_provider_request_debug_log, provider_request_debug_log_type, GenerationDebugLogContext,
-};
+use crate::http_server::endpoints::generate::common::generation_debug_logs::{insert_provider_request_debug_log, provider_request_debug_log_type, GenerationDebugLogContext};
 use crate::http_server::endpoints::omni_gen::generate::image::pipeline_result::ImagePipelineResult;
 use crate::http_server::endpoints::omni_gen::shared_utils::map_seedance2pro_router_error::map_router_error_to_web_error;
 use crate::state::server_state::ServerState;
@@ -41,23 +39,11 @@ pub struct RunPipelineV2Args<'a> {
 // seconds. It deliberately does NOT hold a pooled DB connection across that call — it acquires a
 // short-lived connection only for the wallet deduction. Holding a pooled connection across the
 // external call is what starves the pool and causes `PoolTimedOut`.
-pub async fn run_pipeline_v2(
-  args: RunPipelineV2Args<'_>,
-) -> Result<ImagePipelineResult, CommonWebError> {
-  let RunPipelineV2Args {
-    router_builder,
-    server_state,
-    user_token,
-    resolved_media,
-    debug_log_context,
-    mut mysql_connection,
-  } = args;
+pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<ImagePipelineResult, CommonWebError> {
+  let RunPipelineV2Args { router_builder, server_state, user_token, resolved_media, debug_log_context, mut mysql_connection } = args;
 
-  let hydrated_builder = apply_hydrated_media_inputs(
-    router_builder,
-    resolved_media,
-  );
-  
+  let hydrated_builder = apply_hydrated_media_inputs(router_builder, resolved_media);
+
   let cost = estimate_cost_in_credits(&router_builder)?;
 
   let draft_or_request = build_execution_request(&hydrated_builder)?;
@@ -68,12 +54,7 @@ pub async fn run_pipeline_v2(
 
   let maybe_wallet_ledger_entry_token = if cost > 0 {
     // Billed on the handler's connection (same pre-request DB phase).
-    let deduction = attempt_wallet_deduction_else_common_web_error(
-      user_token,
-      Some(apriori_job_token.as_str()),
-      cost,
-      &mut mysql_connection,
-    ).await?;
+    let deduction = attempt_wallet_deduction_else_common_web_error(user_token, Some(apriori_job_token.as_str()), cost, &mut mysql_connection).await?;
     Some(deduction.ledger_entry_token)
   } else {
     None
@@ -83,12 +64,7 @@ pub async fn run_pipeline_v2(
   // handler's connection — so the payload is captured even when the
   // upload/enqueue fails.
   if let Some(debug_log_type) = provider_request_debug_log_type(draft_or_request.get_provider()) {
-    insert_provider_request_debug_log(
-      debug_log_context,
-      debug_log_type,
-      &format!("{:#?}", draft_or_request),
-      &mut *mysql_connection,
-    ).await;
+    insert_provider_request_debug_log(debug_log_context, debug_log_type, &format!("{:#?}", draft_or_request), &mut *mysql_connection).await;
   }
 
   // NB: Done with pre-request DB writes. Release the pooled connection before
@@ -99,16 +75,10 @@ pub async fn run_pipeline_v2(
 
   let response = finalize_and_generate(draft_or_request, server_state, resolved_media).await?;
 
-  Ok(ImagePipelineResult {
-    apriori_job_token,
-    response,
-    maybe_wallet_ledger_entry_token,
-  })
+  Ok(ImagePipelineResult { apriori_job_token, response, maybe_wallet_ledger_entry_token })
 }
 
-fn build_execution_request(
-  router_builder: &GenerateImageRequestBuilder,
-) -> Result<ImageGenerationDraftOrRequest, CommonWebError> {
+fn build_execution_request(router_builder: &GenerateImageRequestBuilder) -> Result<ImageGenerationDraftOrRequest, CommonWebError> {
   let mut execution_builder = router_builder.clone();
   execution_builder.provider = provider_for_model(execution_builder.model);
 
@@ -123,25 +93,17 @@ fn build_execution_request(
 /// backend; everything else flows through Fal.
 fn provider_for_model(model: RouterImageModel) -> RouterProvider {
   match model {
-    RouterImageModel::Midjourney7
-    | RouterImageModel::Midjourney7Niji
-    | RouterImageModel::Midjourney8
-    | RouterImageModel::Seedream5p0Pro => RouterProvider::Seedance2Pro,
+    RouterImageModel::Midjourney7 | RouterImageModel::Midjourney7Niji | RouterImageModel::Midjourney8 | RouterImageModel::Seedream5p0Pro => RouterProvider::Seedance2Pro,
     _ => RouterProvider::Fal,
   }
 }
 
-fn apply_hydrated_media_inputs(
-  router_builder: &GenerateImageRequestBuilder,
-  resolved_media: &MediaFilesAsCdnUrlListAndMap,
-) -> GenerateImageRequestBuilder {
+fn apply_hydrated_media_inputs(router_builder: &GenerateImageRequestBuilder, resolved_media: &MediaFilesAsCdnUrlListAndMap) -> GenerateImageRequestBuilder {
   let mut hydrated_builder = router_builder.clone();
 
   match hydrated_builder.image_inputs.as_ref() {
     Some(ImageListRef::MediaFileTokens(tokens)) if !tokens.is_empty() => {
-      hydrated_builder.image_inputs = Some(ImageListRef::Urls(
-        resolved_media.ordered_url_list.clone(),
-      ));
+      hydrated_builder.image_inputs = Some(ImageListRef::Urls(resolved_media.ordered_url_list.clone()));
     },
     _ => {},
   }
@@ -149,9 +111,7 @@ fn apply_hydrated_media_inputs(
   hydrated_builder
 }
 
-fn estimate_cost_in_credits(
-  router_builder: &GenerateImageRequestBuilder,
-) -> Result<u64, CommonWebError> {
+fn estimate_cost_in_credits(router_builder: &GenerateImageRequestBuilder) -> Result<u64, CommonWebError> {
   let mut cost_builder = router_builder.clone();
   cost_builder.provider = RouterProvider::Artcraft;
 
@@ -168,11 +128,7 @@ fn estimate_cost_in_credits(
   Ok(cost.cost_in_credits.unwrap_or(0))
 }
 
-async fn finalize_and_generate(
-  draft_or_request: ImageGenerationDraftOrRequest,
-  server_state: &ServerState,
-  resolved_media: &MediaFilesAsCdnUrlListAndMap,
-) -> Result<GenerateImageResponse, CommonWebError> {
+async fn finalize_and_generate(draft_or_request: ImageGenerationDraftOrRequest, server_state: &ServerState, resolved_media: &MediaFilesAsCdnUrlListAndMap) -> Result<GenerateImageResponse, CommonWebError> {
   let provider = draft_or_request.get_provider();
   let client = build_router_client(provider, server_state)?;
 
@@ -180,37 +136,24 @@ async fn finalize_and_generate(
   let request: ImageGenerationRequest = match draft_or_request {
     ImageGenerationDraftOrRequest::Request(request) => request,
     ImageGenerationDraftOrRequest::Draft(draft) => {
-      let draft_context = ImageGenerationDraftContext {
-        client: Some(&client),
-        media_file_to_artcraft_url_map: Some(&resolved_media.token_to_url_map),
-      };
-      draft.finalize(draft_context)
-        .await
-        .map_err(|err| {
-          warn!("Failed to finalize image v2 draft: {:?}", err);
-          map_router_error_to_web_error(err)
-        })?
-    }
+      let draft_context = ImageGenerationDraftContext { client: Some(&client), media_file_to_artcraft_url_map: Some(&resolved_media.token_to_url_map) };
+      draft.finalize(draft_context).await.map_err(|err| {
+        warn!("Failed to finalize image v2 draft: {:?}", err);
+        map_router_error_to_web_error(err)
+      })?
+    },
   };
 
-  request.send_request(&client)
-    .await
-    .map_err(|err| {
-      warn!("v2 image generation failed: {:?}", err);
-      map_router_error_to_web_error(err)
-    })
+  request.send_request(&client).await.map_err(|err| {
+    warn!("v2 image generation failed: {:?}", err);
+    map_router_error_to_web_error(err)
+  })
 }
 
-fn build_router_client(
-  provider: RouterProvider,
-  server_state: &ServerState,
-) -> Result<RouterClient, CommonWebError> {
+fn build_router_client(provider: RouterProvider, server_state: &ServerState) -> Result<RouterClient, CommonWebError> {
   match provider {
     RouterProvider::Fal => {
-      let fal_client = RouterFalClient::new_with_webhook(
-        server_state.inference_providers.fal.api_key.clone(),
-        server_state.inference_providers.fal.webhook_url.clone(),
-      );
+      let fal_client = RouterFalClient::new_with_webhook(server_state.inference_providers.fal.api_key.clone(), server_state.inference_providers.fal.webhook_url.clone());
       Ok(RouterClient::Fal(fal_client))
     },
     RouterProvider::Seedance2Pro => {
@@ -222,10 +165,6 @@ fn build_router_client(
       let session = Seedance2ProSession::from_cookies_string(cookies);
       Ok(RouterClient::Seedance2Pro(RouterSeedance2ProClient::new(session)))
     },
-    other => {
-      Err(CommonWebError::server_error_with_message(
-        &format!("Unsupported provider for image v2 generation: {:?}", other),
-      ))
-    },
+    other => Err(CommonWebError::server_error_with_message(&format!("Unsupported provider for image v2 generation: {:?}", other))),
   }
 }

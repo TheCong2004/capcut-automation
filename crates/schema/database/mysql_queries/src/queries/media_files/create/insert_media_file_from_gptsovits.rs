@@ -38,10 +38,7 @@ pub struct InsertGptSoVitsArgs<'a> {
   pub worker_cluster: &'a str,
 }
 
-pub async fn insert_media_file_from_gptsovits(
-  args: InsertGptSoVitsArgs<'_>
-) -> AnyhowResult<MediaFileToken>
-{
+pub async fn insert_media_file_from_gptsovits(args: InsertGptSoVitsArgs<'_>) -> AnyhowResult<MediaFileToken> {
   let (new_media_token, _id) = insert_media_file_generic_from_job(InsertFromJobArgs {
     pool: &args.pool,
     job: &args.job,
@@ -90,7 +87,8 @@ pub async fn insert_media_file_from_gptsovits(
     maybe_mod_user_token: None,
     maybe_scene_source_media_file_token: None,
     is_intermediate_system_file: false,
-  }).await?;
+  })
+  .await?;
 
   Ok(new_media_token)
 }

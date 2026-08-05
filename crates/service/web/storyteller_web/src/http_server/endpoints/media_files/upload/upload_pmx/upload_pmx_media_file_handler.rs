@@ -79,7 +79,7 @@ pub struct UploadPmxSuccessResponse {
 }
 
 /// Upload a pmx zip file.
-/// 
+///
 /// Be careful to set the correct `engine_category` and `maybe_animation_type` (if needed) fields!
 #[utoipa::path(
   post,
@@ -99,63 +99,51 @@ pub struct UploadPmxSuccessResponse {
     ),
   )
 )]
-pub async fn upload_pmx_media_file_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(mut form): MultipartForm<UploadPmxFileForm>,
-) -> Result<Json<UploadPmxSuccessResponse>, MediaFileUploadError> {
-
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+pub async fn upload_pmx_media_file_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(mut form): MultipartForm<UploadPmxFileForm>) -> Result<Json<UploadPmxSuccessResponse>, MediaFileUploadError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
   // NB: We require a moderator to upload PMX files.
-  let user_session = require_moderator(&http_request, &server_state.session_checker, &mut *mysql_connection)
-      .await
-      .map_err(|err| match err {
-        CommonWebError::NotAuthorized => MediaFileUploadError::NotAuthorized,
-        _ => MediaFileUploadError::ServerError,
-      })?;
+  let user_session = require_moderator(&http_request, &server_state.session_checker, &mut *mysql_connection).await.map_err(|err| match err {
+    CommonWebError::NotAuthorized => MediaFileUploadError::NotAuthorized,
+    _ => MediaFileUploadError::ServerError,
+  })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
-//  // ==================== READ SESSION ==================== //
-//
-//  let maybe_user_session = server_state
-//      .session_checker
-//      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-//      .await
-//      .map_err(|e| {
-//        error!("Session checker error: {:?}", e);
-//        MediaFileUploadError::ServerError
-//      })?;
-//
-//  // ==================== BANNED USERS ==================== //
-//
-//  if let Some(ref user) = maybe_user_session {
-//    if user.is_banned {
-//      return Err(MediaFileUploadError::NotAuthorized);
-//    }
-//  }
+  //  // ==================== READ SESSION ==================== //
+  //
+  //  let maybe_user_session = server_state
+  //      .session_checker
+  //      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
+  //      .await
+  //      .map_err(|e| {
+  //        error!("Session checker error: {:?}", e);
+  //        MediaFileUploadError::ServerError
+  //      })?;
+  //
+  //  // ==================== BANNED USERS ==================== //
+  //
+  //  if let Some(ref user) = maybe_user_session {
+  //    if user.is_banned {
+  //      return Err(MediaFileUploadError::NotAuthorized);
+  //    }
+  //  }
 
-//  // ==================== RATE LIMIT ==================== //
-//
-//  let rate_limiter = match maybe_user_session {
-//    None => &server_state.redis_rate_limiters.file_upload_logged_out,
-//    Some(ref _session) => &server_state.redis_rate_limiters.file_upload_logged_in,
-//  };
-//
-//  if let Err(_err) = rate_limiter.rate_limit_request(&http_request) {
-//    return Err(MediaFileUploadError::RateLimited);
-//  }
+  //  // ==================== RATE LIMIT ==================== //
+  //
+  //  let rate_limiter = match maybe_user_session {
+  //    None => &server_state.redis_rate_limiters.file_upload_logged_out,
+  //    Some(ref _session) => &server_state.redis_rate_limiters.file_upload_logged_in,
+  //  };
+  //
+  //  if let Err(_err) = rate_limiter.rate_limit_request(&http_request) {
+  //    return Err(MediaFileUploadError::RateLimited);
+  //  }
 
   // ==================== HANDLE IDEMPOTENCY ==================== //
 
@@ -166,41 +154,36 @@ pub async fn upload_pmx_media_file_handler(
     return Err(MediaFileUploadError::BadInput(reason));
   }
 
-  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        MediaFileUploadError::BadInput("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    MediaFileUploadError::BadInput("invalid idempotency token".to_string())
+  })?;
 
   // ==================== UPLOAD METADATA ==================== //
 
   let engine_category = form.engine_category.0;
 
-  let maybe_duration_millis = form.maybe_duration_millis
-      .map(|duration| duration.0);
+  let maybe_duration_millis = form.maybe_duration_millis.map(|duration| duration.0);
 
-  let mut maybe_animation_type = form.maybe_animation_type
-      .map(|t| t.0);
+  let mut maybe_animation_type = form.maybe_animation_type.map(|t| t.0);
 
   if engine_category == MediaFileEngineCategory::Expression {
     // NB: Expressions are exclusively ArKit for now (and probably well into the future).
     maybe_animation_type = Some(MediaFileAnimationType::ArKit);
   }
 
-  let maybe_title = form.maybe_title
-      .map(|title| title.trim().to_string())
-      .filter(|title| !title.is_empty());
+  let maybe_title = form.maybe_title.map(|title| title.trim().to_string()).filter(|title| !title.is_empty());
 
-  let creator_set_visibility = form.maybe_visibility
-      .map(|visibility| visibility.0)
-      .or_else(|| {
-        //maybe_user_session
-        //    .as_ref()
-        //    .map(|user_session| user_session.preferred_tts_result_visibility)
-        Some(user_session.preferred_tts_result_visibility)
-      })
-      .unwrap_or(Visibility::default());
+  let creator_set_visibility = form
+    .maybe_visibility
+    .map(|visibility| visibility.0)
+    .or_else(|| {
+      //maybe_user_session
+      //    .as_ref()
+      //    .map(|user_session| user_session.preferred_tts_result_visibility)
+      Some(user_session.preferred_tts_result_visibility)
+    })
+    .unwrap_or(Visibility::default());
 
   // ==================== USER DATA ==================== //
 
@@ -211,48 +194,39 @@ pub async fn upload_pmx_media_file_handler(
 
   // ==================== FILE DATA ==================== //
 
-  let maybe_filename = form.file.file_name.as_deref()
-      .as_deref()
-      .map(|filename| PathBuf::from(filename));
+  let maybe_filename = form.file.file_name.as_deref().as_deref().map(|filename| PathBuf::from(filename));
 
-  let maybe_file_extension = maybe_filename
-      .as_ref()
-      .and_then(|filename| filename.extension())
-      .and_then(|ext| ext.to_str());
+  let maybe_file_extension = maybe_filename.as_ref().and_then(|filename| filename.extension()).and_then(|ext| ext.to_str());
 
   let mut file_bytes = Vec::new();
-  form.file.file.read_to_end(&mut file_bytes)
-      .map_err(|e| {
-        error!("Problem reading file: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  form.file.file.read_to_end(&mut file_bytes).map_err(|e| {
+    error!("Problem reading file: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   match maybe_file_extension {
     Some("zip") => {},
     _ => {
-      return Err(MediaFileUploadError::BadInput(
-        "unsupported file extension. Must be zip or pmx.".to_string()));
-    }
+      return Err(MediaFileUploadError::BadInput("unsupported file extension. Must be zip or pmx.".to_string()));
+    },
   }
 
   // ==================== UPLOAD AND SAVE ==================== //
 
-  const PREFIX : Option<&str> = Some("upload_");
-  const SUFFIX : Option<&str> = Some(".pmx");
+  const PREFIX: Option<&str> = Some("upload_");
+  const SUFFIX: Option<&str> = Some(".pmx");
 
-  let pmx_details = extract_and_upload_pmx_files(&file_bytes, &server_state.public_bucket_client, PREFIX, SUFFIX)
-      .await
-      .map_err(|err| {
-        warn!("Extract and upload pmx error: {:?}", err);
-        match err {
-          PmxError::InvalidArchive => MediaFileUploadError::ServerErrorVerbose("invalid archive file".to_string()),
-          PmxError::TooManyFiles => MediaFileUploadError::ServerErrorVerbose("too many files".to_string()),
-          PmxError::NoPmxFile => MediaFileUploadError::ServerErrorVerbose("no pmx files".to_string()),
-          PmxError::UploadError => MediaFileUploadError::ServerErrorVerbose("upload error".to_string()),
-          PmxError::FileError => MediaFileUploadError::ServerErrorVerbose("file error".to_string()),
-          PmxError::ExtractionError => MediaFileUploadError::ServerErrorVerbose("zip extraction error".to_string()),
-        }
-      })?;
+  let pmx_details = extract_and_upload_pmx_files(&file_bytes, &server_state.public_bucket_client, PREFIX, SUFFIX).await.map_err(|err| {
+    warn!("Extract and upload pmx error: {:?}", err);
+    match err {
+      PmxError::InvalidArchive => MediaFileUploadError::ServerErrorVerbose("invalid archive file".to_string()),
+      PmxError::TooManyFiles => MediaFileUploadError::ServerErrorVerbose("too many files".to_string()),
+      PmxError::NoPmxFile => MediaFileUploadError::ServerErrorVerbose("no pmx files".to_string()),
+      PmxError::UploadError => MediaFileUploadError::ServerErrorVerbose("upload error".to_string()),
+      PmxError::FileError => MediaFileUploadError::ServerErrorVerbose("file error".to_string()),
+      PmxError::ExtractionError => MediaFileUploadError::ServerErrorVerbose("zip extraction error".to_string()),
+    }
+  })?;
 
   // TODO(bt, 2024-02-22): This should be a transaction.
   let (token, record_id) = insert_media_file_from_file_upload(InsertMediaFileFromUploadArgs {
@@ -281,16 +255,13 @@ pub async fn upload_pmx_media_file_handler(
     maybe_public_bucket_extension: SUFFIX,
     pool: &server_state.mysql_pool,
   })
-      .await
-      .map_err(|err| {
-        warn!("New file creation DB error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  .await
+  .map_err(|err| {
+    warn!("New file creation DB error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   info!("new media file id: {} token: {:?}", record_id, &token);
 
-  Ok(Json(UploadPmxSuccessResponse {
-    success: true,
-    media_file_token: token,
-  }))
+  Ok(Json(UploadPmxSuccessResponse { success: true, media_file_token: token }))
 }

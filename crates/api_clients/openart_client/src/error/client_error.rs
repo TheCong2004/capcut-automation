@@ -5,16 +5,16 @@ use std::fmt::{Display, Formatter};
 pub enum ClientError {
   /// No cookies in credentials
   NoCookiesInCredentials,
-  
+
   /// No session in the credentials
   NoSessionInfoInCredentials,
-  
+
   /// An error that occurred clientside before the request was sent.
   ReqwestError(reqwest::Error),
-  
+
   /// An I/O error, e.g. reading from a file or network stream.
   IoError(std::io::Error),
-  
+
   /// Another error that does not fit the above categories.
   Other(String),
 }

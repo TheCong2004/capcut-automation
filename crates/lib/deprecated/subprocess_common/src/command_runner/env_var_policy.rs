@@ -18,27 +18,10 @@ impl EnvVarPolicy {
   /// Build the list of env vars to send to the subprocess, if any, based on the policy.
   pub fn get_env_vars_for_subprocess(&self) -> Option<Vec<(OsString, OsString)>> {
     match self {
-      EnvVarPolicy::CopyNone => {
-        None
-      }
-      EnvVarPolicy::CopyAll => {
-        Some(env::vars().into_iter()
-            .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-            .collect::<Vec<_>>())
-      }
-      EnvVarPolicy::CopyOnly(names) => {
-        Some(env::vars().into_iter()
-            .filter(|(key, _value)| names.contains(key))
-            .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-            .collect::<Vec<_>>())
-
-      }
-      EnvVarPolicy::CopyExcept(names) => {
-        Some(env::vars().into_iter()
-            .filter(|(key, _value)| !names.contains(key))
-            .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-            .collect::<Vec<_>>())
-      }
+      EnvVarPolicy::CopyNone => None,
+      EnvVarPolicy::CopyAll => Some(env::vars().into_iter().map(|(key, value)| (OsString::from(key), OsString::from(value))).collect::<Vec<_>>()),
+      EnvVarPolicy::CopyOnly(names) => Some(env::vars().into_iter().filter(|(key, _value)| names.contains(key)).map(|(key, value)| (OsString::from(key), OsString::from(value))).collect::<Vec<_>>()),
+      EnvVarPolicy::CopyExcept(names) => Some(env::vars().into_iter().filter(|(key, _value)| !names.contains(key)).map(|(key, value)| (OsString::from(key), OsString::from(value))).collect::<Vec<_>>()),
     }
   }
 }
@@ -97,10 +80,7 @@ mod tests {
   #[test]
   #[serial_test::serial]
   fn copy_except() {
-    let policy = EnvVarPolicy::CopyExcept(HashSet::from([
-      "STORYTELLER_TEST_VAR_FOO".to_string(),
-      "STORYTELLER_TEST_VAR_BIN".to_string(),
-    ]));
+    let policy = EnvVarPolicy::CopyExcept(HashSet::from(["STORYTELLER_TEST_VAR_FOO".to_string(), "STORYTELLER_TEST_VAR_BIN".to_string()]));
 
     set_env_vars();
 
@@ -118,10 +98,7 @@ mod tests {
   #[test]
   #[serial_test::serial]
   fn copy_only() {
-    let policy = EnvVarPolicy::CopyOnly(HashSet::from([
-      "STORYTELLER_TEST_VAR_FOO".to_string(),
-      "STORYTELLER_TEST_VAR_BIN".to_string(),
-    ]));
+    let policy = EnvVarPolicy::CopyOnly(HashSet::from(["STORYTELLER_TEST_VAR_FOO".to_string(), "STORYTELLER_TEST_VAR_BIN".to_string()]));
 
     set_env_vars();
 

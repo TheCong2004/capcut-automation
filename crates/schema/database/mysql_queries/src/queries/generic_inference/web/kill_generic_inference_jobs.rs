@@ -32,46 +32,36 @@ pub struct KillGenericInferenceJobsArgs<'a> {
 }
 
 pub async fn kill_generic_inference_jobs(args: KillGenericInferenceJobsArgs<'_>) -> AnyhowResult<()> {
-  let mut query = query_builder(
-    args.job_statuses,
-    args.target,
-    args.maybe_priority_or_lower
-  );
+  let mut query = query_builder(args.job_statuses, args.target, args.maybe_priority_or_lower);
 
   let query = query.build();
 
   let result = query.execute(args.mysql_pool).await;
 
   match result {
-    Err(err) => {
-      Err(anyhow!("error with query: {:?}", err))
-    },
+    Err(err) => Err(anyhow!("error with query: {:?}", err)),
     Ok(_r) => Ok(()),
   }
 }
 
-fn query_builder(
-  job_statuses: HashSet<KillableStatus>,
-  target: KillableTarget,
-  maybe_priority_or_lower: Option<u8>,
-) -> QueryBuilder<'static, MySql> {
-
+fn query_builder(job_statuses: HashSet<KillableStatus>, target: KillableTarget, maybe_priority_or_lower: Option<u8>) -> QueryBuilder<'static, MySql> {
   // NB: Query cannot be statically checked by sqlx
   let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
     r#"
 UPDATE generic_inference_jobs
 SET status='cancelled_by_system'
 WHERE status IN(
-    "#
+    "#,
   );
 
-  let job_statuses = job_statuses.into_iter()
-      .map(|status| match status {
-        KillableStatus::Failed => JobStatus::AttemptFailed.to_str(),
-        KillableStatus::Pending => JobStatus::Pending.to_str(),
-        KillableStatus::Started => JobStatus::Started.to_str(),
-      })
-      .collect::<Vec<_>>();
+  let job_statuses = job_statuses
+    .into_iter()
+    .map(|status| match status {
+      KillableStatus::Failed => JobStatus::AttemptFailed.to_str(),
+      KillableStatus::Pending => JobStatus::Pending.to_str(),
+      KillableStatus::Started => JobStatus::Started.to_str(),
+    })
+    .collect::<Vec<_>>();
 
   // NB: Syntax will be wrong if list has zero length
   let mut separated = query_builder.separated(", ");
@@ -87,15 +77,15 @@ WHERE status IN(
   match target {
     KillableTarget::AllJobs => {
       // No need to modify query.
-    }
+    },
     KillableTarget::Category(category) => {
       query_builder.push(" AND inference_category = ");
       query_builder.push_bind(category);
-    }
+    },
     KillableTarget::ModelType(model_type) => {
       query_builder.push(" AND maybe_model_type = ");
       query_builder.push_bind(model_type);
-    }
+    },
   }
 
   query_builder

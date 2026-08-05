@@ -37,7 +37,7 @@ use crate::http_server::common_responses::common_web_error::CommonWebError;
 #[derive(Serialize)]
 pub struct ListTrendingTtsModelsResponse {
   pub success: bool,
-  
+
   pub top_trending: WindowTrends,
 
   pub top_trending_by_language_code: HashMap<String, WindowTrends>,
@@ -45,52 +45,46 @@ pub struct ListTrendingTtsModelsResponse {
 
 pub type WindowTrends = HashMap<WindowName, Vec<TtsModelToken>>;
 
-
 // =============== Error Response ===============
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn list_trending_tts_models_handler(
-  _http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListTrendingTtsModelsResponse>, CommonWebError>
-{
+pub async fn list_trending_tts_models_handler(_http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListTrendingTtsModelsResponse>, CommonWebError> {
+  // TODO: Cache the outputs!
 
-// TODO: Cache the outputs!
+  //  let maybe_category_assignments = server_state.caches.tts_model_category_assignments.copy_without_bump_if_unexpired()
+  //      .map_err(|e| {
+  //        error!("Error consulting cache: {:?}", e);
+  //        CommonWebError::from_error(e)
+  //      })?;
+  //
+  //  let category_assignments = match maybe_category_assignments {
+  //    Some(category_assignments) => {
+  //      info!("Serving TTS category assignments from cache");
+  //      category_assignments
+  //    },
+  //    None => {
+  //      let category_assignments = query_and_construct_payload(
+  //        &server_state.caches.database_tts_category_list,
+  //        &server_state.mysql_pool)
+  //          .await?;
+  //
+  //      server_state.caches.tts_model_category_assignments.store_copy(&category_assignments)
+  //          .map_err(|e| {
+  //            error!("Error storing cache: {:?}", e);
+  //            CommonWebError::from_error(e)
+  //          })?;
+  //
+  //      category_assignments
+  //    },
+  //  };
 
-//  let maybe_category_assignments = server_state.caches.tts_model_category_assignments.copy_without_bump_if_unexpired()
-//      .map_err(|e| {
-//        error!("Error consulting cache: {:?}", e);
-//        CommonWebError::from_error(e)
-//      })?;
-//
-//  let category_assignments = match maybe_category_assignments {
-//    Some(category_assignments) => {
-//      info!("Serving TTS category assignments from cache");
-//      category_assignments
-//    },
-//    None => {
-//      let category_assignments = query_and_construct_payload(
-//        &server_state.caches.database_tts_category_list,
-//        &server_state.mysql_pool)
-//          .await?;
-//
-//      server_state.caches.tts_model_category_assignments.store_copy(&category_assignments)
-//          .map_err(|e| {
-//            error!("Error storing cache: {:?}", e);
-//            CommonWebError::from_error(e)
-//          })?;
-//
-//      category_assignments
-//    },
-//  };
+  let trending_models = list_trending_tts_models_with_pool(&server_state.mysql_pool).await.map_err(|e| {
+    error!("Query error: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
-  let trending_models= list_trending_tts_models_with_pool(&server_state.mysql_pool).await
-      .map_err(|e| {
-        error!("Query error: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
-
-// TODO: Actually generate the response body sensibly.
+  // TODO: Actually generate the response body sensibly.
 
   let mut top_trending = HashMap::new();
   let mut top_trending_by_language_code = HashMap::new();
@@ -107,11 +101,7 @@ pub async fn list_trending_tts_models_handler(
     }
   }
 
-  let response = ListTrendingTtsModelsResponse {
-    success: true,
-    top_trending,
-    top_trending_by_language_code,
-  };
+  let response = ListTrendingTtsModelsResponse { success: true, top_trending, top_trending_by_language_code };
 
   Ok(Json(response))
 }

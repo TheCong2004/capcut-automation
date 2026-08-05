@@ -36,25 +36,15 @@ const MIME_TYPE_CREATE: &str = "application/x-binary";
 /// We'll increment this if we change the underlying Vall-E code in an incompatible way.
 const CURRENT_VALLE_MODEL_VERSION: u64 = 0;
 
-pub async fn process_create_voice(
-  args: VALLEXProcessJobArgs<'_>,
-  dataset_token: String
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
+pub async fn process_create_voice(args: VALLEXProcessJobArgs<'_>, dataset_token: String) -> Result<JobSuccessResult, ProcessSingleJobError> {
   let deps = args.job_dependencies;
   let job = args.job;
   let mysql_pool = &deps.db.mysql_pool;
 
-  let model_dependencies = deps
-      .job
-      .job_specific_dependencies
-      .maybe_vall_e_x_dependencies
-      .as_ref()
-      .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing VALL-E-X dependencies".to_string())))?;
+  let model_dependencies = deps.job.job_specific_dependencies.maybe_vall_e_x_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing VALL-E-X dependencies".to_string())))?;
 
   // get some globals
-  let mut job_progress_reporter = deps.clients.job_progress_reporter
-      .new_generic_inference(job.inference_job_token.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
+  let mut job_progress_reporter = deps.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
   info!("token! {}", dataset_token);
   let voice_dataset_token = tokens::tokens::zs_voice_datasets::ZsVoiceDatasetToken(dataset_token);
@@ -62,20 +52,16 @@ pub async fn process_create_voice(
   let creator_ip_address = &job.creator_ip_address;
 
   let creator_user_token = match &job.maybe_creator_user_token {
-    Some(token) => {
-      UserToken::new_from_str(token)
-    },
+    Some(token) => UserToken::new_from_str(token),
     None => {
       return Err(ProcessSingleJobError::InvalidJob(anyhow!("Missing Creator User Token")));
-    }
+    },
   };
 
   // STEP 1. SETUP A TEMP DIRECTORY
   let work_temp_dir = format!("/tmp/temp_zeroshot_create_voice_{}", job.id.0);
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let work_temp_dir = args.job_dependencies.fs.scoped_temp_dir_creator_for_work
-      .new_tempdir(&work_temp_dir)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let work_temp_dir = args.job_dependencies.fs.scoped_temp_dir_creator_for_work.new_tempdir(&work_temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   let workdir = work_temp_dir.path().to_path_buf();
 
@@ -83,28 +69,22 @@ pub async fn process_create_voice(
   let voice_dataset = get_dataset_by_token(&voice_dataset_token, false, &mysql_pool).await;
   let single_dataset: ZsDataset;
   match voice_dataset {
-    Ok(val) => {
-      match val {
-        Some(val) => {
-          single_dataset = val;
-        }
-        None => {
-          return Err(ProcessSingleJobError::InvalidJob(anyhow!("Missing Dataset")));
-        }
-      }
-    }
+    Ok(val) => match val {
+      Some(val) => {
+        single_dataset = val;
+      },
+      None => {
+        return Err(ProcessSingleJobError::InvalidJob(anyhow!("Missing Dataset")));
+      },
+    },
     Err(e) => {
       return Err(ProcessSingleJobError::from_anyhow_error(e));
-    }
+    },
   }
   info!("Title:{} Token:{}", &single_dataset.title, &single_dataset.token);
 
   // STEP 3. Download dataset each audio file
-  let result = list_dataset_samples_for_dataset_token(
-    &voice_dataset_token,
-    false,
-    &mysql_pool
-  ).await;
+  let result = list_dataset_samples_for_dataset_token(&voice_dataset_token, false, &mysql_pool).await;
 
   let dataset: Vec<DatasetSampleRecordForList> = match result {
     Ok(val) => val,
@@ -113,14 +93,14 @@ pub async fn process_create_voice(
 
   info!("Dataset length info: {}", dataset.len());
 
-//  let temp_extension = String::from(".bin");
-//  let temp_prefix: String;
-//
-//  if !deps.job.info.container.is_on_prem {
-//    temp_prefix = String::from("sample_"); // this is for seed in local dev to download the samples
-//  } else {
-//    temp_prefix = String::from(BUCKET_FILE_PREFIX_CREATE);
-//  }
+  //  let temp_extension = String::from(".bin");
+  //  let temp_prefix: String;
+  //
+  //  if !deps.job.info.container.is_on_prem {
+  //    temp_prefix = String::from("sample_"); // this is for seed in local dev to download the samples
+  //  } else {
+  //    temp_prefix = String::from(BUCKET_FILE_PREFIX_CREATE);
+  //  }
 
   let mut downloaded_dataset: Vec<PathBuf> = Vec::new();
 
@@ -130,17 +110,9 @@ pub async fn process_create_voice(
     let prefix: Option<&str> = record.maybe_public_bucket_prefix.as_ref().map(|s| s.as_str());
     let extension: Option<&str> = record.maybe_public_bucket_extension.as_ref().map(|s| s.as_str());
 
-    info!("Record=> hash:{} prefix:{:?} extension:{:?}",
-      record.public_bucket_directory_hash,
-      prefix,
-      extension
-    );
+    info!("Record=> hash:{} prefix:{:?} extension:{:?}", record.public_bucket_directory_hash, prefix, extension);
 
-    let audio_media_file = MediaFileBucketPath::from_object_hash(
-      &record.public_bucket_directory_hash,
-      prefix,
-      extension
-    );
+    let audio_media_file = MediaFileBucketPath::from_object_hash(&record.public_bucket_directory_hash, prefix, extension);
 
     info!("Download using audio_media_file_path: {:?}", audio_media_file.to_full_object_pathbuf());
 
@@ -154,10 +126,7 @@ pub async fn process_create_voice(
     info!("Downloading to path: {:?}", file_path);
 
     // TODO: we might want to catch the error and not include the pathes into download dataset?
-    let result = deps.buckets.public_bucket_client.download_file_to_disk(
-      audio_media_file.to_full_object_pathbuf(),
-      &file_path
-    ).await;
+    let result = deps.buckets.public_bucket_client.download_file_to_disk(audio_media_file.to_full_object_pathbuf(), &file_path).await;
 
     if let Err(err) = result {
       error!("could not download sample: {:?}", err);
@@ -173,19 +142,14 @@ pub async fn process_create_voice(
   // STEP 4 Download the models
   info!("Download models (if not present)...");
   for downloader in model_dependencies.downloaders.all_downloaders() {
-    let result = downloader.download_if_not_on_filesystem(
-      &args.job_dependencies.buckets.private_bucket_client,
-      &args.job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads
-    ).await;
+    let result = downloader.download_if_not_on_filesystem(&args.job_dependencies.buckets.private_bucket_client, &args.job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads).await;
     if let Err(err) = result {
       error!("could not download: {:?}", err);
       return Err(err);
     }
   }
 
-  job_progress_reporter
-      .log_status("running inference")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("running inference").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // Command line arg for a list of paths to insert the container
   let audio_files = join_paths(downloaded_dataset);
@@ -201,15 +165,7 @@ pub async fn process_create_voice(
   let inference_start_time = Instant::now();
 
   // Run Inference
-  let command_exit_status =
-      model_dependencies.create_embedding_command.execute_inference(
-        job::job_types::tts::vall_e_x::vall_e_x_inference_command::CreateVoiceInferenceArgs {
-          output_embedding_path: &workdir,
-          output_embedding_name: &output_file_name,
-          audio_files,
-          stderr_output_file: &stderr_output_file,
-        }
-      );
+  let command_exit_status = model_dependencies.create_embedding_command.execute_inference(job::job_types::tts::vall_e_x::vall_e_x_inference_command::CreateVoiceInferenceArgs { output_embedding_path: &workdir, output_embedding_name: &output_file_name, audio_files, stderr_output_file: &stderr_output_file });
 
   let inference_duration = Instant::now().duration_since(inference_start_time);
 
@@ -249,15 +205,10 @@ pub async fn process_create_voice(
   //info!("Success; waiting...");
   //thread::sleep(Duration::from_secs(300));
 
-
   // STEP 4. Download dataset each audio file
   info!("Uploading Media ...");
 
-  let embedding_bucket_location = ZeroShotVoiceEmbeddingBucketPath::generate_new(
-    ModelCategory::Tts,
-    ModelType::VallEx,
-    CURRENT_VALLE_MODEL_VERSION
-  );
+  let embedding_bucket_location = ZeroShotVoiceEmbeddingBucketPath::generate_new(ModelCategory::Tts, ModelType::VallEx, CURRENT_VALLE_MODEL_VERSION);
 
   let embedding_bucket_object_pathbuf = embedding_bucket_location.to_full_object_pathbuf();
 
@@ -285,40 +236,16 @@ pub async fn process_create_voice(
   let voice_name = single_dataset.title;
 
   // insert record
-  let voice_token = create_voice(CreateVoiceArgs {
-    dataset_token: &voice_dataset_token,
-    model_category: ZsVoiceModelCategory::Tts,
-    model_type: ZsVoiceModelType::VallEX,
-    model_version: CURRENT_VALLE_MODEL_VERSION,
-    model_encoding_type: ZsVoiceEncodingType::Encodec,
-    voice_title: &voice_name,
-    bucket_hash: embedding_bucket_location.get_object_hash(),
-    maybe_creator_user_token: Some(&creator_user_token),
-    creator_ip_address: &creator_ip_address,
-    creator_set_visibility: Visibility::Public,
-    mysql_pool,
-  }).await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  let voice_token = create_voice(CreateVoiceArgs { dataset_token: &voice_dataset_token, model_category: ZsVoiceModelCategory::Tts, model_type: ZsVoiceModelType::VallEX, model_version: CURRENT_VALLE_MODEL_VERSION, model_encoding_type: ZsVoiceEncodingType::Encodec, voice_title: &voice_name, bucket_hash: embedding_bucket_location.get_object_hash(), maybe_creator_user_token: Some(&creator_user_token), creator_ip_address: &creator_ip_address, creator_set_visibility: Visibility::Public, mysql_pool }).await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::ZeroShotVoiceEmbedding,
-      entity_token: voice_token.to_string(),
-    }),
-    inference_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::ZeroShotVoiceEmbedding, entity_token: voice_token.to_string() }), inference_duration })
 }
 
 pub struct AudioFile {
   pub filesystem_path: PathBuf,
 }
 
-pub async fn download_audio_from_hash(
-  bucket_hash: &str,
-  name: &str,
-  private_bucket_client: &LegacyBucketClient,
-  path: &PathBuf
-) -> Result<AudioFile, ProcessSingleJobError> {
+pub async fn download_audio_from_hash(bucket_hash: &str, name: &str, private_bucket_client: &LegacyBucketClient, path: &PathBuf) -> Result<AudioFile, ProcessSingleJobError> {
   let unifer = BucketPathUnifier::default_paths();
   let object_path = unifer.zero_shot_tts_speaker_encoding(bucket_hash, 0);
 
@@ -327,26 +254,18 @@ pub async fn download_audio_from_hash(
   let file_name = format!("{}", name);
   path.push(&file_name);
 
-  private_bucket_client.download_file_to_disk(object_path, &path)
-      .await
-      .map_err(|err| {
-        error!("Could not download audio file: {err}");
-        ProcessSingleJobError::from_anyhow_error(anyhow!("Could not download audio file: {err}"))
-      })?;
+  private_bucket_client.download_file_to_disk(object_path, &path).await.map_err(|err| {
+    error!("Could not download audio file: {err}");
+    ProcessSingleJobError::from_anyhow_error(anyhow!("Could not download audio file: {err}"))
+  })?;
 
-  let audio_file = AudioFile {
-    filesystem_path: PathBuf::from(&path.clone()),
-  };
+  let audio_file = AudioFile { filesystem_path: PathBuf::from(&path.clone()) };
 
   Ok(audio_file)
 }
 
 fn join_paths(paths: Vec<PathBuf>) -> String {
-  paths
-      .into_iter()
-      .map(|p| format!("\"{}\"", p.display()))
-      .collect::<Vec<String>>()
-      .join(" ")
+  paths.into_iter().map(|p| format!("\"{}\"", p.display())).collect::<Vec<String>>().join(" ")
 }
 
 #[cfg(test)]
@@ -357,14 +276,10 @@ mod tests {
 
   #[test]
   fn test_path_build() {
-    let paths = vec![
-      PathBuf::from("/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/20.wav"),
-      PathBuf::from("/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/21.wav")
-    ];
+    let paths = vec![PathBuf::from("/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/20.wav"), PathBuf::from("/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/21.wav")];
 
     let value = join_paths(paths);
-    let expected =
-        "\"/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/20.wav\" \"/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/21.wav\"";
+    let expected = "\"/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/20.wav\" \"/home/tensor/code/TTSDockerContainer/Vall-E-mount/input/21.wav\"";
     assert_eq!(value, expected);
   }
 }

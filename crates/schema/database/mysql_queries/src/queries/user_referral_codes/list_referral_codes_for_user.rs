@@ -19,10 +19,7 @@ struct RawRow {
   updated_at: NaiveDateTime,
 }
 
-pub async fn list_referral_codes_for_user<'e, 'c: 'e, E>(
-  owner_user_token: &UserToken,
-  mysql_executor: E,
-) -> Result<Vec<ReferralCodeRow>, sqlx::Error>
+pub async fn list_referral_codes_for_user<'e, 'c: 'e, E>(owner_user_token: &UserToken, mysql_executor: E) -> Result<Vec<ReferralCodeRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -42,14 +39,8 @@ ORDER BY created_at ASC
     "#,
     owner_user_token.as_str(),
   )
-    .fetch_all(mysql_executor)
-    .await?;
+  .fetch_all(mysql_executor)
+  .await?;
 
-  Ok(rows.into_iter().map(|r| ReferralCodeRow {
-    token: r.token,
-    code: r.code,
-    code_lowercase: r.code_lowercase,
-    created_at: r.created_at.and_utc(),
-    updated_at: r.updated_at.and_utc(),
-  }).collect())
+  Ok(rows.into_iter().map(|r| ReferralCodeRow { token: r.token, code: r.code, code_lowercase: r.code_lowercase, created_at: r.created_at.and_utc(), updated_at: r.updated_at.and_utc() }).collect())
 }

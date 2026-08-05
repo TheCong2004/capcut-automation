@@ -6,7 +6,6 @@ use errors::AnyhowResult;
 pub struct MediaUploadModificationDetails; // TODO: Inner fields
 
 impl MediaUploadModificationDetails {
-
   pub fn from_json(json: &str) -> AnyhowResult<Self> {
     Ok(serde_json::from_str(json)?)
   }

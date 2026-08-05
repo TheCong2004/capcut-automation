@@ -2,7 +2,6 @@
 #![forbid(private_interfaces)]
 #![forbid(unused_must_use)]
 //#![forbid(warnings)]
-
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 #![allow(unreachable_patterns)]
@@ -10,7 +9,8 @@
 #![allow(unused_mut)]
 #![allow(unused_variables)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 use std::fs;
 use std::fs::File;
@@ -60,11 +60,11 @@ use crate::script_execution::talknet_model_check_command::TalknetModelCheckComma
 pub mod script_execution;
 
 // Buckets
-const ENV_ACCESS_KEY : &str = "ACCESS_KEY";
-const ENV_SECRET_KEY : &str = "SECRET_KEY";
-const ENV_REGION_NAME : &str = "REGION_NAME";
-const ENV_BUCKET_NAME : &str = "TTS_DOWNLOAD_BUCKET_NAME";
-const ENV_BUCKET_ROOT : &str = "TTS_DOWNLOAD_BUCKET_ROOT";
+const ENV_ACCESS_KEY: &str = "ACCESS_KEY";
+const ENV_SECRET_KEY: &str = "SECRET_KEY";
+const ENV_REGION_NAME: &str = "REGION_NAME";
+const ENV_BUCKET_NAME: &str = "TTS_DOWNLOAD_BUCKET_NAME";
+const ENV_BUCKET_ROOT: &str = "TTS_DOWNLOAD_BUCKET_ROOT";
 
 const DEFAULT_TEMP_DIR: &str = "/tmp";
 
@@ -108,10 +108,7 @@ async fn main() -> AnyhowResult<()> {
 
   info!("Obtaining hostname...");
 
-  let server_hostname = hostname::get()
-    .ok()
-    .and_then(|h| h.into_string().ok())
-    .unwrap_or("tts-download-job".to_string());
+  let server_hostname = hostname::get().ok().and_then(|h| h.into_string().ok()).unwrap_or("tts-download-job".to_string());
 
   info!("Hostname: {}", &server_hostname);
 
@@ -122,32 +119,16 @@ async fn main() -> AnyhowResult<()> {
   let bucket_name = easyenv::get_env_string_required(ENV_BUCKET_NAME)?;
   let bucket_root = easyenv::get_env_string_required(ENV_BUCKET_ROOT)?;
 
-  let s3_compatible_endpoint_url = easyenv::get_env_string_or_default(
-    "S3_COMPATIBLE_ENDPOINT_URL",
-    "https://storage.googleapis.com");
-  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS",
-    Duration::from_secs(60 * 5));
+  let s3_compatible_endpoint_url = easyenv::get_env_string_or_default("S3_COMPATIBLE_ENDPOINT_URL", "https://storage.googleapis.com");
+  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS", Duration::from_secs(60 * 5));
 
-  let bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  let temp_directory = easyenv::get_env_string_or_default(
-    "DOWNLOAD_TEMP_DIR",
-    DEFAULT_TEMP_DIR);
+  let temp_directory = easyenv::get_env_string_or_default("DOWNLOAD_TEMP_DIR", DEFAULT_TEMP_DIR);
 
-  let download_script = easyenv::get_env_string_or_default(
-    "DOWNLOAD_SCRIPT",
-    "./scripts/download_internet_file.py");
+  let download_script = easyenv::get_env_string_or_default("DOWNLOAD_SCRIPT", "./scripts/download_internet_file.py");
 
-  let google_drive_downloader =
-      GoogleDriveDownloadCommand::new_production(&download_script);
+  let google_drive_downloader = GoogleDriveDownloadCommand::new_production(&download_script);
 
   let temp_directory = PathBuf::from(temp_directory);
 
@@ -157,10 +138,7 @@ async fn main() -> AnyhowResult<()> {
 
   info!("Connecting to database...");
 
-  let mysql_pool = MySqlPoolOptions::new()
-    .max_connections(5)
-    .connect(&db_connection_string)
-    .await?;
+  let mysql_pool = MySqlPoolOptions::new().max_connections(5).connect(&db_connection_string).await?;
 
   let common_env = CommonEnv::read_from_env()?;
 
@@ -169,66 +147,38 @@ async fn main() -> AnyhowResult<()> {
   let redis_connection_string = env_get_redis_0_connection_string_or_default();
   let redis_manager = RedisConnectionManager::new(redis_connection_string.as_str())?;
 
-  let redis_pool = r2d2::Pool::builder()
-      .build(redis_manager)?;
+  let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
 
   let firehose_publisher = FirehosePublisher {
     mysql_pool: mysql_pool.clone(), // NB: Pool is sync/send/clone-safe
   };
 
   let badge_granter = BadgeGranter {
-    mysql_pool: mysql_pool.clone(), // NB: Pool is sync/send/clone-safe
+    mysql_pool: mysql_pool.clone(),                 // NB: Pool is sync/send/clone-safe
     firehose_publisher: firehose_publisher.clone(), // NB: Also safe
   };
 
   let tacotron_root_code_directory = easyenv::get_env_string_required("TACOTRON_ROOT_CODE_DIRECTORY")?;
-  let tacotron_virtual_env_activation_command = easyenv::get_env_string_or_default(
-    "TACOTRON_VIRTUAL_ENV_ACTIVATION_COMMAND",
-    "source python-tacotron/bin/activate");
+  let tacotron_virtual_env_activation_command = easyenv::get_env_string_or_default("TACOTRON_VIRTUAL_ENV_ACTIVATION_COMMAND", "source python-tacotron/bin/activate");
 
-  let tacotron_model_check_script_name = easyenv::get_env_string_or_default(
-    "TACOTRON_MODEL_CHECK_SCRIPT_NAME",
-    "vocodes_model_check_tacotron.py");
+  let tacotron_model_check_script_name = easyenv::get_env_string_or_default("TACOTRON_MODEL_CHECK_SCRIPT_NAME", "vocodes_model_check_tacotron.py");
 
-  let tacotron_check_command= TacotronModelCheckCommand::new(
-    &tacotron_root_code_directory,
-    &tacotron_virtual_env_activation_command,
-    &tacotron_model_check_script_name,
-  );
+  let tacotron_check_command = TacotronModelCheckCommand::new(&tacotron_root_code_directory, &tacotron_virtual_env_activation_command, &tacotron_model_check_script_name);
 
   let talknet_root_code_directory = easyenv::get_env_string_required("TALKNET_ROOT_CODE_DIRECTORY")?;
   let talknet_check_script_name = easyenv::get_env_string_required("TALKNET_MODEL_CHECK_SCRIPT_NAME")?;
 
-  let talknet_check_command= TalknetModelCheckCommand::new(
-    &talknet_root_code_directory,
-    &talknet_check_script_name,
-  );
+  let talknet_check_command = TalknetModelCheckCommand::new(&talknet_root_code_directory, &talknet_check_script_name);
 
-  let downloader = Downloader {
-    download_temp_directory: temp_directory,
-    mysql_pool,
-    redis_pool,
-    bucket_client,
-    download_script,
-    google_drive_downloader,
-    bucket_path_unifier: BucketPathUnifier::default_paths(),
-    bucket_root_tts_model_uploads: bucket_root.to_string(),
-    firehose_publisher,
-    badge_granter,
-    tacotron_tts_check: tacotron_check_command,
-    talknet_tts_check: talknet_check_command,
-    job_batch_wait_millis: common_env.job_batch_wait_millis,
-    job_max_attempts: common_env.job_max_attempts as i32,
-    no_op_logger_millis: common_env.no_op_logger_millis,
-  };
+  let downloader = Downloader { download_temp_directory: temp_directory, mysql_pool, redis_pool, bucket_client, download_script, google_drive_downloader, bucket_path_unifier: BucketPathUnifier::default_paths(), bucket_root_tts_model_uploads: bucket_root.to_string(), firehose_publisher, badge_granter, tacotron_tts_check: tacotron_check_command, talknet_tts_check: talknet_check_command, job_batch_wait_millis: common_env.job_batch_wait_millis, job_max_attempts: common_env.job_max_attempts as i32, no_op_logger_millis: common_env.no_op_logger_millis };
 
   main_loop(downloader).await;
 
   Ok(())
 }
 
-const START_TIMEOUT_MILLIS : u64 = 500;
-const INCREASE_TIMEOUT_MILLIS : u64 = 1000;
+const START_TIMEOUT_MILLIS: u64 = 500;
+const INCREASE_TIMEOUT_MILLIS: u64 = 1000;
 
 async fn main_loop(downloader: Downloader) {
   let mut error_timeout_millis = START_TIMEOUT_MILLIS;
@@ -246,7 +196,7 @@ async fn main_loop(downloader: Downloader) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     };
 
     if jobs.is_empty() {
@@ -265,7 +215,7 @@ async fn main_loop(downloader: Downloader) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     }
 
     error_timeout_millis = START_TIMEOUT_MILLIS; // reset
@@ -282,13 +232,8 @@ async fn process_jobs(downloader: &Downloader, jobs: Vec<TtsUploadJobRecord>) ->
       Err(e) => {
         warn!("Failure to process job: {:?}", e);
         let failure_reason = "";
-        let _r = mark_tts_upload_job_failure(
-          &downloader.mysql_pool,
-          &job,
-          failure_reason,
-          downloader.job_max_attempts
-        ).await;
-      }
+        let _r = mark_tts_upload_job_failure(&downloader.mysql_pool, &job, failure_reason, downloader.job_max_attempts).await;
+      },
     }
   }
 
@@ -315,9 +260,7 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
   // TODO: 5. Mark job done. (DONE)
 
   let mut redis = downloader.redis_pool.get()?;
-  let mut redis_logger = RedisJobStatusLogger::new_tts_download(
-    &mut redis,
-    &job.token);
+  let mut redis_logger = RedisJobStatusLogger::new_tts_download(&mut redis, &job.token);
 
   // ==================== ATTEMPT TO GRAB JOB LOCK ==================== //
 
@@ -325,7 +268,7 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
 
   if !lock_acquired {
     warn!("Could not acquire job lock for: {}", &job.id);
-    return Ok(())
+    return Ok(());
   }
 
   // ==================== SETUP TEMP DIRS ==================== //
@@ -339,9 +282,7 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
 
   redis_logger.log_status("downloading model")?;
 
-  let download_url = job.download_url.as_ref()
-    .map(|c| c.to_string())
-    .unwrap_or("".to_string());
+  let download_url = job.download_url.as_ref().map(|c| c.to_string()).unwrap_or("".to_string());
 
   if is_bad_tts_model_download_url(&download_url)? {
     warn!("Bad download URL: `{}`", &download_url);
@@ -353,7 +294,7 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
     Err(e) => {
       safe_delete_directory(&temp_dir);
       return Err(e);
-    }
+    },
   };
 
   let model_type = if download_filename.to_lowercase().ends_with("zip") {
@@ -379,11 +320,7 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
 
   match model_type {
     TtsModelType::Tacotron2 => {
-      let result = downloader.tacotron_tts_check.execute(
-        &file_path,
-        &output_metadata_fs_path,
-        false,
-      );
+      let result = downloader.tacotron_tts_check.execute(&file_path, &output_metadata_fs_path, false);
 
       if let Err(e) = result {
         safe_delete_file(&file_path);
@@ -392,8 +329,8 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
     },
     _ => {
       error!("Wrong model type for tts-download-job: {:?}", &model_type);
-      return Err(anyhow!("Wrong model type for tts-download-job: {:?}", &model_type));;
-    }
+      return Err(anyhow!("Wrong model type for tts-download-job: {:?}", &model_type));
+    },
   }
 
   // ==================== CHECK ALL FILES EXIST AND GET METADATA ==================== //
@@ -409,7 +346,7 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
       safe_delete_file(&output_metadata_fs_path);
       safe_delete_directory(&temp_dir);
       return Err(e);
-    }
+    },
   };
 
   // ==================== UPLOAD MODEL FILE ==================== //
@@ -446,37 +383,22 @@ async fn process_job(downloader: &Downloader, job: &TtsUploadJobRecord) -> Anyho
   // ==================== SAVE RECORDS ==================== //
 
   info!("Saving model record...");
-  let (id, model_token) = insert_tts_model(
-    &downloader.mysql_pool,
-    job,
-    &private_bucket_hash,
-    synthesizer_model_bucket_path,
-    file_metadata.file_size_bytes)
-    .await?;
+  let (id, model_token) = insert_tts_model(&downloader.mysql_pool, job, &private_bucket_hash, synthesizer_model_bucket_path, file_metadata.file_size_bytes).await?;
 
   info!("Marking job complete...");
-  mark_tts_upload_job_done(
-    &downloader.mysql_pool,
-    job,
-    true,
-    Some(&model_token)
-  ).await?;
+  mark_tts_upload_job_done(&downloader.mysql_pool, job, true, Some(&model_token)).await?;
 
   info!("Saved model record: {}", id);
 
-  downloader.firehose_publisher.publish_tts_model_upload_finished(&job.creator_user_token, &model_token)
-      .await
-      .map_err(|e| {
-        warn!("error publishing event: {:?}", e);
-        anyhow!("error publishing event")
-      })?;
+  downloader.firehose_publisher.publish_tts_model_upload_finished(&job.creator_user_token, &model_token).await.map_err(|e| {
+    warn!("error publishing event: {:?}", e);
+    anyhow!("error publishing event")
+  })?;
 
-  downloader.badge_granter.maybe_grant_tts_model_uploads_badge(&job.creator_user_token)
-      .await
-      .map_err(|e| {
-        warn!("error maybe awarding badge: {:?}", e);
-        anyhow!("error maybe awarding badge")
-      })?;
+  downloader.badge_granter.maybe_grant_tts_model_uploads_badge(&job.creator_user_token).await.map_err(|e| {
+    warn!("error maybe awarding badge: {:?}", e);
+    anyhow!("error maybe awarding badge")
+  })?;
 
   redis_logger.log_status("done")?;
 

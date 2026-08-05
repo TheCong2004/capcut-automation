@@ -6,9 +6,7 @@ use crate::error::seedance2pro_generic_api_error::Seedance2ProGenericApiError;
 use crate::error::seedance2pro_specific_api_error::Seedance2ProSpecificApiError;
 
 /// Known error message substrings that indicate a billing/credits error.
-const BILLING_ERROR_MARKERS: &[&str] = &[
-  "credits not enough",
-];
+const BILLING_ERROR_MARKERS: &[&str] = &["credits not enough"];
 
 /// Zod validation message for a string field exceeding its maximum length,
 /// eg. "参数验证失败 - String must contain at most 10000 character(s)".
@@ -29,15 +27,9 @@ const UPLOADED_URLS_FIELD_MARKER: &str = "\"uploadedUrls\"";
 /// Checks the response body for known patterns (e.g. billing errors, request
 /// validation failures) and returns a specific error variant when possible,
 /// falling back to `UncategorizedBadResponseWithStatusAndBody` otherwise.
-pub fn categorize_seedance2pro_error(
-  status_code: StatusCode,
-  body: String,
-) -> Seedance2ProError {
+pub fn categorize_seedance2pro_error(status_code: StatusCode, body: String) -> Seedance2ProError {
   if is_billing_error(&body) {
-    return Seedance2ProSpecificApiError::BillingError {
-      status_code,
-      body,
-    }.into();
+    return Seedance2ProSpecificApiError::BillingError { status_code, body }.into();
   }
 
   if status_code == StatusCode::BAD_REQUEST {
@@ -49,10 +41,7 @@ pub fn categorize_seedance2pro_error(
     }
   }
 
-  Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody {
-    status_code,
-    body,
-  }.into()
+  Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code, body }.into()
 }
 
 /// Check if the response body contains a known billing error marker.
@@ -86,12 +75,10 @@ mod tests {
       let error = categorize_seedance2pro_error(StatusCode::BAD_REQUEST, body);
 
       match error {
-        Seedance2ProError::ApiSpecific(
-          Seedance2ProSpecificApiError::BillingError { status_code, body }
-        ) => {
+        Seedance2ProError::ApiSpecific(Seedance2ProSpecificApiError::BillingError { status_code, body }) => {
           assert_eq!(status_code, StatusCode::BAD_REQUEST);
           assert!(body.contains("credits not enough"));
-        }
+        },
         other => panic!("Expected BillingError, got: {:?}", other),
       }
     }
@@ -103,9 +90,7 @@ mod tests {
       let error = categorize_seedance2pro_error(StatusCode::BAD_REQUEST, body);
 
       match error {
-        Seedance2ProError::ApiSpecific(
-          Seedance2ProSpecificApiError::BillingError { .. }
-        ) => {}
+        Seedance2ProError::ApiSpecific(Seedance2ProSpecificApiError::BillingError { .. }) => {},
         other => panic!("Expected BillingError, got: {:?}", other),
       }
     }
@@ -121,12 +106,10 @@ mod tests {
       let error = categorize_seedance2pro_error(StatusCode::BAD_REQUEST, body);
 
       match error {
-        Seedance2ProError::ApiBadRequest(
-          Seedance2ProBadRequestApiError::PromptIsTooLong { raw_body }
-        ) => {
+        Seedance2ProError::ApiBadRequest(Seedance2ProBadRequestApiError::PromptIsTooLong { raw_body }) => {
           assert!(raw_body.contains("String must contain at most 10000 character(s)"));
           assert!(raw_body.contains("\"prompt\""));
-        }
+        },
         other => panic!("Expected PromptIsTooLong, got: {:?}", other),
       }
     }
@@ -138,12 +121,10 @@ mod tests {
       let error = categorize_seedance2pro_error(StatusCode::BAD_REQUEST, body);
 
       match error {
-        Seedance2ProError::ApiBadRequest(
-          Seedance2ProBadRequestApiError::TooManyUrls { raw_body }
-        ) => {
+        Seedance2ProError::ApiBadRequest(Seedance2ProBadRequestApiError::TooManyUrls { raw_body }) => {
           assert!(raw_body.contains("Array must contain at most 9 element(s)"));
           assert!(raw_body.contains("\"uploadedUrls\""));
-        }
+        },
         other => panic!("Expected TooManyUrls, got: {:?}", other),
       }
     }
@@ -155,9 +136,7 @@ mod tests {
       let error = categorize_seedance2pro_error(StatusCode::INTERNAL_SERVER_ERROR, body);
 
       match error {
-        Seedance2ProError::ApiGeneric(
-          Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { .. }
-        ) => {}
+        Seedance2ProError::ApiGeneric(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { .. }) => {},
         other => panic!("Expected UncategorizedBadResponseWithStatusAndBody, got: {:?}", other),
       }
     }
@@ -170,9 +149,7 @@ mod tests {
       let error = categorize_seedance2pro_error(StatusCode::BAD_REQUEST, body);
 
       match error {
-        Seedance2ProError::ApiGeneric(
-          Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { .. }
-        ) => {}
+        Seedance2ProError::ApiGeneric(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { .. }) => {},
         other => panic!("Expected UncategorizedBadResponseWithStatusAndBody, got: {:?}", other),
       }
     }
@@ -185,40 +162,29 @@ mod tests {
     fn unknown_error_falls_back_to_uncategorized() {
       let body = r#"{"error":"something else went wrong"}"#.to_string();
 
-      let error = categorize_seedance2pro_error(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        body.clone(),
-      );
+      let error = categorize_seedance2pro_error(StatusCode::INTERNAL_SERVER_ERROR, body.clone());
 
       match error {
-        Seedance2ProError::ApiGeneric(
-          Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code, body: b }
-        ) => {
+        Seedance2ProError::ApiGeneric(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code, body: b }) => {
           assert_eq!(status_code, StatusCode::INTERNAL_SERVER_ERROR);
           assert_eq!(b, body);
-        }
+        },
         other => panic!("Expected UncategorizedBadResponseWithStatusAndBody, got: {:?}", other),
       }
     }
 
     #[test]
     fn empty_body_falls_back_to_uncategorized() {
-      let error = categorize_seedance2pro_error(
-        StatusCode::BAD_REQUEST,
-        String::new(),
-      );
+      let error = categorize_seedance2pro_error(StatusCode::BAD_REQUEST, String::new());
 
       match error {
-        Seedance2ProError::ApiGeneric(
-          Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { .. }
-        ) => {}
+        Seedance2ProError::ApiGeneric(Seedance2ProGenericApiError::UncategorizedBadResponseWithStatusAndBody { .. }) => {},
         other => panic!("Expected UncategorizedBadResponseWithStatusAndBody, got: {:?}", other),
       }
     }
   }
 
   fn read_response_body(filename: &str) -> String {
-    std::fs::read_to_string(format!("test_data/responses/{}", filename))
-        .expect("Failed to read test data file")
+    std::fs::read_to_string(format!("test_data/responses/{}", filename)).expect("Failed to read test data file")
   }
 }

@@ -28,7 +28,7 @@ use crate::http_server::validations::validate_idempotency_token_format::validate
 use crate::http_server::user_lookup::user_session::require_user_session_extended::require_user_session_extended;
 use crate::state::server_state::ServerState;
 
-const DEFAULT_FPS : u8 = 12;
+const DEFAULT_FPS: u8 = 12;
 
 /// Form-multipart request fields.
 ///
@@ -94,55 +94,43 @@ pub struct UploadStudioShotSuccessResponse {
     ),
   )
 )]
-pub async fn upload_studio_shot_media_file_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(mut form): MultipartForm<UploadStudioShotFileForm>,
-) -> Result<Json<UploadStudioShotSuccessResponse>, MediaFileUploadError> {
-
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+pub async fn upload_studio_shot_media_file_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(mut form): MultipartForm<UploadStudioShotFileForm>) -> Result<Json<UploadStudioShotSuccessResponse>, MediaFileUploadError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
   // NB: We require a moderator to upload PMX files.
-  let user_session = require_user_session_extended(&http_request, &server_state.session_checker, &mut *mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("User session error: {:?}", e);
-        match e {
-          CommonWebError::NotAuthorized => MediaFileUploadError::NotAuthorized,
-          _ => MediaFileUploadError::ServerError,
-        }
-      })?;
+  let user_session = require_user_session_extended(&http_request, &server_state.session_checker, &mut *mysql_connection).await.map_err(|e| {
+    error!("User session error: {:?}", e);
+    match e {
+      CommonWebError::NotAuthorized => MediaFileUploadError::NotAuthorized,
+      _ => MediaFileUploadError::ServerError,
+    }
+  })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
-//  // ==================== BANNED USERS ==================== //
-//
-//  if let Some(ref user) = maybe_user_session {
-//    if user.is_banned {
-//      return Err(MediaFileUploadError::NotAuthorized);
-//    }
-//  }
+  //  // ==================== BANNED USERS ==================== //
+  //
+  //  if let Some(ref user) = maybe_user_session {
+  //    if user.is_banned {
+  //      return Err(MediaFileUploadError::NotAuthorized);
+  //    }
+  //  }
 
-//  // ==================== RATE LIMIT ==================== //
-//
-//  let rate_limiter = match maybe_user_session {
-//    None => &server_state.redis_rate_limiters.file_upload_logged_out,
-//    Some(ref _session) => &server_state.redis_rate_limiters.file_upload_logged_in,
-//  };
-//
-//  if let Err(_err) = rate_limiter.rate_limit_request(&http_request) {
-//    return Err(MediaFileUploadError::RateLimited);
-//  }
+  //  // ==================== RATE LIMIT ==================== //
+  //
+  //  let rate_limiter = match maybe_user_session {
+  //    None => &server_state.redis_rate_limiters.file_upload_logged_out,
+  //    Some(ref _session) => &server_state.redis_rate_limiters.file_upload_logged_in,
+  //  };
+  //
+  //  if let Err(_err) = rate_limiter.rate_limit_request(&http_request) {
+  //    return Err(MediaFileUploadError::RateLimited);
+  //  }
 
   // ==================== HANDLE IDEMPOTENCY ==================== //
 
@@ -153,19 +141,14 @@ pub async fn upload_studio_shot_media_file_handler(
     return Err(MediaFileUploadError::BadInput(reason));
   }
 
-  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        MediaFileUploadError::BadInput("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    MediaFileUploadError::BadInput("invalid idempotency token".to_string())
+  })?;
 
   // ==================== UPLOAD METADATA ==================== //
 
-
-  let maybe_title = form.maybe_title
-      .map(|title| title.trim().to_string())
-      .filter(|title| !title.is_empty());
+  let maybe_title = form.maybe_title.map(|title| title.trim().to_string()).filter(|title| !title.is_empty());
 
   let creator_set_visibility = form.maybe_visibility
       .map(|visibility| visibility.0)
@@ -183,93 +166,74 @@ pub async fn upload_studio_shot_media_file_handler(
 
   // ==================== FILE DATA ==================== //
 
-  let maybe_filename = form.file.file_name.as_deref()
-      .as_deref()
-      .map(|filename| PathBuf::from(filename));
+  let maybe_filename = form.file.file_name.as_deref().as_deref().map(|filename| PathBuf::from(filename));
 
-  let maybe_file_extension = maybe_filename
-      .as_ref()
-      .and_then(|filename| filename.extension())
-      .and_then(|ext| ext.to_str());
+  let maybe_file_extension = maybe_filename.as_ref().and_then(|filename| filename.extension()).and_then(|ext| ext.to_str());
 
   match maybe_file_extension {
     Some("zip") => {},
     _ => {
-      return Err(MediaFileUploadError::BadInput(
-        "unsupported file extension. Must be zip or pmx.".to_string()));
-    }
+      return Err(MediaFileUploadError::BadInput("unsupported file extension. Must be zip or pmx.".to_string()));
+    },
   }
 
   let mut file_bytes = Vec::new();
-  form.file.file.read_to_end(&mut file_bytes)
-      .map_err(|e| {
-        error!("Problem reading file: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  form.file.file.read_to_end(&mut file_bytes).map_err(|e| {
+    error!("Problem reading file: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== EXTRACT ==================== //
 
   // TODO(bt,2024-08-25): Should include entropy so concurrent requests don't overwrite
-  let frame_temp_dir = server_state.temp_dir_creator.new_tempdir("frames")
-      .map_err(|err| {
-        error!("Problem creating temp dir: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  let frame_temp_dir = server_state.temp_dir_creator.new_tempdir("frames").map_err(|err| {
+    error!("Problem creating temp dir: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let frame_type = extract_frames_from_zip(&file_bytes, frame_temp_dir.path())
-      .map_err(|err| {
-        warn!("Extract frames error: {:?}", err);
-        match err {
-          ExtractFramesError::InvalidArchive => MediaFileUploadError::ServerErrorVerbose("invalid archive file".to_string()),
-          ExtractFramesError::NoImageFiles => MediaFileUploadError::ServerErrorVerbose("no image files".to_string()),
-          ExtractFramesError::TooFewImageFiles => MediaFileUploadError::ServerErrorVerbose("too few image files".to_string()),
-          ExtractFramesError::TooManyFiles => MediaFileUploadError::ServerErrorVerbose("too many files".to_string()),
-          ExtractFramesError::ExtractionError => MediaFileUploadError::ServerErrorVerbose("zip extraction error".to_string()),
-          ExtractFramesError::UploadError => MediaFileUploadError::ServerErrorVerbose("upload error".to_string()),
-          ExtractFramesError::FileError => MediaFileUploadError::ServerErrorVerbose("file error".to_string()),
-        }
-      })?;
+  let frame_type = extract_frames_from_zip(&file_bytes, frame_temp_dir.path()).map_err(|err| {
+    warn!("Extract frames error: {:?}", err);
+    match err {
+      ExtractFramesError::InvalidArchive => MediaFileUploadError::ServerErrorVerbose("invalid archive file".to_string()),
+      ExtractFramesError::NoImageFiles => MediaFileUploadError::ServerErrorVerbose("no image files".to_string()),
+      ExtractFramesError::TooFewImageFiles => MediaFileUploadError::ServerErrorVerbose("too few image files".to_string()),
+      ExtractFramesError::TooManyFiles => MediaFileUploadError::ServerErrorVerbose("too many files".to_string()),
+      ExtractFramesError::ExtractionError => MediaFileUploadError::ServerErrorVerbose("zip extraction error".to_string()),
+      ExtractFramesError::UploadError => MediaFileUploadError::ServerErrorVerbose("upload error".to_string()),
+      ExtractFramesError::FileError => MediaFileUploadError::ServerErrorVerbose("file error".to_string()),
+    }
+  })?;
 
   // ==================== FFMPEG ==================== //
 
-  let frame_rate = form.maybe_frame_rate_fps
-      .map(|fps| *fps)
-      .unwrap_or(DEFAULT_FPS);
+  let frame_rate = form.maybe_frame_rate_fps.map(|fps| *fps).unwrap_or(DEFAULT_FPS);
 
-  let video_file_details = ffmpeg_frames_to_mp4(frame_temp_dir.path(), frame_type, frame_rate)
-      .map_err(|err| {
-        warn!("FFMPEG error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  let video_file_details = ffmpeg_frames_to_mp4(frame_temp_dir.path(), frame_type, frame_rate).map_err(|err| {
+    warn!("FFMPEG error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let file_size_bytes = file_size(&video_file_details.path)
-      .map_err(|err| {
-        error!("Problem getting file size: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  let file_size_bytes = file_size(&video_file_details.path).map_err(|err| {
+    error!("Problem getting file size: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let hash = sha256_hash_file(&video_file_details.path)
-      .map_err(|io_error| {
-        error!("Problem hashing bytes: {:?}", io_error);
-        MediaFileUploadError::ServerError
-      })?;
+  let hash = sha256_hash_file(&video_file_details.path).map_err(|io_error| {
+    error!("Problem hashing bytes: {:?}", io_error);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== UPLOAD ==================== //
 
-  const PREFIX : Option<&str> = Some("upload_");
-  const SUFFIX : Option<&str> = Some(".mp4");
+  const PREFIX: Option<&str> = Some("upload_");
+  const SUFFIX: Option<&str> = Some(".mp4");
 
   let bucket_path = MediaFileBucketPath::generate_new(PREFIX, SUFFIX);
 
-  server_state.public_bucket_client.upload_filename_with_content_type(
-    bucket_path.get_full_object_path_str(),
-    &video_file_details.path,
-    "video/mp4")
-      .await
-      .map_err(|e| {
-        error!("Upload video to bucket error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  server_state.public_bucket_client.upload_filename_with_content_type(bucket_path.get_full_object_path_str(), &video_file_details.path, "video/mp4").await.map_err(|e| {
+    error!("Upload video to bucket error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   if has_debug_header(&http_request) {
     warn!("Debug header detected. Uploading original zip file for analysis.");
@@ -278,11 +242,7 @@ pub async fn upload_studio_shot_media_file_handler(
 
     let zip_bucket_path = MediaFileBucketPath::from_object_hash(zip_bucket_path_hash, PREFIX, Some(".zip"));
 
-    let result = server_state.public_bucket_client.upload_filename_with_content_type(
-      zip_bucket_path.get_full_object_path_str(),
-      form.file.file.path(),
-      "application/zip"
-    ).await;
+    let result = server_state.public_bucket_client.upload_filename_with_content_type(zip_bucket_path.get_full_object_path_str(), form.file.file.path(), "application/zip").await;
 
     // NB: Fail open
     if let Err(err) = result {
@@ -293,7 +253,7 @@ pub async fn upload_studio_shot_media_file_handler(
   // ==================== SAVE RECORD ==================== //
 
   // TODO(bt, 2024-02-22): This should be a transaction.
-  let token= insert_media_file_from_studio_scene_render(InsertStudioSceneRenderArgs {
+  let token = insert_media_file_from_studio_scene_render(InsertStudioSceneRenderArgs {
     media_type: MediaFileType::Mp4,
     maybe_creator_user_token: Some(&user_session.user_token_typed),
     maybe_creator_anonymous_visitor_token: maybe_avt_token.as_ref(),
@@ -304,17 +264,9 @@ pub async fn upload_studio_shot_media_file_handler(
     maybe_audio_encoding: None, // TODO
     maybe_video_encoding: None, // TODO
     // TODO: Frame rate.
-    maybe_scene_source_media_file_token: form.maybe_scene_source_media_file_token
-        .as_ref()
-        .map(|token| &token.0),
-    maybe_frame_width: video_file_details
-        .dimensions
-        .as_ref()
-        .map(|dim| dim.width as u32),
-    maybe_frame_height: video_file_details
-        .dimensions
-        .as_ref()
-        .map(|dim| dim.height as u32),
+    maybe_scene_source_media_file_token: form.maybe_scene_source_media_file_token.as_ref().map(|token| &token.0),
+    maybe_frame_width: video_file_details.dimensions.as_ref().map(|dim| dim.width as u32),
+    maybe_frame_height: video_file_details.dimensions.as_ref().map(|dim| dim.height as u32),
     maybe_duration_millis: video_file_details.duration.map(|duration| duration.millis as u64),
     sha256_checksum: &hash,
     maybe_title: maybe_title.as_deref(),
@@ -323,16 +275,13 @@ pub async fn upload_studio_shot_media_file_handler(
     maybe_public_bucket_extension: SUFFIX,
     pool: &server_state.mysql_pool,
   })
-      .await
-      .map_err(|err| {
-        warn!("New file creation DB error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  .await
+  .map_err(|err| {
+    warn!("New file creation DB error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   info!("new media file token: {:?}", &token);
 
-  Ok(Json(UploadStudioShotSuccessResponse {
-    success: true,
-    media_file_token: token,
-  }))
+  Ok(Json(UploadStudioShotSuccessResponse { success: true, media_file_token: token }))
 }

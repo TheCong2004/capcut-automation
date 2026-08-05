@@ -28,9 +28,7 @@ where
 /// All (live) tags on each of the given media files, in one round-trip.
 /// Media files with no tags simply produce no rows. Not scoped to any
 /// user: per-file tags are publicly visible.
-pub async fn bulk_list_tags_for_media_files<'e, 'c: 'e, E>(
-  args: BulkListTagsForMediaFilesArgs<'e, 'c, E>,
-) -> Result<Vec<MediaFileTagPairRow>, sqlx::Error>
+pub async fn bulk_list_tags_for_media_files<'e, 'c: 'e, E>(args: BulkListTagsForMediaFilesArgs<'e, 'c, E>) -> Result<Vec<MediaFileTagPairRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -53,13 +51,5 @@ where
 
   let rows = builder.build().fetch_all(args.mysql_executor).await?;
 
-  Ok(rows.into_iter()
-    .map(|row| MediaFileTagPairRow {
-      media_file_token: MediaFileToken::new(row.get::<String, _>(0)),
-      tag_token: TagToken::new(row.get::<String, _>(1)),
-      tag_value: row.get::<String, _>(2),
-      tag_value_lowercase: row.get::<String, _>(3),
-      use_count: row.get::<u32, _>(4),
-    })
-    .collect())
+  Ok(rows.into_iter().map(|row| MediaFileTagPairRow { media_file_token: MediaFileToken::new(row.get::<String, _>(0)), tag_token: TagToken::new(row.get::<String, _>(1)), tag_value: row.get::<String, _>(2), tag_value_lowercase: row.get::<String, _>(3), use_count: row.get::<u32, _>(4) }).collect())
 }

@@ -33,22 +33,12 @@ const MIME_TYPE: &str = "image/png";
 /// bucket, and insert a `media_files` row per image. The inference job
 /// row is marked successful with the first media file as the primary
 /// result entity.
-pub async fn process_successful_image_job(
-  deps: &JobDependencies,
-  job: &PendingSeedance2ProJob,
-  order: &OrderStatus,
-) -> AnyhowResult<()> {
+pub async fn process_successful_image_job(deps: &JobDependencies, job: &PendingSeedance2ProJob, order: &OrderStatus) -> AnyhowResult<()> {
   if order.results.is_empty() {
-    return Err(anyhow!(
-      "Completed image order {} has no result entries",
-      order.order_id
-    ));
+    return Err(anyhow!("Completed image order {} has no result entries", order.order_id));
   }
 
-  info!(
-    "Processing completed image order {}: {} image(s) to download.",
-    order.order_id, order.results.len(),
-  );
+  info!("Processing completed image order {}: {} image(s) to download.", order.order_id, order.results.len(),);
 
   // Download, hash, upload, and insert one media_file per image. We
   // process sequentially: Kinovi/upstream is the bottleneck here, so
@@ -57,11 +47,7 @@ pub async fn process_successful_image_job(
 
   let is_batch = order.results.len() > 1;
 
-  let maybe_batch_prompt_token = if is_batch {
-    Some(BatchGenerationToken::generate())
-  } else {
-    None
-  };
+  let maybe_batch_prompt_token = if is_batch { Some(BatchGenerationToken::generate()) } else { None };
 
   for (idx, result) in order.results.iter().enumerate() {
     let token = match download_and_store_one_image(deps, job, order, result, idx, maybe_batch_prompt_token.as_ref()).await {
@@ -74,40 +60,22 @@ pub async fn process_successful_image_job(
         if idx == 0 {
           return Err(err);
         }
-        warn!(
-          "Failed to process image {}/{} for order {}: {:?}",
-          idx + 1, order.results.len(), order.order_id, err,
-        );
+        warn!("Failed to process image {}/{} for order {}: {:?}", idx + 1, order.results.len(), order.order_id, err,);
         continue;
-      }
+      },
     };
     created_tokens.push(token);
   }
 
-  let primary_token = created_tokens.first().ok_or_else(|| {
-    anyhow!(
-      "No media files were created for order {} despite {} result(s)",
-      order.order_id, order.results.len(),
-    )
-  })?;
+  let primary_token = created_tokens.first().ok_or_else(|| anyhow!("No media files were created for order {} despite {} result(s)", order.order_id, order.results.len(),))?;
 
-  info!(
-    "Created {} media file(s) for order {} (primary={}). Finalizing job {}.",
-    created_tokens.len(),
-    order.order_id,
-    primary_token.as_str(),
-    job.job_token.as_str(),
-  );
+  info!("Created {} media file(s) for order {} (primary={}). Finalizing job {}.", created_tokens.len(), order.order_id, primary_token.as_str(), job.job_token.as_str(),);
 
   // Finalize inside a transaction: re-check the job is still pending under a row
   // lock, then mark it complete. See `process_successful_video_job` for the rationale.
-  let mut transaction = deps.mysql_pool.begin().await.map_err(|err| {
-    anyhow!("error beginning finalize transaction for job {}: {:?}", job.job_token.as_str(), err)
-  })?;
+  let mut transaction = deps.mysql_pool.begin().await.map_err(|err| anyhow!("error beginning finalize transaction for job {}: {:?}", job.job_token.as_str(), err))?;
 
-  let maybe_status = select_inference_job_status_for_update(&mut *transaction, &job.job_token)
-    .await
-    .map_err(|err| anyhow!("error locking job {} for finalize: {:?}", job.job_token.as_str(), err))?;
+  let maybe_status = select_inference_job_status_for_update(&mut *transaction, &job.job_token).await.map_err(|err| anyhow!("error locking job {} for finalize: {:?}", job.job_token.as_str(), err))?;
 
   // ── Terminal-state guard (do NOT remove) ──
   //
@@ -121,18 +89,18 @@ pub async fn process_successful_image_job(
     Some(status) => status,
     None => {
       let _ = transaction.rollback().await;
-      return Err(anyhow!(
-        "Job {} vanished before finalize (order {})",
-        job.job_token.as_str(), order.order_id,
-      ));
-    }
+      return Err(anyhow!("Job {} vanished before finalize (order {})", job.job_token.as_str(), order.order_id,));
+    },
   };
 
   if is_job_status_terminal(status) {
     warn!(
       "Job {} is already terminal ({:?}); skipping mark-done (order {}). \
       {} media file(s) may be orphaned.",
-      job.job_token.as_str(), status, order.order_id, created_tokens.len(),
+      job.job_token.as_str(),
+      status,
+      order.order_id,
+      created_tokens.len(),
     );
     let _ = transaction.rollback().await;
     return Ok(());
@@ -140,29 +108,13 @@ pub async fn process_successful_image_job(
 
   // Still pending — mark it done within the locked transaction.
 
-  if let Err(err) = mark_generic_inference_job_successfully_done_by_token_with_executor(
-    MarkGenericInferenceJobSuccessfullyDoneByTokenWithExecutorArgs {
-      executor: &mut *transaction,
-      token: &job.job_token,
-      maybe_entity_type: Some(InferenceResultType::MediaFile),
-      maybe_entity_token: Some(primary_token.as_str()),
-      total_job_duration: None,
-      inference_duration: None,
-    },
-  ).await {
+  if let Err(err) = mark_generic_inference_job_successfully_done_by_token_with_executor(MarkGenericInferenceJobSuccessfullyDoneByTokenWithExecutorArgs { executor: &mut *transaction, token: &job.job_token, maybe_entity_type: Some(InferenceResultType::MediaFile), maybe_entity_token: Some(primary_token.as_str()), total_job_duration: None, inference_duration: None }).await {
     let _ = transaction.rollback().await;
     error!("Error marking image job {} done: {:?}", job.job_token.as_str(), err);
-    return alert_pager_and_return_err(
-      &deps.pager,
-      "Kinovi image job completion update failed",
-      anyhow!("error marking job done: {:?}", err),
-      Some(job),
-    );
+    return alert_pager_and_return_err(&deps.pager, "Kinovi image job completion update failed", anyhow!("error marking job done: {:?}", err), Some(job));
   }
 
-  transaction.commit().await.map_err(|err| {
-    anyhow!("error committing finalize transaction for job {}: {:?}", job.job_token.as_str(), err)
-  })?;
+  transaction.commit().await.map_err(|err| anyhow!("error committing finalize transaction for job {}: {:?}", job.job_token.as_str(), err))?;
 
   info!("Image job {} completed successfully.", job.job_token.as_str());
 
@@ -171,50 +123,23 @@ pub async fn process_successful_image_job(
 
 /// Download a single image from Kinovi's CDN, upload to our public bucket,
 /// and insert a `media_files` row. Returns the new media file token.
-async fn download_and_store_one_image(
-  deps: &JobDependencies,
-  job: &PendingSeedance2ProJob,
-  order: &OrderStatus,
-  result: &MediaResult,
-  index: usize,
-  maybe_batch_token: Option<&BatchGenerationToken>,
-) -> AnyhowResult<MediaFileToken> {
+async fn download_and_store_one_image(deps: &JobDependencies, job: &PendingSeedance2ProJob, order: &OrderStatus, result: &MediaResult, index: usize, maybe_batch_token: Option<&BatchGenerationToken>) -> AnyhowResult<MediaFileToken> {
   let image_url = result.url.as_str();
 
-  info!(
-    "Downloading image {}/{} for order {} from: {}",
-    index + 1, order.results.len(), order.order_id, image_url,
-  );
+  info!("Downloading image {}/{} for order {} from: {}", index + 1, order.results.len(), order.order_id, image_url,);
 
-  let image_bytes: Vec<u8> = reqwest::get(image_url)
-    .await
-    .map_err(|err| anyhow!("reqwest error downloading image {}: {:?}", index, err))?
-    .bytes()
-    .await
-    .map_err(|err| anyhow!("error reading image bytes for index {}: {:?}", index, err))?
-    .to_vec();
+  let image_bytes: Vec<u8> = reqwest::get(image_url).await.map_err(|err| anyhow!("reqwest error downloading image {}: {:?}", index, err))?.bytes().await.map_err(|err| anyhow!("error reading image bytes for index {}: {:?}", index, err))?.to_vec();
 
-  info!(
-    "Downloaded {} bytes for image {}/{} of order {}",
-    image_bytes.len(), index + 1, order.results.len(), order.order_id,
-  );
+  info!("Downloaded {} bytes for image {}/{} of order {}", image_bytes.len(), index + 1, order.results.len(), order.order_id,);
 
-  let checksum = sha256_hash_bytes(&image_bytes)
-    .map_err(|err| anyhow!("error hashing image {}: {:?}", index, err))?;
+  let checksum = sha256_hash_bytes(&image_bytes).map_err(|err| anyhow!("error hashing image {}: {:?}", index, err))?;
 
   let bucket_path = MediaFileBucketPath::generate_new(Some(PREFIX), Some(SUFFIX));
   let object_path = bucket_path.get_full_object_path_str();
 
-  info!(
-    "Uploading image {}/{} to public bucket at path: {}",
-    index + 1, order.results.len(), object_path,
-  );
+  info!("Uploading image {}/{} to public bucket at path: {}", index + 1, order.results.len(), object_path,);
 
-  deps
-    .public_bucket_client
-    .upload_file_with_content_type_process(object_path, &image_bytes, MIME_TYPE)
-    .await
-    .map_err(|err| anyhow!("bucket upload failed for image {}: {:?}", index, err))?;
+  deps.public_bucket_client.upload_file_with_content_type_process(object_path, &image_bytes, MIME_TYPE).await.map_err(|err| anyhow!("bucket upload failed for image {}: {:?}", index, err))?;
 
   let media_file_token = MediaFileInsertBuilder::new()
     .checksum_sha2(&checksum)

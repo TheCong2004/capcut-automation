@@ -20,10 +20,8 @@ pub struct InsertStripeWebhookEventLog {
 }
 
 impl InsertStripeWebhookEventLog {
-
   pub async fn insert(&self, mysql_pool: &MySqlPool) -> AnyhowResult<()> {
-    let query_result = self.query()
-        .execute(mysql_pool).await;
+    let query_result = self.query().execute(mysql_pool).await;
 
     let _record_id = match query_result {
       Ok(res) => res.last_insert_id(),
@@ -32,10 +30,9 @@ impl InsertStripeWebhookEventLog {
 
     Ok(())
   }
-  
+
   pub async fn insert_transactional(&self, transaction: &mut Transaction<'_, MySql>) -> AnyhowResult<()> {
-    let query_result = self.query()
-        .execute(&mut **transaction).await;
+    let query_result = self.query().execute(&mut **transaction).await;
 
     let _record_id = match query_result {
       Ok(res) => res.last_insert_id(),
@@ -47,7 +44,7 @@ impl InsertStripeWebhookEventLog {
 
   fn query(&self) -> Query<MySql, MySqlArguments> {
     sqlx::query!(
-        r#"
+      r#"
 INSERT INTO stripe_webhook_event_logs
 SET
   stripe_event_id = ?,

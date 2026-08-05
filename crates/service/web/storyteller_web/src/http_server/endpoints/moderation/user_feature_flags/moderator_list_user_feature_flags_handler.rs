@@ -49,11 +49,7 @@ pub struct ModeratorListUserFeatureFlagsResponse {
     ("username_or_token" = String, Path, description = "Username or user token"),
   )
 )]
-pub async fn moderator_list_user_feature_flags_handler(
-  http_request: HttpRequest,
-  path: Path<ListUserFeatureFlagsPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ModeratorListUserFeatureFlagsResponse>, CommonWebError> {
+pub async fn moderator_list_user_feature_flags_handler(http_request: HttpRequest, path: Path<ListUserFeatureFlagsPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModeratorListUserFeatureFlagsResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
   let username_or_token = path.username_or_token.trim();
@@ -67,9 +63,7 @@ pub async fn moderator_list_user_feature_flags_handler(
         warn!("Could not get user token by username: {:?}", err);
         CommonWebError::from_anyhow_error(err)
       })?
-      .ok_or_else(|| {
-        CommonWebError::NotFound
-      })?
+      .ok_or_else(|| CommonWebError::NotFound)?
   };
 
   let user_profile = get_user_profile_by_token(&user_token, &server_state.mysql_pool)
@@ -78,23 +72,11 @@ pub async fn moderator_list_user_feature_flags_handler(
       warn!("Could not get user profile by token: {:?}", err);
       CommonWebError::from_anyhow_error(err)
     })?
-    .ok_or_else(|| {
-      CommonWebError::NotFound
-    })?;
+    .ok_or_else(|| CommonWebError::NotFound)?;
 
-  let user_feature_flags =
-    UserSessionFeatureFlags::new(user_profile.maybe_feature_flags.as_deref());
+  let user_feature_flags = UserSessionFeatureFlags::new(user_profile.maybe_feature_flags.as_deref());
 
-  let flags: Vec<String> = user_feature_flags.clone_flags()
-    .iter()
-    .map(|flag| flag.to_str().to_string())
-    .collect();
+  let flags: Vec<String> = user_feature_flags.clone_flags().iter().map(|flag| flag.to_str().to_string()).collect();
 
-  Ok(Json(ModeratorListUserFeatureFlagsResponse {
-    success: true,
-    user_token: user_profile.user_token.as_str().to_string(),
-    username: user_profile.username,
-    display_name: user_profile.display_name,
-    feature_flags: flags,
-  }))
+  Ok(Json(ModeratorListUserFeatureFlagsResponse { success: true, user_token: user_profile.user_token.as_str().to_string(), username: user_profile.username, display_name: user_profile.display_name, feature_flags: flags }))
 }

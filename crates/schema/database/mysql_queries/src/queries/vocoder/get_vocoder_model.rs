@@ -60,19 +60,10 @@ pub struct VocoderModelRecordModFields {
 // FIXME: This is the old style of query scoping and shouldn't be copied.
 //  The moderator-only fields are good practice, though.
 
-pub async fn get_vocoder_model_by_token(
-  vocoder_model_token: &str,
-  can_see_deleted: bool,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<VocoderModelRecord>> {
+pub async fn get_vocoder_model_by_token(vocoder_model_token: &str, can_see_deleted: bool, mysql_pool: &MySqlPool) -> AnyhowResult<Option<VocoderModelRecord>> {
+  let maybe_record = if can_see_deleted { select_including_deleted(vocoder_model_token, mysql_pool).await } else { select_without_deleted(vocoder_model_token, mysql_pool).await };
 
-  let maybe_record = if can_see_deleted {
-    select_including_deleted(vocoder_model_token, mysql_pool).await
-  } else {
-    select_without_deleted(vocoder_model_token, mysql_pool).await
-  };
-
-  let model : InternalVocoderModelRecordRaw = match maybe_record {
+  let model: InternalVocoderModelRecordRaw = match maybe_record {
     Ok(model) => model,
     Err(ref err) => match err {
       sqlx::Error::RowNotFound => {
@@ -82,8 +73,8 @@ pub async fn get_vocoder_model_by_token(
       _ => {
         warn!("vocoder model query error: {:?}", &err);
         return Err(anyhow!("database error"));
-      }
-    }
+      },
+    },
   };
 
   Ok(Some(VocoderModelRecord {
@@ -100,26 +91,14 @@ pub async fn get_vocoder_model_by_token(
     creator_set_visibility: model.creator_set_visibility,
     created_at: model.created_at,
     updated_at: model.updated_at,
-    maybe_moderator_fields: Some(VocoderModelRecordModFields {
-      creator_is_banned: i8_to_bool(model.creator_is_banned),
-      creator_ip_address_creation: model.creator_ip_address_creation,
-      creator_ip_address_last_update: model.creator_ip_address_last_update,
-      is_mod_disabled_from_public_use: i8_to_bool(model.is_mod_disabled_from_public_use),
-      is_mod_disabled_from_author_use: i8_to_bool(model.is_mod_disabled_from_author_use),
-      is_mod_author_editing_locked: i8_to_bool(model.is_mod_author_editing_locked),
-      user_deleted_at: model.user_deleted_at,
-      mod_deleted_at: model.mod_deleted_at,
-    }),
+    maybe_moderator_fields: Some(VocoderModelRecordModFields { creator_is_banned: i8_to_bool(model.creator_is_banned), creator_ip_address_creation: model.creator_ip_address_creation, creator_ip_address_last_update: model.creator_ip_address_last_update, is_mod_disabled_from_public_use: i8_to_bool(model.is_mod_disabled_from_public_use), is_mod_disabled_from_author_use: i8_to_bool(model.is_mod_disabled_from_author_use), is_mod_author_editing_locked: i8_to_bool(model.is_mod_author_editing_locked), user_deleted_at: model.user_deleted_at, mod_deleted_at: model.mod_deleted_at }),
   }))
 }
 
-async fn select_including_deleted(
-  vocoder_model_token: &str,
-  mysql_pool: &MySqlPool
-) -> Result<InternalVocoderModelRecordRaw, sqlx::Error> {
+async fn select_including_deleted(vocoder_model_token: &str, mysql_pool: &MySqlPool) -> Result<InternalVocoderModelRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      InternalVocoderModelRecordRaw,
-        r#"
+    InternalVocoderModelRecordRaw,
+    r#"
 SELECT
     vocoder.token as vocoder_token,
     vocoder.vocoder_type as `vocoder_type: enums::common::vocoder_type::VocoderType`,
@@ -155,19 +134,16 @@ JOIN users
 WHERE
     vocoder.token = ?
         "#,
-      vocoder_model_token
-    )
-      .fetch_one(mysql_pool)
-      .await
+    vocoder_model_token
+  )
+  .fetch_one(mysql_pool)
+  .await
 }
 
-async fn select_without_deleted(
-  vocoder_model_token: &str,
-  mysql_pool: &MySqlPool
-) -> Result<InternalVocoderModelRecordRaw, sqlx::Error> {
+async fn select_without_deleted(vocoder_model_token: &str, mysql_pool: &MySqlPool) -> Result<InternalVocoderModelRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      InternalVocoderModelRecordRaw,
-        r#"
+    InternalVocoderModelRecordRaw,
+    r#"
 SELECT
     vocoder.token as vocoder_token,
     vocoder.vocoder_type as `vocoder_type: enums::common::vocoder_type::VocoderType`,
@@ -205,10 +181,10 @@ WHERE
     AND vocoder.user_deleted_at IS NULL
     AND vocoder.mod_deleted_at IS NULL
         "#,
-      vocoder_model_token
-    )
-      .fetch_one(mysql_pool)
-      .await
+    vocoder_model_token
+  )
+  .fetch_one(mysql_pool)
+  .await
 }
 
 struct InternalVocoderModelRecordRaw {

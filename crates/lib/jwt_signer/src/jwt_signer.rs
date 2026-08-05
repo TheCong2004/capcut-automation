@@ -14,14 +14,10 @@ pub struct JwtSigner {
 }
 
 impl JwtSigner {
-
   pub fn new(hmac_secret: &str) -> Result<Self, JwtSignerError> {
-    let hmac_key = Hmac::new_varkey(hmac_secret.as_bytes())
-        .map_err(|_| JwtSignerError::JwtInvalidKeyLength)?;
+    let hmac_key = Hmac::new_varkey(hmac_secret.as_bytes()).map_err(|_| JwtSignerError::JwtInvalidKeyLength)?;
 
-    Ok(Self {
-      hmac_key,
-    })
+    Ok(Self { hmac_key })
   }
 
   /// Turn a map of claims into a signed JWT cookie payload (string)
@@ -31,8 +27,7 @@ impl JwtSigner {
 
   /// Turn a JWT cookie payload (string) into a map of (key, value) claims
   pub fn jwt_to_claims(&self, jwt: &str) -> Result<BTreeMap<String, String>, JwtSignerError> {
-    jwt.verify_with_key(&self.hmac_key)
-      .map_err(JwtSignerError::JwtVerifyError)
+    jwt.verify_with_key(&self.hmac_key).map_err(JwtSignerError::JwtVerifyError)
   }
 }
 
@@ -42,15 +37,13 @@ pub trait Claimable {
 
 impl Claimable for BTreeMap<String, String> {
   fn sign(&self, hmac_key: &Hmac<Sha256>) -> Result<String, JwtSignerError> {
-    self.sign_with_key(hmac_key)
-      .map_err(JwtSignerError::JwtSignError)
+    self.sign_with_key(hmac_key).map_err(JwtSignerError::JwtSignError)
   }
 }
 
 impl Claimable for BTreeMap<&str, &str> {
   fn sign(&self, hmac_key: &Hmac<Sha256>) -> Result<String, JwtSignerError> {
-    self.sign_with_key(hmac_key)
-      .map_err(JwtSignerError::JwtSignError)
+    self.sign_with_key(hmac_key).map_err(JwtSignerError::JwtSignError)
   }
 }
 

@@ -53,35 +53,25 @@ pub struct SaveResultsArgs<'a> {
   pub output_video_path: &'a Path,
   pub inference_duration: Duration,
 
-  pub studio_args : &'a StudioGen2Payload,
+  pub studio_args: &'a StudioGen2Payload,
 }
 
 pub async fn validate_and_save_results(args: SaveResultsArgs<'_>) -> Result<MediaFileToken, ProcessSingleJobError> {
-
   // ==================== GET METADATA ==================== //
 
   info!("Interrogating result file size ...");
 
-  let file_size_bytes = file_size(args.output_video_path)
-      .map_err(|err| ProcessSingleJobError::Other(err))?;
+  let file_size_bytes = file_size(args.output_video_path).map_err(|err| ProcessSingleJobError::Other(err))?;
 
   info!("Interrogating result mimetype ...");
 
-  let mimetype = get_mimetype_for_file(args.output_video_path)
-      .map_err(|err| ProcessSingleJobError::from_io_error(err))?
-      .map(|mime| mime.to_string())
-      .ok_or(ProcessSingleJobError::Other(anyhow!("Mimetype could not be determined")))?;
+  let mimetype = get_mimetype_for_file(args.output_video_path).map_err(|err| ProcessSingleJobError::from_io_error(err))?.map(|mime| mime.to_string()).ok_or(ProcessSingleJobError::Other(anyhow!("Mimetype could not be determined")))?;
 
   // create ext from mimetype
-  let ext = get_file_extension(mimetype.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  let ext = get_file_extension(mimetype.as_str()).map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // Extension is really a "suffix" and should have the leading period to act as an extension.
-  let ext_suffix = if ext.starts_with(".") {
-    ext.to_string()
-  } else {
-    format!(".{ext}")
-  };
+  let ext_suffix = if ext.starts_with(".") { ext.to_string() } else { format!(".{ext}") };
 
   const PREFIX: &str = "storyteller_";
 
@@ -95,19 +85,13 @@ pub async fn validate_and_save_results(args: SaveResultsArgs<'_>) -> Result<Medi
 
   info!("Calculating sha256...");
 
-  let file_checksum = sha256_hash_file(args.output_video_path)
-      .map_err(|err| {
-        ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-      })?;
+  let file_checksum = sha256_hash_file(args.output_video_path).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
   // ==================== UPLOAD VIDEO TO BUCKET ==================== //
 
-  args.job_progress_reporter.log_status("uploading result")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_progress_reporter.log_status("uploading result").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let result_bucket_location = MediaFileBucketPath::generate_new(
-    Some(PREFIX),
-    Some(&ext_suffix));
+  let result_bucket_location = MediaFileBucketPath::generate_new(Some(PREFIX), Some(&ext_suffix));
 
   let result_bucket_object_pathbuf = result_bucket_location.to_full_object_pathbuf();
 
@@ -122,13 +106,7 @@ pub async fn validate_and_save_results(args: SaveResultsArgs<'_>) -> Result<Medi
       .await
       .map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let thumbnail_task_result = ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4)
-      .with_bucket(&*args.deps.buckets.public_bucket_client.bucket_name())
-      .with_path(&*path_to_string(result_bucket_object_pathbuf.clone()))
-      .with_output_suffix("thumb")
-      .with_event_id(&args.job.id.0.to_string())
-      .send_all()
-      .await;
+  let thumbnail_task_result = ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4).with_bucket(&*args.deps.buckets.public_bucket_client.bucket_name()).with_path(&*path_to_string(result_bucket_object_pathbuf.clone())).with_output_suffix("thumb").with_event_id(&args.job.id.0.to_string()).send_all().await;
 
   match thumbnail_task_result {
     Ok(thumbnail_task) => {
@@ -136,7 +114,7 @@ pub async fn validate_and_save_results(args: SaveResultsArgs<'_>) -> Result<Medi
     },
     Err(e) => {
       error!("Failed to create some/all thumbnail tasks: {:?}", e);
-    }
+    },
   }
 
   //// Also upload the non-watermarked copy
@@ -186,7 +164,7 @@ pub async fn validate_and_save_results(args: SaveResultsArgs<'_>) -> Result<Medi
   //  None => None,
   //};
 
-  let (media_file_token, id) = insert_media_file_from_studio_gen2(InsertArgs{
+  let (media_file_token, id) = insert_media_file_from_studio_gen2(InsertArgs {
     pool: &args.deps.db.mysql_pool,
     job: &args.job,
     maybe_mime_type: Some(&mimetype),
@@ -204,99 +182,99 @@ pub async fn validate_and_save_results(args: SaveResultsArgs<'_>) -> Result<Medi
     worker_hostname: &args.deps.job.info.container.hostname,
     worker_cluster: &args.deps.job.info.container.cluster_name,
   })
-      .await
-      .map_err(|e| {
-        error!("Error saving media file record: {:?}", e);
-        ProcessSingleJobError::Other(e)
-      })?;
+  .await
+  .map_err(|e| {
+    error!("Error saving media file record: {:?}", e);
+    ProcessSingleJobError::Other(e)
+  })?;
 
-//  let should_insert_prompt_record =
-//          args.comfy_args.disable_lcm.is_some()
-//          || args.comfy_args.global_ip_adapter_token.is_some()
-//          || args.comfy_args.lipsync_enabled.is_some()
-//          || args.comfy_args.negative_prompt.is_some()
-//          || args.comfy_args.positive_prompt.is_some()
-//          || args.comfy_args.travel_prompt.is_some()
-//          || args.comfy_args.strength.is_some()
-//          || args.comfy_args.style_name.is_some()
-//          || args.comfy_args.use_cinematic.is_some()
-//          || args.comfy_args.use_face_detailer.is_some()
-//          || args.comfy_args.use_upscaler.is_some();
-//
-//  if should_insert_prompt_record {
-//    info!("Saving prompt record");
-//
-//    let mut other_args_builder = PromptInnerPayloadBuilder::new();
-//
-//    other_args_builder.set_main_ipa_workflow(args.comfy_deps.configs.main_workflow.clone());
-//
-//    if let Some(style_name) = args.comfy_args.style_name {
-//      info!("building PromptInnerPayload with style_name = {:?}", style_name);
-//      other_args_builder.set_style_name(style_name);
-//    }
-//
-//    if args.comfy_args.use_face_detailer.unwrap_or(false) {
-//      other_args_builder.set_used_face_detailer(true);
-//      other_args_builder.set_face_detailer_workflow(args.comfy_deps.configs.face_detailer_workflow.clone());
-//    }
-//
-//    if args.comfy_args.use_upscaler.unwrap_or(false) {
-//      other_args_builder.set_used_upscaler(true);
-//      other_args_builder.set_upscaler_workflow(args.comfy_deps.configs.upscaler_workflow.clone());
-//    }
-//
-//    if args.comfy_args.lipsync_enabled.unwrap_or(false) {
-//      other_args_builder.set_lipsync_enabled(true);
-//    }
-//
-//    if args.comfy_args.disable_lcm.unwrap_or(false) {
-//      other_args_builder.set_disable_lcm(true);
-//    }
-//
-//    if args.comfy_args.use_cinematic.unwrap_or(false) {
-//      other_args_builder.set_use_cinematic(true);
-//    }
-//
-//    other_args_builder.set_strength(args.comfy_args.strength);
-//
-//    if let Ok(duration) = chrono::Duration::from_std(args.inference_duration) {
-//      // NB: Fail open.
-//      other_args_builder.set_inference_duration(Some(duration));
-//    }
-//
-//    if args.comfy_args.global_ip_adapter_token.is_some() {
-//      other_args_builder.set_global_ipa_token(args.comfy_args.global_ip_adapter_token.clone());
-//    }
-//
-//    if args.comfy_args.travel_prompt.is_some() {
-//      other_args_builder.set_travel_prompt(args.comfy_args.travel_prompt.clone());
-//    }
-//
-//    if args.comfy_args.frame_skip.is_some() {
-//      other_args_builder.set_frame_skip(args.comfy_args.frame_skip.clone());
-//    }
-//
-//    let maybe_other_args = other_args_builder.build();
-//
-//    info!("maybe other prompt args: {:?}", maybe_other_args);
-//
-//    // NB: Don't fail the job if the query fails.
-//    let prompt_result = insert_prompt(InsertPromptArgs {
-//      maybe_apriori_prompt_token: Some(&prompt_token),
-//      prompt_type: PromptType::ComfyUi,
-//      maybe_creator_user_token: args.job.maybe_creator_user_token_typed.as_ref(),
-//      maybe_positive_prompt: args.comfy_args.positive_prompt.as_deref(),
-//      maybe_negative_prompt: args.comfy_args.negative_prompt.as_deref(),
-//      maybe_other_args: maybe_other_args.as_ref(),
-//      creator_ip_address: &args.job.creator_ip_address,
-//      mysql_executor: &args.deps.db.mysql_pool,
-//      phantom: Default::default(),
-//    }).await;
-//
-//    if let Err(err) = prompt_result {
-//      error!("No prompt result token? something has failed: {:?} (we'll ignore this error)", err);
-//    }
-//  }
+  //  let should_insert_prompt_record =
+  //          args.comfy_args.disable_lcm.is_some()
+  //          || args.comfy_args.global_ip_adapter_token.is_some()
+  //          || args.comfy_args.lipsync_enabled.is_some()
+  //          || args.comfy_args.negative_prompt.is_some()
+  //          || args.comfy_args.positive_prompt.is_some()
+  //          || args.comfy_args.travel_prompt.is_some()
+  //          || args.comfy_args.strength.is_some()
+  //          || args.comfy_args.style_name.is_some()
+  //          || args.comfy_args.use_cinematic.is_some()
+  //          || args.comfy_args.use_face_detailer.is_some()
+  //          || args.comfy_args.use_upscaler.is_some();
+  //
+  //  if should_insert_prompt_record {
+  //    info!("Saving prompt record");
+  //
+  //    let mut other_args_builder = PromptInnerPayloadBuilder::new();
+  //
+  //    other_args_builder.set_main_ipa_workflow(args.comfy_deps.configs.main_workflow.clone());
+  //
+  //    if let Some(style_name) = args.comfy_args.style_name {
+  //      info!("building PromptInnerPayload with style_name = {:?}", style_name);
+  //      other_args_builder.set_style_name(style_name);
+  //    }
+  //
+  //    if args.comfy_args.use_face_detailer.unwrap_or(false) {
+  //      other_args_builder.set_used_face_detailer(true);
+  //      other_args_builder.set_face_detailer_workflow(args.comfy_deps.configs.face_detailer_workflow.clone());
+  //    }
+  //
+  //    if args.comfy_args.use_upscaler.unwrap_or(false) {
+  //      other_args_builder.set_used_upscaler(true);
+  //      other_args_builder.set_upscaler_workflow(args.comfy_deps.configs.upscaler_workflow.clone());
+  //    }
+  //
+  //    if args.comfy_args.lipsync_enabled.unwrap_or(false) {
+  //      other_args_builder.set_lipsync_enabled(true);
+  //    }
+  //
+  //    if args.comfy_args.disable_lcm.unwrap_or(false) {
+  //      other_args_builder.set_disable_lcm(true);
+  //    }
+  //
+  //    if args.comfy_args.use_cinematic.unwrap_or(false) {
+  //      other_args_builder.set_use_cinematic(true);
+  //    }
+  //
+  //    other_args_builder.set_strength(args.comfy_args.strength);
+  //
+  //    if let Ok(duration) = chrono::Duration::from_std(args.inference_duration) {
+  //      // NB: Fail open.
+  //      other_args_builder.set_inference_duration(Some(duration));
+  //    }
+  //
+  //    if args.comfy_args.global_ip_adapter_token.is_some() {
+  //      other_args_builder.set_global_ipa_token(args.comfy_args.global_ip_adapter_token.clone());
+  //    }
+  //
+  //    if args.comfy_args.travel_prompt.is_some() {
+  //      other_args_builder.set_travel_prompt(args.comfy_args.travel_prompt.clone());
+  //    }
+  //
+  //    if args.comfy_args.frame_skip.is_some() {
+  //      other_args_builder.set_frame_skip(args.comfy_args.frame_skip.clone());
+  //    }
+  //
+  //    let maybe_other_args = other_args_builder.build();
+  //
+  //    info!("maybe other prompt args: {:?}", maybe_other_args);
+  //
+  //    // NB: Don't fail the job if the query fails.
+  //    let prompt_result = insert_prompt(InsertPromptArgs {
+  //      maybe_apriori_prompt_token: Some(&prompt_token),
+  //      prompt_type: PromptType::ComfyUi,
+  //      maybe_creator_user_token: args.job.maybe_creator_user_token_typed.as_ref(),
+  //      maybe_positive_prompt: args.comfy_args.positive_prompt.as_deref(),
+  //      maybe_negative_prompt: args.comfy_args.negative_prompt.as_deref(),
+  //      maybe_other_args: maybe_other_args.as_ref(),
+  //      creator_ip_address: &args.job.creator_ip_address,
+  //      mysql_executor: &args.deps.db.mysql_pool,
+  //      phantom: Default::default(),
+  //    }).await;
+  //
+  //    if let Err(err) = prompt_result {
+  //      error!("No prompt result token? something has failed: {:?} (we'll ignore this error)", err);
+  //    }
+  //  }
 
   info!("Result video media token: {:?}", &media_file_token);
 

@@ -15,10 +15,7 @@ impl DatadogApiKey {
     let trimmed = s.trim();
     if trimmed.len() != s.len() {
       // Don't log the key itself, just that we cleaned it.
-      log::warn!(
-        "DatadogApiKey: trimmed {} surrounding whitespace byte(s) from input",
-        s.len() - trimmed.len(),
-      );
+      log::warn!("DatadogApiKey: trimmed {} surrounding whitespace byte(s) from input", s.len() - trimmed.len(),);
     }
     Self(trimmed.to_string())
   }

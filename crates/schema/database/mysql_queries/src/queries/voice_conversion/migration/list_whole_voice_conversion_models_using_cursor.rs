@@ -66,35 +66,28 @@ pub struct WholeVoiceConversionModelRecord {
   pub mod_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn list_whole_voice_conversion_models_using_cursor(
-  mysql_pool: &MySqlPool,
-  page_size: u64,
-  cursor: u64,
-) -> AnyhowResult<Vec<WholeVoiceConversionModelRecord>> {
+pub async fn list_whole_voice_conversion_models_using_cursor(mysql_pool: &MySqlPool, page_size: u64, cursor: u64) -> AnyhowResult<Vec<WholeVoiceConversionModelRecord>> {
   let mut connection = mysql_pool.acquire().await?;
 
-  let maybe_models
-      = list_whole_voice_conversion_models(&mut connection, page_size, cursor)
-        .await;
+  let maybe_models = list_whole_voice_conversion_models(&mut connection, page_size, cursor).await;
 
-  let models : Vec<RawRecord> = match maybe_models {
+  let models: Vec<RawRecord> = match maybe_models {
     Ok(models) => models,
     Err(err) => {
       return match err {
-        Error::RowNotFound => {
-          Ok(Vec::new())
-        },
+        Error::RowNotFound => Ok(Vec::new()),
         _ => {
           warn!("vc model list query error: {:?}", err);
           Err(anyhow!("vc model list query error"))
-        }
+        },
       }
-    }
+    },
   };
 
-  Ok(models.into_iter()
-    .map(|model| {
-      WholeVoiceConversionModelRecord {
+  Ok(
+    models
+      .into_iter()
+      .map(|model| WholeVoiceConversionModelRecord {
         id: model.id,
         token: model.token,
         model_type: model.model_type,
@@ -125,19 +118,16 @@ pub async fn list_whole_voice_conversion_models_using_cursor(
         updated_at: model.updated_at,
         user_deleted_at: model.user_deleted_at,
         mod_deleted_at: model.mod_deleted_at,
-      }
-    })
-    .collect::<Vec<WholeVoiceConversionModelRecord>>())
+      })
+      .collect::<Vec<WholeVoiceConversionModelRecord>>(),
+  )
 }
 
-async fn list_whole_voice_conversion_models(
-  mysql_connection: &mut PoolConnection<MySql>,
-  page_size: u64,
-  cursor: u64,
-) -> Result<Vec<RawRecord>, Error> {
-  Ok(sqlx::query_as!(
+async fn list_whole_voice_conversion_models(mysql_connection: &mut PoolConnection<MySql>, page_size: u64, cursor: u64) -> Result<Vec<RawRecord>, Error> {
+  Ok(
+    sqlx::query_as!(
       RawRecord,
-        r#"
+      r#"
 SELECT
     id,
     token as `token: tokens::tokens::voice_conversion_models::VoiceConversionModelToken`,
@@ -194,9 +184,10 @@ LIMIT ?
         "#,
       cursor,
       page_size
+    )
+    .fetch_all(&mut **mysql_connection)
+    .await?,
   )
-      .fetch_all(&mut **mysql_connection)
-      .await?)
 }
 
 struct RawRecord {
@@ -234,7 +225,7 @@ struct RawRecord {
   pub private_bucket_object_name: String,
 
   pub is_public_listing_approved: Option<i8>, // bool
-  pub is_locked_from_user_modification: i8, // bool
+  pub is_locked_from_user_modification: i8,   // bool
 
   pub maybe_mod_comments: Option<String>,
 

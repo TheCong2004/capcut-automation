@@ -27,9 +27,7 @@ pub struct ListUserReferralsForUserArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn list_user_referrals_for_user(
-  args: ListUserReferralsForUserArgs<'_>,
-) -> Result<Vec<UserReferralListItem>, sqlx::Error> {
+pub async fn list_user_referrals_for_user(args: ListUserReferralsForUserArgs<'_>) -> Result<Vec<UserReferralListItem>, sqlx::Error> {
   let limit = args.limit as i64;
 
   let rows = match args.maybe_cursor_id {
@@ -62,9 +60,9 @@ LIMIT ?
         cursor_id as u64,
         limit,
       )
-        .fetch_all(args.mysql_pool)
-        .await?
-    }
+      .fetch_all(args.mysql_pool)
+      .await?
+    },
     None => {
       sqlx::query_as!(
         RawRow,
@@ -92,23 +90,10 @@ LIMIT ?
         args.referrer_username,
         limit,
       )
-        .fetch_all(args.mysql_pool)
-        .await?
-    }
+      .fetch_all(args.mysql_pool)
+      .await?
+    },
   };
 
-  Ok(rows.into_iter().map(|r| UserReferralListItem {
-    id: r.id,
-    invited_user_token: r.invited_user_token,
-    invited_username: r.invited_username,
-    invited_display_name: r.invited_display_name,
-    invited_email_address: r.invited_email_address,
-    referrer_user_token: r.referrer_user_token,
-    referrer_username: r.referrer_username,
-    referrer_display_name: r.referrer_display_name,
-    maybe_referral_code_token: r.maybe_referral_code_token,
-    maybe_referral_url: r.maybe_referral_url,
-    maybe_landing_url: r.maybe_landing_url,
-    created_at: r.created_at.and_utc(),
-  }).collect())
+  Ok(rows.into_iter().map(|r| UserReferralListItem { id: r.id, invited_user_token: r.invited_user_token, invited_username: r.invited_username, invited_display_name: r.invited_display_name, invited_email_address: r.invited_email_address, referrer_user_token: r.referrer_user_token, referrer_username: r.referrer_username, referrer_display_name: r.referrer_display_name, maybe_referral_code_token: r.maybe_referral_code_token, maybe_referral_url: r.maybe_referral_url, maybe_landing_url: r.maybe_landing_url, created_at: r.created_at.and_utc() }).collect())
 }

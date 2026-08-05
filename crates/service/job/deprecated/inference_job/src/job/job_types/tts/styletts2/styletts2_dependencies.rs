@@ -11,10 +11,6 @@ pub struct StyleTTS2Dependencies {
 
 impl StyleTTS2Dependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      create_embedding_command: StyleTTS2CreateEmbeddingCommand::from_env()?,
-      downloaders: StyleTTS2Downloaders::build_all_from_env(),
-      inference_command: StyleTTS2InferenceCommand::from_env()?,
-    })
+    Ok(Self { create_embedding_command: StyleTTS2CreateEmbeddingCommand::from_env()?, downloaders: StyleTTS2Downloaders::build_all_from_env(), inference_command: StyleTTS2InferenceCommand::from_env()? })
   }
 }

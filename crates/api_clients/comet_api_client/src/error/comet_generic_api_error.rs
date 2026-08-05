@@ -11,10 +11,7 @@ pub enum CometGenericApiError {
   SerdeResponseParseErrorWithBody(serde_json::Error, String),
 
   /// An uncategorized bad HTTP response with status code and body.
-  UncategorizedBadResponseWithStatusAndBody {
-    status_code: StatusCode,
-    body: String,
-  },
+  UncategorizedBadResponseWithStatusAndBody { status_code: StatusCode, body: String },
 
   /// An uncaught error from the HTTP client (network failures, timeouts, etc.)
   ReqwestError(reqwest::Error),

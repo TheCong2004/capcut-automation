@@ -17,7 +17,7 @@ use tokens::tokens::user_bookmarks::UserBookmarkToken;
 
 use crate::state::server_state::ServerState;
 
-const MAX_BATCH_SIZE : usize = 200;
+const MAX_BATCH_SIZE: usize = 200;
 
 // =============== Request ===============
 
@@ -91,7 +91,6 @@ impl std::fmt::Display for BatchGetUserBookmarksError {
 
 // =============== Handler ===============
 
-
 #[utoipa::path(
   get,
   tag = "User Bookmarks",
@@ -106,26 +105,16 @@ impl std::fmt::Display for BatchGetUserBookmarksError {
     (status = 500, description = "Server error", body = BatchGetUserBookmarksError),
   ),
 )]
-pub async fn batch_get_user_bookmarks_handler(
-  http_request: HttpRequest,
-  query: Query<BatchGetUserBookmarksQueryParams>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, BatchGetUserBookmarksError>
-{
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        error!("Could not acquire DB pool: {:?}", e);
-        BatchGetUserBookmarksError::ServerError
-      })?;
+pub async fn batch_get_user_bookmarks_handler(http_request: HttpRequest, query: Query<BatchGetUserBookmarksQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, BatchGetUserBookmarksError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    error!("Could not acquire DB pool: {:?}", e);
+    BatchGetUserBookmarksError::ServerError
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        BatchGetUserBookmarksError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    BatchGetUserBookmarksError::ServerError
+  })?;
 
   // NB: Force move of tokens from the Query<T>.
   // The auto-magical Query<T> will ordinarily try to force a Copy, which isn't on HashSet.
@@ -140,32 +129,17 @@ pub async fn batch_get_user_bookmarks_handler(
       let bookmarks = fill_in_missed_bookmarks(&tokens, Vec::new());
 
       // NB: Just return "neutral" for everything.
-      return Ok(HttpResponse::Ok()
-          .content_type("application/json")
-          .json(BatchGetUserBookmarksResponse {
-            success: true,
-            bookmarks,
-          }));
-    }
+      return Ok(HttpResponse::Ok().content_type("application/json").json(BatchGetUserBookmarksResponse { success: true, bookmarks }));
+    },
   };
 
-  batch_get_user_bookmarks(
-    &user_session.user_token,
-    &tokens,
-    &mut mysql_connection
-  ).await
-      .map_err(|e| {
-        error!("Batch get user ratings DB error: {:?}", e);
-        BatchGetUserBookmarksError::ServerError
-      })
-      .map(|bookmarks| {
-        HttpResponse::Ok()
-            .content_type("application/json")
-            .json(BatchGetUserBookmarksResponse {
-              success: true,
-              bookmarks: fill_in_missed_bookmarks(&tokens, bookmarks),
-            })
-      })
+  batch_get_user_bookmarks(&user_session.user_token, &tokens, &mut mysql_connection)
+    .await
+    .map_err(|e| {
+      error!("Batch get user ratings DB error: {:?}", e);
+      BatchGetUserBookmarksError::ServerError
+    })
+    .map(|bookmarks| HttpResponse::Ok().content_type("application/json").json(BatchGetUserBookmarksResponse { success: true, bookmarks: fill_in_missed_bookmarks(&tokens, bookmarks) }))
 }
 
 fn fill_in_missed_bookmarks(request_tokens: &HashSet<String>, db_response: Vec<BatchUserBookmark>) -> Vec<BookmarkRow> {
@@ -174,38 +148,42 @@ fn fill_in_missed_bookmarks(request_tokens: &HashSet<String>, db_response: Vec<B
   for record in db_response.into_iter() {
     let is_bookmarked = record.maybe_deleted_at.is_none();
 
-    outputs.insert(record.entity_token.clone(), BookmarkRow {
-      // NB: We clear out the token if it's deleted for the sake of the frontend.
-      maybe_bookmark_token: if is_bookmarked { Some(record.token) } else { None },
-      entity_token: record.entity_token,
-      entity_type: record.entity_type,
-      is_bookmarked,
-    });
+    outputs.insert(
+      record.entity_token.clone(),
+      BookmarkRow {
+        // NB: We clear out the token if it's deleted for the sake of the frontend.
+        maybe_bookmark_token: if is_bookmarked { Some(record.token) } else { None },
+        entity_token: record.entity_token,
+        entity_type: record.entity_type,
+        is_bookmarked,
+      },
+    );
   }
 
   for request_token in request_tokens.iter() {
     if !outputs.contains_key(request_token) {
-      outputs.insert(request_token.clone(), BookmarkRow {
-        entity_token: request_token.clone(),
-        entity_type: {
-          if request_token.starts_with(MediaFileToken::token_prefix()) {
-            UserBookmarkEntityType::MediaFile
-          } else if request_token.starts_with(ModelWeightToken::token_prefix()) {
-            UserBookmarkEntityType::ModelWeight
-          } else if request_token.starts_with(TtsModelToken::token_prefix()) {
-            UserBookmarkEntityType::TtsModel
-          } else {
-            // NB: Fail open; W2lTemplates are dead, so this is a good sentinel value
-            UserBookmarkEntityType::W2lTemplate
-          }
+      outputs.insert(
+        request_token.clone(),
+        BookmarkRow {
+          entity_token: request_token.clone(),
+          entity_type: {
+            if request_token.starts_with(MediaFileToken::token_prefix()) {
+              UserBookmarkEntityType::MediaFile
+            } else if request_token.starts_with(ModelWeightToken::token_prefix()) {
+              UserBookmarkEntityType::ModelWeight
+            } else if request_token.starts_with(TtsModelToken::token_prefix()) {
+              UserBookmarkEntityType::TtsModel
+            } else {
+              // NB: Fail open; W2lTemplates are dead, so this is a good sentinel value
+              UserBookmarkEntityType::W2lTemplate
+            }
+          },
+          is_bookmarked: false,
+          maybe_bookmark_token: None,
         },
-        is_bookmarked: false,
-        maybe_bookmark_token: None,
-      });
+      );
     }
   }
 
-  outputs.into_iter()
-      .map(|(_key, value)| value)
-      .collect::<Vec<_>>()
+  outputs.into_iter().map(|(_key, value)| value).collect::<Vec<_>>()
 }

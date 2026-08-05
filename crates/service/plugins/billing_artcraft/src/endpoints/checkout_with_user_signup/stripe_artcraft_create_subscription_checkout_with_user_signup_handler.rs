@@ -46,17 +46,7 @@ use user_traits_component::traits::internal_session_cache_purge::InternalSession
 
 /// Create a Stripe Checkout session *with* user signup and return the redirect URL in Json.
 /// If the user is already logged in, we just attach it to that record instead.
-pub async fn stripe_artcraft_create_subscription_checkout_with_user_signup_handler(
-  http_request: HttpRequest,
-  request: Json<StripeArtcraftCreateSubscriptionCheckoutWithUserSignupRequest>,
-  stripe_config: Data<ArtcraftStripeConfigWithClient>,
-  server_environment: Data<ServerEnvironment>,
-  session_cookie_manager: web::Data<HttpUserSessionManager>,
-  internal_user_lookup: Data<dyn InternalUserLookup>,
-  internal_session_cache_purge: Data<dyn InternalSessionCachePurge>,
-  mysql_pool: Data<MySqlPool>,
-) -> Result<HttpResponse, CommonWebError>
-{
+pub async fn stripe_artcraft_create_subscription_checkout_with_user_signup_handler(http_request: HttpRequest, request: Json<StripeArtcraftCreateSubscriptionCheckoutWithUserSignupRequest>, stripe_config: Data<ArtcraftStripeConfigWithClient>, server_environment: Data<ServerEnvironment>, session_cookie_manager: web::Data<HttpUserSessionManager>, internal_user_lookup: Data<dyn InternalUserLookup>, internal_session_cache_purge: Data<dyn InternalSessionCachePurge>, mysql_pool: Data<MySqlPool>) -> Result<HttpResponse, CommonWebError> {
   let slug = match request.plan {
     None => return Err(CommonWebError::BadInputWithSimpleMessage("no plan supplied".to_string())),
     Some(slug) => slug,
@@ -69,75 +59,41 @@ pub async fn stripe_artcraft_create_subscription_checkout_with_user_signup_handl
 
   let plan = get_artcraft_subscription_by_slug_and_env(slug, **server_environment);
 
-  let mut mysql_connection = mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("Could not acquire mysql connection: {:?}", err);
-        CommonWebError::ServerError
-      })?;
+  let mut mysql_connection = mysql_pool.acquire().await.map_err(|err| {
+    error!("Could not acquire mysql connection: {:?}", err);
+    CommonWebError::ServerError
+  })?;
 
   let price_id = match cadence {
     PlanBillingCadence::Monthly => plan.monthly_price_id.clone(),
     PlanBillingCadence::Yearly => plan.yearly_price_id.clone(),
   };
 
-  let price_id = PriceId::from_str(&price_id)
-      .map_err(|err| {
-        error!("Error parsing price id: {:?}", err);
-        CommonWebError::ServerError
-      })?;
+  let price_id = PriceId::from_str(&price_id).map_err(|err| {
+    error!("Error parsing price id: {:?}", err);
+    CommonWebError::ServerError
+  })?;
 
-  let maybe_referral_url = request.maybe_referral_url.clone()
-    .or_else(|| {
-      http_request.headers().get("referer")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-    });
+  let maybe_referral_url = request.maybe_referral_url.clone().or_else(|| http_request.headers().get("referer").and_then(|v| v.to_str().ok()).map(|s| s.to_string()));
 
   let maybe_landing_url = request.maybe_landing_url.clone();
 
   // Resolve referral info from code (preferred) or username (fallback).
-  let referral_info = resolve_referral_info(
-    request.maybe_referral_code.as_deref(),
-    request.maybe_referral_username.as_deref(),
-    &mut mysql_connection,
-  ).await;
+  let referral_info = resolve_referral_info(request.maybe_referral_code.as_deref(), request.maybe_referral_username.as_deref(), &mut mysql_connection).await;
 
-  let maybe_user_metadata = internal_user_lookup
-      .lookup_user_from_http_request_and_mysql_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error looking up user: {:?}", err);
-        CommonWebError::ServerError // NB: This was probably *our* fault.
-      })?;
+  let maybe_user_metadata = internal_user_lookup.lookup_user_from_http_request_and_mysql_connection(&http_request, &mut mysql_connection).await.map_err(|err| {
+    error!("Error looking up user: {:?}", err);
+    CommonWebError::ServerError // NB: This was probably *our* fault.
+  })?;
 
-  let creation_payload= match maybe_user_metadata {
+  let creation_payload = match maybe_user_metadata {
     None => {
       info!("Creating new user, then creating checkout session...");
-      let payload = user_creation_case(
-        &http_request,
-        &price_id,
-        &mut mysql_connection,
-        &stripe_config,
-        maybe_referral_url.clone(),
-        maybe_landing_url.clone(),
-        referral_info.maybe_referral_partner,
-        referral_info.maybe_referral_user_token.clone(),
-      ).await?;
+      let payload = user_creation_case(&http_request, &price_id, &mut mysql_connection, &stripe_config, maybe_referral_url.clone(), maybe_landing_url.clone(), referral_info.maybe_referral_partner, referral_info.maybe_referral_user_token.clone()).await?;
 
       // Record the referral relationship if we resolved a referrer.
       if let (Some(new_user), Some(referrer_user_token)) = (&payload.maybe_new_user_metadata, &referral_info.maybe_referral_user_token) {
-        if let Err(err) = insert_user_referral(
-          InsertUserReferralArgs {
-            invited_user_token: &new_user.user_token,
-            referrer_user_token,
-            maybe_referral_code_token: referral_info.maybe_referral_code_token.as_ref(),
-            maybe_referral_url: maybe_referral_url.as_deref(),
-            maybe_landing_url: maybe_landing_url.as_deref(),
-          },
-          &mut *mysql_connection,
-        ).await {
+        if let Err(err) = insert_user_referral(InsertUserReferralArgs { invited_user_token: &new_user.user_token, referrer_user_token, maybe_referral_code_token: referral_info.maybe_referral_code_token.as_ref(), maybe_referral_url: maybe_referral_url.as_deref(), maybe_landing_url: maybe_landing_url.as_deref() }, &mut *mysql_connection).await {
           warn!("Failed to insert user_referral record (continuing): {:?}", err);
         }
       }
@@ -146,12 +102,7 @@ pub async fn stripe_artcraft_create_subscription_checkout_with_user_signup_handl
     },
     Some(user_metadata) => {
       info!("Creating checkout session for user: {:?}", user_metadata.user_token_typed);
-      user_exists_case(
-        &price_id,
-        &user_metadata,
-        &mut mysql_connection,
-        &stripe_config,
-      ).await?
+      user_exists_case(&price_id, &user_metadata, &mut mysql_connection, &stripe_config).await?
     },
   };
 
@@ -162,45 +113,30 @@ pub async fn stripe_artcraft_create_subscription_checkout_with_user_signup_handl
     None => {
       info!("delevering response for existing user...");
       create_http_response_existing_user(creation_payload.checkout_session)
-    }
+    },
     Some(user_metadata) => {
       info!("delevering response for new user...");
       create_http_response_new_user(&session_cookie_manager, creation_payload.checkout_session, user_metadata)
-    }
+    },
   }
 }
 
-pub fn create_http_response_existing_user(
-  checkout_session: CheckoutSession,
-) -> Result<HttpResponse, CommonWebError> {
+pub fn create_http_response_existing_user(checkout_session: CheckoutSession) -> Result<HttpResponse, CommonWebError> {
   let url = checkout_session.url.ok_or(CommonWebError::ServerError)?;
 
-  let response = StripeArtcraftCreateSubscriptionCheckoutWithUserSignupResponse {
-    success: true,
-    stripe_checkout_redirect_url: url,
-    generated_user: None,
-    session: None,
-  };
+  let response = StripeArtcraftCreateSubscriptionCheckoutWithUserSignupResponse { success: true, stripe_checkout_redirect_url: url, generated_user: None, session: None };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|_e| CommonWebError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|_e| CommonWebError::ServerError)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type(CONTENT_TYPE_APPLICATION_JSON)
-      .body(body))
+  Ok(HttpResponse::Ok().content_type(CONTENT_TYPE_APPLICATION_JSON).body(body))
 }
 
-pub fn create_http_response_new_user(
-  session_cookie_manager: &HttpUserSessionManager,
-  checkout_session: CheckoutSession,
-  user_metadata: UserMetadata,
-) -> Result<HttpResponse, CommonWebError> {
-  
+pub fn create_http_response_new_user(session_cookie_manager: &HttpUserSessionManager, checkout_session: CheckoutSession, user_metadata: UserMetadata) -> Result<HttpResponse, CommonWebError> {
   let session_cookie = match session_cookie_manager.create_cookie(&user_metadata.session_token, &user_metadata.user_token) {
     Ok(cookie) => cookie,
     Err(err) => {
       error!("Error creating session cookie: {:?}", err);
-      return Err(CommonWebError::ServerError)
+      return Err(CommonWebError::ServerError);
     },
   };
 
@@ -208,31 +144,17 @@ pub fn create_http_response_new_user(
     Ok(payload) => payload,
     Err(err) => {
       error!("Error encoding session payload: {:?}", err);
-      return Err(CommonWebError::ServerError)
+      return Err(CommonWebError::ServerError);
     },
   };
 
   let url = checkout_session.url.ok_or(CommonWebError::ServerError)?;
 
-  let response = StripeArtcraftCreateSubscriptionCheckoutWithUserSignupResponse {
-    success: true,
-    stripe_checkout_redirect_url: url,
-    generated_user: Some(UserDetails {
-      username: user_metadata.username,
-      display_name: user_metadata.display_name,
-    }),
-    session: Some(SessionDetails {
-      signed_session,
-    }),
-  };
+  let response = StripeArtcraftCreateSubscriptionCheckoutWithUserSignupResponse { success: true, stripe_checkout_redirect_url: url, generated_user: Some(UserDetails { username: user_metadata.username, display_name: user_metadata.display_name }), session: Some(SessionDetails { signed_session }) };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|_e| CommonWebError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|_e| CommonWebError::ServerError)?;
 
-  Ok(HttpResponse::Ok()
-      .cookie(session_cookie)
-      .content_type(CONTENT_TYPE_APPLICATION_JSON)
-      .body(body))
+  Ok(HttpResponse::Ok().cookie(session_cookie).content_type(CONTENT_TYPE_APPLICATION_JSON).body(body))
 }
 
 struct ResolvedReferralInfo {
@@ -242,11 +164,7 @@ struct ResolvedReferralInfo {
 }
 
 /// Resolve referral info from code (preferred) or username (fallback).
-async fn resolve_referral_info(
-  maybe_referral_code: Option<&str>,
-  maybe_referral_username: Option<&str>,
-  mysql_connection: &mut sqlx::pool::PoolConnection<sqlx::MySql>,
-) -> ResolvedReferralInfo {
+async fn resolve_referral_info(maybe_referral_code: Option<&str>, maybe_referral_username: Option<&str>, mysql_connection: &mut sqlx::pool::PoolConnection<sqlx::MySql>) -> ResolvedReferralInfo {
   // Try referral code first.
   if let Some(raw_code) = maybe_referral_code {
     let trimmed = raw_code.trim();
@@ -255,18 +173,14 @@ async fn resolve_referral_info(
       match lookup_referral_code_by_code(&code_lowercase, &mut **mysql_connection).await {
         Ok(Some(result)) => {
           let partner = trimmed[..trimmed.len().min(32)].to_string();
-          return ResolvedReferralInfo {
-            maybe_referral_partner: Some(partner),
-            maybe_referral_user_token: Some(result.owner_user_token),
-            maybe_referral_code_token: Some(result.token),
-          };
-        }
+          return ResolvedReferralInfo { maybe_referral_partner: Some(partner), maybe_referral_user_token: Some(result.owner_user_token), maybe_referral_code_token: Some(result.token) };
+        },
         Ok(None) => {
           // Code not found — fall through to username lookup.
-        }
+        },
         Err(err) => {
           warn!("Referral code lookup failed (continuing): {:?}", err);
-        }
+        },
       }
     }
   }
@@ -274,11 +188,7 @@ async fn resolve_referral_info(
   // Fall back to referral username.
   if let Some(raw) = maybe_referral_username {
     let trimmed = raw.trim();
-    let maybe_partner = if trimmed.is_empty() {
-      None
-    } else {
-      Some(trimmed[..trimmed.len().min(32)].to_string())
-    };
+    let maybe_partner = if trimmed.is_empty() { None } else { Some(trimmed[..trimmed.len().min(32)].to_string()) };
 
     let lookup_username = trimmed.to_lowercase();
     let maybe_user_token = if lookup_username.is_empty() {
@@ -289,20 +199,12 @@ async fn resolve_referral_info(
         Err(err) => {
           warn!("Referral user lookup failed (continuing): {:?}", err);
           None
-        }
+        },
       }
     };
 
-    return ResolvedReferralInfo {
-      maybe_referral_partner: maybe_partner,
-      maybe_referral_user_token: maybe_user_token,
-      maybe_referral_code_token: None,
-    };
+    return ResolvedReferralInfo { maybe_referral_partner: maybe_partner, maybe_referral_user_token: maybe_user_token, maybe_referral_code_token: None };
   }
 
-  ResolvedReferralInfo {
-    maybe_referral_partner: None,
-    maybe_referral_user_token: None,
-    maybe_referral_code_token: None,
-  }
+  ResolvedReferralInfo { maybe_referral_partner: None, maybe_referral_user_token: None, maybe_referral_code_token: None }
 }

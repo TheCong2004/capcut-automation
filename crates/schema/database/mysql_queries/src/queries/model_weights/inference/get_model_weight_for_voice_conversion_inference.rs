@@ -39,25 +39,19 @@ impl std::fmt::Display for ModelWeightError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       ModelWeightError::ModelDeleted => write!(f, "ModelDeleted"),
-      ModelWeightError::DatabaseError { reason} =>
-        write!(f, "Database error: {:?}", reason),
+      ModelWeightError::DatabaseError { reason } => write!(f, "Database error: {:?}", reason),
     }
   }
 }
 
 impl std::error::Error for ModelWeightError {}
 
-
-pub async fn get_model_weight_for_voice_conversion_inference(
-  pool: &MySqlPool,
-  model_weight_token: &ModelWeightToken
-) -> Result<Option<ModelWeightForVoiceConversionInference>, ModelWeightError>
-{
+pub async fn get_model_weight_for_voice_conversion_inference(pool: &MySqlPool, model_weight_token: &ModelWeightToken) -> Result<Option<ModelWeightForVoiceConversionInference>, ModelWeightError> {
   // NB: Lookup failure is Err(RowNotFound).
   // NB: Since this is publicly exposed, we don't query sensitive data.
   let maybe_model = sqlx::query_as!(
-      InternalRecord,
-        r#"
+    InternalRecord,
+    r#"
 SELECT
     w.token as `token: tokens::tokens::model_weights::ModelWeightToken`,
     w.weights_type as `weights_type: enums::by_table::model_weights::weights_types::WeightsType`,
@@ -80,45 +74,29 @@ ON vc.model_weights_token = w.token
 
 WHERE w.token = ?
         "#,
-      model_weight_token
-    )
-      .fetch_one(pool)
-      .await; // TODO: This will return error if it doesn't exist
+    model_weight_token
+  )
+  .fetch_one(pool)
+  .await; // TODO: This will return error if it doesn't exist
 
-  let model : InternalRecord = match maybe_model {
+  let model: InternalRecord = match maybe_model {
     Ok(model) => model,
     Err(err) => {
       return match err {
-        sqlx::Error::RowNotFound => {
-          Ok(None)
-        },
+        sqlx::Error::RowNotFound => Ok(None),
         _ => {
           warn!("voice conversion model query error: {:?}", err);
-          Err(ModelWeightError::DatabaseError {
-            reason: format!("Mysql error: {:?}", err)
-          })
-        }
+          Err(ModelWeightError::DatabaseError { reason: format!("Mysql error: {:?}", err) })
+        },
       }
-    }
+    },
   };
 
   if model.mod_deleted_at.is_some() || model.user_deleted_at.is_some() {
     return Err(ModelWeightError::ModelDeleted);
   }
 
-  Ok(Some(ModelWeightForVoiceConversionInference {
-    token: model.token,
-    weights_type: model.weights_type,
-    title: model.title,
-    has_index_file: i8_to_bool(model.has_index_file),
-    public_bucket_hash: model.public_bucket_hash,
-    maybe_public_bucket_prefix: model.maybe_public_bucket_prefix,
-    maybe_public_bucket_extension: model.maybe_public_bucket_extension,
-    created_at: model.created_at,
-    updated_at: model.updated_at,
-    mod_deleted_at: model.mod_deleted_at,
-    user_deleted_at: model.user_deleted_at,
-  }))
+  Ok(Some(ModelWeightForVoiceConversionInference { token: model.token, weights_type: model.weights_type, title: model.title, has_index_file: i8_to_bool(model.has_index_file), public_bucket_hash: model.public_bucket_hash, maybe_public_bucket_prefix: model.maybe_public_bucket_prefix, maybe_public_bucket_extension: model.maybe_public_bucket_extension, created_at: model.created_at, updated_at: model.updated_at, mod_deleted_at: model.mod_deleted_at, user_deleted_at: model.user_deleted_at }))
 }
 
 struct InternalRecord {

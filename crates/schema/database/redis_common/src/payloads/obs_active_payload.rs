@@ -1,4 +1,3 @@
-
 // TODO: Rename, document
 
 use errors::AnyhowResult;
@@ -10,9 +9,7 @@ pub struct ObsActivePayload {
 
 impl ObsActivePayload {
   pub fn new(twitch_user_id: &str) -> Self {
-    Self {
-      twitch_user_id: twitch_user_id.to_string(),
-    }
+    Self { twitch_user_id: twitch_user_id.to_string() }
   }
 
   pub fn from_json_str(json: &str) -> AnyhowResult<Self> {

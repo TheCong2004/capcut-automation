@@ -21,9 +21,7 @@ where
 /// Update an API key's `maybe_description`, also refreshing `ip_address_update`
 /// (and, via the column's `ON UPDATE` clause, `updated_at`). Scoped to live keys
 /// only. Returns the number of rows affected (0 if no live key matched).
-pub async fn update_api_key<'e, 'c: 'e, E>(
-  args: UpdateApiKeyArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn update_api_key<'e, 'c: 'e, E>(args: UpdateApiKeyArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -41,8 +39,8 @@ LIMIT 1
     args.ip_address,
     args.token.as_str(),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(result.rows_affected())
 }

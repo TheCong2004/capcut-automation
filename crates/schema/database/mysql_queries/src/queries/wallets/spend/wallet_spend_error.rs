@@ -7,33 +7,28 @@ use crate::errors::select_optional_record_error::SelectOptionalRecordError;
 pub enum WalletSpendError {
   /// Requested an invalid amount to spend.
   InvalidAmountToSpend,
-  
+
   /// Not enough funds to cover the spend
-  InsufficientBalance {
-    requested_to_spend_amount: u64,
-    available_amount: u64,
-  },
-  
+  InsufficientBalance { requested_to_spend_amount: u64, available_amount: u64 },
+
   /// Error selecting the wallet
   SelectError(SelectExactlyOneError),
 
   /// Error selecting the wallet
   SelectOptionalError(SelectOptionalRecordError),
-  
+
   /// Error updating the wallet
   SqlxError(sqlx::Error),
 }
 
 impl Error for WalletSpendError {}
 
-
 impl Display for WalletSpendError {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       WalletSpendError::InvalidAmountToSpend => write!(f, "Invalid amount to spend"),
       WalletSpendError::InsufficientBalance { requested_to_spend_amount, available_amount } => {
-        write!(f, "Insufficient balance: requested to spend {}, but only {} available",
-          requested_to_spend_amount, available_amount)
+        write!(f, "Insufficient balance: requested to spend {}, but only {} available", requested_to_spend_amount, available_amount)
       },
       WalletSpendError::SelectError(err) => write!(f, "Error selecting wallet: {}", err),
       WalletSpendError::SelectOptionalError(err) => write!(f, "Error selecting wallet: {}", err),
@@ -59,4 +54,3 @@ impl From<sqlx::Error> for WalletSpendError {
     WalletSpendError::SqlxError(err)
   }
 }
-

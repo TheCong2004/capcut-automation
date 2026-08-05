@@ -26,9 +26,7 @@ pub struct ModelTokenToInfoCache {
 
 impl ModelTokenToInfoCache {
   pub fn new() -> Self {
-    Self {
-      database: Arc::new(RwLock::new(HashMap::new())),
-    }
+    Self { database: Arc::new(RwLock::new(HashMap::new())) }
   }
 
   pub fn insert_one(&self, token: &str, info: &ModelInfoForInferenceJob) -> AnyhowResult<()> {
@@ -36,7 +34,7 @@ impl ModelTokenToInfoCache {
       Err(err) => return Err(anyhow!("lock err: {:?}", err)),
       Ok(mut lock) => {
         lock.insert(token.to_string(), info.clone());
-      }
+      },
     }
     Ok(())
   }
@@ -48,7 +46,7 @@ impl ModelTokenToInfoCache {
         for (token, info) in records.into_iter() {
           lock.insert(token, info);
         }
-      }
+      },
     }
     Ok(())
   }
@@ -56,9 +54,7 @@ impl ModelTokenToInfoCache {
   pub fn get_info(&self, token: &str) -> AnyhowResult<Option<ModelInfoForInferenceJob>> {
     match self.database.read() {
       Err(err) => Err(anyhow!("lock err: {:?}", err)),
-      Ok(lock) => {
-        Ok(lock.get(token).map(|item| item.clone()))
-      }
+      Ok(lock) => Ok(lock.get(token).map(|item| item.clone())),
     }
   }
 }

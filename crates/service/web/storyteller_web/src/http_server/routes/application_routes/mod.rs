@@ -26,4 +26,4 @@ mod wallet_routes;
 mod web_referrals_routes;
 mod webhook_routes;
 mod weights_routes;
-pub (super) mod add_application_routes;
+pub(super) mod add_application_routes;

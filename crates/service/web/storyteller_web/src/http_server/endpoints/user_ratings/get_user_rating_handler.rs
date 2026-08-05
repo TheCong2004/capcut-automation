@@ -44,7 +44,6 @@ pub struct GetUserRatingResponse {
 // NB: Not using DeriveMore since Clion doesn't understand it.
 // =============== Handler ===============
 
-
 #[utoipa::path(
   get,
   tag = "User Ratings",
@@ -60,65 +59,43 @@ pub struct GetUserRatingResponse {
     (status = 500, description = "Server error", body = CommonWebError),
   ),
 )]
-pub async fn get_user_rating_handler(
-  http_request: HttpRequest,
-  path: web::Path<GetUserRatingPath>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetUserRatingResponse>, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        error!("Could not acquire DB pool: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn get_user_rating_handler(http_request: HttpRequest, path: web::Path<GetUserRatingPath>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetUserRatingResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    error!("Could not acquire DB pool: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       info!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
-  let entity= match path.entity_type {
-    UserRatingEntityType::TtsModel => UserRatingEntity::TtsModel(
-      TtsModelToken::new_from_str(&path.entity_token)),
+  let entity = match path.entity_type {
+    UserRatingEntityType::TtsModel => UserRatingEntity::TtsModel(TtsModelToken::new_from_str(&path.entity_token)),
 
-    UserRatingEntityType::W2lTemplate => UserRatingEntity::W2lTemplate(
-      W2lTemplateToken::new_from_str(&path.entity_token)),
+    UserRatingEntityType::W2lTemplate => UserRatingEntity::W2lTemplate(W2lTemplateToken::new_from_str(&path.entity_token)),
 
     UserRatingEntityType::MediaFile => UserRatingEntity::MediaFile(MediaFileToken::new_from_str(&path.entity_token)),
     UserRatingEntityType::ModelWeight => UserRatingEntity::ModelWeight(ModelWeightToken::new_from_str(&path.entity_token)),
 
     // TODO: We'll handle ratings of more types in the future.
-    UserRatingEntityType::W2lResult | UserRatingEntityType::TtsResult =>
-      return Err(CommonWebError::BadInputWithSimpleMessage("type not yet supported".to_string())),
+    UserRatingEntityType::W2lResult | UserRatingEntityType::TtsResult => return Err(CommonWebError::BadInputWithSimpleMessage("type not yet supported".to_string())),
   };
 
-  let maybe_rating = get_user_rating(Args {
-    user_token: &user_session.user_token,
-    user_rating_entity: &entity,
-    mysql_connection: &mut mysql_connection
-  })
-      .await
-      .map_err(|err| {
-        error!("Error fetching rating: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let maybe_rating = get_user_rating(Args { user_token: &user_session.user_token, user_rating_entity: &entity, mysql_connection: &mut mysql_connection }).await.map_err(|err| {
+    error!("Error fetching rating: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let response = GetUserRatingResponse {
-    success: true,
-    maybe_rating_value: maybe_rating.map(|rating| rating.rating_value),
-  };
+  let response = GetUserRatingResponse { success: true, maybe_rating_value: maybe_rating.map(|rating| rating.rating_value) };
 
   Ok(Json(response))
 }

@@ -18,15 +18,9 @@ pub struct JobArgs<'a> {
 }
 
 pub fn validate_job(job: &AvailableInferenceJob) -> Result<JobArgs, ProcessSingleJobError> {
-  let inference_args = job.maybe_inference_args
-      .as_ref()
-      .map(|args| args.args.as_ref())
-      .flatten();
+  let inference_args = job.maybe_inference_args.as_ref().map(|args| args.args.as_ref()).flatten();
 
-  let inference_category = job.maybe_inference_args
-      .as_ref()
-      .map(|args| args.inference_category)
-      .flatten();
+  let inference_category = job.maybe_inference_args.as_ref().map(|args| args.inference_category).flatten();
 
   match inference_category {
     Some(InferenceCategoryAbbreviated::VideoFilter) => {}, // Valid
@@ -35,65 +29,57 @@ pub fn validate_job(job: &AvailableInferenceJob) -> Result<JobArgs, ProcessSingl
     },
     None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no inference category for job!")));
-    }
+    },
   };
 
   let inference_args = match inference_args {
     Some(args) => args,
     None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no inference args for job!")));
-    }
+    },
   };
 
   let inference_args = match inference_args {
     PolymorphicInferenceArgs::Rr(inference_args) => inference_args,
     _ => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inner args for job!")));
-    }
+    },
   };
 
   let video_source = match &inference_args.maybe_video_source {
     Some(args) => args,
     None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no video source!")));
-    }
+    },
   };
 
   let sd_model_token = match &inference_args.maybe_sd_model_token {
     Some(args) => args,
     None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no sd model!")));
-    }
+    },
   };
 
   let prompt = match &inference_args.maybe_prompt {
     Some(args) => args,
     None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no prompt!")));
-    }
+    },
   };
 
   let a_prompt = match &inference_args.maybe_a_prompt {
-      Some(args) => args,
-      None => {
+    Some(args) => args,
+    None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no a prompt!")));
-      }
+    },
   };
 
   let n_prompt = match &inference_args.maybe_n_prompt {
-      Some(args) => args,
-      None => {
+    Some(args) => args,
+    None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no n prompt!")));
-      }
+    },
   };
 
-  Ok(JobArgs {
-    video_source,
-    sd_model_token,
-    lora_model_token: &inference_args.maybe_lora_model_token,
-    prompt,
-    a_prompt,
-    n_prompt,
-    seed: inference_args.maybe_seed,
-  })
+  Ok(JobArgs { video_source, sd_model_token, lora_model_token: &inference_args.maybe_lora_model_token, prompt, a_prompt, n_prompt, seed: inference_args.maybe_seed })
 }

@@ -5,7 +5,6 @@ use reqwest::StatusCode;
 /// This assumes the request failed and returned a non-200.
 /// The caller should check.
 pub async fn classify_http_error_status_code_and_body(status: StatusCode, body: &str) -> OpenArtError {
-  
   let message = body.to_string();
 
   // TODO: Handle various error messages from the API.

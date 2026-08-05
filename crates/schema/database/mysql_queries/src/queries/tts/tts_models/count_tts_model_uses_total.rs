@@ -11,16 +11,12 @@ pub struct TtsModelTotalUseCountInfo {
   pub total_use_count: u64,
 }
 
-pub async fn count_tts_model_uses_total(
-  tts_model_token: &TtsModelToken,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<TtsModelTotalUseCountInfo> {
-
+pub async fn count_tts_model_uses_total(tts_model_token: &TtsModelToken, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<TtsModelTotalUseCountInfo> {
   info!("Querying for TTS model {} total use count", tts_model_token);
 
   let total_use_count = sqlx::query_as!(
     RawTtsModelTotalUseCountInfo,
-        r#"
+    r#"
     SELECT
       count(*) AS total_use_count
     FROM
@@ -30,12 +26,10 @@ pub async fn count_tts_model_uses_total(
         "#,
     tts_model_token
   )
-      .fetch_one(&mut **mysql_connection)
-      .await?;
+  .fetch_one(&mut **mysql_connection)
+  .await?;
 
-  Ok(TtsModelTotalUseCountInfo {
-    total_use_count: total_use_count.total_use_count as u64,
-  })
+  Ok(TtsModelTotalUseCountInfo { total_use_count: total_use_count.total_use_count as u64 })
 }
 
 struct RawTtsModelTotalUseCountInfo {

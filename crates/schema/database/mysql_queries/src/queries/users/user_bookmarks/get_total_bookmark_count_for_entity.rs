@@ -11,16 +11,12 @@ pub struct BookmarkCount {
   pub total_count: usize,
 }
 
-pub async fn get_total_bookmark_count_for_entity(
-  user_bookmark_entity_token: &UserBookmarkEntityToken,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<BookmarkCount> {
-
+pub async fn get_total_bookmark_count_for_entity(user_bookmark_entity_token: &UserBookmarkEntityToken, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<BookmarkCount> {
   let (entity_type, entity_token) = user_bookmark_entity_token.get_composite_keys();
 
   let maybe_result = sqlx::query_as!(
-      RawRecord,
-        r#"
+    RawRecord,
+    r#"
 SELECT
     COUNT(*) as total_count
 FROM
@@ -30,11 +26,11 @@ WHERE
     AND entity_token = ?
     AND deleted_at IS NULL
         "#,
-      entity_type,
-      entity_token
-    )
-      .fetch_one(&mut **mysql_connection)
-      .await;
+    entity_type,
+    entity_token
+  )
+  .fetch_one(&mut **mysql_connection)
+  .await;
 
   match maybe_result {
     Err(err) => match err {
@@ -42,7 +38,7 @@ WHERE
       _ => {
         warn!("get_total_bookmark_count db error: {:?}", err);
         Err(anyhow!("error with query: {:?}", err))
-      }
+      },
     },
     Ok(result) => Ok(result.into_public_type()),
   }
@@ -54,8 +50,6 @@ pub struct RawRecord {
 
 impl RawRecord {
   pub fn into_public_type(self) -> BookmarkCount {
-    BookmarkCount {
-      total_count: self.total_count as usize,
-    }
+    BookmarkCount { total_count: self.total_count as usize }
   }
 }

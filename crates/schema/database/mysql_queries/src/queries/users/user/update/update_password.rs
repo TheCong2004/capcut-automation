@@ -11,12 +11,9 @@ pub struct UpdatePasswordArgs<'e, 't> {
   pub transactor: Transactor<'e, 't>,
 }
 
-pub async fn update_password<'e, 't>(
-  args: UpdatePasswordArgs<'e, 't>
-) -> AnyhowResult<()>
-{
+pub async fn update_password<'e, 't>(args: UpdatePasswordArgs<'e, 't>) -> AnyhowResult<()> {
   let query = sqlx::query!(
-      r#"
+    r#"
 UPDATE users
 SET
   password_hash = ?,

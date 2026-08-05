@@ -5,21 +5,13 @@ use actix_web::web::{Json, Path, Query};
 use actix_web::{web, HttpRequest};
 use log::warn;
 
-use artcraft_api_defs::folders::subfolder::{
-  ListSubfoldersQueryParams, ListSubfoldersSuccessResponse, SubfolderPathInfo,
-};
-use mysql_queries::queries::folders::folder::get_folder_for_owner::{
-  get_folder_for_owner, GetFolderForOwnerArgs,
-};
-use mysql_queries::queries::folders::subfolder::list_subfolders::{
-  list_subfolders, ListSubfoldersArgs,
-};
+use artcraft_api_defs::folders::subfolder::{ListSubfoldersQueryParams, ListSubfoldersSuccessResponse, SubfolderPathInfo};
+use mysql_queries::queries::folders::folder::get_folder_for_owner::{get_folder_for_owner, GetFolderForOwnerArgs};
+use mysql_queries::queries::folders::subfolder::list_subfolders::{list_subfolders, ListSubfoldersArgs};
 use tokens::tokens::folders::FolderToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
-use crate::http_server::endpoints::folders::folder::folder_info_conversion::{
-  build_folder_thumbnails_lookup, folder_row_to_info,
-};
+use crate::http_server::endpoints::folders::folder::folder_info_conversion::{build_folder_thumbnails_lookup, folder_row_to_info};
 use crate::http_server::endpoints::media_files::helpers::get_media_domain::get_media_domain;
 use crate::http_server::user_lookup::user_session::require_user_session::require_user_session;
 use crate::state::server_state::ServerState;
@@ -44,12 +36,7 @@ const MAX_LIMIT: u32 = 1000;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn list_subfolders_handler(
-  http_request: HttpRequest,
-  path: Path<SubfolderPathInfo>,
-  query: Query<ListSubfoldersQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListSubfoldersSuccessResponse>, CommonWebError> {
+pub async fn list_subfolders_handler(http_request: HttpRequest, path: Path<SubfolderPathInfo>, query: Query<ListSubfoldersQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListSubfoldersSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -57,14 +44,8 @@ pub async fn list_subfolders_handler(
 
   let user_session = require_user_session(&http_request, &server_state.session_checker, &mut *conn).await?;
 
-
   // Confirm the parent exists + is owned by the caller before listing.
-  let parent = get_folder_for_owner(GetFolderForOwnerArgs {
-    folder_token: &path.folder_token,
-    owner_user_token: &user_session.user_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let parent = get_folder_for_owner(GetFolderForOwnerArgs { folder_token: &path.folder_token, owner_user_token: &user_session.user_token, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("Parent folder lookup failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -76,19 +57,10 @@ pub async fn list_subfolders_handler(
 
   let maybe_cursor_id = match &query.cursor {
     None => None,
-    Some(cursor_str) => {
-      Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?)
-    }
+    Some(cursor_str) => Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?),
   };
 
-  let rows = list_subfolders(ListSubfoldersArgs {
-    parent_folder_token: &path.folder_token,
-    owner_user_token: &user_session.user_token,
-    maybe_cursor_id,
-    limit,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let rows = list_subfolders(ListSubfoldersArgs { parent_folder_token: &path.folder_token, owner_user_token: &user_session.user_token, maybe_cursor_id, limit, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("list_subfolders failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -96,34 +68,17 @@ pub async fn list_subfolders_handler(
   // Only hand out a next-page cursor when this page was full. A short page
   // means the list is exhausted, and emitting a cursor anyway would make
   // clients fetch one guaranteed-empty trailing page.
-  let maybe_cursor = if rows.len() == limit as usize {
-    rows.last()
-        .map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.id))
-        .transpose()?
-  } else {
-    None
-  };
+  let maybe_cursor = if rows.len() == limit as usize { rows.last().map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.id)).transpose()? } else { None };
 
   let media_domain = get_media_domain(&http_request);
   let server_environment = server_state.server_environment;
 
-  let thumbnails = build_folder_thumbnails_lookup(
-    &rows,
-    &mut *conn,
-    media_domain,
-    server_environment,
-  ).await.map_err(|err| {
+  let thumbnails = build_folder_thumbnails_lookup(&rows, &mut *conn, media_domain, server_environment).await.map_err(|err| {
     warn!("Folder thumbnail lookup failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
 
-  let subfolders = rows.into_iter()
-    .map(|row| folder_row_to_info(row, &thumbnails))
-    .collect();
+  let subfolders = rows.into_iter().map(|row| folder_row_to_info(row, &thumbnails)).collect();
 
-  Ok(Json(ListSubfoldersSuccessResponse {
-    success: true,
-    subfolders,
-    maybe_cursor,
-  }))
+  Ok(Json(ListSubfoldersSuccessResponse { success: true, subfolders, maybe_cursor }))
 }

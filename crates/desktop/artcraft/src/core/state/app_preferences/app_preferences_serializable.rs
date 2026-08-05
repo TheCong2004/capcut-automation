@@ -13,7 +13,7 @@ const CURRENT_VERSION: &str = "2";
 pub struct AppPreferencesSerializable {
   /// Versioning string.
   pub version: String,
-  
+
   /// The downloads directory to use when a user downloads a file.
   pub preferred_download_directory: Option<PreferredDownloadDirectory>,
 
@@ -28,11 +28,11 @@ pub struct AppPreferencesSerializable {
   /// Key pointing to file; defined in the frontend code.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub generation_success_sound: Option<String>,
-  
+
   /// Key pointing to file; defined in the frontend code.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub generation_failure_sound: Option<String>,
-  
+
   /// Key pointing to file; defined in the frontend code.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub generation_enqueue_sound: Option<String>,
@@ -51,15 +51,7 @@ impl AppPreferencesSerializable {
   }
 
   pub fn from_preferences(preferences: &AppPreferences) -> Self {
-    Self {
-      version: CURRENT_VERSION.to_string(),
-      preferred_download_directory: Some(preferences.preferred_download_directory.clone()),
-      play_sounds: Some(preferences.play_sounds),
-      delete_file_sound: preferences.delete_file_sound.clone(),
-      generation_success_sound: preferences.generation_success_sound.clone(),
-      generation_failure_sound: preferences.generation_failure_sound.clone(),
-      generation_enqueue_sound: preferences.generation_enqueue_sound.clone(),
-    }
+    Self { version: CURRENT_VERSION.to_string(), preferred_download_directory: Some(preferences.preferred_download_directory.clone()), play_sounds: Some(preferences.play_sounds), delete_file_sound: preferences.delete_file_sound.clone(), generation_success_sound: preferences.generation_success_sound.clone(), generation_failure_sound: preferences.generation_failure_sound.clone(), generation_enqueue_sound: preferences.generation_enqueue_sound.clone() }
   }
 
   pub fn to_preferences(&self) -> AppPreferences {

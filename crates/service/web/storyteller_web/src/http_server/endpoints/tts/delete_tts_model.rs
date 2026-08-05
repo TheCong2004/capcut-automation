@@ -35,50 +35,37 @@ pub struct DeleteTtsModelRequest {
   as_mod: Option<bool>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn delete_tts_model_handler(
-  http_request: HttpRequest,
-  path: Path<DeleteTtsModelPathInfo>,
-  request: Json<DeleteTtsModelRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
+pub async fn delete_tts_model_handler(http_request: HttpRequest, path: Path<DeleteTtsModelPathInfo>, request: Json<DeleteTtsModelRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
   // NB: Disable if we've migrated to model_weights
   if server_state.flags.switch_tts_to_model_weights {
     warn!("Migration to model_weights for tts. Cannot delete old model.");
     return Err(CommonWebError::server_error_with_message("uncaught server error"));
   }
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // NB: First permission check.
   // Only mods should see deleted models (both user_* and mod_* deleted).
   let is_mod = user_session.can_delete_other_users_tts_models;
 
-  let model_query_result = get_tts_model_by_token(
-    &path.token,
-    is_mod,
-    &server_state.mysql_pool,
-  ).await;
+  let model_query_result = get_tts_model_by_token(&path.token, is_mod, &server_state.mysql_pool).await;
 
   let tts_model = match model_query_result {
     Err(e) => {
       warn!("query error: {:?}", e);
       return Err(CommonWebError::from_anyhow_error(e));
-    }
+    },
     Ok(None) => return Err(CommonWebError::NotFound),
     Ok(Some(model)) => model,
   };
@@ -107,43 +94,21 @@ pub async fn delete_tts_model_handler(
       DeleteRole::ErrorDoNotDelete => {
         warn!("user is not allowed to delete model: {:?}", user_session.user_token);
         return Err(CommonWebError::NotAuthorized);
-      }
-      DeleteRole::AsUser => {
-        delete_tts_model_as_user(
-          &path.token,
-          &ip_address,
-          &server_state.mysql_pool,
-        ).await
-      }
-      DeleteRole::AsMod => {
-        delete_tts_model_as_mod(
-          &path.token,
-          user_session.user_token.as_str(),
-          &server_state.mysql_pool
-        ).await
-      }
+      },
+      DeleteRole::AsUser => delete_tts_model_as_user(&path.token, &ip_address, &server_state.mysql_pool).await,
+      DeleteRole::AsMod => delete_tts_model_as_mod(&path.token, user_session.user_token.as_str(), &server_state.mysql_pool).await,
     }
   } else {
     match delete_role {
       DeleteRole::ErrorDoNotDelete => {
         warn!("user is not allowed to undelete model: {:?}", user_session.user_token);
         return Err(CommonWebError::NotAuthorized);
-      }
+      },
       DeleteRole::AsUser => {
         // NB: Technically only mods can see their own inference_results here
-        undelete_tts_model_as_user(
-          &path.token,
-          &ip_address,
-          &server_state.mysql_pool
-        ).await
-      }
-      DeleteRole::AsMod => {
-        undelete_tts_model_as_mod(
-          &path.token,
-          user_session.user_token.as_str(),
-          &server_state.mysql_pool
-        ).await
-      }
+        undelete_tts_model_as_user(&path.token, &ip_address, &server_state.mysql_pool).await
+      },
+      DeleteRole::AsMod => undelete_tts_model_as_mod(&path.token, user_session.user_token.as_str(), &server_state.mysql_pool).await,
     }
   };
 
@@ -152,7 +117,7 @@ pub async fn delete_tts_model_handler(
     Err(err) => {
       warn!("Delete tts model DB error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   Ok(Json(SimpleGenericJsonSuccess { success: true }))

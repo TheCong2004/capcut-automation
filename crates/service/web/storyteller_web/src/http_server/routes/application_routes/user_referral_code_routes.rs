@@ -12,17 +12,5 @@ where
   T: ServiceFactory<ServiceRequest, Config = (), Error = Error, Response = ServiceResponse<B>, InitError = ()>,
   B: MessageBody,
 {
-  app
-    .service(web::resource("/v1/user_referral_codes/create")
-      .route(web::post().to(create_referral_code_handler))
-      .route(web::head().to(|| HttpResponse::Ok()))
-    )
-    .service(web::resource("/v1/user_referral_codes/list")
-      .route(web::get().to(list_referral_codes_handler))
-      .route(web::head().to(|| HttpResponse::Ok()))
-    )
-    .service(web::resource("/v1/user_referral_codes/code/{token}")
-      .route(web::delete().to(delete_referral_code_handler))
-      .route(web::head().to(|| HttpResponse::Ok()))
-    )
+  app.service(web::resource("/v1/user_referral_codes/create").route(web::post().to(create_referral_code_handler)).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/v1/user_referral_codes/list").route(web::get().to(list_referral_codes_handler)).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/v1/user_referral_codes/code/{token}").route(web::delete().to(delete_referral_code_handler)).route(web::head().to(|| HttpResponse::Ok())))
 }

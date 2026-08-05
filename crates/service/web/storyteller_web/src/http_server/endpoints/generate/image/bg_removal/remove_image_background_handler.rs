@@ -36,27 +36,15 @@ use utoipa::ToSchema;
     ("request" = RemoveImageBackgroundRequest, description = "Payload for Request"),
   )
 )]
-pub async fn remove_image_background_handler(
-  http_request: HttpRequest,
-  request: Json<RemoveImageBackgroundRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<RemoveImageBackgroundResponse>, CommonWebError> {
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await?;
-  
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn remove_image_background_handler(http_request: HttpRequest, request: Json<RemoveImageBackgroundRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<RemoveImageBackgroundResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
+
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // TODO: Limit usage for new accounts. Billing, free credits metering, etc.
 
@@ -73,26 +61,20 @@ pub async fn remove_image_background_handler(
     None => {
       warn!("No media file token provided");
       return Err(CommonWebError::BadInputWithSimpleMessage("No media file token provided".to_string()));
-    }
+    },
   };
 
   if let Err(reason) = validate_idempotency_token_format(&request.uuid_idempotency_token) {
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("invalid idempotency token".to_string())
-      })?;
-  const IS_MOD : bool = false;
-  
-  let media_file_lookup_result = get_media_file_with_connection(
-    media_file_token,
-    IS_MOD,
-    &mut mysql_connection,
-  ).await;
+  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("invalid idempotency token".to_string())
+  })?;
+  const IS_MOD: bool = false;
+
+  let media_file_lookup_result = get_media_file_with_connection(media_file_token, IS_MOD, &mut mysql_connection).await;
 
   let media_file = match media_file_lookup_result {
     Ok(Some(media_file)) => media_file,
@@ -103,78 +85,46 @@ pub async fn remove_image_background_handler(
     Err(err) => {
       warn!("Error looking up media_file: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   if !media_file.media_type.is_jpg_or_png_or_legacy_image() {
     return Err(CommonWebError::BadInputWithSimpleMessage("Media file must be a JPG or PNG image".to_string()));
   }
-  
+
   let media_domain = get_media_domain(&http_request);
-  
-  let bucket_path = MediaFileBucketPath::from_object_hash(
-    &media_file.public_bucket_directory_hash,
-    media_file.maybe_public_bucket_prefix.as_deref(),
-    media_file.maybe_public_bucket_extension.as_deref());
-  
-  let media_links = MediaLinksBuilder::from_media_path_and_env(
-    media_domain, 
-    server_state.server_environment, 
-    &bucket_path);
-  
+
+  let bucket_path = MediaFileBucketPath::from_object_hash(&media_file.public_bucket_directory_hash, media_file.maybe_public_bucket_prefix.as_deref(), media_file.maybe_public_bucket_extension.as_deref());
+
+  let media_links = MediaLinksBuilder::from_media_path_and_env(media_domain, server_state.server_environment, &bucket_path);
+
   info!("Fal webhook URL: {}", server_state.inference_providers.fal.webhook_url);
-  
-  let args = RemoveBackgroundRembgWebhookArgs {
-    request: RemoveBackgroundRembgWebhookRequest {
-      image_url: media_links.cdn_url.to_string(),
-    },
-    webhook_url: &server_state.inference_providers.fal.webhook_url,
-    api_key: &server_state.inference_providers.fal.api_key,
-  };
 
-  let fal_result = remove_background_rembg_webhook(args)
-      .await
-      .map_err(|err| {
-        warn!("Error calling remove_background_rembg_webhook: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let args = RemoveBackgroundRembgWebhookArgs { request: RemoveBackgroundRembgWebhookRequest { image_url: media_links.cdn_url.to_string() }, webhook_url: &server_state.inference_providers.fal.webhook_url, api_key: &server_state.inference_providers.fal.api_key };
 
-  let external_job_id = fal_result.request_id
-      .ok_or_else(|| {
-        warn!("Fal request_id is None");
-        CommonWebError::server_error_with_message("Fal request_id is None")
-      })?;
-  
+  let fal_result = remove_background_rembg_webhook(args).await.map_err(|err| {
+    warn!("Error calling remove_background_rembg_webhook: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
+
+  let external_job_id = fal_result.request_id.ok_or_else(|| {
+    warn!("Fal request_id is None");
+    CommonWebError::server_error_with_message("Fal request_id is None")
+  })?;
+
   info!("Fal request_id: {}", external_job_id);
-  
+
   let ip_address = get_request_ip(&http_request);
 
-  let db_result = insert_generic_inference_job_for_fal_queue(InsertGenericInferenceForFalArgs {
-    uuid_idempotency_token: &request.uuid_idempotency_token,
-    maybe_external_third_party_id: &external_job_id,
-    fal_category: FalCategory::BackgroundRemoval,
-    maybe_model_type: None,
-    maybe_inference_args: None,
-    maybe_prompt_token: None,
-    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
-    maybe_avt_token: maybe_avt_token.as_ref(),
-    creator_ip_address: &ip_address,
-    creator_set_visibility: Visibility::Public,
-    maybe_platform_type: get_request_platform_type(&http_request),
-    mysql_executor: &mut *mysql_connection,
-    phantom: Default::default(),
-  }).await;
+  let db_result = insert_generic_inference_job_for_fal_queue(InsertGenericInferenceForFalArgs { uuid_idempotency_token: &request.uuid_idempotency_token, maybe_external_third_party_id: &external_job_id, fal_category: FalCategory::BackgroundRemoval, maybe_model_type: None, maybe_inference_args: None, maybe_prompt_token: None, maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token), maybe_avt_token: maybe_avt_token.as_ref(), creator_ip_address: &ip_address, creator_set_visibility: Visibility::Public, maybe_platform_type: get_request_platform_type(&http_request), mysql_executor: &mut *mysql_connection, phantom: Default::default() }).await;
 
   let job_token = match db_result {
     Ok(token) => token,
     Err(err) => {
       warn!("Error inserting generic inference job for FAL queue: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
-  Ok(Json(RemoveImageBackgroundResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  Ok(Json(RemoveImageBackgroundResponse { success: true, inference_job_token: job_token }))
 }

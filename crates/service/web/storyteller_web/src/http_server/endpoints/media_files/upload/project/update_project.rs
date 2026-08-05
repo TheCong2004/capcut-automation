@@ -61,24 +61,17 @@ pub struct UpdateProjectArgs<'a> {
 pub async fn update_project(args: UpdateProjectArgs<'_>) -> Result<(), CommonWebError> {
   let UpdateProjectArgs { http_request, server_state, config, media_file_token, mut form } = args;
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // ==================== SESSION (OPTIONAL) + BAN CHECK ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(http_request, &mut mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Session checker error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(http_request, &mut mysql_connection).await.map_err(|err| {
+    error!("Session checker error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   if let Some(ref user) = maybe_user_session {
     if user.is_banned {
@@ -86,62 +79,46 @@ pub async fn update_project(args: UpdateProjectArgs<'_>) -> Result<(), CommonWeb
     }
   }
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(http_request);
 
   // ==================== LOOK UP RECORD + CHECK OWNERSHIP ==================== //
 
-  let media_file = lookup_media_file_for_project_update(LookupMediaFileForProjectUpdateArgs {
-    media_file_token,
-    mysql_executor: &mut *mysql_connection,
-    phantom: PhantomData,
-  })
-      .await
-      .map_err(|err| {
-        error!("Error looking up media file for project update: {:?}", err);
-        CommonWebError::from_error(err)
-      })?
-      .ok_or(CommonWebError::NotFound)?;
+  let media_file = lookup_media_file_for_project_update(LookupMediaFileForProjectUpdateArgs { media_file_token, mysql_executor: &mut *mysql_connection, phantom: PhantomData })
+    .await
+    .map_err(|err| {
+      error!("Error looking up media file for project update: {:?}", err);
+      CommonWebError::from_error(err)
+    })?
+    .ok_or(CommonWebError::NotFound)?;
 
   // Only overwrite records that are the right kind of project document.
   match media_file.maybe_project_type {
     // Modern records declare their project type; it must match exactly.
     Some(project_type) => {
       if project_type != config.project_type {
-        return Err(CommonWebError::BadInputWithSimpleMessage(format!(
-          "media file is not a {} project", config.project_type)));
+        return Err(CommonWebError::BadInputWithSimpleMessage(format!("media file is not a {} project", config.project_type)));
       }
-    }
+    },
     // Legacy records predate `maybe_project_type`. The only legacy project
     // documents are 3D scenes, so only the scene_3d endpoint may adopt them,
     // and the record must actually be a JSON scene file.
     None => {
-      let is_legacy_scene_update = config.project_type == MediaFileProjectType::Scene3d
-          && media_file.media_type == MediaFileType::SceneJson;
+      let is_legacy_scene_update = config.project_type == MediaFileProjectType::Scene3d && media_file.media_type == MediaFileType::SceneJson;
 
       if !is_legacy_scene_update {
-        return Err(CommonWebError::BadInputWithSimpleMessage(format!(
-          "media file is not a {} project", config.project_type)));
+        return Err(CommonWebError::BadInputWithSimpleMessage(format!("media file is not a {} project", config.project_type)));
       }
-    }
+    },
   }
 
-  let creator_check = check_creator_tokens(CheckCreatorTokenArgs {
-    maybe_creator_user_token: media_file.maybe_creator_user_token.as_ref(),
-    maybe_current_request_user_token: maybe_user_session.as_ref().map(|session| session.get_user_token()),
-    maybe_creator_anonymous_visitor_token: media_file.maybe_creator_anonymous_visitor_token.as_ref(),
-    maybe_current_request_anonymous_visitor_token: maybe_avt_token.as_ref(),
-  });
+  let creator_check = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: media_file.maybe_creator_user_token.as_ref(), maybe_current_request_user_token: maybe_user_session.as_ref().map(|session| session.get_user_token()), maybe_creator_anonymous_visitor_token: media_file.maybe_creator_anonymous_visitor_token.as_ref(), maybe_current_request_anonymous_visitor_token: maybe_avt_token.as_ref() });
 
   match creator_check {
-    CheckCreatorTokenResult::UserTokenMatch => {} // Allowed
-    CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMatch => {} // Allowed
-    CheckCreatorTokenResult::UserTokenMismatch
-    | CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMismatch
-    | CheckCreatorTokenResult::InsufficientInformation => {
+    CheckCreatorTokenResult::UserTokenMatch => {},                   // Allowed
+    CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMatch => {}, // Allowed
+    CheckCreatorTokenResult::UserTokenMismatch | CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMismatch | CheckCreatorTokenResult::InsufficientInformation => {
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   }
 
   // ==================== IDEMPOTENCY ==================== //
@@ -152,12 +129,10 @@ pub async fn update_project(args: UpdateProjectArgs<'_>) -> Result<(), CommonWeb
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        warn!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("invalid or duplicate idempotency token".to_string())
-      })?;
+  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    warn!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("invalid or duplicate idempotency token".to_string())
+  })?;
 
   // NB: Release the connection before the bucket upload — never hold a pooled
   // connection across a network call.
@@ -178,26 +153,10 @@ pub async fn update_project(args: UpdateProjectArgs<'_>) -> Result<(), CommonWeb
 
   // NB: The pool is only handed over after the held connection is dropped
   // above, so this acquires the request's single connection at a time.
-  update_project_media_file_contents(UpdateProjectMediaFileContentsArgs {
-    media_file_token,
-    media_class: MediaFileClass::Project,
-    media_type: config.media_file_type,
-    project_type: config.project_type,
-    public_bucket_directory_hash: public_upload_path.get_object_hash(),
-    maybe_public_bucket_prefix: Some(config.bucket_prefix),
-    maybe_public_bucket_extension: Some(config.bucket_suffix),
-    maybe_mime_type: Some(PROJECT_MIMETYPE),
-    file_size_bytes: file_bytes.len() as u64,
-    sha256_checksum: &sha256_checksum,
-    update_ip_address: &ip_address,
-    mysql_executor: &server_state.mysql_pool,
-    phantom: PhantomData,
-  })
-      .await
-      .map_err(|err| {
-        warn!("Project media file update error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  update_project_media_file_contents(UpdateProjectMediaFileContentsArgs { media_file_token, media_class: MediaFileClass::Project, media_type: config.media_file_type, project_type: config.project_type, public_bucket_directory_hash: public_upload_path.get_object_hash(), maybe_public_bucket_prefix: Some(config.bucket_prefix), maybe_public_bucket_extension: Some(config.bucket_suffix), maybe_mime_type: Some(PROJECT_MIMETYPE), file_size_bytes: file_bytes.len() as u64, sha256_checksum: &sha256_checksum, update_ip_address: &ip_address, mysql_executor: &server_state.mysql_pool, phantom: PhantomData }).await.map_err(|err| {
+    warn!("Project media file update error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   Ok(())
 }

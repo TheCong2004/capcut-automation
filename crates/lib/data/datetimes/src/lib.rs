@@ -16,7 +16,6 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
@@ -28,9 +27,7 @@ pub mod generate_dates_inclusive;
 
 // NB: Chrono doesn't have any 'const fn's of not to leverage.
 /// This is the unix epoch datetime.
-pub static CHRONO_DATETIME_UNIX_EPOCH : Lazy<DateTime<Utc>> = Lazy::new(|| {
-  DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)
-});
+pub static CHRONO_DATETIME_UNIX_EPOCH: Lazy<DateTime<Utc>> = Lazy::new(|| DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc));
 
 #[cfg(test)]
 mod tests {

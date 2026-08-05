@@ -26,10 +26,7 @@ impl LeasePayload {
   }
 
   pub fn from_string_id(server_id: &str, thread_id: &str) -> Self {
-    Self {
-      server_id: server_id.to_string(),
-      thread_id: thread_id.to_string(),
-    }
+    Self { server_id: server_id.to_string(), thread_id: thread_id.to_string() }
   }
 
   pub fn serialize(&self) -> String {

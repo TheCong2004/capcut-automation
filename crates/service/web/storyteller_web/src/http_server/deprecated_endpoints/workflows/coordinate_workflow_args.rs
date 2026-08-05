@@ -47,9 +47,7 @@ fn handle_prompts(args: &mut CoordinatedWorkflowArgs) {
   let mut replace_prompt = None;
   let mut replace_travel_prompt = None;
 
-  let maybe_split_prompts = args.prompt.as_deref()
-      .map(|prompt| prompt.split_once("---"))
-      .flatten();
+  let maybe_split_prompts = args.prompt.as_deref().map(|prompt| prompt.split_once("---")).flatten();
 
   match maybe_split_prompts {
     Some((prompt, travel_prompt)) => {
@@ -60,8 +58,8 @@ fn handle_prompts(args: &mut CoordinatedWorkflowArgs) {
         replace_prompt = Some(p.to_string());
         replace_travel_prompt = Some(tp.to_string());
       }
-    }
-    _ => {}
+    },
+    _ => {},
   }
 
   if replace_prompt.is_some() && replace_travel_prompt.is_some() {
@@ -73,7 +71,6 @@ fn handle_prompts(args: &mut CoordinatedWorkflowArgs) {
 }
 
 fn handle_flags(args: &mut CoordinatedWorkflowArgs, is_staff: bool) {
-
   if !is_staff {
     // Non-staff cannot use these workflows
     args.disable_lcm = None;
@@ -87,7 +84,6 @@ fn handle_flags(args: &mut CoordinatedWorkflowArgs, is_staff: bool) {
     // TODO(bt,2024-07-15): Temporarily do this.
     args.use_cinematic = Some(true);
   }
-
 
   if args.use_cinematic == Some(true) {
     // use_cinematic has a built-in upscaler
@@ -171,7 +167,8 @@ mod tests {
       let coordinated_args = coordinate_workflow_args(args, true);
 
       assert_eq!(coordinated_args.prompt, Some("foo, bar, baz".to_string())); // Inline travel prompt dropped
-      assert_eq!(coordinated_args.travel_prompt, Some("querty, asdf".to_string())); // Authoritative field used
+      assert_eq!(coordinated_args.travel_prompt, Some("querty, asdf".to_string()));
+      // Authoritative field used
     }
   }
 
@@ -180,17 +177,7 @@ mod tests {
 
     #[test]
     fn test_defaults() {
-      let args = CoordinatedWorkflowArgs {
-        prompt: None,
-        travel_prompt: None,
-        use_lipsync: None,
-        use_face_detailer: None,
-        use_upscaler: None,
-        disable_lcm: None,
-        use_cinematic: None,
-        use_cogvideo: None,
-        remove_watermark: None,
-      };
+      let args = CoordinatedWorkflowArgs { prompt: None, travel_prompt: None, use_lipsync: None, use_face_detailer: None, use_upscaler: None, disable_lcm: None, use_cinematic: None, use_cogvideo: None, remove_watermark: None };
 
       let coordinated_args = coordinate_workflow_args(args, true);
 
@@ -207,17 +194,7 @@ mod tests {
 
     #[test]
     fn test_upscaler() {
-      let args = CoordinatedWorkflowArgs {
-        prompt: None,
-        travel_prompt: None,
-        use_lipsync: None,
-        use_face_detailer: None,
-        use_upscaler: Some(true),
-        disable_lcm: None,
-        use_cinematic: None,
-        use_cogvideo: None,
-        remove_watermark: None,
-      };
+      let args = CoordinatedWorkflowArgs { prompt: None, travel_prompt: None, use_lipsync: None, use_face_detailer: None, use_upscaler: Some(true), disable_lcm: None, use_cinematic: None, use_cogvideo: None, remove_watermark: None };
 
       let coordinated_args = coordinate_workflow_args(args, true);
 
@@ -231,17 +208,7 @@ mod tests {
 
     #[test]
     fn test_cinematic_and_upscaler() {
-      let args = CoordinatedWorkflowArgs {
-        prompt: None,
-        travel_prompt: None,
-        use_lipsync: None,
-        use_face_detailer: None,
-        use_upscaler: Some(true),
-        disable_lcm: None,
-        use_cinematic: Some(true),
-        use_cogvideo: None,
-        remove_watermark: None,
-      };
+      let args = CoordinatedWorkflowArgs { prompt: None, travel_prompt: None, use_lipsync: None, use_face_detailer: None, use_upscaler: Some(true), disable_lcm: None, use_cinematic: Some(true), use_cogvideo: None, remove_watermark: None };
 
       let coordinated_args = coordinate_workflow_args(args, true);
 
@@ -255,17 +222,7 @@ mod tests {
 
     #[test]
     fn test_cinematic_and_disable_lcm() {
-      let args = CoordinatedWorkflowArgs {
-        prompt: None,
-        travel_prompt: None,
-        use_lipsync: None,
-        use_face_detailer: None,
-        use_upscaler: None,
-        disable_lcm: Some(true),
-        use_cinematic: Some(true),
-        use_cogvideo: None,
-        remove_watermark: None,
-      };
+      let args = CoordinatedWorkflowArgs { prompt: None, travel_prompt: None, use_lipsync: None, use_face_detailer: None, use_upscaler: None, disable_lcm: Some(true), use_cinematic: Some(true), use_cogvideo: None, remove_watermark: None };
 
       let coordinated_args = coordinate_workflow_args(args, true);
 
@@ -279,17 +236,7 @@ mod tests {
 
     #[test]
     fn test_lipsync_and_face_detailer() {
-      let args = CoordinatedWorkflowArgs {
-        prompt: None,
-        travel_prompt: None,
-        use_lipsync: Some(true),
-        use_face_detailer: Some(true),
-        use_upscaler: None,
-        disable_lcm: None,
-        use_cinematic: None,
-        use_cogvideo: None,
-        remove_watermark: None,
-      };
+      let args = CoordinatedWorkflowArgs { prompt: None, travel_prompt: None, use_lipsync: Some(true), use_face_detailer: Some(true), use_upscaler: None, disable_lcm: None, use_cinematic: None, use_cogvideo: None, remove_watermark: None };
 
       let coordinated_args = coordinate_workflow_args(args, true);
 

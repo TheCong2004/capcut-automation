@@ -4,11 +4,7 @@ use actix_web::web::{Json, Path};
 use actix_web::{web, HttpRequest};
 use log::warn;
 
-use artcraft_api_defs::moderation::jobs::user::list_user_jobs::{
-  ListUserJobsEntry,
-  ListUserJobsPathInfo,
-  ListUserJobsResponse,
-};
+use artcraft_api_defs::moderation::jobs::user::list_user_jobs::{ListUserJobsEntry, ListUserJobsPathInfo, ListUserJobsResponse};
 use mysql_queries::queries::generic_inference::web::list_user_jobs_for_moderation::list_user_jobs_for_moderation;
 
 use tokens::tokens::users::UserToken;
@@ -30,38 +26,15 @@ use crate::state::server_state::ServerState;
     ("user_token" = UserToken, Path, description = "User token to look up jobs for"),
   )
 )]
-pub async fn list_user_jobs_handler(
-  http_request: HttpRequest,
-  path: Path<ListUserJobsPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListUserJobsResponse>, CommonWebError> {
-
+pub async fn list_user_jobs_handler(http_request: HttpRequest, path: Path<ListUserJobsPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListUserJobsResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
-  let results = list_user_jobs_for_moderation(&path.user_token, &server_state.mysql_pool)
-    .await
-    .map_err(|err| {
-      warn!("list_user_jobs error: {:?}", err);
-      CommonWebError::from_anyhow_error(err)
-    })?;
+  let results = list_user_jobs_for_moderation(&path.user_token, &server_state.mysql_pool).await.map_err(|err| {
+    warn!("list_user_jobs error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let jobs = results.into_iter().map(|row| ListUserJobsEntry {
-    job_status: row.job_status,
-    job_failure_reason: row.job_failure_reason,
-    credits_delta: row.credits_delta,
-    maybe_linked_refund_ledger_token: row.maybe_linked_refund_ledger_token,
-    on_success_result_media_token: row.on_success_result_media_token,
-    job_token: row.job_token,
-    wallet_ledger_entry_token: row.wallet_ledger_entry_token,
-    wallet_ledger_entry_type: row.wallet_ledger_entry_type,
-    maybe_external_third_party: row.maybe_external_third_party,
-    maybe_external_third_party_id: row.maybe_external_third_party_id,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  }).collect();
+  let jobs = results.into_iter().map(|row| ListUserJobsEntry { job_status: row.job_status, job_failure_reason: row.job_failure_reason, credits_delta: row.credits_delta, maybe_linked_refund_ledger_token: row.maybe_linked_refund_ledger_token, on_success_result_media_token: row.on_success_result_media_token, job_token: row.job_token, wallet_ledger_entry_token: row.wallet_ledger_entry_token, wallet_ledger_entry_type: row.wallet_ledger_entry_type, maybe_external_third_party: row.maybe_external_third_party, maybe_external_third_party_id: row.maybe_external_third_party_id, created_at: row.created_at, updated_at: row.updated_at }).collect();
 
-  Ok(Json(ListUserJobsResponse {
-    success: true,
-    jobs,
-  }))
+  Ok(Json(ListUserJobsResponse { success: true, jobs }))
 }

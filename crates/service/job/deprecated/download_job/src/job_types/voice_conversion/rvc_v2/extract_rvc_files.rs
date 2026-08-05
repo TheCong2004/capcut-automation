@@ -13,15 +13,10 @@ pub enum DownloadedRvcFile {
   InvalidModel,
 
   /// Only the model file (.pth) was uploaded
-  ModelFileOnly {
-    model_file: PathBuf,
-  },
+  ModelFileOnly { model_file: PathBuf },
 
   /// Archive containing both files was uploaded.
-  ModelAndIndexFile {
-    model_file: PathBuf,
-    index_file: PathBuf,
-  },
+  ModelAndIndexFile { model_file: PathBuf, index_file: PathBuf },
 }
 
 pub fn extract_rvc_files(download_file: &Path, temp_dir: &TempDir) -> AnyhowResult<DownloadedRvcFile> {
@@ -95,18 +90,13 @@ pub fn extract_rvc_files(download_file: &Path, temp_dir: &TempDir) -> AnyhowResu
       }
       warn!("Archive did not have a model file within.");
       return Ok(DownloadedRvcFile::InvalidModel);
-    }
+    },
   };
 
   if let Some(path_to_index) = maybe_path_to_index {
-    Ok(DownloadedRvcFile::ModelAndIndexFile {
-      model_file: path_to_model,
-      index_file: path_to_index,
-    })
+    Ok(DownloadedRvcFile::ModelAndIndexFile { model_file: path_to_model, index_file: path_to_index })
   } else {
-    Ok(DownloadedRvcFile::ModelFileOnly {
-      model_file: path_to_model,
-    })
+    Ok(DownloadedRvcFile::ModelFileOnly { model_file: path_to_model })
   }
 }
 
@@ -137,7 +127,7 @@ mod tests {
       DownloadedRvcFile::ModelAndIndexFile { model_file, index_file } => {
         assert!(model_file.ends_with("model.pth"));
         assert!(index_file.ends_with("model.index"));
-      }
+      },
     }
 
     Ok(())

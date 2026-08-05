@@ -31,21 +31,18 @@ pub fn get_request_domain_branding(http_request: &HttpRequest) -> Option<DomainB
         debug!("Origin header: {:?} Branding for hostname: {:?}", uri, branding);
         return Some(branding);
       }
-    }
+    },
     // Fail open for now.
-    Ok(None) => {}
+    Ok(None) => {},
     Err(err) => {
       warn!("Origin header error: {:?}", err);
-    }
+    },
   }
 
   // NB: The "HOST" header contains the hostname. The `http_request.uri()` method we tried
   // before does not include the hostname at all - it only includes the path (!), which is
   // why we use "HOST" header instead.
-  let maybe_host_header = http_request.headers()
-      .get(HOST)
-      .map(|header| header.to_str().ok())
-      .flatten();
+  let maybe_host_header = http_request.headers().get(HOST).map(|header| header.to_str().ok()).flatten();
 
   if let Some(branding) = match_possible_hostname(maybe_host_header) {
     debug!("Host header: {:?} Branding for hostname: {:?}", maybe_host_header, branding);
@@ -77,69 +74,52 @@ mod tests {
 
   mod origin_header {
     use super::*;
-    
+
     #[test]
     fn getartcraft_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://getartcraft.com"))
-          .to_http_request();
-      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::GetArtCraft));
-    }
-    
-    #[test]
-    fn api_dot_getartcraft_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://api.getartcraft.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://getartcraft.com")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::GetArtCraft));
     }
 
+    #[test]
+    fn api_dot_getartcraft_dot_com() {
+      let request = TestRequest::get().insert_header(("origin", "https://api.getartcraft.com")).to_http_request();
+      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::GetArtCraft));
+    }
 
     #[test]
     fn artcraft_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://artcraft.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://artcraft.ai")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::ArtCraftDotAi));
     }
 
     #[test]
     fn api_dot_artcraft_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://api.artcraft.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://api.artcraft.ai")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::ArtCraftDotAi));
     }
 
     #[test]
     fn fakeyou_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://fakeyou.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://fakeyou.com")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
     }
 
     #[test]
     fn api_dot_fakeyou_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://api.fakeyou.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://api.fakeyou.com")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
     }
 
     #[test]
     fn storyteller_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://storyteller.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://storyteller.ai")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
     }
 
     #[test]
     fn api_dot_storyteller_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("origin", "https://api.storyteller.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("origin", "https://api.storyteller.ai")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
     }
   }
@@ -148,86 +128,74 @@ mod tests {
     use super::*;
 
     fn getartcraft_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("host", "getartcraft.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("host", "getartcraft.com")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::GetArtCraft));
     }
 
     #[test]
     fn api_dot_getartcraft_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("host", "api.getartcraft.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("host", "api.getartcraft.com")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::GetArtCraft));
     }
-    
+
     #[test]
     fn fakeyou_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("host", "fakeyou.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("host", "fakeyou.com")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
     }
 
     #[test]
     fn api_dot_fakeyou_dot_com() {
-      let request = TestRequest::get()
-          .insert_header(("host", "api.fakeyou.com"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("host", "api.fakeyou.com")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
     }
 
     #[test]
     fn storyteller_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("host", "storyteller.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("host", "storyteller.ai")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
     }
 
     #[test]
     fn api_dot_storyteller_dot_ai() {
-      let request = TestRequest::get()
-          .insert_header(("host", "api.storyteller.ai"))
-          .to_http_request();
+      let request = TestRequest::get().insert_header(("host", "api.storyteller.ai")).to_http_request();
       assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
     }
   }
 
-//  mod uri {
-//    use super::*;
-//
-//    #[test]
-//    fn fakeyou_dot_com() {
-//      let request = TestRequest::get()
-//          .uri("https://fakeyou.com")
-//          .to_http_request();
-//      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
-//    }
-//
-//    #[test]
-//    fn api_dot_fakeyou_dot_com() {
-//      let request = TestRequest::get()
-//          .uri("https://api.fakeyou.com")
-//          .to_http_request();
-//      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
-//    }
-//
-//    #[test]
-//    fn storyteller_dot_ai() {
-//      let request = TestRequest::get()
-//          .uri("https://storyteller.ai")
-//          .to_http_request();
-//      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
-//    }
-//
-//    #[test]
-//    fn api_dot_storyteller_dot_ai() {
-//      let request = TestRequest::get()
-//          .uri("https://api.storyteller.ai")
-//          .to_http_request();
-//      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
-//    }
-//  }
+  //  mod uri {
+  //    use super::*;
+  //
+  //    #[test]
+  //    fn fakeyou_dot_com() {
+  //      let request = TestRequest::get()
+  //          .uri("https://fakeyou.com")
+  //          .to_http_request();
+  //      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
+  //    }
+  //
+  //    #[test]
+  //    fn api_dot_fakeyou_dot_com() {
+  //      let request = TestRequest::get()
+  //          .uri("https://api.fakeyou.com")
+  //          .to_http_request();
+  //      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::FakeYou));
+  //    }
+  //
+  //    #[test]
+  //    fn storyteller_dot_ai() {
+  //      let request = TestRequest::get()
+  //          .uri("https://storyteller.ai")
+  //          .to_http_request();
+  //      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
+  //    }
+  //
+  //    #[test]
+  //    fn api_dot_storyteller_dot_ai() {
+  //      let request = TestRequest::get()
+  //          .uri("https://api.storyteller.ai")
+  //          .to_http_request();
+  //      assert_eq!(get_request_domain_branding(&request), Some(DomainBranding::Storyteller));
+  //    }
+  //  }
 }

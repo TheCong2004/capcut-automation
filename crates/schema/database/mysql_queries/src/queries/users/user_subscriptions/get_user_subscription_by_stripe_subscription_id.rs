@@ -28,41 +28,27 @@ pub struct UserSubscription {
   pub subscription_expires_at: DateTime<Utc>,
 }
 
-pub async fn get_user_subscription_by_stripe_subscription_id(
-  stripe_subscription_id: &str,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<UserSubscription>> {
+pub async fn get_user_subscription_by_stripe_subscription_id(stripe_subscription_id: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<UserSubscription>> {
   let mut mysql_connection = mysql_pool.acquire().await?;
-  get_user_subscription_by_stripe_subscription_id_with_connection(
-    stripe_subscription_id,
-    &mut mysql_connection
-  ).await
+  get_user_subscription_by_stripe_subscription_id_with_connection(stripe_subscription_id, &mut mysql_connection).await
 }
 
-pub async fn get_user_subscription_by_stripe_subscription_id_with_connection(
-  stripe_subscription_id: &str,
-  mysql_connection: &mut PoolConnection<MySql>
-) -> AnyhowResult<Option<UserSubscription>> {
+pub async fn get_user_subscription_by_stripe_subscription_id_with_connection(stripe_subscription_id: &str, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<UserSubscription>> {
   let query = query(stripe_subscription_id);
   let result = query.fetch_one(&mut **mysql_connection).await;
   map_result(result)
 }
 
-pub async fn get_user_subscription_by_stripe_subscription_id_transactional(
-  stripe_subscription_id: &str,
-  transaction: &mut Transaction<'_, MySql>
-) -> AnyhowResult<Option<UserSubscription>> {
+pub async fn get_user_subscription_by_stripe_subscription_id_transactional(stripe_subscription_id: &str, transaction: &mut Transaction<'_, MySql>) -> AnyhowResult<Option<UserSubscription>> {
   let query = query(stripe_subscription_id);
   let result = query.fetch_one(&mut **transaction).await;
   map_result(result)
 }
 
-fn query(stripe_subscription_id: &str)
-  -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RawUserSubscriptionFromDb, sqlx::Error>>
-{
+fn query(stripe_subscription_id: &str) -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RawUserSubscriptionFromDb, sqlx::Error>> {
   sqlx::query_as!(
-      RawUserSubscriptionFromDb,
-        r#"
+    RawUserSubscriptionFromDb,
+    r#"
 SELECT
   token,
   user_token,
@@ -81,35 +67,15 @@ FROM user_subscriptions
 WHERE
   maybe_stripe_subscription_id = ?
         "#,
-        stripe_subscription_id,
-    )
+    stripe_subscription_id,
+  )
 }
 
-fn map_result(
-  maybe_user_record: Result<RawUserSubscriptionFromDb, sqlx::Error>
-) -> AnyhowResult<Option<UserSubscription>> {
+fn map_result(maybe_user_record: Result<RawUserSubscriptionFromDb, sqlx::Error>) -> AnyhowResult<Option<UserSubscription>> {
   match maybe_user_record {
     Err(sqlx::error::Error::RowNotFound) => Ok(None),
-    Err(e) => {
-      Err(anyhow!("mysql query error: {:?}", e))
-    }
-    Ok(r) => {
-      Ok(Some(UserSubscription {
-        token: r.token,
-        user_token: r.user_token,
-        subscription_namespace: r.subscription_namespace,
-        subscription_product_slug: r.subscription_product_slug,
-        maybe_stripe_subscription_id: r.maybe_stripe_subscription_id,
-        maybe_stripe_product_id: r.maybe_stripe_product_id,
-        maybe_stripe_customer_id: r.maybe_stripe_customer_id,
-        maybe_stripe_subscription_status: r.maybe_stripe_subscription_status,
-        maybe_stripe_is_production: nullable_i8_to_optional_bool(r.maybe_stripe_is_production),
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        subscription_start_at: r.subscription_start_at,
-        subscription_expires_at: r.subscription_expires_at,
-      }))
-    },
+    Err(e) => Err(anyhow!("mysql query error: {:?}", e)),
+    Ok(r) => Ok(Some(UserSubscription { token: r.token, user_token: r.user_token, subscription_namespace: r.subscription_namespace, subscription_product_slug: r.subscription_product_slug, maybe_stripe_subscription_id: r.maybe_stripe_subscription_id, maybe_stripe_product_id: r.maybe_stripe_product_id, maybe_stripe_customer_id: r.maybe_stripe_customer_id, maybe_stripe_subscription_status: r.maybe_stripe_subscription_status, maybe_stripe_is_production: nullable_i8_to_optional_bool(r.maybe_stripe_is_production), created_at: r.created_at, updated_at: r.updated_at, subscription_start_at: r.subscription_start_at, subscription_expires_at: r.subscription_expires_at })),
   }
 }
 

@@ -13,7 +13,7 @@ pub async fn seed_voice_conversion(mysql_pool: &Pool<MySql>) -> AnyhowResult<()>
   info!("Seeding voice conversion...");
 
   let user_token = match get_user_token_by_username(HANASHI_USERNAME, mysql_pool).await? {
-    None => { return Err(anyhow!("could not find user hanashi")) }
+    None => return Err(anyhow!("could not find user hanashi")),
     Some(token) => token,
   };
 
@@ -32,31 +32,10 @@ pub async fn seed_voice_conversion(mysql_pool: &Pool<MySql>) -> AnyhowResult<()>
   Ok(())
 }
 
-async fn create_rvc_model(
-  title: &str,
-  private_bucket_hash: &str,
-  has_index_file: bool,
-  creator_user_token: &UserToken,
-  mysql_pool: &Pool<MySql>,
-) -> AnyhowResult<()> {
-
+async fn create_rvc_model(title: &str, private_bucket_hash: &str, has_index_file: bool, creator_user_token: &UserToken, mysql_pool: &Pool<MySql>) -> AnyhowResult<()> {
   info!("Creating voice conversion record");
 
-  insert_voice_conversion_model_from_download_job(InsertVoiceConversionModelArgs {
-    model_type: VoiceConversionModelType::RvcV2,
-    maybe_new_weights_token: None,
-    title,
-    original_download_url: "https://example.com",
-    original_filename: "unknown.zip",
-    file_size_bytes: 1234,
-    creator_user_token,
-    creator_ip_address: "127.0.0.1",
-    creator_set_visibility: Default::default(),
-    has_index_file,
-    private_bucket_hash,
-    private_bucket_object_name: "unused",
-    mysql_pool,
-  }).await?;
+  insert_voice_conversion_model_from_download_job(InsertVoiceConversionModelArgs { model_type: VoiceConversionModelType::RvcV2, maybe_new_weights_token: None, title, original_download_url: "https://example.com", original_filename: "unknown.zip", file_size_bytes: 1234, creator_user_token, creator_ip_address: "127.0.0.1", creator_set_visibility: Default::default(), has_index_file, private_bucket_hash, private_bucket_object_name: "unused", mysql_pool }).await?;
 
   Ok(())
 }

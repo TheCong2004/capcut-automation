@@ -66,14 +66,7 @@ mod tests {
 
   #[test]
   fn every_known_variant_round_trips() {
-    let all = [
-      (ApiClientGenerationProvider::Artcraft, "artcraft"),
-      (ApiClientGenerationProvider::Fal, "fal"),
-      (ApiClientGenerationProvider::Grok, "grok"),
-      (ApiClientGenerationProvider::Midjourney, "midjourney"),
-      (ApiClientGenerationProvider::Sora, "sora"),
-      (ApiClientGenerationProvider::WorldLabs, "world_labs"),
-    ];
+    let all = [(ApiClientGenerationProvider::Artcraft, "artcraft"), (ApiClientGenerationProvider::Fal, "fal"), (ApiClientGenerationProvider::Grok, "grok"), (ApiClientGenerationProvider::Midjourney, "midjourney"), (ApiClientGenerationProvider::Sora, "sora"), (ApiClientGenerationProvider::WorldLabs, "world_labs")];
     for (variant, s) in all {
       assert_eq!(String::from(variant.clone()), s, "serialize mismatch for {:?}", variant);
       let parsed: ApiClientGenerationProvider = serde_json::from_str(&format!("\"{}\"", s)).unwrap();

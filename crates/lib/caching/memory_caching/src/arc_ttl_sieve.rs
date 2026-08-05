@@ -13,12 +13,9 @@ struct SieveItemWithTtl<V: Clone + ?Sized> {
   stored_at: Instant,
 }
 
-impl <V: Clone + ?Sized> SieveItemWithTtl<V> {
+impl<V: Clone + ?Sized> SieveItemWithTtl<V> {
   fn new(value: V) -> Self {
-    Self {
-      value,
-      stored_at: Instant::now(),
-    }
+    Self { value, stored_at: Instant::now() }
   }
 }
 
@@ -30,15 +27,10 @@ pub struct ArcTtlSieve<K: Eq + Hash + Clone, V: Clone + ?Sized> {
   ttl_duration: Duration,
 }
 
-impl <K: Eq + Hash + Clone, V: Clone + ?Sized> ArcTtlSieve<K, V> {
-
+impl<K: Eq + Hash + Clone, V: Clone + ?Sized> ArcTtlSieve<K, V> {
   pub fn with_capacity_and_ttl_duration(capacity: usize, ttl_duration: Duration) -> AnyhowResult<Self> {
-    let cache = SieveCache::new(capacity)
-        .map_err(|err| anyhow!("could not create cache: {:?}", err))?;
-    Ok(Self {
-      cache: Arc::new(Mutex::new(cache)),
-      ttl_duration,
-    })
+    let cache = SieveCache::new(capacity).map_err(|err| anyhow!("could not create cache: {:?}", err))?;
+    Ok(Self { cache: Arc::new(Mutex::new(cache)), ttl_duration })
   }
 
   pub fn store(&self, key: K, value: V) -> AnyhowResult<()> {
@@ -90,9 +82,7 @@ mod tests {
 
   #[test]
   fn test_get_copy() {
-    let sieve : ArcTtlSieve<String, String> =
-        ArcTtlSieve::with_capacity_and_ttl_duration(1, Duration::from_secs(100))
-            .unwrap();
+    let sieve: ArcTtlSieve<String, String> = ArcTtlSieve::with_capacity_and_ttl_duration(1, Duration::from_secs(100)).unwrap();
 
     let key = "key".to_string();
     let value = "value".to_string();
@@ -104,9 +94,7 @@ mod tests {
 
   #[test]
   fn test_simple_expire() {
-    let sieve : ArcTtlSieve<String, String> =
-        ArcTtlSieve::with_capacity_and_ttl_duration(1, Duration::ZERO)
-            .unwrap();
+    let sieve: ArcTtlSieve<String, String> = ArcTtlSieve::with_capacity_and_ttl_duration(1, Duration::ZERO).unwrap();
 
     let key = "key".to_string();
     let value = "value".to_string();
@@ -119,9 +107,7 @@ mod tests {
 
   #[test]
   fn test_simple_get_then_expire() {
-    let sieve : ArcTtlSieve<String, String> =
-        ArcTtlSieve::with_capacity_and_ttl_duration(1, Duration::from_secs(2))
-            .unwrap();
+    let sieve: ArcTtlSieve<String, String> = ArcTtlSieve::with_capacity_and_ttl_duration(1, Duration::from_secs(2)).unwrap();
 
     let key = "key".to_string();
     let value = "value".to_string();
@@ -130,7 +116,7 @@ mod tests {
 
     let mut count = 0;
 
-    for _ in 0 .. 10_000_000 {
+    for _ in 0..10_000_000 {
       let maybe_value = sieve.get_copy(&key).unwrap();
 
       if maybe_value.is_none() {

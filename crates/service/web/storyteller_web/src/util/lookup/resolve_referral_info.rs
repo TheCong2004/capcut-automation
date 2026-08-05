@@ -33,11 +33,7 @@ pub struct ResolvedReferralInfo {
 ///   - Trim + lowercase + look up user by username for `maybe_referral_user_token`
 ///
 /// All lookups are fail-open: errors are logged and result in `None`.
-pub async fn resolve_referral_info(
-  maybe_referral_code: Option<&str>,
-  maybe_referral_username: Option<&str>,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> ResolvedReferralInfo {
+pub async fn resolve_referral_info(maybe_referral_code: Option<&str>, maybe_referral_username: Option<&str>, mysql_connection: &mut PoolConnection<MySql>) -> ResolvedReferralInfo {
   // Try referral code first.
   if let Some(raw_code) = maybe_referral_code {
     let trimmed = raw_code.trim();
@@ -47,18 +43,14 @@ pub async fn resolve_referral_info(
       match lookup_referral_code_by_code(&code_lowercase, &mut **mysql_connection).await {
         Ok(Some(result)) => {
           let partner = sanitize_referral_code(trimmed);
-          return ResolvedReferralInfo {
-            maybe_referral_partner: partner,
-            maybe_referral_user_token: Some(result.owner_user_token),
-            maybe_referral_code_token: Some(result.token),
-          };
-        }
+          return ResolvedReferralInfo { maybe_referral_partner: partner, maybe_referral_user_token: Some(result.owner_user_token), maybe_referral_code_token: Some(result.token) };
+        },
         Ok(None) => {
           // Code not found — fall through to username lookup.
-        }
+        },
         Err(err) => {
           warn!("Referral code lookup failed (continuing): {:?}", err);
-        }
+        },
       }
     }
   }
@@ -76,20 +68,12 @@ pub async fn resolve_referral_info(
         Err(err) => {
           warn!("Referral user lookup failed (continuing): {:?}", err);
           None
-        }
+        },
       }
     };
 
-    return ResolvedReferralInfo {
-      maybe_referral_partner,
-      maybe_referral_user_token,
-      maybe_referral_code_token: None,
-    };
+    return ResolvedReferralInfo { maybe_referral_partner, maybe_referral_user_token, maybe_referral_code_token: None };
   }
 
-  ResolvedReferralInfo {
-    maybe_referral_partner: None,
-    maybe_referral_user_token: None,
-    maybe_referral_code_token: None,
-  }
+  ResolvedReferralInfo { maybe_referral_partner: None, maybe_referral_user_token: None, maybe_referral_code_token: None }
 }

@@ -54,9 +54,7 @@ pub struct TtsInferenceJobStatusForResponse {
 /// Legacy TTS inference is shut down and the job tables are no longer served.
 /// Every job is reported as terminally "dead" (without touching MySQL or
 /// Redis) so old clients stop polling.
-pub async fn get_tts_inference_job_status_handler(
-  path: Path<GetTtsInferenceStatusPathInfo>,
-) -> Result<Json<GetTtsInferenceStatusSuccessResponse>, CommonWebError> {
+pub async fn get_tts_inference_job_status_handler(path: Path<GetTtsInferenceStatusPathInfo>) -> Result<Json<GetTtsInferenceStatusSuccessResponse>, CommonWebError> {
   let job_token = path.into_inner().token;
 
   if job_token.trim() == "None" {
@@ -67,21 +65,5 @@ pub async fn get_tts_inference_job_status_handler(
 
   let now = Utc::now();
 
-  Ok(Json(GetTtsInferenceStatusSuccessResponse {
-    success: true,
-    state: TtsInferenceJobStatusForResponse {
-      job_token,
-      status: SYNTHETIC_JOB_STATUS.to_string(),
-      maybe_extra_status_description: None,
-      attempt_count: 1,
-      maybe_result_token: None,
-      maybe_public_bucket_wav_audio_path: None,
-      model_token: SYNTHETIC_MODEL_TOKEN.to_string(),
-      tts_model_type: SYNTHETIC_MODEL_TYPE.to_string(),
-      title: SYNTHETIC_MODEL_TITLE.to_string(),
-      raw_inference_text: String::new(),
-      created_at: now,
-      updated_at: now,
-    },
-  }))
+  Ok(Json(GetTtsInferenceStatusSuccessResponse { success: true, state: TtsInferenceJobStatusForResponse { job_token, status: SYNTHETIC_JOB_STATUS.to_string(), maybe_extra_status_description: None, attempt_count: 1, maybe_result_token: None, maybe_public_bucket_wav_audio_path: None, model_token: SYNTHETIC_MODEL_TOKEN.to_string(), tts_model_type: SYNTHETIC_MODEL_TYPE.to_string(), title: SYNTHETIC_MODEL_TITLE.to_string(), raw_inference_text: String::new(), created_at: now, updated_at: now } }))
 }

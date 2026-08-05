@@ -28,36 +28,24 @@ use crate::state::server_state::ServerState;
     ("character_token" = CharacterToken, Path, description = "Character token"),
   )
 )]
-pub async fn delete_character_handler(
-  http_request: HttpRequest,
-  path: Path<DeleteCharacterPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<DeleteCharacterResponse>, CommonWebError> {
-
+pub async fn delete_character_handler(http_request: HttpRequest, path: Path<DeleteCharacterPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<DeleteCharacterResponse>, CommonWebError> {
   let character_token = &path.character_token;
 
   // --- Auth ---
 
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let user_session = require_api_or_web_session(
-    &http_request,
-    &server_state.session_checker,
-    &server_state.avt_cookie_manager,
-    &mut *mysql_connection,
-  ).await?;
+  let user_session = require_api_or_web_session(&http_request, &server_state.session_checker, &server_state.avt_cookie_manager, &mut *mysql_connection).await?;
 
   let user_token = &user_session.user_token;
   let is_mod = user_session.is_mod();
 
   // --- Look up the character (including deleted) ---
 
-  let character = get_character_by_token_including_deleted(character_token, &mut mysql_connection)
-      .await?
-      .ok_or_else(|| {
-        warn!("Character not found: {}", character_token);
-        CommonWebError::NotFound
-      })?;
+  let character = get_character_by_token_including_deleted(character_token, &mut mysql_connection).await?.ok_or_else(|| {
+    warn!("Character not found: {}", character_token);
+    CommonWebError::NotFound
+  })?;
 
   // Already deleted — return success idempotently.
   if character.is_deleted {
@@ -67,16 +55,10 @@ pub async fn delete_character_handler(
 
   // --- Ownership check ---
 
-  let is_owner = character.maybe_creator_user_token
-      .as_ref()
-      .map(|owner| owner == user_token)
-      .unwrap_or(false);
+  let is_owner = character.maybe_creator_user_token.as_ref().map(|owner| owner == user_token).unwrap_or(false);
 
   if !is_owner && !is_mod {
-    warn!(
-      "User {} attempted to delete character {} owned by {:?}",
-      user_token, character_token, character.maybe_creator_user_token,
-    );
+    warn!("User {} attempted to delete character {} owned by {:?}", user_token, character_token, character.maybe_creator_user_token,);
     return Err(CommonWebError::NotAuthorized);
   }
 

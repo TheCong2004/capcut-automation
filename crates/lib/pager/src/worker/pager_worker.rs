@@ -15,15 +15,8 @@ pub struct PagerWorker {
 }
 
 impl PagerWorker {
-  pub fn new(
-    queue: Arc<PagerWorkerMessageQueue>,
-    client: PagerClient,
-  ) -> Self {
-    Self {
-      queue,
-      client,
-      shutdown: Arc::new(AtomicBool::new(false)),
-    }
+  pub fn new(queue: Arc<PagerWorkerMessageQueue>, client: PagerClient) -> Self {
+    Self { queue, client, shutdown: Arc::new(AtomicBool::new(false)) }
   }
 
   /// Get a handle to the shutdown flag so external code can trigger shutdown.
@@ -59,7 +52,7 @@ impl PagerWorker {
           error!("Pager worker queue error: {}. Retrying in 5s.", err);
           tokio::time::sleep(Duration::from_secs(5)).await;
           continue;
-        }
+        },
       };
 
       if items.is_empty() {
@@ -77,21 +70,15 @@ impl PagerWorker {
 
         match self.client.send_page(notification).await {
           Ok(Some(success)) => {
-            debug!(
-              "Pager worker sent page: id={:?}, title={}",
-              success.id, notification.title
-            );
-          }
+            debug!("Pager worker sent page: id={:?}, title={}", success.id, notification.title);
+          },
           Ok(None) => {
             // NoOp — already logged by the client.
-          }
+          },
           Err(err) => {
-            error!(
-              "Pager worker failed to send page for '{}': {}",
-              notification.title, err
-            );
+            error!("Pager worker failed to send page for '{}': {}", notification.title, err);
             // Don't kill the thread on errors — keep processing.
-          }
+          },
         }
       }
     }
@@ -99,15 +86,12 @@ impl PagerWorker {
     // Drain any remaining items on shutdown.
     match self.queue.drain_available() {
       Ok(remaining) if !remaining.is_empty() => {
-        warn!(
-          "Pager worker shutting down with {} unsent notification(s) in queue.",
-          remaining.len()
-        );
-      }
+        warn!("Pager worker shutting down with {} unsent notification(s) in queue.", remaining.len());
+      },
       Err(err) => {
         error!("Pager worker could not drain queue on shutdown: {}", err);
-      }
-      _ => {}
+      },
+      _ => {},
     }
 
     info!("Pager worker thread stopped.");

@@ -10,14 +10,8 @@ use crate::job::job_types::lipsync::sad_talker::process_job::SadTalkerProcessJob
 use crate::state::job_dependencies::JobDependencies;
 
 pub async fn process_single_lipsync_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
-
   let job_success_result = match job.maybe_model_type {
-    Some(InferenceModelType::SadTalker) => {
-      sad_talker::process_job::process_job(SadTalkerProcessJobArgs {
-        job_dependencies,
-        job,
-      }).await?
-    }
+    Some(InferenceModelType::SadTalker) => sad_talker::process_job::process_job(SadTalkerProcessJobArgs { job_dependencies, job }).await?,
     Some(model_type) => return Err(ProcessSingleJobError::Other(anyhow!("wrong model type: {:?}", model_type))),
     None => return Err(ProcessSingleJobError::Other(anyhow!("no model type in record"))),
   };

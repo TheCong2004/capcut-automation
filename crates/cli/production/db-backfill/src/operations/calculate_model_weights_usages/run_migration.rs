@@ -51,14 +51,7 @@ pub async fn run_migration(mysql: Pool<MySql>) -> AnyhowResult<()> {
 
       info!("Date: {} Token: {} Uses: {} (batch elapsed: {} seconds)", date, usage.token.as_str(), usage.latest_usage_count, start.elapsed().as_secs());
 
-      upsert_model_weight_usage_count_for_date(Args {
-        model_token: &usage.token,
-        date,
-        usage_count: usage.latest_usage_count,
-        insert_on_zero: false,
-        mysql_executor: &mut *connection,
-        phantom: Default::default(),
-      }).await?;
+      upsert_model_weight_usage_count_for_date(Args { model_token: &usage.token, date, usage_count: usage.latest_usage_count, insert_on_zero: false, mysql_executor: &mut *connection, phantom: Default::default() }).await?;
     }
   }
 

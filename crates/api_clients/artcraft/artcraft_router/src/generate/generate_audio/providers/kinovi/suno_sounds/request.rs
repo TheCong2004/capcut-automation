@@ -1,13 +1,9 @@
-use seedance2pro_client::generate::audio::generate_suno_sound::{
-  generate_suno_sound, GenerateSunoSoundArgs, GenerateSunoSoundRequest,
-};
+use seedance2pro_client::generate::audio::generate_suno_sound::{generate_suno_sound, GenerateSunoSoundArgs, GenerateSunoSoundRequest};
 
 use crate::client::router_seedance2pro_client::RouterSeedance2ProClient;
 use crate::errors::artcraft_router_error::ArtcraftRouterError;
 use crate::errors::provider_error::ProviderError;
-use crate::generate::generate_audio::generate_audio_response::{
-  GenerateAudioResponse, Seedance2proAudioResponsePayload,
-};
+use crate::generate::generate_audio::generate_audio_response::{GenerateAudioResponse, Seedance2proAudioResponsePayload};
 
 #[derive(Debug, Clone)]
 pub struct KinoviSunoSoundsRequestState {
@@ -19,20 +15,11 @@ impl KinoviSunoSoundsRequestState {
   pub async fn send(&self, client: &RouterSeedance2ProClient) -> Result<GenerateAudioResponse, ArtcraftRouterError> {
     let session = &client.session;
 
-    let args = GenerateSunoSoundArgs {
-      session,
-      host_override: None,
-      request: self.request.clone(),
-    };
+    let args = GenerateSunoSoundArgs { session, host_override: None, request: self.request.clone() };
 
-    let response = generate_suno_sound(args)
-      .await
-      .map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
+    let response = generate_suno_sound(args).await.map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
 
-    Ok(GenerateAudioResponse::Seedance2Pro(Seedance2proAudioResponsePayload {
-      order_id: response.order_id,
-      task_id: response.task_id,
-    }))
+    Ok(GenerateAudioResponse::Seedance2Pro(Seedance2proAudioResponsePayload { order_id: response.order_id, task_id: response.task_id }))
   }
 }
 
@@ -52,10 +39,7 @@ mod tests {
   #[tokio::test]
   #[ignore] // Sends a real generation to Kinovi; costs credits.
   async fn single_hit() {
-    let response = run_pipeline(GenerateAudioRequestBuilder {
-      prompt: Some("A heavy castle door creaking open".to_string()),
-      ..suno_sounds_builder()
-    }).await;
+    let response = run_pipeline(GenerateAudioRequestBuilder { prompt: Some("A heavy castle door creaking open".to_string()), ..suno_sounds_builder() }).await;
     assert!(matches!(response, GenerateAudioResponse::Seedance2Pro(_)));
     assert_eq!(1, 2, "Inspect output above");
   }
@@ -63,13 +47,7 @@ mod tests {
   #[tokio::test]
   #[ignore] // Sends a real generation to Kinovi; costs credits.
   async fn loop_with_bpm_and_key() {
-    let response = run_pipeline(GenerateAudioRequestBuilder {
-      prompt: Some("Lo-fi vinyl crackle groove".to_string()),
-      is_loopable: Some(true),
-      bpm: Some(85),
-      musical_key: Some(CommonMusicalKey::AMinor),
-      ..suno_sounds_builder()
-    }).await;
+    let response = run_pipeline(GenerateAudioRequestBuilder { prompt: Some("Lo-fi vinyl crackle groove".to_string()), is_loopable: Some(true), bpm: Some(85), musical_key: Some(CommonMusicalKey::AMinor), ..suno_sounds_builder() }).await;
     assert!(matches!(response, GenerateAudioResponse::Seedance2Pro(_)));
     assert_eq!(1, 2, "Inspect output above");
   }
@@ -77,16 +55,11 @@ mod tests {
   // ── Helpers ──
 
   fn suno_sounds_builder() -> GenerateAudioRequestBuilder {
-    GenerateAudioRequestBuilder {
-      model: RouterAudioModel::SunoSounds,
-      provider: RouterProvider::Seedance2Pro,
-      ..Default::default()
-    }
+    GenerateAudioRequestBuilder { model: RouterAudioModel::SunoSounds, provider: RouterProvider::Seedance2Pro, ..Default::default() }
   }
 
   fn get_seedance2pro_client() -> RouterClient {
-    let cookies = std::fs::read_to_string("/Users/bt/Artcraft/credentials/seedance2pro_cookies.txt")
-      .expect("Failed to read seedance2pro cookies");
+    let cookies = std::fs::read_to_string("/Users/bt/Artcraft/credentials/seedance2pro_cookies.txt").expect("Failed to read seedance2pro cookies");
     let session = Seedance2ProSession::from_cookies_string(cookies.trim().to_string());
     RouterClient::Seedance2Pro(RouterSeedance2ProClient::new(session))
   }
@@ -105,7 +78,7 @@ mod tests {
     match &response {
       GenerateAudioResponse::Seedance2Pro(p) => {
         println!("task_id={}, order_id={}", p.task_id, p.order_id);
-      }
+      },
       other => println!("response: {:?}", other),
     }
 

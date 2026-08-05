@@ -20,7 +20,7 @@ impl Display for CometClientError {
       Self::ReqwestClientError(err) => write!(f, "Reqwest client error: {}", err),
       Self::InvalidRequestField { field, raw_value, reason } => {
         write!(f, "Invalid value for request field `{}`: {:?} ({})", field, raw_value, reason)
-      }
+      },
     }
   }
 }

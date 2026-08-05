@@ -5,20 +5,12 @@ use actix_web::web::{Json, Path};
 use actix_web::{web, HttpRequest};
 use log::warn;
 use sqlx::pool::PoolConnection;
-use artcraft_api_defs::folders::folder::{
-  FolderPathInfo, SetFolderCoverImageRequest, SetFolderCoverImageSuccessResponse,
-};
+use artcraft_api_defs::folders::folder::{FolderPathInfo, SetFolderCoverImageRequest, SetFolderCoverImageSuccessResponse};
 use enums::by_table::media_files::media_file_class::MediaFileClass;
 use enums::by_table::media_files::media_file_type::MediaFileType;
-use mysql_queries::queries::folders::folder::get_folder_for_owner::{
-  get_folder_for_owner, GetFolderForOwnerArgs,
-};
-use mysql_queries::queries::folders::folder::update_folder_cover_image::{
-  update_folder_cover_image, UpdateFolderCoverImageArgs,
-};
-use mysql_queries::queries::media_files::get::lookup_media_file_for_cover_check::{
-  lookup_media_file_for_cover_check, LookupMediaFileForCoverCheckArgs,
-};
+use mysql_queries::queries::folders::folder::get_folder_for_owner::{get_folder_for_owner, GetFolderForOwnerArgs};
+use mysql_queries::queries::folders::folder::update_folder_cover_image::{update_folder_cover_image, UpdateFolderCoverImageArgs};
+use mysql_queries::queries::media_files::get::lookup_media_file_for_cover_check::{lookup_media_file_for_cover_check, LookupMediaFileForCoverCheckArgs};
 use tokens::tokens::folders::FolderToken;
 use tokens::tokens::media_files::MediaFileToken;
 use tokens::tokens::users::UserToken;
@@ -53,12 +45,7 @@ use crate::state::server_state::ServerState;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn cover_image_folder_handler(
-  http_request: HttpRequest,
-  path: Path<FolderPathInfo>,
-  request: Json<SetFolderCoverImageRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<SetFolderCoverImageSuccessResponse>, CommonWebError> {
+pub async fn cover_image_folder_handler(http_request: HttpRequest, path: Path<FolderPathInfo>, request: Json<SetFolderCoverImageRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SetFolderCoverImageSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -67,45 +54,27 @@ pub async fn cover_image_folder_handler(
   let user_session = require_user_session(&http_request, &server_state.session_checker, &mut *conn).await?;
 
   // Confirm the folder exists + is owned. Authoritative 404 source.
-  get_folder_for_owner(GetFolderForOwnerArgs {
-    folder_token: &path.folder_token,
-    owner_user_token: &user_session.user_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
-    warn!("Folder lookup failed: {:?}", err);
-    CommonWebError::from_error(err)
-  })?
-  .ok_or(CommonWebError::NotFound)?;
+  get_folder_for_owner(GetFolderForOwnerArgs { folder_token: &path.folder_token, owner_user_token: &user_session.user_token, mysql_executor: &mut *conn, phantom: PhantomData })
+    .await
+    .map_err(|err| {
+      warn!("Folder lookup failed: {:?}", err);
+      CommonWebError::from_error(err)
+    })?
+    .ok_or(CommonWebError::NotFound)?;
 
   // Resolve the requested media file to a usable cover token (or `None`
   // if clearing).
   let maybe_resolved_token = match &request.maybe_media_file_token {
     None => None,
-    Some(media_file_token) => Some(
-      resolve_cover_image_token(
-        media_file_token,
-        &user_session.user_token,
-        &mut conn,
-      ).await?,
-    ),
+    Some(media_file_token) => Some(resolve_cover_image_token(media_file_token, &user_session.user_token, &mut conn).await?),
   };
 
-  update_folder_cover_image(UpdateFolderCoverImageArgs {
-    folder_token: &path.folder_token,
-    owner_user_token: &user_session.user_token,
-    maybe_cover_image_media_file_token: maybe_resolved_token.as_ref(),
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  update_folder_cover_image(UpdateFolderCoverImageArgs { folder_token: &path.folder_token, owner_user_token: &user_session.user_token, maybe_cover_image_media_file_token: maybe_resolved_token.as_ref(), mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("update_folder_cover_image failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
 
-  Ok(Json(SetFolderCoverImageSuccessResponse {
-    success: true,
-    maybe_resolved_cover_media_file_token: maybe_resolved_token,
-  }))
+  Ok(Json(SetFolderCoverImageSuccessResponse { success: true, maybe_resolved_cover_media_file_token: maybe_resolved_token }))
 }
 
 /// Look up `media_file_token`, verify ownership matches the session, and
@@ -114,34 +83,21 @@ pub async fn cover_image_folder_handler(
 /// returned regardless of the file's class/type. Otherwise we fall back
 /// to the file itself if it's a directly-renderable image/video, and
 /// `Err(CommonWebError::BadInputWithSimpleMessage(_))` if not.
-async fn resolve_cover_image_token(
-  media_file_token: &MediaFileToken,
-  session_user_token: &UserToken,
-  conn: &mut PoolConnection<sqlx::MySql>,
-) -> Result<MediaFileToken, CommonWebError> {
-  let media_file = lookup_media_file_for_cover_check(LookupMediaFileForCoverCheckArgs {
-    media_file_token,
-    mysql_executor: &mut **conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
-    warn!("lookup_media_file_for_cover_check failed: {:?}", err);
-    CommonWebError::from_error(err)
-  })?
-  .ok_or_else(|| CommonWebError::BadInputWithSimpleMessage(
-    "media file does not exist".to_string(),
-  ))?;
+async fn resolve_cover_image_token(media_file_token: &MediaFileToken, session_user_token: &UserToken, conn: &mut PoolConnection<sqlx::MySql>) -> Result<MediaFileToken, CommonWebError> {
+  let media_file = lookup_media_file_for_cover_check(LookupMediaFileForCoverCheckArgs { media_file_token, mysql_executor: &mut **conn, phantom: PhantomData })
+    .await
+    .map_err(|err| {
+      warn!("lookup_media_file_for_cover_check failed: {:?}", err);
+      CommonWebError::from_error(err)
+    })?
+    .ok_or_else(|| CommonWebError::BadInputWithSimpleMessage("media file does not exist".to_string()))?;
 
-  let creator_matches = media_file.maybe_creator_user_token
-    .as_ref()
-    .map(|t| t.as_str() == session_user_token.as_str())
-    .unwrap_or(false);
+  let creator_matches = media_file.maybe_creator_user_token.as_ref().map(|t| t.as_str() == session_user_token.as_str()).unwrap_or(false);
 
   if !creator_matches {
     // Don't leak whether the file exists; "not yours" reads the same as
     // "doesn't exist" from the client's perspective.
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "media file does not exist".to_string(),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage("media file does not exist".to_string()));
   }
 
   // The file's own cover image wins outright — if there is one, we use
@@ -157,9 +113,7 @@ async fn resolve_cover_image_token(
     return Ok(media_file_token.clone());
   }
 
-  Err(CommonWebError::BadInputWithSimpleMessage(
-    "media file has no cover image and isn't a renderable image or video".to_string(),
-  ))
+  Err(CommonWebError::BadInputWithSimpleMessage("media file has no cover image and isn't a renderable image or video".to_string()))
 }
 
 /// A media file can be used as a cover directly if it's classified as an
@@ -167,10 +121,6 @@ async fn resolve_cover_image_token(
 /// browser-renderable formats. We check both because `media_class` is a
 /// soft category that some legacy rows leave as `unknown`, while
 /// `media_type` is the more reliable indicator for newer rows.
-fn is_directly_usable_as_cover(
-  media_class: MediaFileClass,
-  media_type: MediaFileType,
-) -> bool {
-  matches!(media_class, MediaFileClass::Image | MediaFileClass::Video)
-    || matches!(media_type, MediaFileType::Jpg | MediaFileType::Png | MediaFileType::Mp4)
+fn is_directly_usable_as_cover(media_class: MediaFileClass, media_type: MediaFileType) -> bool {
+  matches!(media_class, MediaFileClass::Image | MediaFileClass::Video) || matches!(media_type, MediaFileType::Jpg | MediaFileType::Png | MediaFileType::Mp4)
 }

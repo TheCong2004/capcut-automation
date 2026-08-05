@@ -85,7 +85,7 @@ pub struct UploadNewEngineAssetSuccessResponse {
 }
 
 /// Upload an engine asset: character, animation, etc. Just don't use this for scenes.
-/// 
+///
 /// This is for new assets. You can't update existing assets with this endpoint.
 ///
 /// Be careful to set the correct `engine_category` and `maybe_animation_type` (if needed) fields!
@@ -107,36 +107,22 @@ pub struct UploadNewEngineAssetSuccessResponse {
     ),
   )
 )]
-pub async fn upload_new_engine_asset_media_file_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(mut form): MultipartForm<UploadNewEngineAssetFileForm>,
-) -> Result<Json<UploadNewEngineAssetSuccessResponse>, MediaFileUploadError> {
-
+pub async fn upload_new_engine_asset_media_file_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(mut form): MultipartForm<UploadNewEngineAssetFileForm>) -> Result<Json<UploadNewEngineAssetSuccessResponse>, MediaFileUploadError> {
   validate_request(&form)?;
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== BANNED USERS ==================== //
 
@@ -166,46 +152,35 @@ pub async fn upload_new_engine_asset_media_file_handler(
     return Err(MediaFileUploadError::BadInput(reason));
   }
 
-  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        MediaFileUploadError::BadInput("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    MediaFileUploadError::BadInput("invalid idempotency token".to_string())
+  })?;
 
   // ==================== USER DATA ==================== //
 
   let ip_address = get_request_ip(&http_request);
 
-  let maybe_user_token = maybe_user_session
-      .as_ref()
-      .map(|session| session.get_user_token());
+  let maybe_user_token = maybe_user_session.as_ref().map(|session| session.get_user_token());
 
   // ==================== FILE DATA ==================== //
 
-  let maybe_generation_provider = form.maybe_generation_provider
-      .as_ref()
-      .and_then(|text| try_parse_generation_provider(text.as_ref()));
+  let maybe_generation_provider = form.maybe_generation_provider.as_ref().and_then(|text| try_parse_generation_provider(text.as_ref()));
 
   let file_info = validate_and_process_form(maybe_user_session.as_ref(), form)?;
 
   // ==================== UPLOAD AND SAVE ==================== //
 
-  const PREFIX : Option<&str> = Some("asset_");
+  const PREFIX: Option<&str> = Some("asset_");
 
   let public_upload_path = MediaFileBucketPath::generate_new(PREFIX, Some(file_info.file_name_suffix));
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    file_info.file_bytes.as_ref(),
-    file_info.mimetype)
-      .await
-      .map_err(|e| {
-        warn!("Upload media bytes to bucket error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), file_info.file_bytes.as_ref(), file_info.mimetype).await.map_err(|e| {
+    warn!("Upload media bytes to bucket error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   // TODO(bt, 2024-02-22): This should be a transaction.
   let (token, record_id) = insert_media_file_from_file_upload(InsertMediaFileFromUploadArgs {
@@ -234,30 +209,22 @@ pub async fn upload_new_engine_asset_media_file_handler(
     maybe_public_bucket_extension: Some(file_info.file_name_suffix),
     pool: &server_state.mysql_pool,
   })
-      .await
-      .map_err(|err| {
-        warn!("New file creation DB error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  .await
+  .map_err(|err| {
+    warn!("New file creation DB error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   info!("new media file id: {} token: {:?}", record_id, &token);
 
-  Ok(Json(UploadNewEngineAssetSuccessResponse {
-    success: true,
-    media_file_token: token,
-  }))
+  Ok(Json(UploadNewEngineAssetSuccessResponse { success: true, media_file_token: token }))
 }
 
 fn validate_request(form: &UploadNewEngineAssetFileForm) -> Result<(), MediaFileUploadError> {
-  let duration_is_zeroish = form.maybe_duration_millis.is_none() ||
-      form.maybe_duration_millis
-          .as_ref()
-          .map(|duration| duration.0 == 0)
-          .unwrap_or(false);
+  let duration_is_zeroish = form.maybe_duration_millis.is_none() || form.maybe_duration_millis.as_ref().map(|duration| duration.0 == 0).unwrap_or(false);
 
   if duration_is_zeroish && form.engine_category.0 == MediaFileEngineCategory::Animation {
-    return Err(MediaFileUploadError::BadInput(
-      "duration_millis must be supplied for animations".to_string()));
+    return Err(MediaFileUploadError::BadInput("duration_millis must be supplied for animations".to_string()));
   }
 
   Ok(())
@@ -281,59 +248,38 @@ struct FileInfo {
   maybe_duration_millis: Option<u64>,
 }
 
-fn validate_and_process_form(
-  maybe_user_session: Option<&SessionUserRecord>,
-  mut form: UploadNewEngineAssetFileForm,
-) -> Result<FileInfo, MediaFileUploadError> {
+fn validate_and_process_form(maybe_user_session: Option<&SessionUserRecord>, mut form: UploadNewEngineAssetFileForm) -> Result<FileInfo, MediaFileUploadError> {
   let engine_category = form.engine_category.0;
 
-  let maybe_duration_millis = form.maybe_duration_millis
-      .map(|duration| duration.0);
+  let maybe_duration_millis = form.maybe_duration_millis.map(|duration| duration.0);
 
-  let mut maybe_animation_type = form.maybe_animation_type
-      .map(|t| t.0);
+  let mut maybe_animation_type = form.maybe_animation_type.map(|t| t.0);
 
   if engine_category == MediaFileEngineCategory::Expression {
     // NB: Expressions are exclusively ArKit for now (and probably well into the future).
     maybe_animation_type = Some(MediaFileAnimationType::ArKit);
   }
 
-  let maybe_title = form.maybe_title
-      .map(|title| title.trim().to_string())
-      .filter(|title| !title.is_empty());
+  let maybe_title = form.maybe_title.map(|title| title.trim().to_string()).filter(|title| !title.is_empty());
 
-  let creator_set_visibility = form.maybe_visibility
-      .map(|visibility| visibility.0)
-      .or_else(|| {
-        maybe_user_session
-            .as_ref()
-            .map(|user_session| user_session.preferred_tts_result_visibility)
-      })
-      .unwrap_or(Visibility::default());
+  let creator_set_visibility = form.maybe_visibility.map(|visibility| visibility.0).or_else(|| maybe_user_session.as_ref().map(|user_session| user_session.preferred_tts_result_visibility)).unwrap_or(Visibility::default());
 
-  let maybe_filename = form.file.file_name.as_deref()
-      .as_deref()
-      .map(|filename| PathBuf::from(filename));
+  let maybe_filename = form.file.file_name.as_deref().as_deref().map(|filename| PathBuf::from(filename));
 
-  let maybe_file_extension = maybe_filename
-      .as_ref()
-      .and_then(|filename| filename.extension())
-      .and_then(|ext| ext.to_str());
+  let maybe_file_extension = maybe_filename.as_ref().and_then(|filename| filename.extension()).and_then(|ext| ext.to_str());
 
   let mut file_bytes = Vec::new();
-  form.file.file.read_to_end(&mut file_bytes)
-      .map_err(|e| {
-        error!("Problem reading file: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  form.file.file.read_to_end(&mut file_bytes).map_err(|e| {
+    error!("Problem reading file: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   let file_size_bytes = file_bytes.len();
 
-  let sha256_checksum = sha256_hash_bytes(&file_bytes)
-      .map_err(|io_error| {
-        error!("Problem hashing bytes: {:?}", io_error);
-        MediaFileUploadError::ServerError
-      })?;
+  let sha256_checksum = sha256_hash_bytes(&file_bytes).map_err(|io_error| {
+    error!("Problem hashing bytes: {:?}", io_error);
+    MediaFileUploadError::ServerError
+  })?;
 
   match maybe_file_extension {
     Some("csv") => {
@@ -341,7 +287,7 @@ fn validate_and_process_form(
       if category != MediaFileEngineCategory::Expression {
         return Err(MediaFileUploadError::BadInput("CSV files are only allowed for expressions.".to_string()));
       }
-    }
+    },
     Some("jpg") | Some("jpeg") | Some("png") | Some("gif") => {
       if maybe_animation_type.is_some() {
         return Err(MediaFileUploadError::BadInput("Image files cannot have an animation type.".to_string()));
@@ -353,7 +299,7 @@ fn validate_and_process_form(
       if category != MediaFileEngineCategory::ImagePlane {
         return Err(MediaFileUploadError::BadInput("Image files are only allowed for image_plane.".to_string()));
       }
-    }
+    },
     Some("mp4") => {
       if maybe_animation_type.is_some() {
         return Err(MediaFileUploadError::BadInput("Video files cannot have an animation type.".to_string()));
@@ -362,14 +308,14 @@ fn validate_and_process_form(
       if category != MediaFileEngineCategory::VideoPlane {
         return Err(MediaFileUploadError::BadInput("Video files are only allowed for video_plane.".to_string()));
       }
-    }
-    _ => {} // Allowed
+    },
+    _ => {}, // Allowed
   }
 
   let (file_name_suffix, media_type, mimetype) = match maybe_file_extension {
     None => {
       return Err(MediaFileUploadError::BadInput("no file extension".to_string()));
-    }
+    },
     Some("bvh") => (".bvh", MediaFileType::Bvh, "application/octet-stream"),
     Some("fbx") => (".fbx", MediaFileType::Fbx, "application/octet-stream"),
     Some("glb") => (".glb", MediaFileType::Glb, "application/octet-stream"),
@@ -386,24 +332,13 @@ fn validate_and_process_form(
     _ => {
       return Err(MediaFileUploadError::BadInput(
         "unsupported file extension. Must be bvh, glb, gltf, fbx, csv (for expressions), \
-        or jpg, png, gif (for image_plane), or mp4 (for video_plane).".to_string()));
-    }
+        or jpg, png, gif (for image_plane), or mp4 (for video_plane)."
+          .to_string(),
+      ));
+    },
   };
 
   let media_class = media_type.to_media_class();
 
-  Ok(FileInfo {
-    media_class,
-    media_type,
-    engine_category,
-    maybe_title,
-    creator_set_visibility,
-    maybe_animation_type,
-    file_bytes,
-    file_size_bytes,
-    mimetype,
-    file_name_suffix,
-    sha256_checksum,
-    maybe_duration_millis,
-  })
+  Ok(FileInfo { media_class, media_type, engine_category, maybe_title, creator_set_visibility, maybe_animation_type, file_bytes, file_size_bytes, mimetype, file_name_suffix, sha256_checksum, maybe_duration_millis })
 }

@@ -11,15 +11,11 @@ pub struct ThreadId {
 
 impl ThreadId {
   pub fn random_id() -> Self {
-    Self {
-      id: random_crockford_token(10),
-    }
+    Self { id: random_crockford_token(10) }
   }
 
   pub fn with_id(id: &str) -> Self {
-    Self {
-      id: id.to_string(),
-    }
+    Self { id: id.to_string() }
   }
 
   pub fn get_id(&self) -> &str {

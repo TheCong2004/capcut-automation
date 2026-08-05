@@ -13,10 +13,7 @@ pub struct UserImpersonationRequestRecord {
 }
 
 /// Look up a user impersonation request by the public impersonation token (the "password").
-pub async fn lookup_user_impersonation_request(
-  user_impersonation_token: &str,
-  mysql_pool: &MySqlPool,
-) -> Result<Option<UserImpersonationRequestRecord>, sqlx::Error> {
+pub async fn lookup_user_impersonation_request(user_impersonation_token: &str, mysql_pool: &MySqlPool) -> Result<Option<UserImpersonationRequestRecord>, sqlx::Error> {
   let maybe_record = sqlx::query_as!(
     UserImpersonationRequestRecord,
     r#"
@@ -33,8 +30,8 @@ LIMIT 1
     "#,
     user_impersonation_token,
   )
-    .fetch_optional(mysql_pool)
-    .await?;
+  .fetch_optional(mysql_pool)
+  .await?;
 
   Ok(maybe_record)
 }

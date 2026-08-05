@@ -19,54 +19,22 @@ pub struct GenerationDebugLogContext<'a> {
 
 /// Best-effort info-level debug log of an inbound generation HTTP request.
 /// Never fails the request — insert errors are logged and swallowed.
-pub async fn insert_generation_request_debug_log<'e, 'c: 'e, E>(
-  debug_log_event_token: &'e DebugLogEventToken,
-  user_token: &'e UserToken,
-  ip_address: &'e str,
-  request_url: &'e str,
-  request_json: &'e str,
-  mysql_executor: E,
-) where
+pub async fn insert_generation_request_debug_log<'e, 'c: 'e, E>(debug_log_event_token: &'e DebugLogEventToken, user_token: &'e UserToken, ip_address: &'e str, request_url: &'e str, request_json: &'e str, mysql_executor: E)
+where
   E: 'c + Executor<'c, Database = MySql>,
 {
-  if let Err(err) = insert_debug_log(InsertDebugLogArgs {
-    apriori_debug_log_event_token: Some(debug_log_event_token),
-    maybe_creator_user_token: Some(user_token),
-    debug_log_type: DebugLogType::HttpRequest,
-    maybe_log_level: Some(DebugLogLevel::Info),
-    maybe_ip_address: Some(ip_address),
-    maybe_url: Some(request_url),
-    message: request_json,
-    mysql_executor,
-    phantom: Default::default(),
-  }).await {
+  if let Err(err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(debug_log_event_token), maybe_creator_user_token: Some(user_token), debug_log_type: DebugLogType::HttpRequest, maybe_log_level: Some(DebugLogLevel::Info), maybe_ip_address: Some(ip_address), maybe_url: Some(request_url), message: request_json, mysql_executor, phantom: Default::default() }).await {
     warn!("Failed to insert HTTP request debug log: {:?}", err);
   }
 }
 
 /// Best-effort error-level debug log of a generation backend failure.
 /// Never fails the request — insert errors are logged and swallowed.
-pub async fn insert_generation_failure_debug_log<'e, 'c: 'e, E>(
-  debug_log_event_token: &'e DebugLogEventToken,
-  user_token: &'e UserToken,
-  ip_address: &'e str,
-  request_url: &'e str,
-  error_message: &'e str,
-  mysql_executor: E,
-) where
+pub async fn insert_generation_failure_debug_log<'e, 'c: 'e, E>(debug_log_event_token: &'e DebugLogEventToken, user_token: &'e UserToken, ip_address: &'e str, request_url: &'e str, error_message: &'e str, mysql_executor: E)
+where
   E: 'c + Executor<'c, Database = MySql>,
 {
-  if let Err(err) = insert_debug_log(InsertDebugLogArgs {
-    apriori_debug_log_event_token: Some(debug_log_event_token),
-    maybe_creator_user_token: Some(user_token),
-    debug_log_type: DebugLogType::BackendFailure,
-    maybe_log_level: Some(DebugLogLevel::Error),
-    maybe_ip_address: Some(ip_address),
-    maybe_url: Some(request_url),
-    message: error_message,
-    mysql_executor,
-    phantom: Default::default(),
-  }).await {
+  if let Err(err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(debug_log_event_token), maybe_creator_user_token: Some(user_token), debug_log_type: DebugLogType::BackendFailure, maybe_log_level: Some(DebugLogLevel::Error), maybe_ip_address: Some(ip_address), maybe_url: Some(request_url), message: error_message, mysql_executor, phantom: Default::default() }).await {
     warn!("Failed to insert generation failure debug log: {:?}", err);
   }
 }
@@ -94,25 +62,11 @@ pub fn provider_request_debug_log_type(provider: RouterProvider) -> Option<Debug
 /// outbound payload is captured even when the upload/enqueue fails, without
 /// ever touching the pool.
 /// Never fails the request — insert errors are logged and swallowed.
-pub async fn insert_provider_request_debug_log<'e, 'c: 'e, E>(
-  context: &'e GenerationDebugLogContext<'e>,
-  debug_log_type: DebugLogType,
-  outbound_request_debug: &'e str,
-  mysql_executor: E,
-) where
+pub async fn insert_provider_request_debug_log<'e, 'c: 'e, E>(context: &'e GenerationDebugLogContext<'e>, debug_log_type: DebugLogType, outbound_request_debug: &'e str, mysql_executor: E)
+where
   E: 'c + Executor<'c, Database = MySql>,
 {
-  if let Err(err) = insert_debug_log(InsertDebugLogArgs {
-    apriori_debug_log_event_token: Some(context.event_token),
-    maybe_creator_user_token: Some(context.user_token),
-    debug_log_type,
-    maybe_log_level: Some(DebugLogLevel::Info),
-    maybe_ip_address: Some(context.ip_address),
-    maybe_url: Some(context.request_url),
-    message: outbound_request_debug,
-    mysql_executor,
-    phantom: Default::default(),
-  }).await {
+  if let Err(err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(context.event_token), maybe_creator_user_token: Some(context.user_token), debug_log_type, maybe_log_level: Some(DebugLogLevel::Info), maybe_ip_address: Some(context.ip_address), maybe_url: Some(context.request_url), message: outbound_request_debug, mysql_executor, phantom: Default::default() }).await {
     warn!("Failed to insert {} debug log: {:?}", debug_log_type, err);
   }
 }

@@ -55,7 +55,7 @@ pub enum ListUserBookmarksForEntityError {
 impl ResponseError for ListUserBookmarksForEntityError {
   fn status_code(&self) -> StatusCode {
     match *self {
-      ListUserBookmarksForEntityError::ServerError=> StatusCode::INTERNAL_SERVER_ERROR,
+      ListUserBookmarksForEntityError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
     }
   }
 
@@ -75,7 +75,6 @@ impl fmt::Display for ListUserBookmarksForEntityError {
   }
 }
 
-
 #[utoipa::path(
   get,
   tag = "User Bookmarks",
@@ -89,44 +88,36 @@ impl fmt::Display for ListUserBookmarksForEntityError {
   (status = 500, body = ListUserBookmarksForEntityError),
   ),
 )]
-pub async fn list_user_bookmarks_for_entity_handler(
-  _http_request: HttpRequest,
-  path: Path<ListUserBookmarksForEntityPathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListUserBookmarksForEntitySuccessResponse>, ListUserBookmarksForEntityError>
-{
-  let entity_token = UserBookmarkEntityToken::from_entity_type_and_token(
-    path.entity_type, &path.entity_token);
-  
-  let query_results = list_user_bookmarks_for_entity(
-    entity_token,
-    &server_state.mysql_pool,
-  ).await;
+pub async fn list_user_bookmarks_for_entity_handler(_http_request: HttpRequest, path: Path<ListUserBookmarksForEntityPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListUserBookmarksForEntitySuccessResponse>, ListUserBookmarksForEntityError> {
+  let entity_token = UserBookmarkEntityToken::from_entity_type_and_token(path.entity_type, &path.entity_token);
+
+  let query_results = list_user_bookmarks_for_entity(entity_token, &server_state.mysql_pool).await;
 
   let user_bookmarks = match query_results {
     Ok(results) => results,
     Err(e) => {
       warn!("Query error: {:?}", e);
       return Err(ListUserBookmarksForEntityError::ServerError);
-    }
+    },
   };
 
   let response = ListUserBookmarksForEntitySuccessResponse {
     success: true,
-    user_bookmarks: user_bookmarks.into_iter()
-        .map(|user_bookmark| UserBookmarkForEntityListItem {
-          token: user_bookmark.token,
-          user: UserDetailsLight {
-            user_token: user_bookmark.user_token.clone(),
-            username: user_bookmark.username.to_string(), // NB: Cloned because of ref use for avatar below
-            display_name: user_bookmark.user_display_name.clone(),
-            gravatar_hash: user_bookmark.user_gravatar_hash.clone(),
-            default_avatar: UserDefaultAvatarInfo::from_username(&user_bookmark.username),
-          },
-          created_at: user_bookmark.created_at,
-          updated_at: user_bookmark.updated_at,
-        })
-        .collect(),
+    user_bookmarks: user_bookmarks
+      .into_iter()
+      .map(|user_bookmark| UserBookmarkForEntityListItem {
+        token: user_bookmark.token,
+        user: UserDetailsLight {
+          user_token: user_bookmark.user_token.clone(),
+          username: user_bookmark.username.to_string(), // NB: Cloned because of ref use for avatar below
+          display_name: user_bookmark.user_display_name.clone(),
+          gravatar_hash: user_bookmark.user_gravatar_hash.clone(),
+          default_avatar: UserDefaultAvatarInfo::from_username(&user_bookmark.username),
+        },
+        created_at: user_bookmark.created_at,
+        updated_at: user_bookmark.updated_at,
+      })
+      .collect(),
   };
 
   Ok(Json(response))

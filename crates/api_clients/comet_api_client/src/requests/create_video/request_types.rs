@@ -50,8 +50,7 @@ mod tests {
 
   #[test]
   fn parse_real_create_response() {
-    let response: CreateVideoRawResponse = serde_json::from_str(REAL_CREATE_RESPONSE)
-      .expect("should parse");
+    let response: CreateVideoRawResponse = serde_json::from_str(REAL_CREATE_RESPONSE).expect("should parse");
 
     assert_eq!(response.id, "task_abc123");
     assert_eq!(response.task_id.as_deref(), Some("task_abc123"));
@@ -66,9 +65,7 @@ mod tests {
   fn parse_minimal_response() {
     // Only `id` and `status` are load-bearing; everything else is optional
     // so schema drift doesn't break enqueuing.
-    let response: CreateVideoRawResponse = serde_json::from_str(
-      r#"{"id":"task_xyz","status":"queued"}"#,
-    ).expect("should parse");
+    let response: CreateVideoRawResponse = serde_json::from_str(r#"{"id":"task_xyz","status":"queued"}"#).expect("should parse");
 
     assert_eq!(response.id, "task_xyz");
     assert_eq!(response.status, CometVideoTaskStatus::Queued);

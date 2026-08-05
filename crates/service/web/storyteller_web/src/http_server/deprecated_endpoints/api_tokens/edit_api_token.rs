@@ -36,26 +36,18 @@ pub struct EditApiTokenResponse {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn edit_api_token_handler(
-  http_request: HttpRequest,
-  request: web::Json<EditApiTokenRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn edit_api_token_handler(http_request: HttpRequest, request: web::Json<EditApiTokenRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if user_session.is_banned {
@@ -63,18 +55,12 @@ pub async fn edit_api_token_handler(
     return Err(CommonWebError::NotAuthorized);
   }
 
-  let tokens = list_available_api_tokens_for_user(
-    user_session.user_token.as_str(),
-    &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Error querying tokens: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  let tokens = list_available_api_tokens_for_user(user_session.user_token.as_str(), &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Error querying tokens: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
-  let valid_token = tokens.iter()
-      .find(|t| t.api_token.eq(&request.api_token))
-      .is_some();
+  let valid_token = tokens.iter().find(|t| t.api_token.eq(&request.api_token)).is_some();
 
   if !valid_token {
     warn!("Invalid API Token");
@@ -83,26 +69,14 @@ pub async fn edit_api_token_handler(
 
   let creator_ip_address = get_request_ip(&http_request);
 
-  let _r = edit_api_token(
-    user_session.user_token.as_str(),
-    &request.api_token,
-    request.maybe_short_description.as_deref(),
-    &creator_ip_address,
-    &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        error!("Error with query: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      });
+  let _r = edit_api_token(user_session.user_token.as_str(), &request.api_token, request.maybe_short_description.as_deref(), &creator_ip_address, &server_state.mysql_pool).await.map_err(|e| {
+    error!("Error with query: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  });
 
-  let response = EditApiTokenResponse {
-    success: true,
-  };
+  let response = EditApiTokenResponse { success: true };
 
-  let body = serde_json::to_string(&response)
-      .map_err(CommonWebError::from_error)?;
+  let body = serde_json::to_string(&response).map_err(CommonWebError::from_error)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

@@ -26,28 +26,18 @@ impl MetricsCollector {
     Self { queue: SampleQueue::new(), enabled: false }
   }
 
-  pub fn is_enabled(&self) -> bool { self.enabled }
+  pub fn is_enabled(&self) -> bool {
+    self.enabled
+  }
 
   // ==================== Request observations ====================
 
   /// Record one HTTP request observation. Called by the actix middleware.
-  pub fn record_request(
-    &self,
-    route: impl Into<String>,
-    method: impl Into<String>,
-    status_code: u16,
-    duration_ms: f64,
-  ) {
+  pub fn record_request(&self, route: impl Into<String>, method: impl Into<String>, status_code: u16, duration_ms: f64) {
     if !self.enabled {
       return;
     }
-    self.queue.push(Sample::Request(RequestSample {
-      route: route.into(),
-      method: method.into(),
-      status_code,
-      duration_ms,
-      timestamp_secs: now_secs(),
-    }));
+    self.queue.push(Sample::Request(RequestSample { route: route.into(), method: method.into(), status_code, duration_ms, timestamp_secs: now_secs() }));
   }
 
   // ==================== Custom counters ====================
@@ -71,11 +61,7 @@ impl MetricsCollector {
     // bucket. The worker counts entries per group; emitting n separate
     // samples keeps the aggregation logic uniform.
     for _ in 0..value {
-      self.queue.push(Sample::Counter(CounterSample {
-        metric: metric.clone(),
-        tags: tags.clone(),
-        timestamp_secs,
-      }));
+      self.queue.push(Sample::Counter(CounterSample { metric: metric.clone(), tags: tags.clone(), timestamp_secs }));
     }
   }
 
@@ -87,20 +73,12 @@ impl MetricsCollector {
     if !self.enabled {
       return;
     }
-    self.queue.push(Sample::Observation(ObservationSample {
-      metric: metric.into(),
-      value,
-      tags,
-      timestamp_secs: now_secs(),
-    }));
+    self.queue.push(Sample::Observation(ObservationSample { metric: metric.into(), value, tags, timestamp_secs: now_secs() }));
   }
 }
 
 fn now_secs() -> i64 {
-  SystemTime::now()
-    .duration_since(SystemTime::UNIX_EPOCH)
-    .map(|d| d.as_secs() as i64)
-    .unwrap_or(0)
+  SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -139,7 +117,7 @@ mod tests {
         Sample::Counter(c) => {
           assert_eq!(c.metric, "my.metric");
           assert_eq!(c.tags, vec!["a:b".to_string()]);
-        }
+        },
         other => panic!("expected Counter, got {:?}", other),
       }
     }
@@ -182,7 +160,7 @@ mod tests {
           assert_eq!(o.metric, "my.dist");
           assert_eq!(o.value, 3.14);
           assert_eq!(o.tags, vec!["k:v".to_string()]);
-        }
+        },
         other => panic!("expected Observation, got {:?}", other),
       }
     }

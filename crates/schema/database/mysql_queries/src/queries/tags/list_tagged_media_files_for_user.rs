@@ -27,9 +27,7 @@ where
 /// Excludes soft-deleted and intermediate system files. Newest first
 /// (`media_files.id` descending; the id doubles as the cursor). The
 /// EXISTS probe is a point lookup on `index_media_file_token`.
-pub async fn list_tagged_media_files_for_user<'e, 'c: 'e, E>(
-  args: ListTaggedMediaFilesForUserArgs<'e, 'c, E>,
-) -> Result<Vec<MediaFileListRow>, sqlx::Error>
+pub async fn list_tagged_media_files_for_user<'e, 'c: 'e, E>(args: ListTaggedMediaFilesForUserArgs<'e, 'c, E>) -> Result<Vec<MediaFileListRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -91,6 +89,6 @@ LIMIT ?
     cursor_id,
     limit,
   )
-    .fetch_all(args.mysql_executor)
-    .await
+  .fetch_all(args.mysql_executor)
+  .await
 }

@@ -6,12 +6,8 @@ use actix_web::web::{Json, Path};
 use actix_web::{web, HttpRequest};
 use log::warn;
 
-use artcraft_api_defs::tags::clear_media_file_tags::{
-  ClearMediaFileTagsPathInfo, ClearMediaFileTagsSuccessResponse,
-};
-use mysql_queries::queries::tags::filter_owned_media_file_tokens::{
-  filter_owned_media_file_tokens, FilterOwnedMediaFileTokensArgs,
-};
+use artcraft_api_defs::tags::clear_media_file_tags::{ClearMediaFileTagsPathInfo, ClearMediaFileTagsSuccessResponse};
+use mysql_queries::queries::tags::filter_owned_media_file_tokens::{filter_owned_media_file_tokens, FilterOwnedMediaFileTokensArgs};
 use tokens::tokens::media_files::MediaFileToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
@@ -36,11 +32,7 @@ use crate::state::server_state::ServerState;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn clear_media_file_tags_handler(
-  http_request: HttpRequest,
-  path: Path<ClearMediaFileTagsPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ClearMediaFileTagsSuccessResponse>, CommonWebError> {
+pub async fn clear_media_file_tags_handler(http_request: HttpRequest, path: Path<ClearMediaFileTagsPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ClearMediaFileTagsSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -48,12 +40,7 @@ pub async fn clear_media_file_tags_handler(
 
   let user_session = require_user_session(&http_request, &server_state.session_checker, &mut *conn).await?;
 
-  let owned = filter_owned_media_file_tokens(FilterOwnedMediaFileTokensArgs {
-    candidate_tokens: slice::from_ref(&path.media_file_token),
-    owner_user_token: &user_session.user_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let owned = filter_owned_media_file_tokens(FilterOwnedMediaFileTokensArgs { candidate_tokens: slice::from_ref(&path.media_file_token), owner_user_token: &user_session.user_token, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("Media file ownership check failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -62,16 +49,7 @@ pub async fn clear_media_file_tags_handler(
   }
 
   // Clearing is just "set to the empty tag set".
-  let outcome = apply_tags_to_media_files(
-    &mut conn,
-    &user_session.user_token,
-    &owned,
-    /* new_tags= */ &[],
-    /* remove_unmentioned= */ true,
-  ).await?;
+  let outcome = apply_tags_to_media_files(&mut conn, &user_session.user_token, &owned, /* new_tags= */ &[], /* remove_unmentioned= */ true).await?;
 
-  Ok(Json(ClearMediaFileTagsSuccessResponse {
-    success: true,
-    removed_count: outcome.removed_count,
-  }))
+  Ok(Json(ClearMediaFileTagsSuccessResponse { success: true, removed_count: outcome.removed_count }))
 }

@@ -16,106 +16,83 @@ use crate::http_server::common_responses::common_web_error::CommonWebError;
 
 #[derive(Deserialize)]
 pub struct UpdateMediaFileRequest {
-    pub creator_set_visibility: Option<String>,
+  pub creator_set_visibility: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct UpdateMediaFileResponse {
-    pub success: bool,
+  pub success: bool,
 }
 
 /// For the URL PathInfo
 #[derive(Deserialize)]
 pub struct UpdateMediaFilePathInfo {
-    token: MediaFileToken,
+  token: MediaFileToken,
 }
 
 // =============== Error Response ===============
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn update_media_file_handler(
-    http_request: HttpRequest,
-    path: Path<UpdateMediaFilePathInfo>,
-    request: Json<UpdateMediaFileRequest>,
-    server_state: web::Data<Arc<ServerState>>) -> Result<Json<UpdateMediaFileResponse>, CommonWebError>
-{
-    let maybe_user_session = server_state
-        .session_checker
-        .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-        .await
-        .map_err(|e| {
-            warn!("Session checker error: {:?}", e);
-            CommonWebError::from_error(e)
-        })?;
+pub async fn update_media_file_handler(http_request: HttpRequest, path: Path<UpdateMediaFilePathInfo>, request: Json<UpdateMediaFileRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<UpdateMediaFileResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-    let user_session = match maybe_user_session {
-        Some(session) => session,
-        None => {
-            warn!("not logged in");
-            return Err(CommonWebError::NotAuthorized);
-        }
-    };
+  let user_session = match maybe_user_session {
+    Some(session) => session,
+    None => {
+      warn!("not logged in");
+      return Err(CommonWebError::NotAuthorized);
+    },
+  };
 
-    let media_file_token = path.token.clone();
-    let is_mod = user_session.can_ban_users;
+  let media_file_token = path.token.clone();
+  let is_mod = user_session.can_ban_users;
 
-    let media_file_lookup_result = get_media_file(
-        &path.token,
-        is_mod,
-        &server_state.mysql_pool,
-    ).await;
+  let media_file_lookup_result = get_media_file(&path.token, is_mod, &server_state.mysql_pool).await;
 
-    let media_file = match media_file_lookup_result {
-        Ok(Some(media_file)) => media_file,
-        Ok(None) => {
-            warn!("MediaFile not found: {:?}", media_file_token);
-            return Err(CommonWebError::NotFound);
-        },
-        Err(err) => {
-            warn!("Error looking up media_file: {:?}", err);
-            return Err(CommonWebError::from_anyhow_error(err));
-        }
-    };
+  let media_file = match media_file_lookup_result {
+    Ok(Some(media_file)) => media_file,
+    Ok(None) => {
+      warn!("MediaFile not found: {:?}", media_file_token);
+      return Err(CommonWebError::NotFound);
+    },
+    Err(err) => {
+      warn!("Error looking up media_file: {:?}", err);
+      return Err(CommonWebError::from_anyhow_error(err));
+    },
+  };
 
-    let is_creator = media_file.maybe_creator_user_token
-        .is_some_and(|t| t.as_str() == user_session.user_token.as_str());
+  let is_creator = media_file.maybe_creator_user_token.is_some_and(|t| t.as_str() == user_session.user_token.as_str());
 
-    if !is_creator && !is_mod {
-        warn!("user is not allowed to edit this media_file: {:?}", user_session.user_token);
-        return Err(CommonWebError::NotAuthorized);
-    }
+  if !is_creator && !is_mod {
+    warn!("user is not allowed to edit this media_file: {:?}", user_session.user_token);
+    return Err(CommonWebError::NotAuthorized);
+  }
 
-    let mut creator_set_visibility = Visibility::Public;
+  let mut creator_set_visibility = Visibility::Public;
 
+  if let Some(visibility) = request.creator_set_visibility.as_deref() {
+    creator_set_visibility = Visibility::from_str(visibility).map_err(|_| CommonWebError::BadInputWithSimpleMessage("bad record visibility".to_string()))?;
+  }
 
-    if let Some(visibility) = request.creator_set_visibility.as_deref() {
-        creator_set_visibility = Visibility::from_str(visibility)
-            .map_err(|_| CommonWebError::BadInputWithSimpleMessage("bad record visibility".to_string()))?;
-    }
+  let ip_address = get_request_ip(&http_request);
+  let mut maybe_mod_user_token = None;
 
-    let ip_address = get_request_ip(&http_request);
-    let mut maybe_mod_user_token = None;
+  if is_mod {
+    maybe_mod_user_token = Some(user_session.user_token.as_str().to_string());
+  }
+  let query_result = update_media_file_visibility(UpdateMediaFileArgs { media_file_token: &media_file_token.clone(), creator_set_visibility: &creator_set_visibility, maybe_mod_user_token: maybe_mod_user_token.as_deref(), mysql_pool: &server_state.mysql_pool }).await;
 
-    if is_mod {
-        maybe_mod_user_token = Some(user_session.user_token.as_str().to_string());
-    }
-    let query_result = update_media_file_visibility(
-        UpdateMediaFileArgs {
-            media_file_token: &media_file_token.clone(),
-            creator_set_visibility: &creator_set_visibility,
-            maybe_mod_user_token: maybe_mod_user_token.as_deref(),
-            mysql_pool: &server_state.mysql_pool
-        }
-    ).await;
+  match query_result {
+    Ok(_) => {},
+    Err(err) => {
+      warn!("Update MediaFile DB error: {:?}", err);
+      return Err(CommonWebError::from_anyhow_error(err));
+    },
+  };
 
-    match query_result {
-        Ok(_) => {},
-        Err(err) => {
-            warn!("Update MediaFile DB error: {:?}", err);
-            return Err(CommonWebError::from_anyhow_error(err));
-        }
-    };
-
-    Ok(Json(UpdateMediaFileResponse { success: true }))
+  Ok(Json(UpdateMediaFileResponse { success: true }))
 }

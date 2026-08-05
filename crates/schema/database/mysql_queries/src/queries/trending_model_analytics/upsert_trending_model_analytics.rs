@@ -19,13 +19,12 @@ pub struct Args<'a> {
 }
 
 pub async fn upsert_trending_model_analytics(args: Args<'_>) -> AnyhowResult<()> {
-
   let (model_type, model_token) = match args.model_token {
     ModelToken::Tts(ref token) => (ModelType::Tts, token.as_str()),
   };
 
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO trending_model_analytics
 SET
   model_type = ?,
@@ -38,13 +37,13 @@ ON DUPLICATE KEY UPDATE
   numeric_value = ?,
   version = version + 1
         "#,
-      // Insert
-      model_type,
-      model_token,
-      args.window_name,
-      args.numeric_value,
-      args.numeric_value,
-    );
+    // Insert
+    model_type,
+    model_token,
+    args.window_name,
+    args.numeric_value,
+    args.numeric_value,
+  );
 
   let _r = query.execute(&mut **args.mysql_connection).await?;
   Ok(())

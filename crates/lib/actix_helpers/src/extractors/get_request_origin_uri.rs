@@ -7,13 +7,7 @@ use actix_web::HttpRequest;
 use errors::AnyhowResult;
 
 pub fn get_request_origin_uri(request: &HttpRequest) -> AnyhowResult<Option<Uri>> {
-  Ok(request.headers()
-      .get(ORIGIN)
-      .map(|origin| origin.to_str())
-      .transpose()?
-      .filter(|origin| !origin.is_empty())
-      .map(|origin| Uri::from_str(origin))
-      .transpose()?)
+  Ok(request.headers().get(ORIGIN).map(|origin| origin.to_str()).transpose()?.filter(|origin| !origin.is_empty()).map(|origin| Uri::from_str(origin)).transpose()?)
 }
 
 #[cfg(test)]
@@ -27,8 +21,7 @@ mod tests {
 
   #[test]
   fn missing_origin() {
-    let request = TestRequest::default()
-        .to_http_request();
+    let request = TestRequest::default().to_http_request();
 
     let origin = get_request_origin_uri(&request).expect("should be Ok");
 
@@ -37,9 +30,7 @@ mod tests {
 
   #[test]
   fn empty_string_origin() {
-    let request = TestRequest::default()
-        .insert_header(("Origin", ""))
-        .to_http_request();
+    let request = TestRequest::default().insert_header(("Origin", "")).to_http_request();
 
     let origin = get_request_origin_uri(&request).expect("should be Ok");
 
@@ -48,9 +39,7 @@ mod tests {
 
   #[test]
   fn fakeyou() {
-    let request = TestRequest::default()
-        .insert_header(("Origin", "https://fakeyou.com"))
-        .to_http_request();
+    let request = TestRequest::default().insert_header(("Origin", "https://fakeyou.com")).to_http_request();
 
     let origin = get_request_origin_uri(&request).expect("should be Ok");
 

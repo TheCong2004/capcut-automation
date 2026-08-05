@@ -11,34 +11,34 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Extension trait to configure Command for hidden window on Windows
 pub trait CommandExt {
-    /// Hide console window on Windows (no-op on other platforms)
-    fn hide_window(&mut self) -> &mut Self;
+  /// Hide console window on Windows (no-op on other platforms)
+  fn hide_window(&mut self) -> &mut Self;
 }
 
 impl CommandExt for Command {
-    #[cfg(windows)]
-    fn hide_window(&mut self) -> &mut Self {
-        self.creation_flags(CREATE_NO_WINDOW);
-        self
-    }
+  #[cfg(windows)]
+  fn hide_window(&mut self) -> &mut Self {
+    self.creation_flags(CREATE_NO_WINDOW);
+    self
+  }
 
-    #[cfg(not(windows))]
-    fn hide_window(&mut self) -> &mut Self {
-        self
-    }
+  #[cfg(not(windows))]
+  fn hide_window(&mut self) -> &mut Self {
+    self
+  }
 }
 
 /// Extension trait for std::process::Command
 impl CommandExt for std::process::Command {
-    #[cfg(windows)]
-    fn hide_window(&mut self) -> &mut Self {
-        use std::os::windows::process::CommandExt as _;
-        self.creation_flags(CREATE_NO_WINDOW);
-        self
-    }
+  #[cfg(windows)]
+  fn hide_window(&mut self) -> &mut Self {
+    use std::os::windows::process::CommandExt as _;
+    self.creation_flags(CREATE_NO_WINDOW);
+    self
+  }
 
-    #[cfg(not(windows))]
-    fn hide_window(&mut self) -> &mut Self {
-        self
-    }
+  #[cfg(not(windows))]
+  fn hide_window(&mut self) -> &mut Self {
+    self
+  }
 }

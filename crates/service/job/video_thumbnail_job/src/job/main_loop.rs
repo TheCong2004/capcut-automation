@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use log::{error, info, warn};
 
-use mysql_queries::queries::media_files::thumbnails::list_video_media_files_without_thumbnails_for_job::{
-  list_video_media_files_without_thumbnails_for_job,
-  ListVideoMediaFilesWithoutThumbnailsArgs,
-};
+use mysql_queries::queries::media_files::thumbnails::list_video_media_files_without_thumbnails_for_job::{list_video_media_files_without_thumbnails_for_job, ListVideoMediaFilesWithoutThumbnailsArgs};
 
 use crate::job::alert_on_error::alert_pager_and_return_err;
 use crate::job_dependencies::JobDependencies;
@@ -19,7 +16,7 @@ pub async fn main_loop(deps: JobDependencies) {
           info!("Processed {} video thumbnail(s) this cycle.", count);
         }
         count > 0
-      }
+      },
       Err(err) => {
         error!("Error in video thumbnail batch cycle: {:?}", err);
         let _ = alert_pager_and_return_err::<()>(&deps.pager, "Video thumbnail batch cycle error", err);
@@ -28,7 +25,7 @@ pub async fn main_loop(deps: JobDependencies) {
         // Wait before retrying after a failure.
         tokio::time::sleep(Duration::from_millis(deps.query_failure_retry_delay_millis)).await;
         false
-      }
+      },
     };
 
     // If we didn't process anything, sleep for the poll interval before checking again.
@@ -51,14 +48,7 @@ async fn run_batch_cycle(deps: &JobDependencies) -> anyhow::Result<u64> {
       break;
     }
 
-    let result = list_video_media_files_without_thumbnails_for_job(
-      ListVideoMediaFilesWithoutThumbnailsArgs {
-        custom_max_lookback_hours: deps.custom_max_lookback_hours,
-        custom_page_size: deps.custom_page_size,
-        maybe_id_cursor: maybe_cursor,
-        executor: &deps.mysql_pool,
-      },
-    ).await?;
+    let result = list_video_media_files_without_thumbnails_for_job(ListVideoMediaFilesWithoutThumbnailsArgs { custom_max_lookback_hours: deps.custom_max_lookback_hours, custom_page_size: deps.custom_page_size, maybe_id_cursor: maybe_cursor, executor: &deps.mysql_pool }).await?;
 
     if result.media_files.is_empty() {
       break;
@@ -81,15 +71,11 @@ async fn run_batch_cycle(deps: &JobDependencies) -> anyhow::Result<u64> {
         Ok(()) => {
           let _ = deps.job_stats.increment_success_count();
           total_processed += 1;
-        }
+        },
         Err(err) => {
-          warn!(
-            "Failed to generate thumbnail for media file {}: {:?}",
-            media_file.token.as_str(),
-            err,
-          );
+          warn!("Failed to generate thumbnail for media file {}: {:?}", media_file.token.as_str(), err,);
           let _ = deps.job_stats.increment_failure_count();
-        }
+        },
       }
     }
 

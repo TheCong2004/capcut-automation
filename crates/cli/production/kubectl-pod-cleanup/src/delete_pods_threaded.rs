@@ -10,19 +10,16 @@ use crate::list_pods::list_pods;
 use crate::pod_store::PodStore;
 
 /// If kubectl returns faster than this, it may be spamming the API.
-const TIMEOUT_TRIGGER_THRESHOLD : Duration = Duration::from_millis(500);
+const TIMEOUT_TRIGGER_THRESHOLD: Duration = Duration::from_millis(500);
 
-const TIMEOUT_DURATION : Duration = Duration::from_secs(5);
+const TIMEOUT_DURATION: Duration = Duration::from_secs(5);
 
 /// If we fail to delete pods this number of times, exit the thread.
-const FAILURE_TRIGGER_THRESHOLD : usize = 5;
+const FAILURE_TRIGGER_THRESHOLD: usize = 5;
 
-const POD_STATUSES_TO_KEEP : [&str; 2] = [
-  "ContainerCreating",
-  "Running",
-];
+const POD_STATUSES_TO_KEEP: [&str; 2] = ["ContainerCreating", "Running"];
 
-const POD_STATUSES_TO_ALWAYS_CLEAR : [&str; 18] = [
+const POD_STATUSES_TO_ALWAYS_CLEAR: [&str; 18] = [
   "Completed",
   "ContainerStatusUnknown", // TODO: Maybe don't include?
   "CrashLoopBackOff",
@@ -43,7 +40,7 @@ const POD_STATUSES_TO_ALWAYS_CLEAR : [&str; 18] = [
   "UnexpectedAdmissionError",
 ];
 
-const POD_STATUSES_TO_SOMETIMES_CLEAR : [&str; 5] = [
+const POD_STATUSES_TO_SOMETIMES_CLEAR: [&str; 5] = [
   "Init:1/2",
   "Init:1/3",
   "Init:2/3",
@@ -54,14 +51,13 @@ const POD_STATUSES_TO_SOMETIMES_CLEAR : [&str; 5] = [
   //"Init:ContainerStatusUnknown",
 ];
 
-
 pub fn delete_pods_threaded(num_tasks: usize, batch_size: usize) -> AnyhowResult<()> {
   let pods_to_delete = list_pods_to_delete()?;
   let pod_store = PodStore::from_names(pods_to_delete);
 
   let mut join_handles = Vec::with_capacity(batch_size);
 
-  for _ in 0 ..num_tasks {
+  for _ in 0..num_tasks {
     let pod_store_cloned = pod_store.clone();
 
     // NB: Using std::thread instead of Tokio since this API is blocking.
@@ -84,17 +80,9 @@ pub fn delete_pods_threaded(num_tasks: usize, batch_size: usize) -> AnyhowResult
 fn list_pods_to_delete() -> AnyhowResult<Vec<String>> {
   let all_pods = list_pods()?;
 
-  let pods_to_delete = all_pods.iter()
-      .filter(|pod| !POD_STATUSES_TO_KEEP.contains(&pod.status.as_str()))
-      .filter(|pod| {
-        POD_STATUSES_TO_ALWAYS_CLEAR.contains(&pod.status.as_str()) ||
-            POD_STATUSES_TO_SOMETIMES_CLEAR.contains(&pod.status.as_str())
-      })
-      .collect::<Vec<_>>();
+  let pods_to_delete = all_pods.iter().filter(|pod| !POD_STATUSES_TO_KEEP.contains(&pod.status.as_str())).filter(|pod| POD_STATUSES_TO_ALWAYS_CLEAR.contains(&pod.status.as_str()) || POD_STATUSES_TO_SOMETIMES_CLEAR.contains(&pod.status.as_str())).collect::<Vec<_>>();
 
-  let pod_names_to_delete = pods_to_delete.iter()
-      .map(|pod| pod.name.to_string())
-      .collect::<Vec<_>>();
+  let pod_names_to_delete = pods_to_delete.iter().map(|pod| pod.name.to_string()).collect::<Vec<_>>();
 
   Ok(pod_names_to_delete)
 }
@@ -108,7 +96,7 @@ fn delete_pod_thread(pod_store: PodStore, batch_size: usize) {
       Err(err) => {
         error!("threading error: {:?}", err);
         return;
-      }
+      },
     };
 
     if batch.is_empty() {
@@ -126,9 +114,7 @@ fn delete_pod_thread(pod_store: PodStore, batch_size: usize) {
       return;
     }
 
-    let pod_names = batch.into_iter()
-        .map(|n| n.to_string())
-        .collect::<Vec<String>>();
+    let pod_names = batch.into_iter().map(|n| n.to_string()).collect::<Vec<String>>();
 
     let start = Instant::now();
 

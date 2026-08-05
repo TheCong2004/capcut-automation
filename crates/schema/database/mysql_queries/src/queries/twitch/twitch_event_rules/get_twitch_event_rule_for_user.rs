@@ -21,15 +21,10 @@ pub struct TwitchEventRule {
 }
 
 /// Query record by token and user token
-pub async fn get_twitch_event_rule_for_user(
-  twitch_event_rule_token: &str,
-  user_token: &str,
-  pool: &MySqlPool,
-) -> AnyhowResult<Option<TwitchEventRule>> {
-
+pub async fn get_twitch_event_rule_for_user(twitch_event_rule_token: &str, user_token: &str, pool: &MySqlPool) -> AnyhowResult<Option<TwitchEventRule>> {
   let maybe_record = sqlx::query_as!(
-      TwitchEventRuleInternal,
-        r#"
+    TwitchEventRuleInternal,
+    r#"
 SELECT
   token,
   event_category as `event_category: crate::column_types::twitch_event_category::TwitchEventCategory`,
@@ -45,29 +40,19 @@ WHERE
   token = ?
   AND user_token = ?
         "#,
-      twitch_event_rule_token,
-      user_token,
-    )
-      .fetch_one(pool)
-      .await;
+    twitch_event_rule_token,
+    user_token,
+  )
+  .fetch_one(pool)
+  .await;
 
-  let record : TwitchEventRuleInternal = match maybe_record {
+  let record: TwitchEventRuleInternal = match maybe_record {
     Ok(record) => record,
     Err(sqlx::Error::RowNotFound) => return Ok(None),
     Err(ref err) => return Err(anyhow!("database query error: {:?}", err)),
   };
 
-  Ok(Some(TwitchEventRule {
-    token: record.token,
-    event_category: record.event_category,
-    event_match_predicate: record.event_match_predicate,
-    event_response: record.event_response,
-    user_specified_rule_order: record.user_specified_rule_order,
-    rule_is_disabled: i8_to_bool(record.rule_is_disabled),
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-    deleted_at: record.deleted_at,
-  }))
+  Ok(Some(TwitchEventRule { token: record.token, event_category: record.event_category, event_match_predicate: record.event_match_predicate, event_response: record.event_response, user_specified_rule_order: record.user_specified_rule_order, rule_is_disabled: i8_to_bool(record.rule_is_disabled), created_at: record.created_at, updated_at: record.updated_at, deleted_at: record.deleted_at }))
 }
 
 #[derive(Debug)]

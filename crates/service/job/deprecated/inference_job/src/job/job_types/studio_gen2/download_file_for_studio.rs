@@ -13,7 +13,7 @@ use tokens::tokens::media_files::MediaFileToken;
 use crate::job::job_loop::process_single_job_error::ProcessSingleJobError;
 use crate::job::job_types::studio_gen2::studio_gen2_dirs::StudioGen2Dirs;
 
-const DEFAULT_SUFFIX : &str = ".jpg";
+const DEFAULT_SUFFIX: &str = ".jpg";
 
 pub struct DownloadDetails {
   pub media_file: MediaFile,
@@ -27,47 +27,29 @@ pub struct DownloadFileForStudioArgs<'a> {
   pub remote_cloud_file_client: &'a RemoteCloudFileClient,
 }
 
-pub async fn download_file_for_studio(
-  args: DownloadFileForStudioArgs<'_>,
-  transactor: Transactor<'_, '_>,
-) -> Result<DownloadDetails, ProcessSingleJobError> {
-
+pub async fn download_file_for_studio(args: DownloadFileForStudioArgs<'_>, transactor: Transactor<'_, '_>) -> Result<DownloadDetails, ProcessSingleJobError> {
   info!("Querying input media file by token: {:?} ...", &args.media_token);
 
-  let input_media_file =  get_media_file_with_transactor(
-    &args.media_token,
-    true,
-    transactor,
-  ).await?.ok_or_else(|| {
+  let input_media_file = get_media_file_with_transactor(&args.media_token, true, transactor).await?.ok_or_else(|| {
     error!("media_file not found: {:?}", &args.media_token);
     ProcessSingleJobError::Other(anyhow!("media_file not found: {:?}", &args.media_token))
   })?;
 
-  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-    &input_media_file.public_bucket_directory_hash,
-    input_media_file.maybe_public_bucket_prefix.as_deref(),
-    input_media_file.maybe_public_bucket_extension.as_deref());
+  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&input_media_file.public_bucket_directory_hash, input_media_file.maybe_public_bucket_prefix.as_deref(), input_media_file.maybe_public_bucket_extension.as_deref());
 
   info!("media file cloud bucket path: {:?}", media_file_bucket_path.get_full_object_path_str());
 
   let suffix = get_suffix(&input_media_file);
 
-  let filesystem_path = args.input_paths.input_dir.path()
-      .join(format!("{}{}", args.filename_without_extension, suffix));
+  let filesystem_path = args.input_paths.input_dir.path().join(format!("{}{}", args.filename_without_extension, suffix));
 
   info!("Downloading input file to {:?}", &filesystem_path);
 
-  args.remote_cloud_file_client.download_media_file(
-    &media_file_bucket_path,
-    path_to_string(&filesystem_path)
-  ).await?;
+  args.remote_cloud_file_client.download_media_file(&media_file_bucket_path, path_to_string(&filesystem_path)).await?;
 
   info!("Downloaded file!");
 
-  Ok(DownloadDetails {
-    media_file: input_media_file,
-    file_path: filesystem_path,
-  })
+  Ok(DownloadDetails { media_file: input_media_file, file_path: filesystem_path })
 }
 
 fn get_suffix(input_media_file: &MediaFile) -> String {

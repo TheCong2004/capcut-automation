@@ -22,15 +22,16 @@ pub struct InsertBatchArgs<'a, 'b> {
 ///
 /// NB: Calling code is responsible for rolling back the transaction if this fails.
 pub async fn insert_batch_generation_records<'a, 'b>(args: InsertBatchArgs<'a, 'b>) -> AnyhowResult<BatchGenerationToken> {
-
   let batch_token = match args.maybe_existing_batch_token {
     Some(existing_token) => existing_token.clone(),
     None => BatchGenerationToken::generate(),
   };
 
-  let mut query_builder = QueryBuilder::new(r#"
+  let mut query_builder = QueryBuilder::new(
+    r#"
     INSERT INTO batch_generations (token, entity_type, entity_token) VALUES
-  "#);
+  "#,
+  );
 
   for (i, entry) in args.entries.iter().enumerate() {
     let (entity_type, entity_token) = entry.get_composite_keys();
@@ -52,7 +53,7 @@ pub async fn insert_batch_generation_records<'a, 'b>(args: InsertBatchArgs<'a, '
 
   let query = query_builder.build();
 
-  let query_result  = query.execute(&mut **args.transaction).await;
+  let query_result = query.execute(&mut **args.transaction).await;
 
   match query_result {
     Ok(_) => Ok(batch_token),
@@ -75,10 +76,7 @@ mod tests {
   use crate::queries::batch_generations::insert_batch_generation_records::{insert_batch_generation_records, InsertBatchArgs};
 
   async fn setup() -> sqlx::Pool<sqlx::MySql> {
-    MySqlPoolOptions::new()
-        .max_connections(3)
-        .connect(&DEFAULT_MYSQL_CONNECTION_STRING).await
-        .unwrap()
+    MySqlPoolOptions::new().max_connections(3).connect(&DEFAULT_MYSQL_CONNECTION_STRING).await.unwrap()
   }
 
   #[ignore]
@@ -88,17 +86,9 @@ mod tests {
 
     let mut transaction = pool.begin().await.unwrap();
 
-    let entries = vec![
-      BatchGenerationEntity::MediaFile(MediaFileToken::new_from_str("media_foo")),
-      BatchGenerationEntity::MediaFile(MediaFileToken::new_from_str("media_bar")),
-      BatchGenerationEntity::MediaFile(MediaFileToken::new_from_str("media_baz")),
-    ];
+    let entries = vec![BatchGenerationEntity::MediaFile(MediaFileToken::new_from_str("media_foo")), BatchGenerationEntity::MediaFile(MediaFileToken::new_from_str("media_bar")), BatchGenerationEntity::MediaFile(MediaFileToken::new_from_str("media_baz"))];
 
-    let r = insert_batch_generation_records(InsertBatchArgs {
-      entries,
-      maybe_existing_batch_token: None,
-      transaction: &mut transaction,
-    }).await;
+    let r = insert_batch_generation_records(InsertBatchArgs { entries, maybe_existing_batch_token: None, transaction: &mut transaction }).await;
 
     transaction.commit().await.unwrap();
   }

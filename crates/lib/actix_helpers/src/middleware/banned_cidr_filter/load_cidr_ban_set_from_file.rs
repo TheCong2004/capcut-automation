@@ -13,11 +13,7 @@ pub fn load_cidr_ban_set_from_file<P: AsRef<Path>>(path: P) -> AnyhowResult<Bann
   let file = File::open(path)?;
   let reader = BufReader::new(file);
 
-  let lines = reader.lines()
-      .filter_map(|line| line.ok())
-      .map(|line| line.trim().to_string())
-      .filter(|line| !(line.starts_with("#") || line.is_empty()))
-      .collect::<HashSet<String>>();
+  let lines = reader.lines().filter_map(|line| line.ok()).map(|line| line.trim().to_string()).filter(|line| !(line.starts_with("#") || line.is_empty())).collect::<HashSet<String>>();
 
   let cidr_bans = BannedCidrSet::new();
 

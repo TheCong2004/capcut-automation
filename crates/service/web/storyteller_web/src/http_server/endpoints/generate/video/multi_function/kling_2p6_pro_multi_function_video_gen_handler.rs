@@ -55,36 +55,23 @@ use utoipa::ToSchema;
     ("request" = Kling2p6ProMultiFunctionVideoGenRequest, description = "Payload for Request"),
   )
 )]
-pub async fn kling_2p6_pro_multi_function_video_gen_handler(
-  http_request: HttpRequest,
-  request: Json<Kling2p6ProMultiFunctionVideoGenRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<Kling2p6ProMultiFunctionVideoGenResponse>, CommonWebError> {
-  
+pub async fn kling_2p6_pro_multi_function_video_gen_handler(http_request: HttpRequest, request: Json<Kling2p6ProMultiFunctionVideoGenRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<Kling2p6ProMultiFunctionVideoGenResponse>, CommonWebError> {
   payments_error_test(&request.prompt.as_deref().unwrap_or(""))?;
-  
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await?;
-  
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let mut mysql_connection = server_state.mysql_pool.acquire().await?;
+
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
+
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   let user_token = match maybe_user_session.as_ref() {
     Some(session) => &session.user_token,
     None => {
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if let Err(reason) = validate_idempotency_token_format(&request.uuid_idempotency_token) {
@@ -96,7 +83,7 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
   if let Some(start_frame_token) = request.start_frame_image_media_token.as_ref() {
     let mut tokens = Vec::new();
     tokens.push(start_frame_token.to_owned());
-    
+
     // if let Some(end_frame_token) = request.end_frame_image_media_token.as_ref() {
     //   // NB: Masks are only relevant when this is an image editing exercise.
     //   tokens.push(end_frame_token.to_owned());
@@ -109,13 +96,8 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
     None => HashMap::new(),
     Some(media_tokens) => {
       info!("Looking up image media tokens: {:?}", media_tokens);
-      lookup_image_urls_as_map(
-        &http_request,
-        &mut mysql_connection,
-        server_state.server_environment,
-        &media_tokens,
-      ).await?
-    }
+      lookup_image_urls_as_map(&http_request, &mut mysql_connection, server_state.server_environment, &media_tokens).await?
+    },
   };
 
   let maybe_start_frame_image_url = match request.start_frame_image_media_token.as_ref() {
@@ -124,8 +106,8 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
       Some(url) => Some(url.to_string()),
       None => {
         return Err(CommonWebError::BadInputWithSimpleMessage("Media for start frame not found.".to_string()));
-      }
-    }
+      },
+    },
   };
 
   // let maybe_end_frame_image_url = match request.end_frame_image_media_token.as_ref() {
@@ -137,18 +119,16 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
   //     }
   //   }
   // };
-  
-  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
-      })?;
+
+  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
+  })?;
 
   info!("Fal webhook URL: {}", server_state.inference_providers.fal.webhook_url);
 
   let apriori_job_token = InferenceJobToken::generate();
-  
+
   let fal_result;
   let generation_mode;
 
@@ -162,42 +142,24 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
       None => EnqueueKlingV2p6ProImageToVideoDurationSeconds::Five,
     };
 
-    let fal_request = EnqueueKlingV2p6ProImageToVideoRequest {
-      prompt: request.prompt.as_deref().unwrap_or("").to_string(),
-      image_url: start_frame_url,
-      generate_audio: request.generate_audio,
-      negative_prompt: request.negative_prompt.clone(),
-      duration: Some(duration),
-    };
+    let fal_request = EnqueueKlingV2p6ProImageToVideoRequest { prompt: request.prompt.as_deref().unwrap_or("").to_string(), image_url: start_frame_url, generate_audio: request.generate_audio, negative_prompt: request.negative_prompt.clone(), duration: Some(duration) };
 
     let cost = fal_request.calculate_cost_in_cents();
 
-    let args = EnqueueKlingV2p6ProImageToVideoArgs {
-      request: fal_request,
-      webhook_url: &server_state.inference_providers.fal.webhook_url,
-      api_key: &server_state.inference_providers.fal.api_key,
-    };
-    
+    let args = EnqueueKlingV2p6ProImageToVideoArgs { request: fal_request, webhook_url: &server_state.inference_providers.fal.webhook_url, api_key: &server_state.inference_providers.fal.api_key };
+
     info!("Charging wallet: {}", cost);
-    
-    attempt_wallet_deduction_else_common_web_error(
-      user_token,
-      Some(apriori_job_token.as_str()),
-      cost,
-      &mut mysql_connection,
-    ).await?;
 
-    fal_result = enqueue_kling_v2p6_pro_image_to_video_webhook(args)
-        .await
-        .map_err(|err| {
-          warn!("Error calling enqueue_kling_v2p6_pro_image_to_video_webhook: {:?}", err);
-          CommonWebError::from_error(err)
-        })?;
+    attempt_wallet_deduction_else_common_web_error(user_token, Some(apriori_job_token.as_str()), cost, &mut mysql_connection).await?;
 
+    fal_result = enqueue_kling_v2p6_pro_image_to_video_webhook(args).await.map_err(|err| {
+      warn!("Error calling enqueue_kling_v2p6_pro_image_to_video_webhook: {:?}", err);
+      CommonWebError::from_error(err)
+    })?;
   } else {
     info!("text-to-video case");
     generation_mode = CommonGenerationMode::Text;
-    
+
     let duration = match request.duration {
       Some(Kling2p6ProMultiFunctionVideoGenDuration::FiveSeconds) => EnqueueKlingV2p6ProTextToVideoDurationSeconds::Five,
       Some(Kling2p6ProMultiFunctionVideoGenDuration::TenSeconds) => EnqueueKlingV2p6ProTextToVideoDurationSeconds::Ten,
@@ -211,65 +173,42 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
       None => EnqueueKlingV2p6ProTextToVideoAspectRatio::Square,
     };
 
-    let t2v_request = EnqueueKlingV2p6ProTextToVideoRequest {
-      prompt: request.prompt.as_deref().unwrap_or("").to_string(),
-      negative_prompt: request.negative_prompt.clone(),
-      generate_audio: request.generate_audio,
-      duration: Some(duration),
-      aspect_ratio: Some(aspect_ratio),
-    };
+    let t2v_request = EnqueueKlingV2p6ProTextToVideoRequest { prompt: request.prompt.as_deref().unwrap_or("").to_string(), negative_prompt: request.negative_prompt.clone(), generate_audio: request.generate_audio, duration: Some(duration), aspect_ratio: Some(aspect_ratio) };
 
     let cost = t2v_request.calculate_cost_in_cents();
 
-    let args = EnqueueKlingV2p6ProTextToVideoArgs {
-      request: t2v_request,
-      webhook_url: &server_state.inference_providers.fal.webhook_url,
-      api_key: &server_state.inference_providers.fal.api_key,
-    };
+    let args = EnqueueKlingV2p6ProTextToVideoArgs { request: t2v_request, webhook_url: &server_state.inference_providers.fal.webhook_url, api_key: &server_state.inference_providers.fal.api_key };
 
     info!("Charging wallet...");
 
-    attempt_wallet_deduction_else_common_web_error(
-      user_token,
-      Some(apriori_job_token.as_str()),
-      cost,
-      &mut mysql_connection,
-    ).await?;
+    attempt_wallet_deduction_else_common_web_error(user_token, Some(apriori_job_token.as_str()), cost, &mut mysql_connection).await?;
 
-    fal_result = enqueue_kling_v2p6_pro_text_to_video_webhook(args)
-        .await
-        .map_err(|err| {
-          warn!("Error calling enqueue_kling_v2p6_pro_text_to_video_webhook: {:?}", err);
-          CommonWebError::from_error(err)
-        })?;
+    fal_result = enqueue_kling_v2p6_pro_text_to_video_webhook(args).await.map_err(|err| {
+      warn!("Error calling enqueue_kling_v2p6_pro_text_to_video_webhook: {:?}", err);
+      CommonWebError::from_error(err)
+    })?;
   }
 
-  let external_job_id = fal_result.request_id
-      .ok_or_else(|| {
-        warn!("Fal request_id is None");
-        CommonWebError::server_error_with_message("Fal request_id is None")
-      })?;
+  let external_job_id = fal_result.request_id.ok_or_else(|| {
+    warn!("Fal request_id is None");
+    CommonWebError::server_error_with_message("Fal request_id is None")
+  })?;
 
   info!("Fal request_id: {}", external_job_id);
 
   let ip_address = get_request_ip(&http_request);
 
-  let mut transaction = mysql_connection
-      .begin()
-      .await
-      .map_err(|err| {
-        error!("Error starting MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("Error starting MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // NB: Don't fail the job if the query fails.
   let prompt_result = insert_prompt(InsertPromptArgs {
     maybe_bitrate: None,
     maybe_apriori_prompt_token: None,
     prompt_type: PromptType::ArtcraftApp,
-    maybe_creator_user_token: maybe_user_session
-        .as_ref()
-        .map(|s| &s.user_token),
+    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
     maybe_model_type: Some(CommonModelType::Kling2p6Pro),
     maybe_generation_provider: Some(GenerationProvider::Artcraft),
     maybe_positive_prompt: request.prompt.as_deref(),
@@ -291,24 +230,22 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
     creator_ip_address: &ip_address,
     mysql_executor: &mut *transaction,
     phantom: Default::default(),
-  }).await;
+  })
+  .await;
 
   let prompt_token = match prompt_result {
     Ok(token) => Some(token),
     Err(err) => {
       warn!("Error inserting prompt: {:?}", err);
       None // Don't fail the job if the prompt insertion fails.
-    }
+    },
   };
 
   if let Some(token) = prompt_token.as_ref() {
     let mut context_items = Vec::with_capacity(2);
-    
+
     if let Some(media_token) = &request.start_frame_image_media_token {
-      context_items.push(PromptContextItem {
-        media_token: media_token.clone(),
-        context_semantic_type: PromptContextSemanticType::VidStartFrame,
-      });
+      context_items.push(PromptContextItem { media_token: media_token.clone(), context_semantic_type: PromptContextSemanticType::VidStartFrame });
     }
 
     // if let Some(media_token) = &request.end_frame_image_media_token {
@@ -319,11 +256,7 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
     // }
 
     if !context_items.is_empty() {
-      let result = insert_batch_prompt_context_items(InsertBatchArgs {
-        prompt_token: token.clone(),
-        items: context_items,
-        transaction: &mut transaction,
-      }).await;
+      let result = insert_batch_prompt_context_items(InsertBatchArgs { prompt_token: token.clone(), items: context_items, transaction: &mut transaction }).await;
 
       if let Err(err) = result {
         // NB: Fail open.
@@ -332,46 +265,20 @@ pub async fn kling_2p6_pro_multi_function_video_gen_handler(
     }
   }
 
-  let db_result = insert_generic_inference_job_for_fal_queue_with_apriori_job_token(InsertGenericInferenceForFalWithAprioriJobTokenArgs {
-    apriori_job_token: &apriori_job_token,
-    uuid_idempotency_token: &request.uuid_idempotency_token,
-    maybe_external_third_party_id: &external_job_id,
-    fal_category: FalCategory::VideoGeneration,
-    maybe_model_type: Some(CommonModelType::Kling2p6Pro),
-    maybe_inference_args: None,
-    maybe_prompt_token: prompt_token.as_ref(),
-    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
-    maybe_avt_token: maybe_avt_token.as_ref(),
-    creator_ip_address: &ip_address,
-    creator_set_visibility: Visibility::Public,
-    maybe_platform_type: get_request_platform_type(&http_request),
-    maybe_cost_estimates: None,
-    mysql_executor: &mut *transaction,
-    starting_job_status_override: None,
-    maybe_frontend_failure_category: None,
-    maybe_failure_reason: None,
-      maybe_debug_log_event_token: None,
-    phantom: Default::default(),
-  }).await;
+  let db_result = insert_generic_inference_job_for_fal_queue_with_apriori_job_token(InsertGenericInferenceForFalWithAprioriJobTokenArgs { apriori_job_token: &apriori_job_token, uuid_idempotency_token: &request.uuid_idempotency_token, maybe_external_third_party_id: &external_job_id, fal_category: FalCategory::VideoGeneration, maybe_model_type: Some(CommonModelType::Kling2p6Pro), maybe_inference_args: None, maybe_prompt_token: prompt_token.as_ref(), maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token), maybe_avt_token: maybe_avt_token.as_ref(), creator_ip_address: &ip_address, creator_set_visibility: Visibility::Public, maybe_platform_type: get_request_platform_type(&http_request), maybe_cost_estimates: None, mysql_executor: &mut *transaction, starting_job_status_override: None, maybe_frontend_failure_category: None, maybe_failure_reason: None, maybe_debug_log_event_token: None, phantom: Default::default() }).await;
 
   let job_token = match db_result {
     Ok(token) => token,
     Err(err) => {
       warn!("Error inserting generic inference job for FAL queue: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
-  
-  let _r = transaction
-      .commit()
-      .await
-      .map_err(|err| {
-        error!("Error committing MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
 
-  Ok(Json(Kling2p6ProMultiFunctionVideoGenResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  let _r = transaction.commit().await.map_err(|err| {
+    error!("Error committing MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
+
+  Ok(Json(Kling2p6ProMultiFunctionVideoGenResponse { success: true, inference_job_token: job_token }))
 }

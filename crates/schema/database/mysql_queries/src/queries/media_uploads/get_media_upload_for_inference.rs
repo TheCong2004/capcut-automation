@@ -31,25 +31,16 @@ pub struct MediaUploadRecordForInference {
 }
 
 /// Query for a media upload to see if we already uploaded it.
-pub async fn get_media_upload_for_inference(
-  media_upload_token: &MediaUploadToken,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Option<MediaUploadRecordForInference>> {
+pub async fn get_media_upload_for_inference(media_upload_token: &MediaUploadToken, mysql_pool: &MySqlPool) -> AnyhowResult<Option<MediaUploadRecordForInference>> {
   let mut connection = mysql_pool.acquire().await?;
-  get_media_upload_by_uuid_with_connection(
-    media_upload_token,
-    &mut connection
-  ).await
+  get_media_upload_by_uuid_with_connection(media_upload_token, &mut connection).await
 }
 
 /// Query for a media upload to see if we already uploaded it.
-pub async fn get_media_upload_by_uuid_with_connection(
-  media_upload_token: &MediaUploadToken,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<Option<MediaUploadRecordForInference>> {
+pub async fn get_media_upload_by_uuid_with_connection(media_upload_token: &MediaUploadToken, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<MediaUploadRecordForInference>> {
   let maybe_result = sqlx::query_as!(
-      RawMediaUploadRecord,
-        r#"
+    RawMediaUploadRecord,
+    r#"
 SELECT
     mu.token as `token: tokens::tokens::media_uploads::MediaUploadToken`,
     mu.media_type as `media_type: enums::by_table::media_uploads::media_upload_type::MediaUploadType`,
@@ -69,8 +60,8 @@ WHERE
         "#,
     media_upload_token.as_str(),
   )
-      .fetch_one(&mut **mysql_connection)
-      .await;
+  .fetch_one(&mut **mysql_connection)
+  .await;
 
   match maybe_result {
     Err(err) => match err {
@@ -78,27 +69,9 @@ WHERE
       _ => {
         error!("list media uploads db error: {:?}", err);
         Err(anyhow!("error with query: {:?}", err))
-      }
+      },
     },
-    Ok(upload) => Ok(Some(MediaUploadRecordForInference {
-      token: upload.token,
-      media_type: upload.media_type,
-      maybe_original_filename: upload.maybe_original_filename,
-      public_bucket_directory_hash: upload.public_bucket_directory_hash,
-      original_file_size_bytes: upload.original_file_size_bytes as u32,
-      original_duration_millis: upload.original_duration_millis as u32,
-      maybe_extra_file_modification_info: upload.maybe_extra_file_modification_info
-          .as_deref()
-          .filter(|info| !info.trim().is_empty())
-          .map(|info| MediaUploadModificationDetails::from_json(info))
-          .transpose()
-          .map_err(|err| {
-            anyhow!("Error parsing field `maybe_extra_file_modification_info` from JSON: {:?}", err)
-          })?,
-      creator_set_visibility: upload.creator_set_visibility,
-      created_at: upload.created_at,
-      updated_at: upload.updated_at,
-    }))
+    Ok(upload) => Ok(Some(MediaUploadRecordForInference { token: upload.token, media_type: upload.media_type, maybe_original_filename: upload.maybe_original_filename, public_bucket_directory_hash: upload.public_bucket_directory_hash, original_file_size_bytes: upload.original_file_size_bytes as u32, original_duration_millis: upload.original_duration_millis as u32, maybe_extra_file_modification_info: upload.maybe_extra_file_modification_info.as_deref().filter(|info| !info.trim().is_empty()).map(|info| MediaUploadModificationDetails::from_json(info)).transpose().map_err(|err| anyhow!("Error parsing field `maybe_extra_file_modification_info` from JSON: {:?}", err))?, creator_set_visibility: upload.creator_set_visibility, created_at: upload.created_at, updated_at: upload.updated_at })),
   }
 }
 

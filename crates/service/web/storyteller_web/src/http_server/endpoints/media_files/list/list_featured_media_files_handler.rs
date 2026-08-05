@@ -120,11 +120,11 @@ pub struct FeaturedMediaFile {
   pub maybe_animation_type: Option<MediaFileAnimationType>,
 
   /// (DEPRECATED) URL path to the media file
-  #[deprecated(note="This field doesn't point to the full URL. Use media_links instead to leverage the CDN.")]
+  #[deprecated(note = "This field doesn't point to the full URL. Use media_links instead to leverage the CDN.")]
   pub public_bucket_path: String,
 
   /// (DEPRECATED) Full URL to the media file
-  #[deprecated(note="This points to the bucket. Use media_links instead to leverage the CDN.")]
+  #[deprecated(note = "This points to the bucket. Use media_links instead to leverage the CDN.")]
   pub public_bucket_url: String,
 
   /// Rich CDN links to the media, including thumbnails, previews, and more.
@@ -135,16 +135,16 @@ pub struct FeaturedMediaFile {
   /// 3D files require them.
   pub cover_image: MediaFileCoverImageDetails,
 
-  #[deprecated(note="Use MediaFileOriginDetails instead")]
+  #[deprecated(note = "Use MediaFileOriginDetails instead")]
   pub origin_category: MediaFileOriginCategory,
 
-  #[deprecated(note="Use MediaFileOriginDetails instead")]
+  #[deprecated(note = "Use MediaFileOriginDetails instead")]
   pub origin_product_category: MediaFileOriginProductCategory,
 
-  #[deprecated(note="Use MediaFileOriginDetails instead")]
+  #[deprecated(note = "Use MediaFileOriginDetails instead")]
   pub maybe_origin_model_type: Option<MediaFileOriginModelType>,
 
-  #[deprecated(note="Use MediaFileOriginDetails instead")]
+  #[deprecated(note = "Use MediaFileOriginDetails instead")]
   pub maybe_origin_model_token: Option<String>,
 
   /// Details where the media file came from.
@@ -193,28 +193,16 @@ pub struct FeaturedMediaFile {
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn list_featured_media_files_handler(
-  http_request: HttpRequest,
-  query: Query<ListFeaturedMediaFilesQueryParams>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError> {
-
+pub async fn list_featured_media_files_handler(http_request: HttpRequest, query: Query<ListFeaturedMediaFilesQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
   let cache_start = Instant::now();
 
   let maybe_cloudflare_header = get_cloudflare_ray_header(&http_request);
 
-  let maybe_cached_results  = server_state
-      .caches
-      .ephemeral
-      .featured_media_files_sieve
-      .get_copy(&query)
-      .ok()
-      .flatten();
+  let maybe_cached_results = server_state.caches.ephemeral.featured_media_files_sieve.get_copy(&query).ok().flatten();
 
   let cache_duration = Instant::now().signed_duration_since(cache_start);
 
-  info!("ListFeaturedMediaFiles: cache read: {:?}, cloudflare ray id: {:?}",
-    cache_duration, maybe_cloudflare_header);
+  info!("ListFeaturedMediaFiles: cache read: {:?}, cloudflare ray id: {:?}", cache_duration, maybe_cloudflare_header);
 
   let mut is_from_cache = maybe_cached_results.is_some();
 
@@ -245,79 +233,41 @@ pub async fn list_featured_media_files_handler(
 
   let media_domain = get_media_domain(&http_request);
 
-  let results = results_page.records.into_iter()
-      .map(|m| {
-        let public_bucket_path = MediaFileBucketPath::from_object_hash(
-          &m.public_bucket_directory_hash,
-          m.maybe_public_bucket_prefix.as_deref(),
-          m.maybe_public_bucket_extension.as_deref(),
-        );
-        FeaturedMediaFile {
-          token: m.token.clone(),
-          media_class: m.media_class,
-          media_type: m.media_type,
-          maybe_engine_category: m.maybe_engine_category,
-          maybe_animation_type: m.maybe_animation_type,
-          media_links: MediaLinksBuilder::from_media_path_and_env(
-            media_domain, 
-            server_state.server_environment,
-            &public_bucket_path
-          ),
-          public_bucket_path: public_bucket_path
-              .get_full_object_path_str()
-              .to_string(),
-          public_bucket_url: bucket_url_string_from_media_path(&public_bucket_path, media_domain, server_state.server_environment),
-          cover_image: MediaFileCoverImageDetails::from_optional_db_fields(
-            &m.token,
-            media_domain,
-            server_state.server_environment,
-            m.maybe_file_cover_image_public_bucket_hash.as_deref(),
-            m.maybe_file_cover_image_public_bucket_prefix.as_deref(),
-            m.maybe_file_cover_image_public_bucket_extension.as_deref(),
-          ),
-          origin: MediaFileOriginDetails::from_db_fields_str(
-            m.origin_category,
-            m.origin_product_category,
-            m.maybe_origin_model_type,
-            m.maybe_origin_model_token.as_deref(),
-            m.maybe_origin_model_title.as_deref()),
-          origin_category: m.origin_category,
-          origin_product_category: m.origin_product_category,
-          maybe_origin_model_type: m.maybe_origin_model_type,
-          maybe_origin_model_token: m.maybe_origin_model_token,
-          maybe_creator: UserDetailsLight::from_optional_db_fields_owned(
-            m.maybe_creator_user_token,
-            m.maybe_creator_username,
-            m.maybe_creator_display_name,
-            m.maybe_creator_gravatar_hash
-          ),
-          is_user_upload: m.is_user_upload,
-          is_intermediate_system_file: m.is_intermediate_system_file,
-          maybe_title: m.maybe_title,
-          maybe_text_transcript: m.maybe_text_transcript,
-          maybe_style_name: m.maybe_prompt_args
-              .as_ref()
-              .and_then(|args| args.style_name.as_ref())
-              .and_then(|style| style.to_style_name()),
-          maybe_duration_millis: m.maybe_duration_millis,
-          stats: SimpleEntityStats {
-            positive_rating_count: m.maybe_ratings_positive_count.unwrap_or(0),
-            bookmark_count: m.maybe_bookmark_count.unwrap_or(0),
-          },
-          created_at: m.created_at,
-          updated_at: m.updated_at,
-        }
-      }).collect::<Vec<_>>();
+  let results = results_page
+    .records
+    .into_iter()
+    .map(|m| {
+      let public_bucket_path = MediaFileBucketPath::from_object_hash(&m.public_bucket_directory_hash, m.maybe_public_bucket_prefix.as_deref(), m.maybe_public_bucket_extension.as_deref());
+      FeaturedMediaFile {
+        token: m.token.clone(),
+        media_class: m.media_class,
+        media_type: m.media_type,
+        maybe_engine_category: m.maybe_engine_category,
+        maybe_animation_type: m.maybe_animation_type,
+        media_links: MediaLinksBuilder::from_media_path_and_env(media_domain, server_state.server_environment, &public_bucket_path),
+        public_bucket_path: public_bucket_path.get_full_object_path_str().to_string(),
+        public_bucket_url: bucket_url_string_from_media_path(&public_bucket_path, media_domain, server_state.server_environment),
+        cover_image: MediaFileCoverImageDetails::from_optional_db_fields(&m.token, media_domain, server_state.server_environment, m.maybe_file_cover_image_public_bucket_hash.as_deref(), m.maybe_file_cover_image_public_bucket_prefix.as_deref(), m.maybe_file_cover_image_public_bucket_extension.as_deref()),
+        origin: MediaFileOriginDetails::from_db_fields_str(m.origin_category, m.origin_product_category, m.maybe_origin_model_type, m.maybe_origin_model_token.as_deref(), m.maybe_origin_model_title.as_deref()),
+        origin_category: m.origin_category,
+        origin_product_category: m.origin_product_category,
+        maybe_origin_model_type: m.maybe_origin_model_type,
+        maybe_origin_model_token: m.maybe_origin_model_token,
+        maybe_creator: UserDetailsLight::from_optional_db_fields_owned(m.maybe_creator_user_token, m.maybe_creator_username, m.maybe_creator_display_name, m.maybe_creator_gravatar_hash),
+        is_user_upload: m.is_user_upload,
+        is_intermediate_system_file: m.is_intermediate_system_file,
+        maybe_title: m.maybe_title,
+        maybe_text_transcript: m.maybe_text_transcript,
+        maybe_style_name: m.maybe_prompt_args.as_ref().and_then(|args| args.style_name.as_ref()).and_then(|style| style.to_style_name()),
+        maybe_duration_millis: m.maybe_duration_millis,
+        stats: SimpleEntityStats { positive_rating_count: m.maybe_ratings_positive_count.unwrap_or(0), bookmark_count: m.maybe_bookmark_count.unwrap_or(0) },
+        created_at: m.created_at,
+        updated_at: m.updated_at,
+      }
+    })
+    .collect::<Vec<_>>();
 
-  let response = ListFeaturedMediaFilesSuccessResponse {
-    success: true,
-    results,
-    pagination: PaginationCursors {
-      maybe_next: cursor_next,
-      maybe_previous: cursor_previous,
-      cursor_is_reversed,
-    }
-  };
+  let response = ListFeaturedMediaFilesSuccessResponse { success: true, results, pagination: PaginationCursors { maybe_next: cursor_next, maybe_previous: cursor_previous, cursor_is_reversed } };
 
   let body = serde_json::to_string(&response)?;
 
@@ -328,17 +278,10 @@ pub async fn list_featured_media_files_handler(
     response_builder.insert_header(("x-sieve", "true"));
   }
 
-  Ok(response_builder
-      .content_type("application/json")
-      .body(body))
+  Ok(response_builder.content_type("application/json").body(body))
 }
 
-async fn database_lookup(
-  query: &ListFeaturedMediaFilesQueryParams,
-  server_state: &ServerState,
-  maybe_cloudflare_header: Option<&str>,
-) -> Result<FeaturedMediaFileListPage, CommonWebError> {
-
+async fn database_lookup(query: &ListFeaturedMediaFilesQueryParams, server_state: &ServerState, maybe_cloudflare_header: Option<&str>) -> Result<FeaturedMediaFileListPage, CommonWebError> {
   // TODO(bt,2023-12-04): Enforce real maximums and defaults
   let limit = query.page_size.unwrap_or(25);
 
@@ -353,7 +296,7 @@ async fn database_lookup(
   };
 
   let maybe_filter_media_types = get_scoped_media_types(query.filter_media_type.as_deref());
-  let maybe_filter_media_classes  = get_scoped_media_classes(query.filter_media_classes.as_deref());
+  let maybe_filter_media_classes = get_scoped_media_classes(query.filter_media_classes.as_deref());
   let maybe_filter_engine_categories = get_scoped_engine_categories(query.filter_engine_categories.as_deref());
   let maybe_filter_product_categories = get_scoped_product_categories(query.filter_products.as_deref());
 
@@ -363,18 +306,7 @@ async fn database_lookup(
 
   let query_start = Instant::now();
 
-  let results = list_featured_media_files(ListFeaturedMediaFilesArgs {
-    limit,
-    maybe_offset: cursor,
-    cursor_is_reversed,
-    sort_ascending,
-    view_as: VIEW_AS,
-    maybe_filter_media_types: maybe_filter_media_types.as_ref(),
-    maybe_filter_media_classes: maybe_filter_media_classes.as_ref(),
-    maybe_filter_engine_categories: maybe_filter_engine_categories.as_ref(),
-    maybe_filter_product_categories: maybe_filter_product_categories.as_ref(),
-    mysql_pool: &server_state.mysql_pool,
-  }).await.map_err(|err| {
+  let results = list_featured_media_files(ListFeaturedMediaFilesArgs { limit, maybe_offset: cursor, cursor_is_reversed, sort_ascending, view_as: VIEW_AS, maybe_filter_media_types: maybe_filter_media_types.as_ref(), maybe_filter_media_classes: maybe_filter_media_classes.as_ref(), maybe_filter_engine_categories: maybe_filter_engine_categories.as_ref(), maybe_filter_product_categories: maybe_filter_product_categories.as_ref(), mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
     error!("DB error: {:?}", err);
     CommonWebError::from_anyhow_error(err)
   })?;
@@ -384,16 +316,11 @@ async fn database_lookup(
   let cache_store_start = Instant::now();
 
   // NB: Fail open.
-  let _result = server_state
-      .caches
-      .ephemeral
-      .featured_media_files_sieve
-      .store_copy(&query, &results);
+  let _result = server_state.caches.ephemeral.featured_media_files_sieve.store_copy(&query, &results);
 
   let cache_store_duration = Instant::now().signed_duration_since(cache_store_start);
 
-  info!("ListFeaturedMediaFiles: query: {:?}, cache store: {:?}, results len: {:?}, cloudflare ray id: {:?}",
-    query_duration, cache_store_duration, results.records.len(), maybe_cloudflare_header);
+  info!("ListFeaturedMediaFiles: query: {:?}, cache store: {:?}, results len: {:?}, cloudflare ray id: {:?}", query_duration, cache_store_duration, results.records.len(), maybe_cloudflare_header);
 
   Ok(results)
 }

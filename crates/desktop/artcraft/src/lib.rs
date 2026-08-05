@@ -102,7 +102,7 @@ pub fn run() {
 
   println!("Loading app preferences...");
   let app_preferences = load_app_preferences_or_default(&app_data_root);
-  
+
   let provider_credential_cache = crate::core::providers::credentials::provider_credential_loading_cache::ProviderCredentialLoadingCache::new(app_data_root.clone());
   let provider_credential_cache_2 = provider_credential_cache.clone();
 
@@ -112,18 +112,17 @@ pub fn run() {
   let storyteller_creds_manager = StorytellerCredentialManager::initialize_empty(&app_data_root);
   let storyteller_creds_manager_2 = storyteller_creds_manager.clone();
   let storyteller_creds_manager_3 = storyteller_creds_manager.clone();
-  
+
   println!("Attempting to read existing sora credentials...");
   let sora_creds_manager = SoraCredentialManager::initialize_from_disk_infallible(&app_data_root);
   let sora_creds_manager_2 = sora_creds_manager.clone();
-  
+
   // Other state
   let sora_task_queue = SoraTaskQueue::new();
   let sora_task_queue_2 = sora_task_queue.clone();
 
-  let app_env_configs = AppEnvConfigs::load_from_filesystem(&app_data_root)
-    .expect("AppEnvConfigs should be loaded from disk");
-  
+  let app_env_configs = AppEnvConfigs::load_from_filesystem(&app_data_root).expect("AppEnvConfigs should be loaded from disk");
+
   let app_env_configs_2 = app_env_configs.clone();
 
   let midjourney_creds_manager = MidjourneyCredentialManager::initialize_from_disk_infallible(&app_data_root);
@@ -140,7 +139,7 @@ pub fn run() {
 
   let worldlabs_bearer_bridge = WorldlabsBearerBridge::empty();
   let worldlabs_bearer_bridge_2 = worldlabs_bearer_bridge.clone();
-  
+
   let artcraft_usage_tracker = ArtcraftUsageTracker::new();
   let artcraft_usage_tracker_2 = artcraft_usage_tracker.clone();
 
@@ -188,23 +187,7 @@ pub fn run() {
       tauri::async_runtime::block_on(async move {
         let result = setup_main_window(&app).await;
 
-        let result = handle_tauri_startup(
-          handle,
-          root,
-          env_config,
-          artcraft_platform_info_2,
-          artcraft_usage_tracker_2,
-          storyteller_creds,
-          sora_creds,
-          sora_tasks,
-          midjourney_creds_manager_2,
-          grok_creds_manager_2,
-          grok_prompt_queue_2,
-          worldlabs_bearer_bridge_2,
-          worldlabs_creds_manager_2,
-          provider_credential_cache_2,
-          dispatcher,
-        ).await;
+        let result = handle_tauri_startup(handle, root, env_config, artcraft_platform_info_2, artcraft_usage_tracker_2, storyteller_creds, sora_creds, sora_tasks, midjourney_creds_manager_2, grok_creds_manager_2, grok_prompt_queue_2, worldlabs_bearer_bridge_2, worldlabs_creds_manager_2, provider_credential_cache_2, dispatcher).await;
 
         if let Err(err) = result {
           error!("Failed to handle Tauri startup: {:?}", err);
@@ -449,6 +432,5 @@ pub fn run() {
     youwee::embedded_system_commands::youwee_backend_health,
   ]);
 
-  builder.run(tauri::generate_context!("tauri.conf.json"))
-    .expect("error while running tauri application");
+  builder.run(tauri::generate_context!("tauri.conf.json")).expect("error while running tauri application");
 }

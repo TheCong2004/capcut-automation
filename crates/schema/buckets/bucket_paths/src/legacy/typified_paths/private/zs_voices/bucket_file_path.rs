@@ -24,7 +24,6 @@ pub struct ZeroShotVoiceEmbeddingBucketPath {
 impl PrivatePath for ZeroShotVoiceEmbeddingBucketPath {}
 
 impl ZeroShotVoiceEmbeddingBucketPath {
-
   pub fn generate_new(model_category: ModelCategory, model_type: ModelType, model_version: u64) -> Self {
     let entropy = crockford_entropy_lower(32);
     Self::from_object_hash(&entropy, model_category, model_type, model_version)
@@ -38,14 +37,7 @@ impl ZeroShotVoiceEmbeddingBucketPath {
 
     let full_object_path = format!("{}/{}", directory.get_directory_path_str(), filename);
 
-    Self {
-      directory,
-      filename,
-      full_object_path,
-      model_category,
-      model_type,
-      model_version,
-    }
+    Self { directory, filename, full_object_path, model_category, model_type, model_version }
   }
 
   pub fn get_full_object_path_str(&self) -> &str {

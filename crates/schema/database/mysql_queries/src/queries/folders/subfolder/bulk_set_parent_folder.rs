@@ -26,9 +26,7 @@ where
 ///     before the SQL is built.
 ///   * SQL-side: the WHERE clause includes `AND token != new_parent_token`
 ///     as a defense-in-depth guard.
-pub async fn bulk_set_parent_folder<'e, 'c: 'e, E>(
-  args: BulkSetParentFolderArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn bulk_set_parent_folder<'e, 'c: 'e, E>(args: BulkSetParentFolderArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -37,18 +35,13 @@ where
   // pairs with the SQL `token != new_parent_token` guard below.
   let new_parent_str = args.new_parent_token.as_str();
 
-  let filtered_children: Vec<&FolderToken> = args.child_tokens
-    .iter()
-    .filter(|t| t.as_str() != new_parent_str)
-    .collect();
+  let filtered_children: Vec<&FolderToken> = args.child_tokens.iter().filter(|t| t.as_str() != new_parent_str).collect();
 
   if filtered_children.is_empty() {
     return Ok(0);
   }
 
-  let mut builder = QueryBuilder::<MySql>::new(
-    "UPDATE folders SET maybe_parent_folder_token = ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("UPDATE folders SET maybe_parent_folder_token = ");
   builder.push_bind(new_parent_str);
   builder.push(" WHERE owner_user_token = ");
   builder.push_bind(args.owner_user_token.as_str());

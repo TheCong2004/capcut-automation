@@ -7,6 +7,8 @@ use log::{error, info, warn};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::env;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub const DEFAULT_CAPCUT_MATE_BASE_URL: &str = "http://127.0.0.1:30000";
@@ -24,26 +26,17 @@ fn get_capcut_mate_base_url() -> String {
 }
 
 fn get_timeout() -> Duration {
-  let secs = env::var("REQUEST_TIMEOUT_SECONDS")
-    .ok()
-    .and_then(|s| s.parse::<u64>().ok())
-    .unwrap_or(DEFAULT_TIMEOUT_SECS);
+  let secs = env::var("REQUEST_TIMEOUT_SECONDS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(DEFAULT_TIMEOUT_SECS);
   Duration::from_secs(secs)
 }
 
 fn get_poll_interval() -> Duration {
-  let ms = env::var("PIPELINE_POLL_INTERVAL_MS")
-    .ok()
-    .and_then(|s| s.parse::<u64>().ok())
-    .unwrap_or(DEFAULT_POLL_INTERVAL_MS);
+  let ms = env::var("PIPELINE_POLL_INTERVAL_MS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(DEFAULT_POLL_INTERVAL_MS);
   Duration::from_millis(ms)
 }
 
 fn get_job_timeout() -> Duration {
-  let secs = env::var("PIPELINE_JOB_TIMEOUT_SECONDS")
-    .ok()
-    .and_then(|s| s.parse::<u64>().ok())
-    .unwrap_or(DEFAULT_JOB_TIMEOUT_SECS);
+  let secs = env::var("PIPELINE_JOB_TIMEOUT_SECONDS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(DEFAULT_JOB_TIMEOUT_SECS);
   Duration::from_secs(secs)
 }
 
@@ -51,10 +44,7 @@ fn get_job_timeout() -> Duration {
 pub async fn health_check() -> Result<(), String> {
   let base_url = get_capcut_mate_base_url();
   let url = format!("{}/health", base_url.trim_end_matches('/'));
-  let client = Client::builder()
-    .timeout(Duration::from_secs(5))
-    .build()
-    .map_err(|e| format!("CAPCUT_MATE_UNAVAILABLE: Failed to build HTTP client: {e}"))?;
+  let client = Client::builder().timeout(Duration::from_secs(5)).build().map_err(|e| format!("CAPCUT_UNAVAILABLE: Failed to build HTTP client: {e}"))?;
 
   match client.get(&url).send().await {
     Ok(res) => {
@@ -62,10 +52,10 @@ pub async fn health_check() -> Result<(), String> {
       if status.is_success() {
         Ok(())
       } else {
-        Err(format!("CAPCUT_MATE_UNAVAILABLE: HTTP status {}", status.as_u16()))
+        Err(format!("CAPCUT_UNAVAILABLE: HTTP status {}", status.as_u16()))
       }
-    }
-    Err(err) => Err(format!("CAPCUT_MATE_UNAVAILABLE: Connection failed to {url}: {err}")),
+    },
+    Err(err) => Err(format!("CAPCUT_UNAVAILABLE: Connection failed to {url}: {err}")),
   }
 }
 
@@ -76,78 +66,66 @@ pub struct DraftAssemblyResult {
   pub rendering_supported: bool,
 }
 
-/// Assembly flow: create_draft -> add_captions -> save_draft -> (gen_video if supported).
-pub async fn assemble_and_process_draft(script: &str) -> AnyhowResult<DraftAssemblyResult> {
+/// Assembly flow: create_draft -> add_captions -> save_draft -> verify_draft -> (gen_video if supported).
+pub async fn assemble_and_process_draft(script: &str, cancel_flag: Option<Arc<AtomicBool>>) -> AnyhowResult<DraftAssemblyResult> {
   let client = Client::builder().timeout(get_timeout()).build()?;
 
   info!("[CAPCUT][CREATE_DRAFT] Initiating draft creation...");
   let (draft_url, draft_id) = create_draft(&client, DEFAULT_WIDTH, DEFAULT_HEIGHT).await?;
   if draft_id.is_empty() {
-    return Err(anyhow::anyhow!("CAPCUT_INVALID_DRAFT: Received empty draft_id"));
+    return Err(anyhow::anyhow!("DRAFT_CREATE_FAILED: Received empty draft_id"));
   }
 
   info!("[CAPCUT][ADD_CAPTION] Segmenting and adding captions to draft_id={}", draft_id);
   let captions = segment_script_to_captions(script);
-  if captions.is_empty() {
-    warn!("[CAPCUT][ADD_CAPTION] Script produced no caption segments");
-  } else {
+  if !captions.is_empty() {
     add_captions(&client, &draft_url, &captions).await?;
   }
 
   info!("[CAPCUT][SAVE] Saving draft draft_id={}", draft_id);
   let saved_draft_url = save_draft(&client, &draft_url).await?;
 
-  // Check if render video is supported or attempted
+  // Verify draft exists via get_draft API or draft URL validation
+  info!("[CAPCUT][VERIFY_DRAFT] Verifying saved draft structure...");
+  verify_draft_exists(&client, &draft_id).await?;
+
+  // Attempt render
   info!("[CAPCUT][RENDER_CHECK] Checking render capability...");
   match gen_video(&client, &saved_draft_url).await {
     Ok(_) => {
       info!("[CAPCUT][RENDER] Render job submitted. Polling status...");
-      match poll_gen_video_status(&client, &saved_draft_url).await {
-        Ok(video_url) => Ok(DraftAssemblyResult {
-          draft_url: saved_draft_url,
-          draft_id,
-          video_url: Some(video_url),
-          rendering_supported: true,
-        }),
-        Err(err) => {
-          warn!("[CAPCUT][RENDER_WARN] Rendering polling failed or unavailable ({err}). Falling back to DRAFT_READY");
-          Ok(DraftAssemblyResult {
-            draft_url: saved_draft_url,
-            draft_id,
-            video_url: None,
-            rendering_supported: false,
-          })
-        }
+      let video_url = poll_gen_video_status(&client, &saved_draft_url, cancel_flag).await?;
+
+      // Verify video output
+      if video_url.trim().is_empty() {
+        return Err(anyhow::anyhow!("RENDER_FAILED: Returned video URL is empty"));
       }
-    }
+
+      Ok(DraftAssemblyResult { draft_url: saved_draft_url, draft_id, video_url: Some(video_url), rendering_supported: true })
+    },
     Err(err) => {
-      info!("[CAPCUT][DRAFT_READY] Rendering unavailable or unsupported on backend ({err}). Completing at DRAFT_READY stage");
-      Ok(DraftAssemblyResult {
-        draft_url: saved_draft_url,
-        draft_id,
-        video_url: None,
-        rendering_supported: false,
-      })
-    }
+      let err_str = err.to_string();
+      // Only fallback to DraftReady if backend explicitly signals render is unsupported/disabled
+      if err_str.contains("render_unsupported") || err_str.contains("cli_bridge_disabled") || err_str.contains("no_render_engine") {
+        info!("[CAPCUT][DRAFT_READY] Backend rendering is explicitly unsupported ({err_str}). Finishing gracefully at DRAFT_READY");
+        Ok(DraftAssemblyResult { draft_url: saved_draft_url, draft_id, video_url: None, rendering_supported: false })
+      } else {
+        // Any real render failure MUST be propagated as RENDER_FAILED
+        error!("[CAPCUT][RENDER_ERROR] Render submission failed: {err_str}");
+        Err(anyhow::anyhow!("RENDER_FAILED: {err_str}"))
+      }
+    },
   }
 }
 
 /// Create a new draft and return (draft_url, draft_id).
 async fn create_draft(client: &Client, width: u32, height: u32) -> AnyhowResult<(String, String)> {
   let body = json!({ "width": width, "height": height });
-  let response = post(client, "/create_draft", &body).await?;
+  let response = post(client, "/create_draft", &body).await.map_err(|e| anyhow::anyhow!("DRAFT_CREATE_FAILED: {e}"))?;
 
-  let draft_url = response
-    .get("draft_url")
-    .and_then(|v| v.as_str())
-    .ok_or_else(|| anyhow::anyhow!("create_draft response missing draft_url"))?
-    .to_string();
+  let draft_url = response.get("draft_url").and_then(|v| v.as_str()).ok_or_else(|| anyhow::anyhow!("DRAFT_CREATE_FAILED: create_draft response missing draft_url"))?.to_string();
 
-  let draft_id = response
-    .get("draft_id")
-    .and_then(|v| v.as_str())
-    .map(|s| s.to_string())
-    .unwrap_or_else(|| extract_draft_id_from_url(&draft_url));
+  let draft_id = response.get("draft_id").and_then(|v| v.as_str()).map(|s| s.to_string()).unwrap_or_else(|| extract_draft_id_from_url(&draft_url));
 
   info!("[CAPCUT][CREATED] draft_url={}, draft_id={}", draft_url, draft_id);
   Ok((draft_url, draft_id))
@@ -161,7 +139,7 @@ async fn add_captions(client: &Client, draft_url: &str, captions: &[CaptionSegme
     "captions": captions_json,
   });
 
-  post(client, "/add_captions", &body).await?;
+  post(client, "/add_captions", &body).await.map_err(|e| anyhow::anyhow!("CAPTION_ADD_FAILED: {e}"))?;
   info!("[CAPCUT][CAPTIONS_ADDED] Injected {} captions into timeline", captions.len());
   Ok(())
 }
@@ -169,15 +147,26 @@ async fn add_captions(client: &Client, draft_url: &str, captions: &[CaptionSegme
 /// Save draft.
 async fn save_draft(client: &Client, draft_url: &str) -> AnyhowResult<String> {
   let body = json!({ "draft_url": draft_url });
-  let response = post(client, "/save_draft", &body).await?;
+  let response = post(client, "/save_draft", &body).await.map_err(|e| anyhow::anyhow!("DRAFT_SAVE_FAILED: {e}"))?;
 
-  let saved_url = response
-    .get("draft_url")
-    .and_then(|v| v.as_str())
-    .unwrap_or(draft_url)
-    .to_string();
+  let saved_url = response.get("draft_url").and_then(|v| v.as_str()).unwrap_or(draft_url).to_string();
 
   Ok(saved_url)
+}
+
+/// Verify draft existence via get_draft API endpoint.
+async fn verify_draft_exists(client: &Client, draft_id: &str) -> AnyhowResult<()> {
+  let base_url = get_capcut_mate_base_url();
+  let url = format!("{}/openapi/capcut-mate/v1/get_draft?draft_id={}", base_url.trim_end_matches('/'), draft_id);
+
+  match client.get(&url).send().await {
+    Ok(res) if res.status().is_success() => Ok(()),
+    Ok(res) => {
+      let status = res.status().as_u16();
+      Err(anyhow::anyhow!("DRAFT_SAVE_FAILED: get_draft validation failed with HTTP {}", status))
+    },
+    Err(e) => Err(anyhow::anyhow!("DRAFT_SAVE_FAILED: get_draft validation error: {e}")),
+  }
 }
 
 /// Kick off video rendering task if supported.
@@ -187,41 +176,50 @@ async fn gen_video(client: &Client, draft_url: &str) -> AnyhowResult<()> {
   Ok(())
 }
 
-/// Poll video rendering status until completed, failed, or deadline exceeded.
-async fn poll_gen_video_status(client: &Client, draft_url: &str) -> AnyhowResult<String> {
+/// Poll video rendering status with cancellation check and strict deadline.
+async fn poll_gen_video_status(client: &Client, draft_url: &str, cancel_flag: Option<Arc<AtomicBool>>) -> AnyhowResult<String> {
   let deadline = std::time::Instant::now() + get_job_timeout();
   let poll_interval = get_poll_interval();
   let body = json!({ "draft_url": draft_url });
 
   loop {
-    let response = post(client, "/gen_video_status", &body).await?;
+    // Check cancellation requested
+    if let Some(ref flag) = cancel_flag {
+      if flag.load(Ordering::Relaxed) {
+        info!("[CAPCUT][RENDER_CANCEL] Cancellation requested during render polling");
+        return Err(anyhow::anyhow!("RENDER_CANCELLED: User requested job cancellation"));
+      }
+    }
 
-    let status = response
-      .get("status")
-      .and_then(|v| v.as_str())
-      .unwrap_or("");
+    let response = match post(client, "/gen_video_status", &body).await {
+      Ok(res) => res,
+      Err(err) => {
+        warn!("[CAPCUT][POLL_ERR] Error querying gen_video_status: {err}");
+        if std::time::Instant::now() >= deadline {
+          return Err(anyhow::anyhow!("RENDER_TIMEOUT: Polling failed repeatedly and deadline exceeded: {err}"));
+        }
+        tokio::time::sleep(poll_interval).await;
+        continue;
+      },
+    };
+
+    let status = response.get("status").and_then(|v| v.as_str()).unwrap_or("");
 
     match status {
       "success" | "completed" | "done" => {
-        let video_url = response
-          .get("video_url")
-          .and_then(|v| v.as_str())
-          .ok_or_else(|| anyhow::anyhow!("gen_video_status completed but missing video_url"))?;
+        let video_url = response.get("video_url").and_then(|v| v.as_str()).ok_or_else(|| anyhow::anyhow!("RENDER_FAILED: gen_video_status completed but missing video_url"))?;
         return Ok(video_url.to_string());
-      }
+      },
       "failed" | "error" => {
-        let err_msg = response
-          .get("error_message")
-          .and_then(|v| v.as_str())
-          .unwrap_or("unknown render error");
-        return Err(anyhow::anyhow!("CapCut render failed: {}", err_msg));
-      }
+        let err_msg = response.get("error_message").and_then(|v| v.as_str()).unwrap_or("unknown render error");
+        return Err(anyhow::anyhow!("RENDER_FAILED: CapCut render failed: {err_msg}"));
+      },
       _ => {
         if std::time::Instant::now() >= deadline {
-          return Err(anyhow::anyhow!("CapCut render polling timed out after deadline"));
+          return Err(anyhow::anyhow!("RENDER_TIMEOUT: Render did not complete within deadline"));
         }
         tokio::time::sleep(poll_interval).await;
-      }
+      },
     }
   }
 }
@@ -242,24 +240,13 @@ async fn post(client: &Client, path: &str, body: &Value) -> AnyhowResult<Value> 
   let url = format!("{}/openapi/capcut-mate/v1{}", base_url.trim_end_matches('/'), path);
   let body_string = serde_json::to_string(body)?;
 
-  let response = client
-    .post(&url)
-    .header("Content-Type", "application/json")
-    .header("Accept", "application/json")
-    .body(body_string)
-    .send()
-    .await?;
+  let response = client.post(&url).header("Content-Type", "application/json").header("Accept", "application/json").body(body_string).send().await.map_err(|e| anyhow::anyhow!("CAPCUT_UNAVAILABLE: Connection failed to {url}: {e}"))?;
 
   let status = response.status();
   let text = response.text().await?;
 
   if !status.is_success() {
-    return Err(anyhow::anyhow!(
-      "CapCut Mate HTTP error {} for {}: {}",
-      status.as_u16(),
-      path,
-      text
-    ));
+    return Err(anyhow::anyhow!("CAPCUT_UNAVAILABLE: CapCut Mate HTTP error {} for {}: {}", status.as_u16(), path, text));
   }
 
   let parsed: Value = serde_json::from_str(&text)?;
@@ -267,11 +254,8 @@ async fn post(client: &Client, path: &str, body: &Value) -> AnyhowResult<Value> 
   // CapCut Mate signals logical errors via code != 0 even on HTTP 200
   let code = parsed.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
   if code != 0 {
-    let message = parsed
-      .get("message")
-      .and_then(|v| v.as_str())
-      .unwrap_or("unknown backend error");
-    return Err(anyhow::anyhow!("CapCut Mate API failure at {} (code {}): {}", path, code, message));
+    let message = parsed.get("message").and_then(|v| v.as_str()).unwrap_or("unknown backend error");
+    return Err(anyhow::anyhow!("CAPCUT_API_ERROR: Path {path} failed (code {code}): {message}"));
   }
 
   Ok(parsed)

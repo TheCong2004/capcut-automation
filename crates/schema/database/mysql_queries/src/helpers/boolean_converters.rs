@@ -11,8 +11,7 @@ pub fn i8_to_bool(value: i8) -> bool {
 
 /// Bool conversion, but turn nulls to a default value.
 pub fn nullable_i8_to_bool(value: Option<i8>, default_value: bool) -> bool {
-  value.map(|v| i8_to_bool(v))
-      .unwrap_or(default_value)
+  value.map(|v| i8_to_bool(v)).unwrap_or(default_value)
 }
 
 pub fn nullable_i8_to_bool_default_false(value: Option<i8>) -> bool {
@@ -21,7 +20,7 @@ pub fn nullable_i8_to_bool_default_false(value: Option<i8>) -> bool {
     Some(v) => match v {
       0 => false,
       _ => true,
-    }
+    },
   }
 }
 
@@ -29,7 +28,6 @@ pub fn nullable_i8_to_bool_default_false(value: Option<i8>) -> bool {
 pub fn nullable_i8_to_optional_bool(value: Option<i8>) -> Option<bool> {
   value.map(|v| i8_to_bool(v))
 }
-
 
 /// MySQL "is null" returns i64.
 pub fn i64_to_bool(value: i64) -> bool {
@@ -39,7 +37,6 @@ pub fn i64_to_bool(value: i64) -> bool {
     true
   }
 }
-
 
 #[cfg(test)]
 mod tests {

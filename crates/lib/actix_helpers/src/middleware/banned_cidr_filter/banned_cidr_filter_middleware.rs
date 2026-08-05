@@ -13,14 +13,14 @@ use crate::middleware::banned_ip_filter::banned_error::BannedError;
 //use std::task::{Context, Poll};
 
 pub struct BannedCidrFilterMiddleware<S> {
-  pub (crate) service: S,
-  pub (crate) cidr_bans: BannedCidrSet,
+  pub(crate) service: S,
+  pub(crate) cidr_bans: BannedCidrSet,
 }
 
 impl<S, B> Service<ServiceRequest> for BannedCidrFilterMiddleware<S>
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;
@@ -42,13 +42,11 @@ impl<S, B> Service<ServiceRequest> for BannedCidrFilterMiddleware<S>
       Ok(ip) => ip,
       Err(_err) => {
         return Either::Left(self.service.call(request));
-      }
+      },
     };
 
     // NB: Fail open again.
-    let is_banned = self.cidr_bans
-        .ip_is_banned(ip_address)
-        .unwrap_or(false);
+    let is_banned = self.cidr_bans.ip_is_banned(ip_address).unwrap_or(false);
 
     if is_banned {
       Either::Right(err(Error::from(BannedError {})))

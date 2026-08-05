@@ -8,14 +8,13 @@ use crate::error::EnvError;
 /// Get an environment variable as a `Duration` in seconds.
 /// If not provided or cannot parse, return an error.
 pub fn get_env_duration_seconds_required(env_name: &str) -> Result<Duration, EnvError> {
-  get_env_duration_seconds_internal(env_name)
-    .and_then(|maybe| match maybe {
-      None => {
-        warn!("Env var '{}' not supplied.", env_name);
-        Err(EnvError::RequiredNotPresent { name: env_name.to_string() })
-      },
-      Some(val) => Ok(val),
-    })
+  get_env_duration_seconds_internal(env_name).and_then(|maybe| match maybe {
+    None => {
+      warn!("Env var '{}' not supplied.", env_name);
+      Err(EnvError::RequiredNotPresent { name: env_name.to_string() })
+    },
+    Some(val) => Ok(val),
+  })
 }
 
 /// Get an environment variable as a `Duration` in seconds.
@@ -46,21 +45,18 @@ pub fn get_env_duration_seconds_or_default(env_name: &str, default: Duration) ->
       Some(val) => val,
     })
     .unwrap_or_else(|e| {
-      warn!("Env var '{}': error parsing numeric value: {:?}. Using default '{:?}'.",
-            env_name, e, default);
+      warn!("Env var '{}': error parsing numeric value: {:?}. Using default '{:?}'.", env_name, e, default);
       default
     })
 }
 
 fn get_env_duration_seconds_internal(env_name: &str) -> Result<Option<Duration>, EnvError> {
   match env::var(env_name).as_ref().ok() {
-    None => {
-      Ok(None)
-    },
+    None => Ok(None),
     Some(val) => match val.parse::<u64>() {
       Ok(number) => Ok(Some(Duration::from_secs(number))),
-      Err(_) => Err(EnvError::ParseError { reason: format!("Couldn't parse as number: '{}'", val) })
-    }
+      Err(_) => Err(EnvError::ParseError { reason: format!("Couldn't parse as number: '{}'", val) }),
+    },
   }
 }
 

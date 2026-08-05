@@ -210,8 +210,7 @@ impl Residue {
 
             // Reserve interleave buffer storage in the scratch-pad.
             self.setup_type2_buf(full_residue_len);
-        }
-        else {
+        } else {
             self.setup_part_classes(parts_to_read * residue_channels.count());
         }
 
@@ -254,8 +253,7 @@ impl Residue {
                             self.setup.residue_classifications as u32,
                             &mut self.part_classes[part_first..],
                         );
-                    }
-                    else {
+                    } else {
                         // For formats 0 and 1, each channel has its own classification list.
                         for (i, ch) in residue_channels.iter().enumerate() {
                             let channel = &channels[ch];
@@ -297,8 +295,7 @@ impl Residue {
 
                             let class_idx = self.part_classes[part + parts_to_read * i] as usize;
                             &self.setup.residue_vq_class[class_idx]
-                        }
-                        else {
+                        } else {
                             &self.setup.residue_vq_class[self.part_classes[part] as usize]
                         };
 
@@ -379,8 +376,7 @@ fn decode_classes(mut val: u32, parts_per_classword: u16, classifications: u32, 
         }
 
         skip
-    }
-    else {
+    } else {
         0
     };
 

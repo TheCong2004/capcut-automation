@@ -48,24 +48,14 @@ pub struct WatermarkArgs<P: AsRef<Path>> {
 }
 
 impl FfmpegLogoWatermarkCommand {
-  pub fn new<P: AsRef<Path>>(
-    executable_or_command: ExecutableOrCommand,
-    maybe_default_logo_path: Option<P>,
-    maybe_execution_timeout: Option<Duration>,
-  ) -> Self {
-    Self {
-      executable_or_command,
-      maybe_default_logo_path: maybe_default_logo_path.map(|p| p.as_ref().to_path_buf()),
-      maybe_execution_timeout,
-    }
+  pub fn new<P: AsRef<Path>>(executable_or_command: ExecutableOrCommand, maybe_default_logo_path: Option<P>, maybe_execution_timeout: Option<Duration>) -> Self {
+    Self { executable_or_command, maybe_default_logo_path: maybe_default_logo_path.map(|p| p.as_ref().to_path_buf()), maybe_execution_timeout }
   }
 
   pub fn from_env() -> AnyhowResult<Self> {
-    let maybe_command = easyenv::get_env_string_optional(
-      "FFMPEG_LOGO_COMMAND");
+    let maybe_command = easyenv::get_env_string_optional("FFMPEG_LOGO_COMMAND");
 
-    let maybe_executable = easyenv::get_env_pathbuf_optional(
-      "FFMPEG_LOGO_EXECUTABLE");
+    let maybe_executable = easyenv::get_env_pathbuf_optional("FFMPEG_LOGO_EXECUTABLE");
 
     let executable_or_command = match maybe_command {
       Some(command) => ExecutableOrCommand::Command(command),
@@ -74,49 +64,36 @@ impl FfmpegLogoWatermarkCommand {
         None => {
           warn!("Neither executable or command supplied, using `ffmpeg`.");
           ExecutableOrCommand::Command("ffmpeg".to_string())
-        }
+        },
       },
     };
 
-    let maybe_default_logo_path = easyenv::get_env_pathbuf_optional(
-      "FFMPEG_LOGO_LOGO_PATH");
+    let maybe_default_logo_path = easyenv::get_env_pathbuf_optional("FFMPEG_LOGO_LOGO_PATH");
 
-    let maybe_execution_timeout =
-        easyenv::get_env_duration_seconds_optional("FFMPEG_LOGO_TIMEOUT_SECONDS");
+    let maybe_execution_timeout = easyenv::get_env_duration_seconds_optional("FFMPEG_LOGO_TIMEOUT_SECONDS");
 
-    Ok(Self {
-      executable_or_command,
-      maybe_default_logo_path,
-      maybe_execution_timeout,
-    })
+    Ok(Self { executable_or_command, maybe_default_logo_path, maybe_execution_timeout })
   }
 
-  pub fn execute<P: AsRef<Path>>(
-    &self,
-    args: WatermarkArgs<P>,
-  ) -> CommandExitStatus {
+  pub fn execute<P: AsRef<Path>>(&self, args: WatermarkArgs<P>) -> CommandExitStatus {
     match self.do_execute_inference(args) {
       Ok(exit_status) => exit_status,
       Err(error) => CommandExitStatus::FailureWithReason { reason: format!("error: {:?}", error) },
     }
   }
 
-  fn do_execute_inference<P: AsRef<Path>>(
-    &self,
-    args: WatermarkArgs<P>,
-  ) -> AnyhowResult<CommandExitStatus> {
-
+  fn do_execute_inference<P: AsRef<Path>>(&self, args: WatermarkArgs<P>) -> AnyhowResult<CommandExitStatus> {
     let mut command = String::new();
 
     match self.executable_or_command {
       ExecutableOrCommand::Executable(ref executable) => {
         command.push_str(&path_to_string(executable));
         command.push_str(" ");
-      }
+      },
       ExecutableOrCommand::Command(ref cmd) => {
         command.push_str(cmd);
         command.push_str(" ");
-      }
+      },
     }
 
     // ===== Begin Python Args =====
@@ -125,10 +102,7 @@ impl FfmpegLogoWatermarkCommand {
     command.push_str(" -i ");
     command.push_str(&path_to_string(args.video_path));
 
-    let watermark_path = args.maybe_override_logo_path.as_ref()
-        .map(|p| p.as_ref().to_path_buf())
-        .or(self.maybe_default_logo_path.clone())
-        .ok_or(anyhow!("no watermark path"))?;
+    let watermark_path = args.maybe_override_logo_path.as_ref().map(|p| p.as_ref().to_path_buf()).or(self.maybe_default_logo_path.clone()).ok_or(anyhow!("no watermark path"))?;
 
     command.push_str(" -i ");
     command.push_str(&path_to_string(watermark_path));
@@ -142,14 +116,9 @@ impl FfmpegLogoWatermarkCommand {
 
     command.push_str(&path_to_string(args.output_path));
 
-
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
     let config = PopenConfig::default();
 
@@ -162,7 +131,7 @@ impl FfmpegLogoWatermarkCommand {
         let exit_status = p.wait()?;
         info!("Subprocess exit status: {:?}", exit_status);
         Ok(CommandExitStatus::from_exit_status(exit_status))
-      }
+      },
       Some(timeout) => {
         info!("Executing with timeout: {:?}", &timeout);
         let exit_status = p.wait_timeout(timeout)?;
@@ -173,13 +142,13 @@ impl FfmpegLogoWatermarkCommand {
             info!("Subprocess didn't end after timeout: {:?}; terminating...", &timeout);
             let _r = p.terminate()?;
             Ok(CommandExitStatus::Timeout)
-          }
+          },
           Some(exit_status) => {
             info!("Subprocess timed wait exit status: {:?}", exit_status);
             Ok(CommandExitStatus::from_exit_status(exit_status))
-          }
+          },
         }
-      }
+      },
     }
   }
 }

@@ -7,7 +7,6 @@ use std::collections::HashSet;
 use std::iter::FromIterator;
 
 pub async fn test_search_model_weights_documents(client: &Elasticsearch) -> AnyhowResult<Vec<ModelWeightDocument>> {
-
   let results = search_model_weights(SearchArgs {
     //search_term: "zel",
     search_term: "mariano",
@@ -19,7 +18,8 @@ pub async fn test_search_model_weights_documents(client: &Elasticsearch) -> Anyh
     sort_direction: Some(ModelWeightsSortDirection::Ascending),
     minimum_score: None,
     client: &client,
-  }).await?;
+  })
+  .await?;
 
   Ok(results)
 }

@@ -8,12 +8,8 @@ pub struct SeedVcDependencies {
   pub ffmpeg_command_runner: FfmpegCommandRunner,
 }
 
-
 impl SeedVcDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      inference_command: SeedVcInferenceCommand::from_env()?,
-      ffmpeg_command_runner: FfmpegCommandRunner::from_env()?,
-    })
+    Ok(Self { inference_command: SeedVcInferenceCommand::from_env()?, ffmpeg_command_runner: FfmpegCommandRunner::from_env()? })
   }
 }

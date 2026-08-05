@@ -3,10 +3,7 @@ use std::fmt::{Display, Formatter};
 use actix_http::StatusCode;
 use actix_web::web::Json;
 use actix_web::{HttpResponse, ResponseError};
-use artcraft_api_defs::generate::cost_estimate::estimate_splat_cost::{
-  EstimateSplatCostError, EstimateSplatCostErrorType, EstimateSplatCostRequest,
-  EstimateSplatCostResponse,
-};
+use artcraft_api_defs::generate::cost_estimate::estimate_splat_cost::{EstimateSplatCostError, EstimateSplatCostErrorType, EstimateSplatCostRequest, EstimateSplatCostResponse};
 use artcraft_router::api::router_splat_model::RouterSplatModel;
 use artcraft_router::api::image_list_ref::ImageListRef;
 use artcraft_router::api::router_provider::RouterProvider;
@@ -14,7 +11,6 @@ use artcraft_router::generate::generate_splat::generate_splat_request::GenerateS
 use enums::common::generation::common_splat_model::CommonSplatModel;
 use enums::common::generation_provider::GenerationProvider;
 use tokens::tokens::media_files::MediaFileToken;
-
 
 /// Estimate the credit and USD cost of a splat generation request.
 /// Does not require authentication and does not charge any credits.
@@ -27,9 +23,7 @@ use tokens::tokens::media_files::MediaFileToken;
     (status = 400, description = "Invalid request", body = EstimateSplatCostError),
   ),
 )]
-pub async fn estimate_splat_cost_handler(
-  request: Json<EstimateSplatCostRequest>,
-) -> Result<Json<EstimateSplatCostResponse>, HandlerError> {
+pub async fn estimate_splat_cost_handler(request: Json<EstimateSplatCostRequest>) -> Result<Json<EstimateSplatCostResponse>, HandlerError> {
   let router_provider = map_provider(request.provider, request.model)?;
   let router_model = map_splat_model(request.model)?;
 
@@ -45,38 +39,23 @@ pub async fn estimate_splat_cost_handler(
       RouterProvider::Artcraft => {
         dummy_tokens = vec![MediaFileToken::new_from_str("FAKE_TOKEN")];
         Some(ImageListRef::MediaFileTokens(dummy_tokens.clone()))
-      }
+      },
       _ => {
         dummy_urls = vec!["https://example.com/fake.png".to_string()];
         Some(ImageListRef::Urls(dummy_urls.clone()))
-      }
+      },
     }
   } else {
     None
   };
 
-  let router_request = GenerateSplatRequest {
-    model: router_model,
-    provider: router_provider,
-    prompt: None,
-    reference_images,
-    idempotency_token: None,
-  };
+  let router_request = GenerateSplatRequest { model: router_model, provider: router_provider, prompt: None, reference_images, idempotency_token: None };
 
-  let plan = router_request.build()
-    .map_err(|e| HandlerError::InvalidInput(format!("{}", e)))?;
+  let plan = router_request.build().map_err(|e| HandlerError::InvalidInput(format!("{}", e)))?;
 
   let estimate = plan.estimate_costs();
 
-  Ok(Json(EstimateSplatCostResponse {
-    success: true,
-    cost_in_credits: estimate.cost_in_credits,
-    cost_in_usd_cents: estimate.cost_in_usd_cents,
-    is_free: estimate.is_free,
-    is_unlimited: estimate.is_unlimited,
-    is_rate_limited: estimate.is_rate_limited,
-    has_watermark: estimate.has_watermark,
-  }))
+  Ok(Json(EstimateSplatCostResponse { success: true, cost_in_credits: estimate.cost_in_credits, cost_in_usd_cents: estimate.cost_in_usd_cents, is_free: estimate.is_free, is_unlimited: estimate.is_unlimited, is_rate_limited: estimate.is_rate_limited, has_watermark: estimate.has_watermark }))
 }
 
 /// Local error type — wraps the serializable API error struct so we can implement
@@ -102,33 +81,17 @@ impl ResponseError for HandlerError {
 
   fn error_response(&self) -> HttpResponse {
     let (error_type, error_message) = match self {
-      HandlerError::InvalidProviderForModel { provider, model } => (
-        EstimateSplatCostErrorType::InvalidProviderForModel,
-        format!("RouterProvider '{}' is not supported for model '{}'", provider, model),
-      ),
-      HandlerError::InvalidInput(msg) => (
-        EstimateSplatCostErrorType::InvalidInput,
-        msg.clone(),
-      ),
+      HandlerError::InvalidProviderForModel { provider, model } => (EstimateSplatCostErrorType::InvalidProviderForModel, format!("RouterProvider '{}' is not supported for model '{}'", provider, model)),
+      HandlerError::InvalidInput(msg) => (EstimateSplatCostErrorType::InvalidInput, msg.clone()),
     };
-    HttpResponse::BadRequest().json(EstimateSplatCostError {
-      success: false,
-      error_type,
-      error_message,
-    })
+    HttpResponse::BadRequest().json(EstimateSplatCostError { success: false, error_type, error_message })
   }
 }
 
-fn map_provider(
-  provider: GenerationProvider,
-  model: CommonSplatModel,
-) -> Result<RouterProvider, HandlerError> {
+fn map_provider(provider: GenerationProvider, model: CommonSplatModel) -> Result<RouterProvider, HandlerError> {
   match provider {
     GenerationProvider::Artcraft => Ok(RouterProvider::Artcraft),
-    other => Err(HandlerError::InvalidProviderForModel {
-      provider: format!("{:?}", other),
-      model: format!("{:?}", model),
-    }),
+    other => Err(HandlerError::InvalidProviderForModel { provider: format!("{:?}", other), model: format!("{:?}", model) }),
   }
 }
 
@@ -136,7 +99,6 @@ fn map_splat_model(model: CommonSplatModel) -> Result<RouterSplatModel, HandlerE
   match model {
     CommonSplatModel::Marble0p1Mini => Ok(RouterSplatModel::Marble0p1Mini),
     CommonSplatModel::Marble0p1Plus => Ok(RouterSplatModel::Marble0p1Plus),
-    other => Err(HandlerError::InvalidInput(
-      format!("model {:?} is not supported by this endpoint", other))),
+    other => Err(HandlerError::InvalidInput(format!("model {:?} is not supported by this endpoint", other))),
   }
 }

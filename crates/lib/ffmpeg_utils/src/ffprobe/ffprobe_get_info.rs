@@ -28,28 +28,19 @@ pub struct VideoFrameRate {
   pub fps_original: String,
 }
 
-pub fn ffprobe_get_info(
-  video_path: impl AsRef<Path>
-) -> AnyhowResult<VideoInfo>
-{
+pub fn ffprobe_get_info(video_path: impl AsRef<Path>) -> AnyhowResult<VideoInfo> {
   let result = ffprobe::ffprobe(video_path)?;
 
   let mut maybe_dimensions = None;
   let mut maybe_duration = None;
   let mut maybe_frame_rate = None;
 
-  let video_streams = result.streams.iter()
-      .filter(|stream| stream.codec_type.as_deref() == Some("video"));
+  let video_streams = result.streams.iter().filter(|stream| stream.codec_type.as_deref() == Some("video"));
 
   for stream in video_streams {
     // Grab the first video stream with dimensions and duration.
-    if let (Some(width), Some(height), Some(duration)) =
-        (stream.width, stream.height, stream.duration.as_deref())
-    {
-      maybe_dimensions = Some(VideoDimensions {
-        width: width.unsigned_abs(),
-        height: height.unsigned_abs(),
-      });
+    if let (Some(width), Some(height), Some(duration)) = (stream.width, stream.height, stream.duration.as_deref()) {
+      maybe_dimensions = Some(VideoDimensions { width: width.unsigned_abs(), height: height.unsigned_abs() });
       maybe_duration = Some(duration.to_string());
       // avg_frame_rate vs r_frame_rate: https://github.com/eugeneware/ffprobe/issues/7
       maybe_frame_rate = Some(stream.avg_frame_rate.to_string());
@@ -60,34 +51,23 @@ pub fn ffprobe_get_info(
     None => None,
     Some(duration) => {
       let millis = parse_seconds(&duration)?;
-      Some(VideoDuration {
-        millis,
-        seconds_original: duration,
-      })
-    }
+      Some(VideoDuration { millis, seconds_original: duration })
+    },
   };
 
   let maybe_frame_rate = match maybe_frame_rate {
     None => None,
     Some(frame_rate) => {
       let fps = parse_fps(&frame_rate)?;
-      Some(VideoFrameRate {
-        fps,
-        fps_original: frame_rate,
-      })
-    }
+      Some(VideoFrameRate { fps, fps_original: frame_rate })
+    },
   };
 
-  Ok(VideoInfo {
-    dimensions: maybe_dimensions,
-    duration: maybe_duration,
-    frame_rate: maybe_frame_rate,
-  })
+  Ok(VideoInfo { dimensions: maybe_dimensions, duration: maybe_duration, frame_rate: maybe_frame_rate })
 }
 
 fn parse_seconds(ffprobe_seconds: &str) -> AnyhowResult<u32> {
-  let (seconds, decimal_seconds) = ffprobe_seconds.split_once('.')
-      .unwrap_or_else(|| (ffprobe_seconds, ""));
+  let (seconds, decimal_seconds) = ffprobe_seconds.split_once('.').unwrap_or_else(|| (ffprobe_seconds, ""));
 
   let seconds = u32::from_str(seconds)?;
   let milliseconds = seconds.saturating_mul(1000);
@@ -118,11 +98,9 @@ pub mod tests {
 
   #[test]
   pub fn test_decode_mp4() {
-    let filename = test_file_path("test_data/video/mp4/golden_sun_garoh.mp4")
-        .expect("path should exist");
+    let filename = test_file_path("test_data/video/mp4/golden_sun_garoh.mp4").expect("path should exist");
 
-    let info = ffprobe_get_info(filename)
-        .expect("should be able to read with ffprobe");
+    let info = ffprobe_get_info(filename).expect("should be able to read with ffprobe");
 
     let dimensions = info.dimensions.expect("video should have dimensions");
 

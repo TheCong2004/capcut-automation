@@ -18,26 +18,18 @@ pub struct ListUserRolesResponse {
   pub user_roles: Vec<UserRoleForList>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn list_user_roles_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn list_user_roles_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: Add new permission for this.
@@ -46,26 +38,19 @@ pub async fn list_user_roles_handler(
     return Err(CommonWebError::NotAuthorized);
   }
 
-  let maybe_user_roles =
-      list_user_roles(&server_state.mysql_pool).await;
+  let maybe_user_roles = list_user_roles(&server_state.mysql_pool).await;
 
   let user_roles = match maybe_user_roles {
     Ok(results) => results,
     Err(e) => {
       warn!("Error querying user roles: {:?}", e);
       return Err(CommonWebError::from_anyhow_error(e));
-    }
+    },
   };
 
-  let response = ListUserRolesResponse {
-    success: true,
-    user_roles,
-  };
+  let response = ListUserRolesResponse { success: true, user_roles };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|e| CommonWebError::from_error(e))?;
+  let body = serde_json::to_string(&response).map_err(|e| CommonWebError::from_error(e))?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

@@ -19,12 +19,7 @@ pub struct CopiedFileData {
 /// This is designed to be idempotent and re-runnable. Any time we re-run the query, we should get the same result.
 /// This will enable us to perfect the query and get the write flows online and switched over.
 ///
-pub async fn upsert_model_weight_from_voice_conversion_model(
-  record: &WholeVoiceConversionModelRecord,
-  mysql_pool: &MySqlPool,
-  copied_data: &CopiedFileData,
-) -> AnyhowResult<()> {
-
+pub async fn upsert_model_weight_from_voice_conversion_model(record: &WholeVoiceConversionModelRecord, mysql_pool: &MySqlPool, copied_data: &CopiedFileData) -> AnyhowResult<()> {
   let mut transaction = mysql_pool.begin().await?;
 
   let model_weight_token = create_or_generate_token(record);
@@ -46,20 +41,14 @@ pub fn create_or_generate_token(record: &WholeVoiceConversionModelRecord) -> Mod
   }
 }
 
-pub async fn upsert_model_weights_record(
-  record: &WholeVoiceConversionModelRecord,
-  model_weight_token: &ModelWeightToken,
-  copied_data: &CopiedFileData,
-  transaction: &mut Transaction<'_, MySql>,
-) -> AnyhowResult<()> {
-
+pub async fn upsert_model_weights_record(record: &WholeVoiceConversionModelRecord, model_weight_token: &ModelWeightToken, copied_data: &CopiedFileData, transaction: &mut Transaction<'_, MySql>) -> AnyhowResult<()> {
   let weights_type = match record.model_type {
     VoiceConversionModelType::SoftVc => return Err(anyhow!("we never built softvc models")),
     VoiceConversionModelType::RvcV2 => WeightsType::RvcV2,
     VoiceConversionModelType::SoVitsSvc => WeightsType::SoVitsSvc,
   };
 
-  const WEIGHTS_CATEGORY : WeightsCategory = WeightsCategory::VoiceConversion;
+  const WEIGHTS_CATEGORY: WeightsCategory = WeightsCategory::VoiceConversion;
 
   // NB: Not setting a few fields (for now)
   // maybe_last_update_user_token - seems like bad design
@@ -69,7 +58,7 @@ pub async fn upsert_model_weights_record(
   // TODO(bt): rename creator_ip_address to ip_address_creation (and add ip_address_last_update)
   // TODO(bt): Check model_weights column integer types - signed vs unsigned
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO model_weights
 SET
   token = ?,
@@ -138,19 +127,16 @@ ON DUPLICATE KEY UPDATE
     record.original_download_url,
     record.original_filename,
     record.file_size_bytes,
-
     copied_data.file_sha_hash,
     copied_data.bucket_path.get_object_hash(),
     copied_data.bucket_path.get_optional_prefix(),
     copied_data.bucket_path.get_optional_extension(),
-
     record.token.as_str(),
     record.version,
     record.created_at,
     record.updated_at,
     record.user_deleted_at,
     record.mod_deleted_at,
-
     // Update
     weights_type,
     WEIGHTS_CATEGORY,
@@ -163,12 +149,10 @@ ON DUPLICATE KEY UPDATE
     record.original_download_url,
     record.original_filename,
     record.file_size_bytes,
-
     copied_data.file_sha_hash,
     copied_data.bucket_path.get_object_hash(),
     copied_data.bucket_path.get_optional_prefix(),
     copied_data.bucket_path.get_optional_extension(),
-
     record.token.as_str(),
     record.version,
     record.created_at,
@@ -182,13 +166,9 @@ ON DUPLICATE KEY UPDATE
   Ok(())
 }
 
-pub async fn upsert_model_weights_extension_record(
-  record: &WholeVoiceConversionModelRecord,
-  model_weight_token: &ModelWeightToken,
-  transaction: &mut Transaction<'_, MySql>
-) -> AnyhowResult<()> {
+pub async fn upsert_model_weights_extension_record(record: &WholeVoiceConversionModelRecord, model_weight_token: &ModelWeightToken, transaction: &mut Transaction<'_, MySql>) -> AnyhowResult<()> {
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO model_weights_extension_voice_conversion_details
 SET
   model_weights_token = ?,
@@ -196,31 +176,27 @@ SET
 ON DUPLICATE KEY UPDATE
   has_index_file = ?
         "#,
-      &model_weight_token,
-      record.has_index_file,
-      record.has_index_file
-    );
+    &model_weight_token,
+    record.has_index_file,
+    record.has_index_file
+  );
 
   let _r = query.execute(&mut **transaction).await?;
 
   Ok(())
 }
 
-pub async fn update_original_record(
-  record: &WholeVoiceConversionModelRecord,
-  model_weight_token: &ModelWeightToken,
-  transaction: &mut Transaction<'_, MySql>
-) -> AnyhowResult<()> {
+pub async fn update_original_record(record: &WholeVoiceConversionModelRecord, model_weight_token: &ModelWeightToken, transaction: &mut Transaction<'_, MySql>) -> AnyhowResult<()> {
   let query = sqlx::query!(
-        r#"
+    r#"
 UPDATE voice_conversion_models
 SET
   maybe_migration_new_model_weights_token = ?
 WHERE token = ?
         "#,
-      model_weight_token,
-      record.token,
-    );
+    model_weight_token,
+    record.token,
+  );
 
   let _r = query.execute(&mut **transaction).await?;
 

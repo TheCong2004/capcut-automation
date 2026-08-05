@@ -13,11 +13,10 @@ pub fn init_all_with_default_logging(default_if_absent: Option<&str>) {
 
 /// Read env configs from a filename.
 pub fn from_filename<P: AsRef<Path>>(filename: P) -> Result<(), InitError> {
-  let _path = dotenv::from_filename(&filename)
-      .map_err(|err| {
-        error!("Could not read env config from path {:?} : {:?}", filename.as_ref(), err);
-        InitError::DotEnvError
-      })?;
+  let _path = dotenv::from_filename(&filename).map_err(|err| {
+    error!("Could not read env config from path {:?} : {:?}", filename.as_ref(), err);
+    InitError::DotEnvError
+  })?;
   Ok(())
 }
 
@@ -27,9 +26,7 @@ pub fn read_env_config_from_filename_and_paths<P: AsRef<Path>, Q: AsRef<Path>>(f
   if do_read_env_config_from_filename_and_paths(&filename, paths)? {
     Ok(())
   } else {
-    error!("No env file existed for filename {:?} in the search paths {:?}",
-      filename.as_ref(),
-      paths.iter().map(|p| p.as_ref().to_path_buf()).collect::<Vec<PathBuf>>());
+    error!("No env file existed for filename {:?} in the search paths {:?}", filename.as_ref(), paths.iter().map(|p| p.as_ref().to_path_buf()).collect::<Vec<PathBuf>>());
     Err(InitError::NoConfigFileFoundError)
   }
 }
@@ -56,16 +53,14 @@ fn do_read_env_config_from_filename_and_paths<P: AsRef<Path>, Q: AsRef<Path>>(fi
 
     if path.exists() && path.is_file() {
       log::info!("Attempting to read env vars from file: {:?}", path);
-      let path = std::fs::canonicalize(path)
-          .map_err(|err| {
-            error!("Error canonicalizing path: {:?}", err);
-            InitError::IoError
-          })?;
-      dotenv::from_path(path)
-          .map_err(|err| {
-            error!("dotenv error reading config: {:?}", err);
-            InitError::DotEnvError
-          })?;
+      let path = std::fs::canonicalize(path).map_err(|err| {
+        error!("Error canonicalizing path: {:?}", err);
+        InitError::IoError
+      })?;
+      dotenv::from_path(path).map_err(|err| {
+        error!("dotenv error reading config: {:?}", err);
+        InitError::DotEnvError
+      })?;
       return Ok(true);
     }
   }

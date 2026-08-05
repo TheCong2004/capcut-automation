@@ -18,9 +18,7 @@ where
 /// Hard-delete membership rows for the given folder + media file tokens.
 /// Idempotent — rows that don't exist are silently skipped. Returns the
 /// number of rows actually deleted.
-pub async fn bulk_delete_folder_media_files<'e, 'c: 'e, E>(
-  args: BulkDeleteFolderMediaFilesArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn bulk_delete_folder_media_files<'e, 'c: 'e, E>(args: BulkDeleteFolderMediaFilesArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -28,9 +26,7 @@ where
     return Ok(0);
   }
 
-  let mut builder = QueryBuilder::<MySql>::new(
-    "DELETE FROM folder_media_files WHERE folder_token = ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("DELETE FROM folder_media_files WHERE folder_token = ");
   builder.push_bind(args.folder_token.as_str());
   builder.push(" AND media_file_token IN (");
 

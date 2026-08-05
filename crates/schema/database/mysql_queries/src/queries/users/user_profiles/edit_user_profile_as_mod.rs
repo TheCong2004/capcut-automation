@@ -23,13 +23,9 @@ pub struct Args<'a> {
 
 /// Mods can edit user profiles, but shouldn't be able to change preferences
 /// We won't set the last edit IP address either.
-pub async fn edit_user_profile_as_mod(
-  mysql_pool: &MySqlPool,
-  args: Args<'_>,
-) -> AnyhowResult<()>
-{
+pub async fn edit_user_profile_as_mod(mysql_pool: &MySqlPool, args: Args<'_>) -> AnyhowResult<()> {
   let _result = sqlx::query!(
-        r#"
+    r#"
 UPDATE users
 SET
     profile_markdown = ?,
@@ -45,18 +41,18 @@ SET
 WHERE users.token = ?
 LIMIT 1
         "#,
-      args.profile_markdown,
-      args.profile_html,
-      args.discord_username,
-      args.twitter_username,
-      args.twitch_username,
-      args.github_username,
-      args.cashapp_username,
-      args.website_url,
-      args.user_token,
-    )
-      .execute(mysql_pool)
-      .await?;
+    args.profile_markdown,
+    args.profile_html,
+    args.discord_username,
+    args.twitter_username,
+    args.twitch_username,
+    args.github_username,
+    args.cashapp_username,
+    args.website_url,
+    args.user_token,
+  )
+  .execute(mysql_pool)
+  .await?;
 
   Ok(())
 }

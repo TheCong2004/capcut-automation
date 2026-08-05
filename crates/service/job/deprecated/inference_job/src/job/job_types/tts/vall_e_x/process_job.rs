@@ -13,33 +13,31 @@ use super::validate_job::JobType;
 
 // This will download everything get into the root host OS then ... will invoke inference using the pathes from the files invoked
 pub struct VALLEXProcessJobArgs<'a> {
-    pub job_dependencies: &'a JobDependencies,
-    pub job: &'a AvailableInferenceJob,
+  pub job_dependencies: &'a JobDependencies,
+  pub job: &'a AvailableInferenceJob,
 }
 
 // query using the token then grab the bucket hash
-pub async fn process_job(
-    args: VALLEXProcessJobArgs<'_>
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
-    let job = args.job;
+pub async fn process_job(args: VALLEXProcessJobArgs<'_>) -> Result<JobSuccessResult, ProcessSingleJobError> {
+  let job = args.job;
 
-    // get args token
-    let jobArgs = validate_job(&job)?; // bubbles error up
+  // get args token
+  let jobArgs = validate_job(&job)?; // bubbles error up
 
-    match jobArgs.job_type {
-        JobType::Create => {
-            if let Some(voice_dataset_token) = jobArgs.voice_dataset_token {
-                process_create_voice(args, voice_dataset_token).await
-            } else {
-                Err(ProcessSingleJobError::Other(anyhow!("Missing Dataset Token?")))
-            }
-        }
-        JobType::Inference => {
-            if let Some(voice_token) = jobArgs.voice_token {
-                process_inference_voice(args, voice_token).await
-            } else {
-                Err(ProcessSingleJobError::Other(anyhow!("Missing Voice Token?")))
-            }
-        }
-    }
+  match jobArgs.job_type {
+    JobType::Create => {
+      if let Some(voice_dataset_token) = jobArgs.voice_dataset_token {
+        process_create_voice(args, voice_dataset_token).await
+      } else {
+        Err(ProcessSingleJobError::Other(anyhow!("Missing Dataset Token?")))
+      }
+    },
+    JobType::Inference => {
+      if let Some(voice_token) = jobArgs.voice_token {
+        process_inference_voice(args, voice_token).await
+      } else {
+        Err(ProcessSingleJobError::Other(anyhow!("Missing Voice Token?")))
+      }
+    },
+  }
 }

@@ -13,9 +13,7 @@ use artcraft_api_defs::folders::media_files::ListMediaFilesWithoutFolderQueryPar
 use enums::by_table::media_files::media_file_class::MediaFileClass;
 use enums::by_table::media_files::media_file_type::MediaFileType;
 use enums::common::visibility::Visibility;
-use mysql_queries::queries::folders::media_files::list_media_files_without_folder::{
-  list_media_files_without_folder, ListMediaFilesWithoutFolderArgs,
-};
+use mysql_queries::queries::folders::media_files::list_media_files_without_folder::{list_media_files_without_folder, ListMediaFilesWithoutFolderArgs};
 use mysql_queries::queries::media_files::list::media_file_list_row::MediaFileListRow;
 use tokens::tokens::batch_generations::BatchGenerationToken;
 use tokens::tokens::media_files::MediaFileToken;
@@ -110,11 +108,7 @@ pub struct UnfolderedMediaFileListItem {
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn list_media_files_without_folder_handler(
-  http_request: HttpRequest,
-  query: Query<ListMediaFilesWithoutFolderQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListMediaFilesWithoutFolderSuccessResponse>, CommonWebError> {
+pub async fn list_media_files_without_folder_handler(http_request: HttpRequest, query: Query<ListMediaFilesWithoutFolderQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListMediaFilesWithoutFolderSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -126,19 +120,10 @@ pub async fn list_media_files_without_folder_handler(
 
   let maybe_cursor_id = match &query.cursor {
     None => None,
-    Some(cursor_str) => {
-      Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?)
-    }
+    Some(cursor_str) => Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?),
   };
 
-  let rows = list_media_files_without_folder(ListMediaFilesWithoutFolderArgs {
-    owner_user_token: &user_session.user_token,
-    maybe_filter_media_class: query.filter_media_class,
-    maybe_cursor_id,
-    limit,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let rows = list_media_files_without_folder(ListMediaFilesWithoutFolderArgs { owner_user_token: &user_session.user_token, maybe_filter_media_class: query.filter_media_class, maybe_cursor_id, limit, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("list_media_files_without_folder failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -146,35 +131,18 @@ pub async fn list_media_files_without_folder_handler(
   // Only hand out a next-page cursor when this page was full. A short page
   // means the list is exhausted, and emitting a cursor anyway would make
   // clients fetch one guaranteed-empty trailing page.
-  let maybe_cursor = if rows.len() == limit as usize {
-    rows.last()
-        .map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.media_file_id))
-        .transpose()?
-  } else {
-    None
-  };
+  let maybe_cursor = if rows.len() == limit as usize { rows.last().map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.media_file_id)).transpose()? } else { None };
 
   let media_domain = get_media_domain(&http_request);
   let server_environment = server_state.server_environment;
 
-  let media_files = rows.into_iter()
-    .map(|row| unfoldered_media_file_row_to_list_item(row, media_domain, server_environment))
-    .collect();
+  let media_files = rows.into_iter().map(|row| unfoldered_media_file_row_to_list_item(row, media_domain, server_environment)).collect();
 
-  Ok(Json(ListMediaFilesWithoutFolderSuccessResponse {
-    success: true,
-    media_files,
-    maybe_cursor,
-  }))
+  Ok(Json(ListMediaFilesWithoutFolderSuccessResponse { success: true, media_files, maybe_cursor }))
 }
 
-fn unfoldered_media_file_row_to_list_item(
-  row: MediaFileListRow,
-  media_domain: MediaDomain,
-  server_environment: server_environment::ServerEnvironment,
-) -> UnfolderedMediaFileListItem {
-  let (media_links, cover_image) =
-      build_media_links_and_cover(&row, media_domain, server_environment);
+fn unfoldered_media_file_row_to_list_item(row: MediaFileListRow, media_domain: MediaDomain, server_environment: server_environment::ServerEnvironment) -> UnfolderedMediaFileListItem {
+  let (media_links, cover_image) = build_media_links_and_cover(&row, media_domain, server_environment);
 
   UnfolderedMediaFileListItem {
     token: row.media_file_token,

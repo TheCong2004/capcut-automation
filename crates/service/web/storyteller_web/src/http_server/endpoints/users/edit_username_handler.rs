@@ -34,12 +34,7 @@ use user_input_common::check_for_slurs::contains_slurs;
     ("request" = EditUsernameRequest, description = "Payload for Request"),
   )
 )]
-pub async fn edit_username_handler(
-  http_request: HttpRequest,
-  request: Json<EditUsernameRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<EditUsernameResponse>, CommonWebError>
-{
+pub async fn edit_username_handler(http_request: HttpRequest, request: Json<EditUsernameRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<EditUsernameResponse>, CommonWebError> {
   let username = request.display_name.trim().to_lowercase();
   let display_name = request.display_name.trim().to_string();
 
@@ -55,18 +50,12 @@ pub async fn edit_username_handler(
     return Err(CommonWebError::BadInputWithSimpleMessage("username is reserved".to_string()));
   }
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let user_session = require_user_session_extended(
-    &http_request,
-    &server_state.session_checker,
-    &mut *mysql_connection).await?;
+  let user_session = require_user_session_extended(&http_request, &server_state.session_checker, &mut *mysql_connection).await?;
 
   if user_session.role.is_banned {
     return Err(CommonWebError::NotAuthorized);
@@ -74,24 +63,17 @@ pub async fn edit_username_handler(
 
   let ip_address = get_request_ip(&http_request);
 
-  let result = update_username(UpdateUsernameArgs {
-    token: &user_session.user_token_typed,
-    username: &username,
-    display_name: &display_name,
-    username_is_not_customized: false,
-    ip_address: &ip_address,
-    transactor: Transactor::for_connection(&mut mysql_connection),
-  }).await;
+  let result = update_username(UpdateUsernameArgs { token: &user_session.user_token_typed, username: &username, display_name: &display_name, username_is_not_customized: false, ip_address: &ip_address, transactor: Transactor::for_connection(&mut mysql_connection) }).await;
 
   match result {
     Ok(()) => {},
     Err(UpdateUsernameError::UsernameIsTaken) => {
       return Err(CommonWebError::BadInputWithSimpleMessage("username is taken".to_string()));
-    }
+    },
     Err(UpdateUsernameError::DatabaseError { source }) => {
       warn!("Error updating username: {:?}", source);
       return Err(CommonWebError::server_error_with_message("uncaught server error"));
-    }
+    },
   }
 
   Ok(Json(EditUsernameResponse { success: true }))

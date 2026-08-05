@@ -20,24 +20,19 @@ pub struct RedisJobProgressReporter {
 
 impl RedisJobProgressReporterBuilder {
   pub fn from_redis_pool(redis_pool: r2d2::Pool<RedisConnectionManager>) -> Self {
-    Self {
-      redis_pool,
-    }
+    Self { redis_pool }
   }
 
   /// Create a new instance. The backing Redis pool is Sync/Send behind an Arc.
   fn create_instance(redis_pool: r2d2::Pool<RedisConnectionManager>, redis_key: String) -> AnyhowResult<Box<dyn JobProgressReporter>> {
     let redis = redis_pool.get()?;
 
-    Ok(Box::new(RedisJobProgressReporter {
-      redis,
-      redis_key,
-    }))
+    Ok(Box::new(RedisJobProgressReporter { redis, redis_key }))
   }
 }
 
 impl RedisJobProgressReporter {
-  pub const STATUS_KEY_TTL_SECONDS : usize = 60 * 60;
+  pub const STATUS_KEY_TTL_SECONDS: usize = 60 * 60;
 }
 
 impl JobProgressReporterBuilder for RedisJobProgressReporterBuilder {
@@ -74,7 +69,7 @@ impl JobProgressReporterBuilder for RedisJobProgressReporterBuilder {
 
 impl JobProgressReporter for RedisJobProgressReporter {
   fn log_status(&mut self, logging_details: &str) -> AnyhowResult<()> {
-    let _r : String = self.redis // NB: Compiler can't figure out the throwaway result type
+    let _r: String = self.redis // NB: Compiler can't figure out the throwaway result type
         .set_ex(&self.redis_key,
           logging_details,
           Self::STATUS_KEY_TTL_SECONDS)?;

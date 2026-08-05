@@ -32,7 +32,7 @@ pub struct UploadVideoMediaSuccessResponse {
   pub media_file_token: MediaFileToken,
 }
 
-static ALLOWED_MIME_TYPES : Lazy<HashSet<&'static str>> = Lazy::new(|| {
+static ALLOWED_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
   HashSet::from([
     // Video
     "video/mp4", // NB: Only mp4 for now.
@@ -56,34 +56,20 @@ static ALLOWED_MIME_TYPES : Lazy<HashSet<&'static str>> = Lazy::new(|| {
     ("request" = (), description = "Ask Brandon. This is form-multipart."),
   )
 )]
-pub async fn upload_video_media_file_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  mut multipart_payload: Multipart,
-) -> Result<HttpResponse, MediaFileUploadError> {
-
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+pub async fn upload_video_media_file_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, mut multipart_payload: Multipart) -> Result<HttpResponse, MediaFileUploadError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== BANNED USERS ==================== //
 
@@ -106,16 +92,13 @@ pub async fn upload_video_media_file_handler(
 
   // ==================== READ MULTIPART REQUEST ==================== //
 
-  let upload_media_request = drain_multipart_request(multipart_payload)
-      .await
-      .map_err(|e| {
-        // TODO: Error handling could be nicer.
-        MediaFileUploadError::BadInput("bad request".to_string())
-      })?;
+  let upload_media_request = drain_multipart_request(multipart_payload).await.map_err(|e| {
+    // TODO: Error handling could be nicer.
+    MediaFileUploadError::BadInput("bad request".to_string())
+  })?;
 
   // TODO(bt, 2024-02-26): This should be a transaction.
-  let uuid_idempotency_token = upload_media_request.uuid_idempotency_token
-      .ok_or(MediaFileUploadError::BadInput("no uuid".to_string()))?;
+  let uuid_idempotency_token = upload_media_request.uuid_idempotency_token.ok_or(MediaFileUploadError::BadInput("no uuid".to_string()))?;
 
   // ==================== HANDLE IDEMPOTENCY ==================== //
 
@@ -123,29 +106,24 @@ pub async fn upload_video_media_file_handler(
     return Err(MediaFileUploadError::BadInput(reason));
   }
 
-  insert_idempotency_token(&uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        MediaFileUploadError::BadInput("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(&uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    MediaFileUploadError::BadInput("invalid idempotency token".to_string())
+  })?;
 
   // ==================== UPLOAD METADATA ==================== //
 
-  let creator_set_visibility = upload_media_request.visibility
-      .as_deref()
-      .map(|visibility| Visibility::from_str(visibility))
-      .transpose()
-      .map_err(|err| {
-        error!("Invalid visibility: {:?}", err);
-        MediaFileUploadError::BadInput("invalid visibility".to_string())
-      })?
-      .or_else(|| {
-        maybe_user_session
-            .as_ref()
-            .map(|user_session| user_session.preferred_tts_result_visibility)
-      })
-      .unwrap_or(Visibility::default());
+  let creator_set_visibility = upload_media_request
+    .visibility
+    .as_deref()
+    .map(|visibility| Visibility::from_str(visibility))
+    .transpose()
+    .map_err(|err| {
+      error!("Invalid visibility: {:?}", err);
+      MediaFileUploadError::BadInput("invalid visibility".to_string())
+    })?
+    .or_else(|| maybe_user_session.as_ref().map(|user_session| user_session.preferred_tts_result_visibility))
+    .unwrap_or(Visibility::default());
 
   let upload_type = match upload_media_request.media_source {
     MediaFileUploadSource::Unknown => UploadType::Filesystem,
@@ -157,9 +135,7 @@ pub async fn upload_video_media_file_handler(
 
   let ip_address = get_request_ip(&http_request);
 
-  let maybe_user_token = maybe_user_session
-      .as_ref()
-      .map(|session| session.get_user_token());
+  let maybe_user_token = maybe_user_session.as_ref().map(|session| session.get_user_token());
 
   // ==================== FILE DATA ==================== //
 
@@ -172,58 +148,50 @@ pub async fn upload_video_media_file_handler(
 
   let mimetype = match maybe_mimetype {
     None => return Err(MediaFileUploadError::BadInput("unknown mimetype".to_string())),
-    Some(mimetype) => if ALLOWED_MIME_TYPES.contains(mimetype) {
-      mimetype
-    } else {
-      return Err(MediaFileUploadError::BadInput("unsupported mimetype".to_string()));
-    }
+    Some(mimetype) => {
+      if ALLOWED_MIME_TYPES.contains(mimetype) {
+        mimetype
+      } else {
+        return Err(MediaFileUploadError::BadInput("unsupported mimetype".to_string()));
+      }
+    },
   };
 
   let file_size_bytes = file_bytes.len();
 
-  let hash = sha256_hash_bytes(&file_bytes)
-      .map_err(|io_error| {
-        error!("Problem hashing bytes: {:?}", io_error);
-        MediaFileUploadError::ServerError
-      })?;
+  let hash = sha256_hash_bytes(&file_bytes).map_err(|io_error| {
+    error!("Problem hashing bytes: {:?}", io_error);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== FRAME RATE ==================== //
 
-  let mp4_info = get_mp4_info_for_bytes(file_bytes.as_ref())
-      .map_err(|err| {
-        warn!("Error reading mp4 info: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  let mp4_info = get_mp4_info_for_bytes(file_bytes.as_ref()).map_err(|err| {
+    warn!("Error reading mp4 info: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== UPLOAD AND SAVE ==================== //
 
   // TODO(bt,2024-02-26): We statically know the extension if it was an allowed mimetype. Fix this.
-  let mut extension = mimetype_to_extension(mimetype)
-      .map(|extension| format!(".{extension}"))
-      .unwrap_or(".mp4".to_string());
+  let mut extension = mimetype_to_extension(mimetype).map(|extension| format!(".{extension}")).unwrap_or(".mp4".to_string());
 
-  const PREFIX : Option<&str> = Some("video_");
+  const PREFIX: Option<&str> = Some("video_");
 
   let public_upload_path = MediaFileBucketPath::generate_new(PREFIX, Some(&extension));
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    file_bytes.as_ref(),
-    mimetype)
-      .await
-      .map_err(|e| {
-        warn!("Upload media bytes to bucket error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), file_bytes.as_ref(), mimetype).await.map_err(|e| {
+    warn!("Upload media bytes to bucket error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   // TODO(bt, 2024-02-22): This should be a transaction.
   let (token, record_id) = insert_media_file_from_file_upload(InsertMediaFileFromUploadArgs {
     maybe_media_class: Some(MediaFileClass::Video),
     maybe_project_type: None,
-    media_file_type: MediaFileType::try_from_mime_type(mimetype)
-        .unwrap_or(MediaFileType::Video), // Coarse fallback for unrecognized mimes
+    media_file_type: MediaFileType::try_from_mime_type(mimetype).unwrap_or(MediaFileType::Video), // Coarse fallback for unrecognized mimes
     maybe_creator_user_token: maybe_user_token,
     maybe_creator_anonymous_visitor_token: maybe_avt_token.as_ref(),
     creator_ip_address: &ip_address,
@@ -246,23 +214,17 @@ pub async fn upload_video_media_file_handler(
     maybe_public_bucket_extension: Some(&extension),
     pool: &server_state.mysql_pool,
   })
-      .await
-      .map_err(|err| {
-        warn!("New file creation DB error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  .await
+  .map_err(|err| {
+    warn!("New file creation DB error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   info!("new media file id: {} token: {:?}", record_id, &token);
 
-  let response = UploadVideoMediaSuccessResponse {
-    success: true,
-    media_file_token: token,
-  };
+  let response = UploadVideoMediaSuccessResponse { success: true, media_file_token: token };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|e| MediaFileUploadError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|e| MediaFileUploadError::ServerError)?;
 
-  return Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body));
+  return Ok(HttpResponse::Ok().content_type("application/json").body(body));
 }

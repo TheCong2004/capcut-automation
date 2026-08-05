@@ -18,9 +18,7 @@ where
 /// Mark a folder as deleted by stamping `maybe_deleted_at`. Children
 /// retain their `maybe_parent_folder_token` and become "orphaned" — that
 /// state is surfaced by the list query's `is_orphaned` flag.
-pub async fn soft_delete_folder<'e, 'c: 'e, E>(
-  args: SoftDeleteFolderArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn soft_delete_folder<'e, 'c: 'e, E>(args: SoftDeleteFolderArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -36,7 +34,7 @@ LIMIT 1
     args.folder_token.as_str(),
     args.owner_user_token.as_str(),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
   Ok(result.rows_affected())
 }

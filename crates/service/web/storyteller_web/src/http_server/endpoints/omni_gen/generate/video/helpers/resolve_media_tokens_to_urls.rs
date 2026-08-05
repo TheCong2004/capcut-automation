@@ -9,10 +9,7 @@ use tokens::tokens::media_files::MediaFileToken;
 
 /// For providers that take URLs directly (GmiCloud, Fal), swap
 /// `ImageRef::MediaFileToken` → `ImageRef::Url` using the resolved map.
-pub fn resolve_media_tokens_to_urls(
-  builder: &mut GenerateVideoRequestBuilder,
-  url_map: Option<&HashMap<MediaFileToken, String>>,
-) {
+pub fn resolve_media_tokens_to_urls(builder: &mut GenerateVideoRequestBuilder, url_map: Option<&HashMap<MediaFileToken, String>>) {
   let map = match url_map {
     Some(m) => m,
     None => return,
@@ -34,9 +31,7 @@ pub fn resolve_media_tokens_to_urls(
 
   // reference_images
   if let Some(ImageListRef::MediaFileTokens(ref tokens)) = builder.reference_images {
-    let urls: Vec<String> = tokens.iter()
-      .filter_map(|t| map.get(t).cloned())
-      .collect();
+    let urls: Vec<String> = tokens.iter().filter_map(|t| map.get(t).cloned()).collect();
     if !urls.is_empty() {
       builder.reference_images = Some(ImageListRef::Urls(urls));
     }
@@ -44,9 +39,7 @@ pub fn resolve_media_tokens_to_urls(
 
   // reference_videos
   if let Some(VideoListRef::MediaFileTokens(ref tokens)) = builder.reference_videos {
-    let urls: Vec<String> = tokens.iter()
-      .filter_map(|t| map.get(t).cloned())
-      .collect();
+    let urls: Vec<String> = tokens.iter().filter_map(|t| map.get(t).cloned()).collect();
     if !urls.is_empty() {
       builder.reference_videos = Some(VideoListRef::Urls(urls));
     }
@@ -54,9 +47,7 @@ pub fn resolve_media_tokens_to_urls(
 
   // reference_audio
   if let Some(AudioListRef::MediaFileTokens(ref tokens)) = builder.reference_audio {
-    let urls: Vec<String> = tokens.iter()
-      .filter_map(|t| map.get(t).cloned())
-      .collect();
+    let urls: Vec<String> = tokens.iter().filter_map(|t| map.get(t).cloned()).collect();
     if !urls.is_empty() {
       builder.reference_audio = Some(AudioListRef::Urls(urls));
     }

@@ -25,13 +25,7 @@ pub fn run_http_server(args: CreateServerArgs) -> AnyhowResult<Server> {
   let num_workers = easyenv::get_env_num("HTTP_NUM_WORKERS", DEFAULT_NUM_WORKERS)?;
   let _hostname = args.container_environment.hostname.clone();
 
-  let server_state = HttpServerSharedState {
-    job_stats: args.job_stats.clone(),
-    consecutive_failure_unhealthy_threshold: easyenv::get_env_num(
-      "CONSECUTIVE_FAILURE_UNHEALTHY_THRESHOLD",
-      3,
-    )?,
-  };
+  let server_state = HttpServerSharedState { job_stats: args.job_stats.clone(), consecutive_failure_unhealthy_threshold: easyenv::get_env_num("CONSECUTIVE_FAILURE_UNHEALTHY_THRESHOLD", 3)? };
 
   let server_state_arc = web::Data::new(Arc::new(server_state));
 
@@ -39,24 +33,7 @@ pub fn run_http_server(args: CreateServerArgs) -> AnyhowResult<Server> {
 
   let log_format = "[%{HOSTNAME}e] IP=[%{X-Forwarded-For}i] \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
-  let handle = HttpServer::new(move || {
-    App::new()
-      .app_data(server_state_arc.clone())
-      .wrap(Logger::new(&log_format).exclude("/_status"))
-      .service(
-        web::resource("/")
-          .route(web::get().to(|| HttpResponse::Ok()))
-          .route(web::head().to(|| HttpResponse::Ok())),
-      )
-      .service(
-        web::resource("/_status")
-          .route(web::get().to(get_health_check_handler))
-          .route(web::head().to(|| HttpResponse::Ok())),
-      )
-  })
-    .bind(bind_address)?
-    .workers(num_workers)
-    .run();
+  let handle = HttpServer::new(move || App::new().app_data(server_state_arc.clone()).wrap(Logger::new(&log_format).exclude("/_status")).service(web::resource("/").route(web::get().to(|| HttpResponse::Ok())).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/_status").route(web::get().to(get_health_check_handler)).route(web::head().to(|| HttpResponse::Ok())))).bind(bind_address)?.workers(num_workers).run();
 
   Ok(handle)
 }

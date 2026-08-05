@@ -3,14 +3,14 @@ use std::path::{Path, PathBuf};
 use crate::paths::env_get_path::env_get_path;
 
 /// The env var that declares where the storyteller root directory lives.
-pub const STORYTELLER_ROOT : &str = "STORYTELLER_ROOT";
+pub const STORYTELLER_ROOT: &str = "STORYTELLER_ROOT";
 
 /// Default OS home directory.
-pub const HOME : &str = "HOME";
+pub const HOME: &str = "HOME";
 
 // DO NOT LEAK THIS. THIS IS FOR TESTING ONLY.
-pub (crate) const TEST_STORYTELLER_ROOT : &str = "ENV_TEST_STORYTELLER_ROOT_DO_NOT_LEAK_";
-pub (crate) const TEST_HOME : &str = "ENV_TEST_HOME_DO_NOT_LEAK_";
+pub(crate) const TEST_STORYTELLER_ROOT: &str = "ENV_TEST_STORYTELLER_ROOT_DO_NOT_LEAK_";
+pub(crate) const TEST_HOME: &str = "ENV_TEST_HOME_DO_NOT_LEAK_";
 
 // TODO: Test on Mac, Windows, and WSL.
 /// Use several heuristics to find "storyteller root", where all of our monorepos are located.
@@ -135,9 +135,7 @@ mod tests {
       // We'll make sure to canonicalize both paths.
       let mut corrected = PathBuf::from("/private");
 
-      expected.iter()
-          .filter(|component| !component.to_string_lossy().eq("/"))
-          .for_each(|component| corrected.push(component));
+      expected.iter().filter(|component| !component.to_string_lossy().eq("/")).for_each(|component| corrected.push(component));
 
       expected = corrected;
     }

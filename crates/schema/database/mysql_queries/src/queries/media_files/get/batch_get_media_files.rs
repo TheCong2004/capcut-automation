@@ -37,12 +37,10 @@ pub struct MediaFile {
   pub maybe_engine_category: Option<MediaFileEngineCategory>,
   pub maybe_animation_type: Option<MediaFileAnimationType>,
 
-
   // TODO: Bucket hash bits.
 
   // TODO: Other media details (file size, mime type, dimensions, duration, etc.)
   // TODO: Provenance data (product, upload vs inference, model details and foreign keys)
-
   pub maybe_batch_token: Option<BatchGenerationToken>,
 
   pub maybe_title: Option<String>,
@@ -50,7 +48,7 @@ pub struct MediaFile {
 
   pub maybe_origin_filename: Option<String>,
 
-  pub maybe_duration_millis : Option<u64>,
+  pub maybe_duration_millis: Option<u64>,
 
   pub maybe_creator_user_token: Option<UserToken>,
   pub maybe_creator_username: Option<String>,
@@ -97,7 +95,6 @@ pub struct MediaFile {
 
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
-
   // pub maybe_moderator_fields: Option<MediaFileModeratorFields>,
 }
 
@@ -123,9 +120,7 @@ pub struct MediaFileRaw {
   pub maybe_engine_category: Option<MediaFileEngineCategory>,
   pub maybe_animation_type: Option<MediaFileAnimationType>,
 
-
   // TODO: Bucket hash bits.
-
   pub maybe_batch_token: Option<BatchGenerationToken>,
 
   pub maybe_title: Option<String>,
@@ -133,7 +128,7 @@ pub struct MediaFileRaw {
 
   pub maybe_origin_filename: Option<String>,
 
-  pub maybe_duration_millis : Option<i32>,
+  pub maybe_duration_millis: Option<i32>,
 
   pub maybe_creator_user_token: Option<UserToken>,
   pub maybe_creator_username: Option<String>,
@@ -174,7 +169,6 @@ pub struct MediaFileRaw {
 
   //pub model_is_mod_approved: bool, // converted
   //pub maybe_mod_user_token: Option<String>,
-
   pub maybe_ratings_positive_count: Option<u32>,
   pub maybe_ratings_negative_count: Option<u32>,
   pub maybe_bookmark_count: Option<u32>,
@@ -183,19 +177,14 @@ pub struct MediaFileRaw {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn batch_get_media_files(
-  media_file_tokens: &[MediaFileToken],
-  can_see_deleted: bool,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Vec<MediaFile>> {
-
+pub async fn batch_get_media_files(media_file_tokens: &[MediaFileToken], can_see_deleted: bool, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<MediaFile>> {
   if media_file_tokens.is_empty() {
     // NB: We should always eagerly return, but if we don't, the query builder will build an
     // invalid query.
     return Ok(Vec::new());
   }
 
-  let mut query_builder : QueryBuilder<MySql> = make_query_builder();
+  let mut query_builder: QueryBuilder<MySql> = make_query_builder();
 
   query_builder.push(" WHERE m.token IN ( ");
 
@@ -218,13 +207,17 @@ pub async fn batch_get_media_files(
 
   let records = match query_results {
     Ok(records) => records,
-    Err(ref err) => return match err {
-      sqlx::Error::RowNotFound => Ok(Vec::new()),
-      _ => Err(anyhow!("database error: {:?}", err)),
-    }
+    Err(ref err) => {
+      return match err {
+        sqlx::Error::RowNotFound => Ok(Vec::new()),
+        _ => Err(anyhow!("database error: {:?}", err)),
+      }
+    },
   };
 
-  Ok(records.into_iter()
+  Ok(
+    records
+      .into_iter()
       .map(|record| MediaFile {
         token: record.token,
         media_class: record.media_class,
@@ -264,9 +257,7 @@ pub async fn batch_get_media_files(
         maybe_model_weight_creator_username: record.maybe_model_weight_creator_username,
         maybe_model_weight_creator_display_name: record.maybe_model_weight_creator_display_name,
         maybe_model_weight_creator_gravatar_hash: record.maybe_model_weight_creator_gravatar_hash,
-        extra_media_file_info: record.extra_file_modification_info
-            .map(|info| MediaFileExtraInfo::from_json_str(&info).ok())
-            .flatten(), // NB: Fail open. Do not fail the query if we can't hydrate the JSON.
+        extra_media_file_info: record.extra_file_modification_info.map(|info| MediaFileExtraInfo::from_json_str(&info).ok()).flatten(), // NB: Fail open. Do not fail the query if we can't hydrate the JSON.
         public_bucket_directory_hash: record.public_bucket_directory_hash,
         maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
         maybe_public_bucket_extension: record.maybe_public_bucket_extension,
@@ -276,11 +267,13 @@ pub async fn batch_get_media_files(
         created_at: record.created_at,
         updated_at: record.updated_at,
       })
-      .collect::<Vec<_>>())
+      .collect::<Vec<_>>(),
+  )
 }
 
 fn make_query_builder() -> QueryBuilder<'static, MySql> {
-  QueryBuilder::new(r#"
+  QueryBuilder::new(
+    r#"
 SELECT
     m.token,
 
@@ -360,7 +353,8 @@ LEFT OUTER JOIN entity_stats
     AND entity_stats.entity_token = m.token
 LEFT OUTER JOIN prompts
     ON prompts.token = m.maybe_prompt_token
-    "#)
+    "#,
+  )
 }
 
 // NB(bt,2023-12-05): There's an issue with type hinting in the `as` clauses with QueryBuilder (or
@@ -384,7 +378,6 @@ impl FromRow<'_, MySqlRow> for MediaFileRaw {
 
       maybe_engine_category: MediaFileEngineCategory::try_from_mysql_row_nullable(row, "maybe_engine_category")?,
       maybe_animation_type: MediaFileAnimationType::try_from_mysql_row_nullable(row, "maybe_animation_type")?,
-
 
       maybe_batch_token: BatchGenerationToken::try_from_mysql_row_nullable(row, "maybe_batch_token")?,
 

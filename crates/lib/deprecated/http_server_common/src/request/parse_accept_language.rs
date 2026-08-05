@@ -4,19 +4,12 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 /// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Language
-static ACCEPT_LANGUAGE_QUALITY_FACTOR_REGEX : Lazy<Regex> = Lazy::new(|| {
-  Regex::new(r#";q=\d+\.\d+"#).expect("should be valid regex")
-});
+static ACCEPT_LANGUAGE_QUALITY_FACTOR_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#";q=\d+\.\d+"#).expect("should be valid regex"));
 
 /// Parse out accept languages
 /// Does not error so that the endpoint won't degrade
 pub fn parse_accept_language(accept_languages_header: &str) -> Vec<LanguageTag> {
-  let unparsed_tags = accept_languages_header.split(",")
-      .into_iter()
-      .map(|tag| tag.trim())
-      .map(|tag| ACCEPT_LANGUAGE_QUALITY_FACTOR_REGEX.replace(tag, ""))
-      .map(|tag| tag.to_string())
-      .collect::<Vec<String>>();
+  let unparsed_tags = accept_languages_header.split(",").into_iter().map(|tag| tag.trim()).map(|tag| ACCEPT_LANGUAGE_QUALITY_FACTOR_REGEX.replace(tag, "")).map(|tag| tag.to_string()).collect::<Vec<String>>();
 
   let mut parsed_tags = Vec::new();
 
@@ -24,10 +17,10 @@ pub fn parse_accept_language(accept_languages_header: &str) -> Vec<LanguageTag> 
     match LanguageTag::parse(tag.as_ref()) {
       Ok(t) => {
         parsed_tags.push(t);
-      }
+      },
       Err(e) => {
         warn!("Error parsing language tag '{}' : {:?}", tag, e);
-      }
+      },
     }
   }
 
@@ -75,7 +68,7 @@ mod tests {
     let list = parse_accept_language("en, es, en-GB");
     let first = list.get(0).unwrap();
     let second = list.get(1).unwrap();
-    let third= list.get(2).unwrap();
+    let third = list.get(2).unwrap();
     assert_eq!(first.primary_language(), "en");
     assert_eq!(second.primary_language(), "es");
     assert_eq!(third.primary_language(), "en");

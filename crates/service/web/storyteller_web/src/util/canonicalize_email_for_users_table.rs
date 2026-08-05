@@ -1,4 +1,3 @@
-
 /// This is to document the simple canonicalization routine we use currently
 /// In the future we may want something more sophisticated that can handle
 /// Gmail email address rules around period (.) and plus (+) as well as

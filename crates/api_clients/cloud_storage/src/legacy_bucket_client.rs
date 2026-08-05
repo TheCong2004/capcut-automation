@@ -23,21 +23,19 @@ pub struct LegacyBucketClient {
   optional_bucket_root: Option<String>,
 }
 
-
 #[derive(Debug)]
 pub enum LegacyBucketClientError {
-    ErrorWithCodeAndMessage { code: u16, message: String },
+  ErrorWithCodeAndMessage { code: u16, message: String },
 }
 
 impl std::fmt::Display for LegacyBucketClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            LegacyBucketClientError::ErrorWithCodeAndMessage { code, message } => write!(f, "Error {}: {}", code, message),
-        }
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    match self {
+      LegacyBucketClientError::ErrorWithCodeAndMessage { code, message } => write!(f, "Error {}: {}", code, message),
     }
+  }
 }
 impl Error for LegacyBucketClientError {}
-
 
 impl LegacyBucketClient {
   pub fn bucket_name(&self) -> String {
@@ -53,21 +51,11 @@ impl LegacyBucketClient {
     optional_bucket_root: Option<&str>,
     // See underlying docs for timeout details.
     bucket_request_timeout: Option<Duration>,
-  ) -> anyhow::Result<Self>
-  {
-    let credentials = Credentials {
-      access_key: Some(access_key.to_string()),
-      secret_key: Some(secret_key.to_string()),
-      security_token: None,
-      session_token: None,
-      expiration: None
-    };
+  ) -> anyhow::Result<Self> {
+    let credentials = Credentials { access_key: Some(access_key.to_string()), secret_key: Some(secret_key.to_string()), security_token: None, session_token: None, expiration: None };
 
     // NB: The GCS buckets aren't supported by default.
-    let region = Region::Custom {
-      region: region_name.to_owned(),
-      endpoint: s3_endpoint.to_owned(),
-    };
+    let region = Region::Custom { region: region_name.to_owned(), endpoint: s3_endpoint.to_owned() };
 
     let mut bucket = Bucket::new(&bucket_name, region, credentials)?;
 
@@ -79,7 +67,7 @@ impl LegacyBucketClient {
       },
       _ => {
         bucket.set_path_style();
-      }
+      },
     }
 
     let optional_bucket_root = optional_bucket_root.map(|s| s.to_string());
@@ -166,19 +154,12 @@ impl LegacyBucketClient {
     Ok(())
   }
 
-  pub async fn upload_filename<P: AsRef<Path>, Q: AsRef<Path>>(
-    &self,
-    object_path: P,
-    filename: Q
-  ) -> anyhow::Result<()> {
-    let object_path_str = object_path.as_ref()
-        .to_str()
-        .map(|s| s.to_string())
-        .ok_or(anyhow!("could not convert object path to string"))?;
+  pub async fn upload_filename<P: AsRef<Path>, Q: AsRef<Path>>(&self, object_path: P, filename: Q) -> anyhow::Result<()> {
+    let object_path_str = object_path.as_ref().to_str().map(|s| s.to_string()).ok_or(anyhow!("could not convert object path to string"))?;
 
     // TODO: does a newer version of this crate handle streaming/buffering file contents?
     let mut file = File::open(filename).await?;
-    let mut buffer : Vec<u8> = Vec::new();
+    let mut buffer: Vec<u8> = Vec::new();
     file.read_to_end(&mut buffer).await?;
 
     info!("Uploading...");
@@ -186,20 +167,12 @@ impl LegacyBucketClient {
     self.upload_file(&object_path_str, &buffer).await
   }
 
-  pub async fn upload_filename_with_content_type<P: AsRef<Path>, Q: AsRef<Path>>(
-    &self,
-    object_path: P,
-    filename: Q,
-    content_type: &str
-  ) -> anyhow::Result<()> {
-    let object_path_str = object_path.as_ref()
-      .to_str()
-      .map(|s| s.to_string())
-      .ok_or(anyhow!("could not convert object path to string"))?;
+  pub async fn upload_filename_with_content_type<P: AsRef<Path>, Q: AsRef<Path>>(&self, object_path: P, filename: Q, content_type: &str) -> anyhow::Result<()> {
+    let object_path_str = object_path.as_ref().to_str().map(|s| s.to_string()).ok_or(anyhow!("could not convert object path to string"))?;
 
     // TODO: does a newer version of this crate handle streaming/buffering file contents?
     let mut file = File::open(filename).await?;
-    let mut buffer : Vec<u8> = Vec::new();
+    let mut buffer: Vec<u8> = Vec::new();
     file.read_to_end(&mut buffer).await?;
 
     info!("Uploading with content type...");
@@ -224,15 +197,8 @@ impl LegacyBucketClient {
     Ok(bytes.to_vec())
   }
 
-  pub async fn download_file_to_disk<P: AsRef<Path>, Q: AsRef<Path>>(
-    &self,
-    object_path: P,
-    filesystem_path: Q,
-  ) -> AnyhowResult<()> {
-    let object_path_str = object_path.as_ref()
-      .to_str()
-      .map(|s| s.to_string())
-      .ok_or(anyhow!("could not convert object path to string"))?;
+  pub async fn download_file_to_disk<P: AsRef<Path>, Q: AsRef<Path>>(&self, object_path: P, filesystem_path: Q) -> AnyhowResult<()> {
+    let object_path_str = object_path.as_ref().to_str().map(|s| s.to_string()).ok_or(anyhow!("could not convert object path to string"))?;
 
     info!("creating file for bucket download: {:?}", filesystem_path.as_ref());
 
@@ -244,9 +210,7 @@ impl LegacyBucketClient {
 
     let status_code = match result {
       Ok(status_code) => status_code,
-      Err(err) => {
-        return bail!("Error downloading from bucket (named '{}'): {:?}", &self.bucket.name, err)
-      }
+      Err(err) => return bail!("Error downloading from bucket (named '{}'): {:?}", &self.bucket.name, err),
     };
 
     match status_code {

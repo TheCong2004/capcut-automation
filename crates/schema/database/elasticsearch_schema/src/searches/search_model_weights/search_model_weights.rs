@@ -15,11 +15,10 @@ use crate::searches::search_model_weights::min_score::add_min_score;
 use crate::searches::search_model_weights::predicates::{creator_user_token_predicate, language_subtag_predicate, must_be_not_deleted, weights_categories_predicates, weights_types_predicates};
 use crate::searches::search_model_weights::sort::add_sort;
 
-static JSON_QUERY : Lazy<Value> = Lazy::new(|| {
-  const QUERY_TEMPLATE : &str = include_str!("../../../../../../../_database/elasticsearch/searches/model_weights/search.json");
+static JSON_QUERY: Lazy<Value> = Lazy::new(|| {
+  const QUERY_TEMPLATE: &str = include_str!("../../../../../../../_database/elasticsearch/searches/model_weights/search.json");
 
-  let json : Value = serde_json::from_str(QUERY_TEMPLATE)
-      .expect("json should parse");
+  let json: Value = serde_json::from_str(QUERY_TEMPLATE).expect("json should parse");
 
   json
 });
@@ -78,39 +77,28 @@ pub async fn search_model_weights(args: SearchArgs<'_>) -> AnyhowResult<Vec<Mode
 
   debug!("ElasticSearch Query: {:#?}", json_query);
 
-  let search_response = args.client
-      .search(SearchParts::Index(&[MODEL_WEIGHT_INDEX]))
-      .body(query)
-      .size(30)
-      .allow_no_indices(true)
-      .send()
-      .await?;
+  let search_response = args.client.search(SearchParts::Index(&[MODEL_WEIGHT_INDEX])).body(query).size(30).allow_no_indices(true).send().await?;
 
   let _status_code = search_response.status_code();
 
   let mut response_json = search_response.json::<Value>().await?;
 
-  let hits = response_json.get_mut("hits")
-      .map(|hits| hits.take());
+  let hits = response_json.get_mut("hits").map(|hits| hits.take());
 
-  let hits = hits.map(|mut hits| {
-    hits.get_mut("hits")
-        .map(|hits| hits.take())
-  }).flatten();
+  let hits = hits.map(|mut hits| hits.get_mut("hits").map(|hits| hits.take())).flatten();
 
   let mut documents = Vec::new();
 
   match hits {
     Some(Value::Array(inner_hits)) => {
       for mut hit in inner_hits {
-        let maybe_object = hit.get_mut("_source")
-            .map(|source| source.take());
+        let maybe_object = hit.get_mut("_source").map(|source| source.take());
         if let Some(value) = maybe_object {
           let document = serde_json::from_value::<ModelWeightDocument>(value)?;
           documents.push(document);
         }
       }
-    }
+    },
     _ => {},
   }
 
@@ -121,14 +109,12 @@ fn build_query(args: &SearchArgs) -> AnyhowResult<Value> {
   let query = JSON_QUERY.clone();
 
   let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.must", &mut |_| {
-    let mut predicates = vec![
-      must_be_not_deleted(),
-    ];
+    let mut predicates = vec![must_be_not_deleted()];
 
-//    if let Some(is_featured) = args.is_featured {
-//      predicates.push(featured_predicate(is_featured));
-//    }
-//
+    //    if let Some(is_featured) = args.is_featured {
+    //      predicates.push(featured_predicate(is_featured));
+    //    }
+    //
 
     if let Some(language_subtag) = args.maybe_ietf_primary_language_subtag {
       predicates.push(language_subtag_predicate(language_subtag));
@@ -149,24 +135,17 @@ fn build_query(args: &SearchArgs) -> AnyhowResult<Value> {
     Some(json!(predicates))
   })?;
 
-  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[0].fuzzy.title.value", &mut |_| {
-    Some(json!(args.search_term))
-  })?;
+  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[0].fuzzy.title.value", &mut |_| Some(json!(args.search_term)))?;
 
-  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[1].match.title.query", &mut |_| {
-    Some(json!(args.search_term))
-  })?;
+  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[1].match.title.query", &mut |_| Some(json!(args.search_term)))?;
 
-  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[2].multi_match.query", &mut |_| {
-    Some(json!(args.search_term))
-  })?;
+  let query = jsonpath_lib::replace_with(query, "$.query.bool.must[0].bool.should[2].multi_match.query", &mut |_| Some(json!(args.search_term)))?;
 
   let query = add_sort(query, args.sort_field, args.sort_direction);
   let query = add_min_score(query, args.search_term, args.minimum_score);
 
   Ok(query)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -184,142 +163,84 @@ mod tests {
 
   #[test]
   fn test_default_search() {
-    let search = build_query(&SearchArgs {
-      search_term: "foo",
-      maybe_creator_user_token: None,
-      maybe_ietf_primary_language_subtag: None,
-      maybe_weights_categories: None,
-      maybe_weights_types: None,
-      sort_field: Default::default(),
-      sort_direction: Default::default(),
-      minimum_score: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "foo", maybe_creator_user_token: None, maybe_ietf_primary_language_subtag: None, maybe_weights_categories: None, maybe_weights_types: None, sort_field: Default::default(), sort_direction: Default::default(), minimum_score: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[0].fuzzy.title.value").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[0].fuzzy.title.value").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[1].match.title.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[1].match.title.query").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
   }
 
   #[test]
   fn test_creator_user_token() {
-    let search = build_query(&SearchArgs {
-      search_term: "asdf",
-      maybe_creator_user_token: Some(&UserToken::new_from_str("USER_TOKEN")),
-      maybe_ietf_primary_language_subtag: None,
-      maybe_weights_categories: None,
-      maybe_weights_types: None,
-      sort_field: Default::default(),
-      sort_direction: Default::default(),
-      minimum_score: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "asdf", maybe_creator_user_token: Some(&UserToken::new_from_str("USER_TOKEN")), maybe_ietf_primary_language_subtag: None, maybe_weights_categories: None, maybe_weights_types: None, sort_field: Default::default(), sort_direction: Default::default(), minimum_score: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[1].term.maybe_creator_user_token").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[1].term.maybe_creator_user_token").unwrap();
 
     assert_eq!(value[0], &Value::String("USER_TOKEN".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[0].fuzzy.title.value").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[0].fuzzy.title.value").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[1].match.title.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[1].match.title.query").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
 
     assert_eq!(value[0], &Value::String("asdf".to_string()));
   }
 
   #[test]
   fn test_ietf_primary_language_subtag() {
-    let search = build_query(&SearchArgs {
-      search_term: "foo",
-      maybe_creator_user_token: None,
-      maybe_ietf_primary_language_subtag: Some("ja"),
-      maybe_weights_categories: None,
-      maybe_weights_types: None,
-      client: &elasticsearch::Elasticsearch::default(),
-      minimum_score: None,
-      sort_field: Default::default(),
-      sort_direction: Default::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "foo", maybe_creator_user_token: None, maybe_ietf_primary_language_subtag: Some("ja"), maybe_weights_categories: None, maybe_weights_types: None, client: &elasticsearch::Elasticsearch::default(), minimum_score: None, sort_field: Default::default(), sort_direction: Default::default() }).unwrap();
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted").unwrap();
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.must[1].term.maybe_ietf_primary_language_subtag").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.must[1].term.maybe_ietf_primary_language_subtag").unwrap();
 
     assert_eq!(value[0], &Value::String("ja".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[0].fuzzy.title.value").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[0].fuzzy.title.value").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[1].match.title.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[1].match.title.query").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
 
-    let value = jsonpath_lib::select(
-      &search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
+    let value = jsonpath_lib::select(&search, "$.query.bool.must[0].bool.should[2].multi_match.query").unwrap();
 
     assert_eq!(value[0], &Value::String("foo".to_string()));
   }
 
   #[test]
   fn test_weight_types() {
-    let search = build_query(&SearchArgs {
-      search_term: "bar",
-      maybe_creator_user_token: None,
-      maybe_ietf_primary_language_subtag: None,
-      maybe_weights_categories: None,
-      maybe_weights_types: Some(HashSet::from_iter(vec![
-        WeightsType::Tacotron2,
-        WeightsType::GptSoVits,
-      ])),
-      sort_field: Default::default(),
-      sort_direction: Default::default(),
-      minimum_score: None,
-      client: &elasticsearch::Elasticsearch::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "bar", maybe_creator_user_token: None, maybe_ietf_primary_language_subtag: None, maybe_weights_categories: None, maybe_weights_types: Some(HashSet::from_iter(vec![WeightsType::Tacotron2, WeightsType::GptSoVits])), sort_field: Default::default(), sort_direction: Default::default(), minimum_score: None, client: &elasticsearch::Elasticsearch::default() }).unwrap();
 
     let value = select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted");
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let values = select_str_values(
-      &search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.weights_type");
+    let values = select_str_values(&search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.weights_type");
 
     assert_eq!(values.len(), 2);
     assert!(values.contains(&"tt2"));
@@ -328,27 +249,13 @@ mod tests {
 
   #[test]
   fn test_weight_categories() {
-    let search = build_query(&SearchArgs {
-      search_term: "bar",
-      maybe_creator_user_token: None,
-      maybe_ietf_primary_language_subtag: None,
-      maybe_weights_types: None,
-      maybe_weights_categories: Some(HashSet::from_iter(vec![
-        WeightsCategory::TextToSpeech,
-        WeightsCategory::VoiceConversion,
-      ])),
-      client: &elasticsearch::Elasticsearch::default(),
-      minimum_score: None,
-      sort_field: Default::default(),
-      sort_direction: Default::default(),
-    }).unwrap();
+    let search = build_query(&SearchArgs { search_term: "bar", maybe_creator_user_token: None, maybe_ietf_primary_language_subtag: None, maybe_weights_types: None, maybe_weights_categories: Some(HashSet::from_iter(vec![WeightsCategory::TextToSpeech, WeightsCategory::VoiceConversion])), client: &elasticsearch::Elasticsearch::default(), minimum_score: None, sort_field: Default::default(), sort_direction: Default::default() }).unwrap();
 
     let value = select(&search, "$.query.bool.must[0].bool.must[0].term.is_deleted");
 
     assert_eq!(value[0], &Value::Bool(false));
 
-    let values = select_str_values(
-      &search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.weights_category");
+    let values = select_str_values(&search, "$.query.bool.must[0].bool.must[1].bool.should[*].term.weights_category");
 
     assert_eq!(values.len(), 2);
     assert!(values.contains(&"text_to_speech"));
@@ -360,13 +267,12 @@ mod tests {
   }
 
   fn select_str_values<'a>(search: &'a Value, path: &str) -> Vec<&'a str> {
-    select(search, path).into_iter()
-        .map(|value| {
-          match value {
-            Value::String(inner) => inner.as_str(),
-            _ => panic!("Expected string"),
-          }
-        })
-        .collect()
+    select(search, path)
+      .into_iter()
+      .map(|value| match value {
+        Value::String(inner) => inner.as_str(),
+        _ => panic!("Expected string"),
+      })
+      .collect()
   }
 }

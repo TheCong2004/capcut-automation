@@ -16,9 +16,7 @@ pub struct GrokWrappedWebsocket {
 
 impl GrokWrappedWebsocket {
   pub fn new(websocket: WebSocket) -> Self {
-    Self {
-      websocket: Arc::new(RwLock::new(websocket)),
-    }
+    Self { websocket: Arc::new(RwLock::new(websocket)) }
   }
 
   pub async fn send(&self, message: String) -> Result<(), GrokError> {
@@ -26,22 +24,17 @@ impl GrokWrappedWebsocket {
       Err(_err) => Err(GrokClientError::WebsocketLockError.into()),
       Ok(mut websocket) => {
         let message = Message::text(message);
-        websocket.send(message)
-            .await
-            .map_err(|err| {
-              GrokClientError::WreqClientError(err)
-            })?;
+        websocket.send(message).await.map_err(|err| GrokClientError::WreqClientError(err))?;
         Ok(())
       },
     }
   }
 
   pub async fn send_serializable<T: Serialize>(&self, message: T) -> Result<(), GrokError> {
-    let message_json = serde_json::to_string(&message)
-        .map_err(|err| {
-          warn!("Failed to serialize prompt websocket message: {}", err);
-          GrokClientError::WebsocketRequestSerializationError(err)
-        })?;
+    let message_json = serde_json::to_string(&message).map_err(|err| {
+      warn!("Failed to serialize prompt websocket message: {}", err);
+      GrokClientError::WebsocketRequestSerializationError(err)
+    })?;
     self.send(message_json).await
   }
 
@@ -55,7 +48,7 @@ impl GrokWrappedWebsocket {
           Err(elapsed) => {
             info!("Websocket try_next() elapsed without receiving a message: {:?}", elapsed);
             Ok(None) // Timeout elapsed.
-          }
+          },
           Ok(inner) => {
             let maybe_message = inner.map_err(GrokClientError::WebsocketReadError)?;
 
@@ -70,7 +63,7 @@ impl GrokWrappedWebsocket {
                 Ok(None)
               },
             }
-          }
+          },
         }
       },
     }
@@ -86,11 +79,11 @@ impl GrokWrappedWebsocket {
           Err(elapsed) => {
             info!("Websocket try_next() elapsed without receiving a message: {:?}", elapsed);
             Ok(None) // Timeout elapsed.
-          }
+          },
           Ok(inner) => {
             let maybe_message = inner.map_err(GrokClientError::WebsocketReadError)?;
             Ok(maybe_message)
-          }
+          },
         }
       },
     }

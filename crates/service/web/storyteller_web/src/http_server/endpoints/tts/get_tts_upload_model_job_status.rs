@@ -47,35 +47,27 @@ pub struct GetTtsUploadModelStatusSuccessResponse {
   pub success: bool,
   pub state: TtsUploadModelJobStatusForResponse,
 }
-pub async fn get_tts_upload_model_job_status_handler(
-  http_request: HttpRequest,
-  path: Path<GetTtsUploadModelStatusPathInfo>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetTtsUploadModelStatusSuccessResponse>, CommonWebError>
-{
+pub async fn get_tts_upload_model_job_status_handler(http_request: HttpRequest, path: Path<GetTtsUploadModelStatusPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetTtsUploadModelStatusSuccessResponse>, CommonWebError> {
   // NB: Since this is publicly exposed, we don't query sensitive data.
   let record = get_tts_model_upload_job_status(&path.token, &server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        error!("tts template query error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?
-      .ok_or(
-        // TODO: 404
-        CommonWebError::server_error_with_message("uncaught server error")
-      )?;
+    .await
+    .map_err(|err| {
+      error!("tts template query error: {:?}", err);
+      CommonWebError::from_anyhow_error(err)
+    })?
+    .ok_or(
+      // TODO: 404
+      CommonWebError::server_error_with_message("uncaught server error"),
+    )?;
 
-  let mut redis = server_state.redis_pool
-      .get()
-      .map_err(|e| {
-        warn!("redis error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut redis = server_state.redis_pool.get().map_err(|e| {
+    warn!("redis error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let extra_status_key = RedisKeys::tts_download_extra_status_info(&path.token);
-  let maybe_extra_status_description : Option<String> = match redis.get(&extra_status_key) {
-    Ok(Some(status)) => {
-      Some(status)
-    },
+  let maybe_extra_status_description: Option<String> = match redis.get(&extra_status_key) {
+    Ok(Some(status)) => Some(status),
     Ok(None) => None,
     Err(e) => {
       warn!("redis error: {:?}", e);
@@ -83,18 +75,7 @@ pub async fn get_tts_upload_model_job_status_handler(
     },
   };
 
-  let model_for_response = TtsUploadModelJobStatusForResponse {
-    job_token: record.job_token.clone(),
-    status: record.status.clone(),
-    maybe_extra_status_description,
-    attempt_count: record.attempt_count as u8,
-    maybe_model_token: record.maybe_model_token.clone(),
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-  };
+  let model_for_response = TtsUploadModelJobStatusForResponse { job_token: record.job_token.clone(), status: record.status.clone(), maybe_extra_status_description, attempt_count: record.attempt_count as u8, maybe_model_token: record.maybe_model_token.clone(), created_at: record.created_at, updated_at: record.updated_at };
 
-  Ok(Json(GetTtsUploadModelStatusSuccessResponse {
-    success: true,
-    state: model_for_response,
-  }))
+  Ok(Json(GetTtsUploadModelStatusSuccessResponse { success: true, state: model_for_response }))
 }

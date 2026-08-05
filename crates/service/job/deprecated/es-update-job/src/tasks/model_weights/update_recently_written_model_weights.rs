@@ -13,7 +13,7 @@ use crate::job_state::JobState;
 use crate::tasks::model_weights::util::copy_model_weight_records_to_documents::copy_model_weight_records_to_documents;
 
 pub async fn update_recently_written_model_weights(job_state: Arc<JobState>) {
-  let mut last_updated_time= DateTime::UNIX_EPOCH;
+  let mut last_updated_time = DateTime::UNIX_EPOCH;
 
   // TODO(bt,2024-02-05): Write this cursor to Redis so job can resume without reindexing everything.
   loop {
@@ -26,7 +26,7 @@ pub async fn update_recently_written_model_weights(job_state: Arc<JobState>) {
         error!("Error getting database time: {:?}", err);
         tokio::time::sleep(Duration::from_millis(job_state.sleep_config.between_error_wait_millis)).await;
         continue;
-      }
+      },
     }
   }
 
@@ -51,8 +51,7 @@ pub async fn with_database_main_loop(updated_at_cursor: &mut DateTime<Utc>, job_
   loop {
     info!("Querying tokens updated since: {:?}", &updated_at_cursor);
 
-    let maybe_records =
-        list_model_weight_tokens_updated_since(&mut *mysql_connection, &updated_at_cursor).await?;
+    let maybe_records = list_model_weight_tokens_updated_since(&mut *mysql_connection, &updated_at_cursor).await?;
 
     if maybe_records.is_empty() {
       info!("No records updated since {:?}", &updated_at_cursor);
@@ -60,18 +59,11 @@ pub async fn with_database_main_loop(updated_at_cursor: &mut DateTime<Utc>, job_
       continue;
     }
 
-    let maybe_tokens = maybe_records.into_iter()
-        .map(|record| record.token)
-        .collect::<Vec<_>>();
+    let maybe_tokens = maybe_records.into_iter().map(|record| record.token).collect::<Vec<_>>();
 
     info!("Found {} updated records", maybe_tokens.len());
 
-    let maybe_last_cursor = copy_model_weight_records_to_documents(
-      maybe_tokens,
-      &mut *mysql_connection,
-      &job_state.elasticsearch,
-      &job_state.sleep_config,
-    ).await?;
+    let maybe_last_cursor = copy_model_weight_records_to_documents(maybe_tokens, &mut *mysql_connection, &job_state.elasticsearch, &job_state.sleep_config).await?;
 
     if let Some(last_cursor) = maybe_last_cursor {
       // NB: If we trigger thousands of records to get updated at the same time, the cursor could get stuck.

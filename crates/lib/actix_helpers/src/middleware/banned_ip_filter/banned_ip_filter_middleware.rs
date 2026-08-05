@@ -15,14 +15,14 @@ use crate::middleware::banned_ip_filter::ip_ban_list::ip_ban_list::IpBanList;
 // 2. Middleware's call method gets called with normal request.
 
 pub struct BannedIpFilterMiddleware<S> {
-  pub (crate) service: S,
-  pub (crate) ip_ban_list: IpBanList,
+  pub(crate) service: S,
+  pub(crate) ip_ban_list: IpBanList,
 }
 
 impl<S, B> Service<ServiceRequest> for BannedIpFilterMiddleware<S>
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;
@@ -40,9 +40,7 @@ impl<S, B> Service<ServiceRequest> for BannedIpFilterMiddleware<S>
 
     // NB: Fail open.
     // We don't want our service to explode because we can't read bans.
-    let is_banned = self.ip_ban_list
-        .contains_ip_address(&ip_address)
-        .unwrap_or(false);
+    let is_banned = self.ip_ban_list.contains_ip_address(&ip_address).unwrap_or(false);
 
     if is_banned {
       Either::Right(err(Error::from(BannedError {})))

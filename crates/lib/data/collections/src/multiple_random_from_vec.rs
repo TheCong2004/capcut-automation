@@ -36,7 +36,7 @@ mod tests {
 
   #[test]
   fn behavior_on_empty() {
-    let items : Vec<String> = vec![];
+    let items: Vec<String> = vec![];
     let selected = multiple_random_from_vec(&items, 5);
     assert!(selected.is_empty());
   }

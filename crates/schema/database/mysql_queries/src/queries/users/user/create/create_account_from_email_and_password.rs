@@ -46,13 +46,8 @@ pub struct CreateAccountSuccessResult {
   pub user_id: u64,
 }
 
-
-pub async fn create_account_from_email_and_password(
-  args: CreateAccountFromEmailPasswordArgs<'_>,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> Result<CreateAccountSuccessResult, CreateAccountError>
-{
-  let result= create_account_generic(
+pub async fn create_account_from_email_and_password(args: CreateAccountFromEmailPasswordArgs<'_>, mysql_connection: &mut PoolConnection<MySql>) -> Result<CreateAccountSuccessResult, CreateAccountError> {
+  let result = create_account_generic(
     GenericCreateAccountArgs {
       maybe_signup_method: Some(UserSignupMethod::EmailPassword),
 
@@ -91,10 +86,8 @@ pub async fn create_account_from_email_and_password(
       was_eagerly_provisioned: false,
     },
     &mut **mysql_connection,
-  ).await?;
+  )
+  .await?;
 
-  Ok(CreateAccountSuccessResult {
-    user_token: result.user_token,
-    user_id: result.user_id,
-  })
+  Ok(CreateAccountSuccessResult { user_token: result.user_token, user_id: result.user_id })
 }

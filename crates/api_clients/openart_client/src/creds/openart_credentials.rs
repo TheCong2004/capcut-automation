@@ -10,9 +10,6 @@ pub struct OpenArtCredentials {
 impl OpenArtCredentials {
   pub fn from_cookies(cookies: &str) -> Self {
     let cookies = OpenArtCookies::new(cookies.to_string());
-    Self { 
-      cookies: Some(cookies),
-      session_info: None,
-    }
+    Self { cookies: Some(cookies), session_info: None }
   }
 }

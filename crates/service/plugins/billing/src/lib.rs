@@ -9,12 +9,12 @@
 #![allow(unused_mut)]
 #![allow(unused_variables)]
 #![forbid(unreachable_patterns)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 pub mod default_routes;
 pub mod paypal;

@@ -34,6 +34,7 @@ SERVICES_STATUS: Dict[str, Dict[str, Any]] = {
     "unified_server": {"status": "ready"},
     "llm": {"status": "unavailable", "message": None},
     "capcut_mate": {"status": "unavailable", "message": None},
+    "storage": {"status": "unavailable", "message": None},
     "open_montage": {"status": "unavailable", "message": None},
     "media_crawler": {"status": "unavailable", "message": None},
 }
@@ -66,7 +67,6 @@ except Exception as err:
     print(f"[CRITICAL][UnifiedBE] Mandatory backend CapCutMate failed to load: {err}", file=sys.stderr)
     traceback.print_exc()
     SERVICES_STATUS["capcut_mate"] = {"status": "unavailable", "message": str(err)}
-    # Fail fast on mandatory component failure as specified in requirements
     sys.exit(1)
 
 # 2. Mount OpenMontage (OPTIONAL)
@@ -159,31 +159,59 @@ except Exception as err:
     print(f"[UnifiedBE] Failed to setup FreeLLMAPI proxy: {err}")
 
 
+def check_storage_write_permission() -> tuple[bool, str | None]:
+    """Verify output directory exists and is writable by performing a temporary file write."""
+    custom_dir = os.environ.get("CAPCUT_OUTPUT_DIR")
+    output_dir = Path(custom_dir) if custom_dir else PROJECT_ROOT / "capcut-mate" / "output"
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        test_file = output_dir / ".write_test_tmp"
+        test_file.write_text("ok", encoding="utf-8")
+        if test_file.exists():
+            test_file.unlink()
+        return True, None
+    except Exception as e:
+        return False, f"Storage directory '{output_dir}' not writable: {e}"
+
+
 # Health & Readiness Endpoints
 @app.get("/api/unified/health")
 async def unified_health():
-    # Perform active probe for LLM service
+    # 1. Perform active probe for LLM service (Strict 2xx requirement)
     llm_base_url = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:20128")
     llm_ready = False
     llm_msg = None
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             res = await client.get(f"{llm_base_url.rstrip('/')}/v1/models")
-            if res.status_code < 500:
+            if res.status_code == 200 or (200 <= res.status_code < 300):
                 llm_ready = True
+            elif res.status_code == 401:
+                llm_msg = "UNAUTHORIZED: LLM authentication failed (HTTP 401)"
+            elif res.status_code == 403:
+                llm_msg = "FORBIDDEN: LLM access denied (HTTP 403)"
+            elif res.status_code == 404:
+                llm_msg = "NOT_FOUND: LLM models endpoint not found (HTTP 404)"
             else:
                 llm_msg = f"HTTP {res.status_code}"
     except Exception as e:
-        llm_msg = str(e)
+        llm_msg = f"Connection failed to {llm_base_url}: {e}"
 
     SERVICES_STATUS["llm"] = {
         "status": "ready" if llm_ready else "unavailable",
         "message": llm_msg,
     }
 
-    # System health status
+    # 2. Storage write test
+    storage_ok, storage_err = check_storage_write_permission()
+    SERVICES_STATUS["storage"] = {
+        "status": "ready" if storage_ok else "unavailable",
+        "message": storage_err,
+    }
+
+    # 3. Overall health status
     is_capcut_ready = SERVICES_STATUS["capcut_mate"]["status"] == "ready"
-    if is_capcut_ready and llm_ready:
+    if is_capcut_ready and llm_ready and storage_ok:
         overall_status = "healthy"
     elif is_capcut_ready or llm_ready:
         overall_status = "degraded"
@@ -196,6 +224,7 @@ async def unified_health():
             "unified_server": SERVICES_STATUS["unified_server"],
             "llm": SERVICES_STATUS["llm"],
             "capcut_mate": SERVICES_STATUS["capcut_mate"],
+            "storage": SERVICES_STATUS["storage"],
         },
     }
 
@@ -205,14 +234,25 @@ async def unified_readiness():
     health_resp = await unified_health()
     services = health_resp["services"]
 
-    # Mandatory readiness check: unified_server and capcut_mate must be ready
+    # Mandatory readiness requirements: Both LLM and CapCut Mate and Storage must be ready
     capcut_status = services["capcut_mate"]["status"]
+    llm_status = services["llm"]["status"]
+    storage_status = services["storage"]["status"]
+
+    unready_reasons = []
     if capcut_status != "ready":
+        unready_reasons.append(f"capcut_mate ({services['capcut_mate']['message']})")
+    if llm_status != "ready":
+        unready_reasons.append(f"llm ({services['llm']['message']})")
+    if storage_status != "ready":
+        unready_reasons.append(f"storage ({services['storage']['message']})")
+
+    if unready_reasons:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "status": "not_ready",
-                "reason": f"Mandatory dependency capcut_mate is unavailable: {services['capcut_mate']['message']}",
+                "reason": f"Mandatory dependencies not ready: {', '.join(unready_reasons)}",
                 "services": services,
             },
         )

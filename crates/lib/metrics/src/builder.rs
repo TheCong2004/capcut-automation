@@ -25,48 +25,47 @@ pub struct MetricsBuilder {
 
 impl MetricsBuilder {
   pub fn new() -> Self {
-    Self {
-      client: None,
-      flush_interval: Duration::from_secs(DEFAULT_FLUSH_INTERVAL_SECS),
-      duration_metric_name: DEFAULT_DURATION_METRIC.to_string(),
-      count_metric_name: DEFAULT_COUNT_METRIC.to_string(),
-      host: None,
-      env: None,
-      service_name: None,
-      max_buffered_samples: None,
-    }
+    Self { client: None, flush_interval: Duration::from_secs(DEFAULT_FLUSH_INTERVAL_SECS), duration_metric_name: DEFAULT_DURATION_METRIC.to_string(), count_metric_name: DEFAULT_COUNT_METRIC.to_string(), host: None, env: None, service_name: None, max_buffered_samples: None }
   }
 
   pub fn datadog_client(mut self, client: DatadogClient) -> Self {
-    self.client = Some(client); self
+    self.client = Some(client);
+    self
   }
 
   pub fn flush_interval(mut self, interval: Duration) -> Self {
-    self.flush_interval = interval; self
+    self.flush_interval = interval;
+    self
   }
 
   pub fn duration_metric_name(mut self, name: impl Into<String>) -> Self {
-    self.duration_metric_name = name.into(); self
+    self.duration_metric_name = name.into();
+    self
   }
 
   pub fn count_metric_name(mut self, name: impl Into<String>) -> Self {
-    self.count_metric_name = name.into(); self
+    self.count_metric_name = name.into();
+    self
   }
 
   pub fn host(mut self, host: impl Into<String>) -> Self {
-    self.host = Some(host.into()); self
+    self.host = Some(host.into());
+    self
   }
 
   pub fn env(mut self, env: impl Into<String>) -> Self {
-    self.env = Some(env.into()); self
+    self.env = Some(env.into());
+    self
   }
 
   pub fn service_name(mut self, name: impl Into<String>) -> Self {
-    self.service_name = Some(name.into()); self
+    self.service_name = Some(name.into());
+    self
   }
 
   pub fn max_buffered_samples(mut self, n: usize) -> Self {
-    self.max_buffered_samples = Some(n); self
+    self.max_buffered_samples = Some(n);
+    self
   }
 
   /// Build the (collector, worker) pair plus a shutdown flag. Spawn
@@ -77,8 +76,7 @@ impl MetricsBuilder {
   /// Returns `Err` only if no Datadog client was provided. Callers that
   /// want to disable metrics should use [`MetricsCollector::noop`] instead.
   pub fn build(self) -> Result<BuildOutput, String> {
-    let client = self.client
-      .ok_or_else(|| "MetricsBuilder: datadog_client is required".to_string())?;
+    let client = self.client.ok_or_else(|| "MetricsBuilder: datadog_client is required".to_string())?;
 
     let queue = match self.max_buffered_samples {
       Some(n) => SampleQueue::with_capacity(n),
@@ -86,14 +84,7 @@ impl MetricsBuilder {
     };
     let shutdown = Arc::new(AtomicBool::new(false));
 
-    let config = MetricsWorkerConfig {
-      flush_interval: self.flush_interval,
-      duration_metric_name: self.duration_metric_name,
-      count_metric_name: self.count_metric_name,
-      host: self.host,
-      env: self.env.unwrap_or_else(|| "unknown".to_string()),
-      service_name: self.service_name.unwrap_or_else(|| "unknown".to_string()),
-    };
+    let config = MetricsWorkerConfig { flush_interval: self.flush_interval, duration_metric_name: self.duration_metric_name, count_metric_name: self.count_metric_name, host: self.host, env: self.env.unwrap_or_else(|| "unknown".to_string()), service_name: self.service_name.unwrap_or_else(|| "unknown".to_string()) };
 
     let collector = MetricsCollector::new(queue.clone());
     let worker = MetricsWorker::new(queue, client, config, shutdown.clone());
@@ -103,7 +94,9 @@ impl MetricsBuilder {
 }
 
 impl Default for MetricsBuilder {
-  fn default() -> Self { Self::new() }
+  fn default() -> Self {
+    Self::new()
+  }
 }
 
 pub struct BuildOutput {

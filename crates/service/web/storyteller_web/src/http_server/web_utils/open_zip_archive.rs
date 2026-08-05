@@ -5,7 +5,7 @@ use zip::ZipArchive;
 
 use mimetypes::mimetype_for_bytes::get_mimetype_for_bytes;
 
-const ZIP_MIMETYPE : &str = "application/zip";
+const ZIP_MIMETYPE: &str = "application/zip";
 
 #[derive(Debug)]
 pub enum OpenZipError {
@@ -13,11 +13,7 @@ pub enum OpenZipError {
   TooManyFiles,
 }
 
-pub fn open_zip_archive(
-  zip_container_file_bytes: &[u8],
-  maybe_max_file_count: Option<usize>,
-) -> Result<ZipArchive<BufReader<Cursor<&[u8]>>>, OpenZipError>{
-
+pub fn open_zip_archive(zip_container_file_bytes: &[u8], maybe_max_file_count: Option<usize>) -> Result<ZipArchive<BufReader<Cursor<&[u8]>>>, OpenZipError> {
   let maybe_mimetype = get_mimetype_for_bytes(zip_container_file_bytes);
 
   if maybe_mimetype != Some(ZIP_MIMETYPE) {
@@ -28,11 +24,10 @@ pub fn open_zip_archive(
   let mut cursor = Cursor::new(zip_container_file_bytes);
   let reader = BufReader::new(cursor);
 
-  let mut archive = ZipArchive::new(reader)
-      .map_err(|err| {
-        error!("Problem reading zip archive: {:?}", err);
-        OpenZipError::InvalidArchive
-      })?;
+  let mut archive = ZipArchive::new(reader).map_err(|err| {
+    error!("Problem reading zip archive: {:?}", err);
+    OpenZipError::InvalidArchive
+  })?;
 
   info!("Archive opened. Entry count: {}", archive.len());
 

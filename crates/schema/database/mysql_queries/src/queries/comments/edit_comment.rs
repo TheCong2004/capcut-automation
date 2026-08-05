@@ -7,7 +7,8 @@ use errors::AnyhowResult;
 use tokens::tokens::comments::CommentToken;
 
 pub struct Args<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub comment_token: &'e CommentToken,
 
@@ -24,13 +25,12 @@ pub struct Args<'e, 'c, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn edit_comment<'e, 'c : 'e, E>(
-  args: Args<'e, 'c, E>,
-) -> AnyhowResult<()>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn edit_comment<'e, 'c: 'e, E>(args: Args<'e, 'c, E>) -> AnyhowResult<()>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let query_result = sqlx::query!(
-        r#"
+    r#"
 UPDATE comments
 SET
   comment_markdown = ?,
@@ -41,13 +41,13 @@ SET
 WHERE
   token = ?
         "#,
-      args.comment_markdown,
-      args.comment_rendered_html,
-      args.editor_ip_address,
-      args.comment_token,
-    )
-      .execute(args.mysql_executor)
-      .await;
+    args.comment_markdown,
+    args.comment_rendered_html,
+    args.editor_ip_address,
+    args.comment_token,
+  )
+  .execute(args.mysql_executor)
+  .await;
 
   let _record_id = match query_result {
     Ok(res) => res.last_insert_id(),

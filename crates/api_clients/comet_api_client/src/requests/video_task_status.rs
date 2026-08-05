@@ -80,13 +80,7 @@ mod tests {
 
   #[test]
   fn deserialize_known_states() {
-    let cases = [
-      ("\"queued\"", CometVideoTaskStatus::Queued),
-      ("\"in_progress\"", CometVideoTaskStatus::InProgress),
-      ("\"completed\"", CometVideoTaskStatus::Completed),
-      ("\"failed\"", CometVideoTaskStatus::Failed),
-      ("\"error\"", CometVideoTaskStatus::Error),
-    ];
+    let cases = [("\"queued\"", CometVideoTaskStatus::Queued), ("\"in_progress\"", CometVideoTaskStatus::InProgress), ("\"completed\"", CometVideoTaskStatus::Completed), ("\"failed\"", CometVideoTaskStatus::Failed), ("\"error\"", CometVideoTaskStatus::Error)];
     for (json, expected) in cases {
       let status: CometVideoTaskStatus = serde_json::from_str(json).expect("should parse");
       assert_eq!(status, expected);
@@ -102,14 +96,7 @@ mod tests {
 
   #[test]
   fn round_trip() {
-    for status in [
-      CometVideoTaskStatus::Queued,
-      CometVideoTaskStatus::InProgress,
-      CometVideoTaskStatus::Completed,
-      CometVideoTaskStatus::Failed,
-      CometVideoTaskStatus::Error,
-      CometVideoTaskStatus::Unknown("new_state".to_string()),
-    ] {
+    for status in [CometVideoTaskStatus::Queued, CometVideoTaskStatus::InProgress, CometVideoTaskStatus::Completed, CometVideoTaskStatus::Failed, CometVideoTaskStatus::Error, CometVideoTaskStatus::Unknown("new_state".to_string())] {
       let json = serde_json::to_string(&status).expect("should serialize");
       let parsed: CometVideoTaskStatus = serde_json::from_str(&json).expect("should parse");
       assert_eq!(parsed, status);

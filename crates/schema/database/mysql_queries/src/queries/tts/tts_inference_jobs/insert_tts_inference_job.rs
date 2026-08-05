@@ -24,7 +24,7 @@ pub struct TtsInferenceJobInsertBuilder {
   is_from_api: bool,
   is_for_twitch: bool,
   is_debug_request: bool, // Route the request to a special host with this flag
-  priority_level: u8, // Priority is 0 by default and optionally increases
+  priority_level: u8,     // Priority is 0 by default and optionally increases
 
   /// Premium feature controlling TTS max duration.
   ///  - Negative values imply unlimited duration
@@ -34,23 +34,9 @@ pub struct TtsInferenceJobInsertBuilder {
 }
 
 impl TtsInferenceJobInsertBuilder {
-
   /// Everything needs to be manually specified
   pub fn new_for_fakeyou_request() -> Self {
-    Self {
-      job_token: None,
-      uuid_idempotency_token: None,
-      model_token: None,
-      raw_inference_text: None,
-      creator_ip_address: None,
-      maybe_creator_user_token: None,
-      creator_set_visibility: None,
-      is_from_api: false,
-      is_for_twitch: false,
-      is_debug_request: false,
-      priority_level: 0,
-      max_duration_seconds: 0,
-    }
+    Self { job_token: None, uuid_idempotency_token: None, model_token: None, raw_inference_text: None, creator_ip_address: None, maybe_creator_user_token: None, creator_set_visibility: None, is_from_api: false, is_for_twitch: false, is_debug_request: false, priority_level: 0, max_duration_seconds: 0 }
   }
 
   /// We can default a lot of the fields to "empty"-ish values
@@ -136,32 +122,20 @@ impl TtsInferenceJobInsertBuilder {
 
   pub async fn insert(&mut self, mysql_pool: &MySqlPool) -> AnyhowResult<()> {
     // TODO: These should be custom error types with a custom macro to make this easy.
-    let job_token = self.job_token
-        .clone()
-        .ok_or(anyhow!("no job_token"))?;
+    let job_token = self.job_token.clone().ok_or(anyhow!("no job_token"))?;
 
-    let uuid_idempotency_token = self.uuid_idempotency_token
-        .clone()
-        .ok_or(anyhow!("no uuid_idempotency_token"))?;
+    let uuid_idempotency_token = self.uuid_idempotency_token.clone().ok_or(anyhow!("no uuid_idempotency_token"))?;
 
-    let model_token = self.model_token
-        .clone()
-        .ok_or(anyhow!("no model_token"))?;
+    let model_token = self.model_token.clone().ok_or(anyhow!("no model_token"))?;
 
-    let raw_inference_text = self.raw_inference_text
-        .clone()
-        .ok_or(anyhow!("no raw_inference_text"))?;
+    let raw_inference_text = self.raw_inference_text.clone().ok_or(anyhow!("no raw_inference_text"))?;
 
-    let creator_ip_address = self.creator_ip_address
-        .clone()
-        .ok_or(anyhow!("no creator_ip_address"))?;
+    let creator_ip_address = self.creator_ip_address.clone().ok_or(anyhow!("no creator_ip_address"))?;
 
-    let creator_set_visibility = self.creator_set_visibility
-        .clone()
-        .ok_or(anyhow!("no creator_set_visibility"))?;
+    let creator_set_visibility = self.creator_set_visibility.clone().ok_or(anyhow!("no creator_set_visibility"))?;
 
     let query = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO tts_inference_jobs
 SET
   token = ?,
@@ -192,16 +166,13 @@ SET
       self.max_duration_seconds,
     );
 
-    let query_result = query.execute(mysql_pool)
-        .await;
+    let query_result = query.execute(mysql_pool).await;
 
     let _record_id = match query_result {
-      Ok(res) => {
-        res.last_insert_id()
-      },
+      Ok(res) => res.last_insert_id(),
       Err(err) => {
         return Err(anyhow!("MySQL tts_inference_job record insert error: {:?}", err));
-      }
+      },
     };
 
     Ok(())

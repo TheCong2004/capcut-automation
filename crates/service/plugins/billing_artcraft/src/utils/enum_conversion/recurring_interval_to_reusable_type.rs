@@ -1,7 +1,7 @@
 use reusable_types::stripe::stripe_recurring_interval::StripeRecurringInterval;
 use stripe_shared::RecurringInterval;
 
-pub fn recurring_interval_to_reusable_type(recurring_interval: RecurringInterval) -> StripeRecurringInterval{
+pub fn recurring_interval_to_reusable_type(recurring_interval: RecurringInterval) -> StripeRecurringInterval {
   match recurring_interval {
     RecurringInterval::Day => StripeRecurringInterval::Day,
     RecurringInterval::Month => StripeRecurringInterval::Month,

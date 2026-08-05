@@ -32,10 +32,10 @@ struct RawResult {
   maybe_previously_cached_model_use_count: Option<u32>,
 }
 
-pub async fn count_all_model_usages_on_date<'e, 'c, E>(
-  mysql_executor: E,
-  date: NaiveDate,
-) -> AnyhowResult<ModelUseCounts> where E: 'e + Executor<'c, Database=MySql> {
+pub async fn count_all_model_usages_on_date<'e, 'c, E>(mysql_executor: E, date: NaiveDate) -> AnyhowResult<ModelUseCounts>
+where
+  E: 'e + Executor<'c, Database = MySql>,
+{
   // NB(1): This query groups model_weights tokens as well as the old
   //       format "TM:" prefixed tts_models tokens that some streamers are using.
   //
@@ -47,8 +47,8 @@ pub async fn count_all_model_usages_on_date<'e, 'c, E>(
   // NB(3): We also join against model_weight_usage_counts to get the previously
   //        cached count. We should rewrite that value if there's a mismatch.
   let query = sqlx::query_as!(
-      RawResult,
-        r#"
+    RawResult,
+    r#"
 SELECT
   distinct coalesce(w.token, w_old.token) as token,
   mwuc.usage_count as maybe_previously_cached_model_use_count,
@@ -68,26 +68,20 @@ WHERE f.maybe_origin_model_token IS NOT NULL
 GROUP BY coalesce(w.token, w_old.token), mwuc.usage_count
 ORDER BY usage_count DESC
         "#,
-      date,
-      date,
-      date,
-    );
+    date,
+    date,
+    date,
+  );
 
   let results = query.fetch_all(mysql_executor).await?;
 
-  let results = results.into_iter()
-      .filter_map(|record| match record.token {
-        None => None, // NB: This shouldn't happen, but SQLx is strict!
-        Some(token) => Some(ModelUseCount {
-          token: ModelWeightToken::new_from_str(&token),
-          latest_usage_count: try_i64_to_u64_or_min(record.usage_count),
-          maybe_previously_cached_model_use_count: record.maybe_previously_cached_model_use_count
-              .map(|n| n as u64),
-        })
-      })
-      .collect();
+  let results = results
+    .into_iter()
+    .filter_map(|record| match record.token {
+      None => None, // NB: This shouldn't happen, but SQLx is strict!
+      Some(token) => Some(ModelUseCount { token: ModelWeightToken::new_from_str(&token), latest_usage_count: try_i64_to_u64_or_min(record.usage_count), maybe_previously_cached_model_use_count: record.maybe_previously_cached_model_use_count.map(|n| n as u64) }),
+    })
+    .collect();
 
-  Ok(ModelUseCounts {
-    counts: results,
-  })
+  Ok(ModelUseCounts { counts: results })
 }

@@ -74,24 +74,19 @@ impl std::fmt::Display for TtsModelForInferenceError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       TtsModelForInferenceError::ModelDeleted => write!(f, "ModelDeleted"),
-      TtsModelForInferenceError::DatabaseError { reason} =>
-        write!(f, "Database error: {:?}", reason),
+      TtsModelForInferenceError::DatabaseError { reason } => write!(f, "Database error: {:?}", reason),
     }
   }
 }
 
 impl std::error::Error for TtsModelForInferenceError {}
 
-pub async fn get_tts_model_for_inference_improved(
-  pool: &MySqlPool,
-  model_token: &str
-) -> Result<Option<TtsModelForInferenceRecord>, TtsModelForInferenceError>
-{
+pub async fn get_tts_model_for_inference_improved(pool: &MySqlPool, model_token: &str) -> Result<Option<TtsModelForInferenceRecord>, TtsModelForInferenceError> {
   // NB: Lookup failure is Err(RowNotFound).
   // NB: Since this is publicly exposed, we don't query sensitive data.
   let maybe_model = sqlx::query_as!(
-      InternalTtsModelForInferenceRecordRaw,
-        r#"
+    InternalTtsModelForInferenceRecordRaw,
+    r#"
 SELECT
     tts.token as `model_token: tokens::tokens::tts_models::TtsModelToken`,
     tts.tts_model_type as `tts_model_type: enums::by_table::tts_models::tts_model_type::TtsModelType`,
@@ -127,26 +122,22 @@ LEFT OUTER JOIN vocoder_models AS vocoder
 
 WHERE tts.token = ?
         "#,
-      &model_token
-    )
-      .fetch_one(pool)
-      .await; // TODO: This will return error if it doesn't exist
+    &model_token
+  )
+  .fetch_one(pool)
+  .await; // TODO: This will return error if it doesn't exist
 
-  let model : InternalTtsModelForInferenceRecordRaw = match maybe_model {
+  let model: InternalTtsModelForInferenceRecordRaw = match maybe_model {
     Ok(model) => model,
-    Err(err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          return Ok(None);
-        },
-        _ => {
-          warn!("tts model query error: {:?}", err);
-          return Err(TtsModelForInferenceError::DatabaseError {
-            reason: format!("Mysql error: {:?}", err)
-          });
-        }
-      }
-    }
+    Err(err) => match err {
+      sqlx::Error::RowNotFound => {
+        return Ok(None);
+      },
+      _ => {
+        warn!("tts model query error: {:?}", err);
+        return Err(TtsModelForInferenceError::DatabaseError { reason: format!("Mysql error: {:?}", err) });
+      },
+    },
   };
 
   if model.mod_deleted_at.is_some() || model.user_deleted_at.is_some() {
@@ -163,15 +154,7 @@ WHERE tts.token = ?
       // NB: We're relying on a single field's presence to infer that the others vocoder fields
       // are also there. If for some reason they aren't, fail open.
       None => None,
-      Some(vocoder_token) => Some(CustomVocoderFields {
-        vocoder_token,
-        vocoder_type: model.maybe_custom_vocoder_type.ok_or(
-          TtsModelForInferenceError::DatabaseError { reason: "custom_vocoder_type field error".to_string() })?,
-        vocoder_title: model.maybe_custom_vocoder_title.ok_or(
-          TtsModelForInferenceError::DatabaseError { reason: "custom_vocoder_title field error".to_string() })?,
-        vocoder_private_bucket_hash: model.maybe_custom_vocoder_private_bucket_hash.ok_or(
-          TtsModelForInferenceError::DatabaseError { reason: "vocoder_private_bucket_hash field error".to_string() })?,
-      })
+      Some(vocoder_token) => Some(CustomVocoderFields { vocoder_token, vocoder_type: model.maybe_custom_vocoder_type.ok_or(TtsModelForInferenceError::DatabaseError { reason: "custom_vocoder_type field error".to_string() })?, vocoder_title: model.maybe_custom_vocoder_title.ok_or(TtsModelForInferenceError::DatabaseError { reason: "custom_vocoder_title field error".to_string() })?, vocoder_private_bucket_hash: model.maybe_custom_vocoder_private_bucket_hash.ok_or(TtsModelForInferenceError::DatabaseError { reason: "vocoder_private_bucket_hash field error".to_string() })? }),
     },
     maybe_default_pretrained_vocoder: model.maybe_default_pretrained_vocoder,
     creator_user_token: model.creator_user_token,
@@ -215,4 +198,3 @@ struct InternalTtsModelForInferenceRecordRaw {
   mod_deleted_at: Option<DateTime<Utc>>,
   user_deleted_at: Option<DateTime<Utc>>,
 }
-

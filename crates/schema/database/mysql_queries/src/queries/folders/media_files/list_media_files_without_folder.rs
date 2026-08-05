@@ -37,9 +37,7 @@ where
 /// The NOT EXISTS probe is a point lookup on
 /// `folder_media_files.index_media_file_token` plus a primary-key lookup
 /// on `folders` for the soft-delete check — cheap per candidate row.
-pub async fn list_media_files_without_folder<'e, 'c: 'e, E>(
-  args: ListMediaFilesWithoutFolderArgs<'e, 'c, E>,
-) -> Result<Vec<MediaFileListRow>, sqlx::Error>
+pub async fn list_media_files_without_folder<'e, 'c: 'e, E>(args: ListMediaFilesWithoutFolderArgs<'e, 'c, E>) -> Result<Vec<MediaFileListRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -50,23 +48,8 @@ where
   let limit = args.limit as i64;
 
   match args.maybe_filter_media_class {
-    Some(media_class) => {
-      select_page_with_class_filter(
-        args.owner_user_token,
-        media_class,
-        cursor_id,
-        limit,
-        args.mysql_executor,
-      ).await
-    }
-    None => {
-      select_page_all_classes(
-        args.owner_user_token,
-        cursor_id,
-        limit,
-        args.mysql_executor,
-      ).await
-    }
+    Some(media_class) => select_page_with_class_filter(args.owner_user_token, media_class, cursor_id, limit, args.mysql_executor).await,
+    None => select_page_all_classes(args.owner_user_token, cursor_id, limit, args.mysql_executor).await,
   }
 }
 
@@ -74,12 +57,7 @@ where
 // check them at compile time (no QueryBuilder). Keep the SELECT lists and
 // predicates in sync; they differ only in the `media_class = ?` filter.
 
-async fn select_page_all_classes<'e, 'c: 'e, E>(
-  owner_user_token: &'e UserToken,
-  cursor_id: u64,
-  limit: i64,
-  mysql_executor: E,
-) -> Result<Vec<MediaFileListRow>, sqlx::Error>
+async fn select_page_all_classes<'e, 'c: 'e, E>(owner_user_token: &'e UserToken, cursor_id: u64, limit: i64, mysql_executor: E) -> Result<Vec<MediaFileListRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -139,17 +117,11 @@ LIMIT ?
     cursor_id,
     limit,
   )
-    .fetch_all(mysql_executor)
-    .await
+  .fetch_all(mysql_executor)
+  .await
 }
 
-async fn select_page_with_class_filter<'e, 'c: 'e, E>(
-  owner_user_token: &'e UserToken,
-  media_class: MediaFileClass,
-  cursor_id: u64,
-  limit: i64,
-  mysql_executor: E,
-) -> Result<Vec<MediaFileListRow>, sqlx::Error>
+async fn select_page_with_class_filter<'e, 'c: 'e, E>(owner_user_token: &'e UserToken, media_class: MediaFileClass, cursor_id: u64, limit: i64, mysql_executor: E) -> Result<Vec<MediaFileListRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -211,6 +183,6 @@ LIMIT ?
     cursor_id,
     limit,
   )
-    .fetch_all(mysql_executor)
-    .await
+  .fetch_all(mysql_executor)
+  .await
 }

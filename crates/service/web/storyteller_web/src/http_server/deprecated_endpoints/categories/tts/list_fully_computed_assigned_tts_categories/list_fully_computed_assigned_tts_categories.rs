@@ -39,15 +39,11 @@ pub struct ModelTokensByCategoryToken {
 
 // =============== Handler ===============
 
-pub async fn list_fully_computed_assigned_tts_categories_handler(
-  _http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, ListFullyComputedAssignedTtsCategoriesError>
-{
-  let maybe_category_assignments = server_state.caches.ephemeral.tts_model_category_assignments.grab_copy_without_bump_if_unexpired()
-      .map_err(|e| {
-        error!("Error consulting cache: {:?}", e);
-        ListFullyComputedAssignedTtsCategoriesError::ServerError
-      })?;
+pub async fn list_fully_computed_assigned_tts_categories_handler(_http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, ListFullyComputedAssignedTtsCategoriesError> {
+  let maybe_category_assignments = server_state.caches.ephemeral.tts_model_category_assignments.grab_copy_without_bump_if_unexpired().map_err(|e| {
+    error!("Error consulting cache: {:?}", e);
+    ListFullyComputedAssignedTtsCategoriesError::ServerError
+  })?;
 
   let category_assignments = match maybe_category_assignments {
     Some(category_assignments) => {
@@ -55,30 +51,20 @@ pub async fn list_fully_computed_assigned_tts_categories_handler(
       category_assignments
     },
     None => {
-      let category_assignments = query_and_construct_payload(
-        &server_state.caches.ephemeral.database_tts_category_list,
-        &server_state.mysql_pool)
-          .await?;
+      let category_assignments = query_and_construct_payload(&server_state.caches.ephemeral.database_tts_category_list, &server_state.mysql_pool).await?;
 
-      server_state.caches.ephemeral.tts_model_category_assignments.store_copy(&category_assignments)
-          .map_err(|e| {
-            error!("Error storing cache: {:?}", e);
-            ListFullyComputedAssignedTtsCategoriesError::ServerError
-          })?;
+      server_state.caches.ephemeral.tts_model_category_assignments.store_copy(&category_assignments).map_err(|e| {
+        error!("Error storing cache: {:?}", e);
+        ListFullyComputedAssignedTtsCategoriesError::ServerError
+      })?;
 
       category_assignments
     },
   };
 
-  let response = ListFullyComputedAssignedTtsCategoriesResponse {
-    success: true,
-    category_token_to_tts_model_tokens: category_assignments,
-  };
+  let response = ListFullyComputedAssignedTtsCategoriesResponse { success: true, category_token_to_tts_model_tokens: category_assignments };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|_e| ListFullyComputedAssignedTtsCategoriesError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|_e| ListFullyComputedAssignedTtsCategoriesError::ServerError)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

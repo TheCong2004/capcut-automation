@@ -89,21 +89,15 @@ struct RawUserProfileRecord {
 }
 
 //#[deprecated = "Use the PoolConnection method"]
-pub async fn get_user_profile_by_token(
-  token: &UserToken,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<UserProfileResult>> {
+pub async fn get_user_profile_by_token(token: &UserToken, mysql_pool: &MySqlPool) -> AnyhowResult<Option<UserProfileResult>> {
   let mut connection = mysql_pool.acquire().await?;
   get_user_profile_by_token_from_connection(token, &mut connection).await
 }
 
-pub async fn get_user_profile_by_token_from_connection<'a>(
-  token: &UserToken,
-  connection: &'a mut PoolConnection<MySql>
-) -> AnyhowResult<Option<UserProfileResult>> {
+pub async fn get_user_profile_by_token_from_connection<'a>(token: &UserToken, connection: &'a mut PoolConnection<MySql>) -> AnyhowResult<Option<UserProfileResult>> {
   let maybe_profile_record = sqlx::query_as!(
-      RawUserProfileRecord,
-        r#"
+    RawUserProfileRecord,
+    r#"
 SELECT
     users.token as `user_token: tokens::tokens::users::UserToken`,
     username,
@@ -133,24 +127,22 @@ WHERE
     AND users.user_deleted_at IS NULL
     AND users.mod_deleted_at IS NULL
         "#,
-        token,
-    )
-      .fetch_one(&mut **connection)
-      .await;
+    token,
+  )
+  .fetch_one(&mut **connection)
+  .await;
 
-  let profile_record : RawUserProfileRecord = match maybe_profile_record {
+  let profile_record: RawUserProfileRecord = match maybe_profile_record {
     Ok(profile_record) => profile_record,
     Err(err) => {
       return match err {
-        sqlx::Error::RowNotFound => {
-          Ok(None)
-        },
+        sqlx::Error::RowNotFound => Ok(None),
         _ => {
           warn!("User profile query error: {:?}", err);
           Err(anyhow!("query error"))
-        }
+        },
       }
-    }
+    },
   };
 
   Ok(Some(UserProfileResult {
@@ -174,10 +166,6 @@ WHERE
     preferred_w2l_result_visibility: profile_record.preferred_w2l_result_visibility,
     maybe_feature_flags: profile_record.maybe_feature_flags,
     created_at: profile_record.created_at,
-    maybe_moderator_fields: Some(UserProfileModeratorFields {
-      is_banned: i8_to_bool(profile_record.is_banned),
-      maybe_mod_comments: profile_record.maybe_mod_comments,
-      maybe_mod_user_token: profile_record.maybe_mod_user_token,
-    })
+    maybe_moderator_fields: Some(UserProfileModeratorFields { is_banned: i8_to_bool(profile_record.is_banned), maybe_mod_comments: profile_record.maybe_mod_comments, maybe_mod_user_token: profile_record.maybe_mod_user_token }),
   }))
 }

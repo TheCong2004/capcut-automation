@@ -9,15 +9,8 @@ pub struct UsernameSet {
 
 impl UsernameSet {
   pub fn from_comma_separated(comma_separated_list: &str) -> Self {
-    let usernames = comma_separated_list.split(",")
-        .into_iter()
-        .map(|item| item.trim())
-        .map(|item| item.to_lowercase())
-        .filter(|item| !item.is_empty())
-        .collect::<HashSet<_>>();
-    Self  {
-      usernames
-    }
+    let usernames = comma_separated_list.split(",").into_iter().map(|item| item.trim()).map(|item| item.to_lowercase()).filter(|item| !item.is_empty()).collect::<HashSet<_>>();
+    Self { usernames }
   }
 
   pub fn len(&self) -> usize {

@@ -192,8 +192,7 @@ impl FormatReader for AdtsReader {
                 // known, the seek cannot be completed.
                 if let Some(sample_rate) = self.tracks[0].codec_params.sample_rate {
                     TimeBase::new(1, sample_rate).calc_timestamp(time)
-                }
-                else {
+                } else {
                     return seek_error(SeekErrorKind::Unseekable);
                 }
             }
@@ -213,8 +212,7 @@ impl FormatReader for AdtsReader {
                 if seeked_pos != self.first_frame_pos {
                     return seek_error(SeekErrorKind::Unseekable);
                 }
-            }
-            else {
+            } else {
                 return seek_error(SeekErrorKind::ForwardOnly);
             }
 

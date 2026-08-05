@@ -28,7 +28,6 @@ pub struct F5TTSInferenceCommand {
 
   /// If the execution should be ended after a certain point.
   maybe_execution_timeout: Option<Duration>,
-
 }
 #[derive(Clone)]
 pub enum ExecutableOrCommand {
@@ -54,20 +53,8 @@ pub struct InferenceArgs<'s> {
 }
 
 impl F5TTSInferenceCommand {
-  pub fn new(
-    f5_tts_code_directory: PathBuf,
-    executable_or_command: ExecutableOrCommand,
-    maybe_virtual_env_activation_command: Option<String>,
-    maybe_docker_options: Option<DockerOptions>,
-    maybe_execution_timeout: Option<Duration>,
-  ) -> Self {
-    Self {
-      f5_tts_code_directory,
-      executable_or_command,
-      maybe_virtual_env_activation_command,
-      maybe_docker_options,
-      maybe_execution_timeout,
-    }
+  pub fn new(f5_tts_code_directory: PathBuf, executable_or_command: ExecutableOrCommand, maybe_virtual_env_activation_command: Option<String>, maybe_docker_options: Option<DockerOptions>, maybe_execution_timeout: Option<Duration>) -> Self {
+    Self { f5_tts_code_directory, executable_or_command, maybe_virtual_env_activation_command, maybe_docker_options, maybe_execution_timeout }
   }
 
   pub fn from_env() -> anyhow::Result<Self> {
@@ -86,42 +73,21 @@ impl F5TTSInferenceCommand {
     };
 
     let maybe_virtual_env_activation_command = easyenv::get_env_string_optional("F5_TTS_VENV_ACTIVATION_COMMAND");
-    let maybe_docker_options = easyenv::get_env_string_optional("F5_TTS_DOCKER_OPTIONS")
-    .map(|image_name| {
-      DockerOptions {
-        image_name,
-        maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()),
-        maybe_environment_variables: None,
-        maybe_gpu: Some(DockerGpu::All),
-      }
-    });
+    let maybe_docker_options = easyenv::get_env_string_optional("F5_TTS_DOCKER_OPTIONS").map(|image_name| DockerOptions { image_name, maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()), maybe_environment_variables: None, maybe_gpu: Some(DockerGpu::All) });
     let maybe_execution_timeout = easyenv::get_env_duration_seconds_optional("F5_TTS_EXECUTION_TIMEOUT");
 
-    Ok(Self {
-      f5_tts_code_directory,
-      executable_or_command,
-      maybe_virtual_env_activation_command,
-      maybe_docker_options,
-      maybe_execution_timeout,
-    })
+    Ok(Self { f5_tts_code_directory, executable_or_command, maybe_virtual_env_activation_command, maybe_docker_options, maybe_execution_timeout })
   }
 
-  pub fn execute_inference(
-    &self,
-    args: InferenceArgs,
-  ) -> CommandExitStatus {
+  pub fn execute_inference(&self, args: InferenceArgs) -> CommandExitStatus {
     match self.do_execute_inference(args) {
       Ok(exit_status) => exit_status,
       Err(error) => CommandExitStatus::FailureWithReason { reason: format!("error: {:?}", error) },
     }
   }
 
-  pub fn do_execute_inference(
-    &self,
-    args: InferenceArgs,
-  ) -> anyhow::Result<CommandExitStatus> {
+  pub fn do_execute_inference(&self, args: InferenceArgs) -> anyhow::Result<CommandExitStatus> {
     let mut command = String::new();
-
 
     command.push_str(&format!("cd {}", path_to_string(&self.f5_tts_code_directory)));
 
@@ -137,16 +103,15 @@ impl F5TTSInferenceCommand {
       ExecutableOrCommand::Executable(ref executable) => {
         command.push_str(&path_to_string(executable));
         command.push_str(" infer ");
-      }
+      },
       ExecutableOrCommand::Command(ref cmd) => {
         command.push_str(cmd);
         command.push_str(" ");
-      }
+      },
     }
 
     command.push_str(&format!(" --gen_file {}", path_to_string(args.input_text_file)));
     command.push_str(&format!(" --ref_audio {}", path_to_string(args.reference_audio_path)));
-
 
     //command.push_str(&format!(" --output_path {}", path_to_string(args.output_audio_directory)));
     command.push_str(&format!(" --output_dir {}", path_to_string(args.output_audio_directory)));
@@ -159,11 +124,7 @@ impl F5TTSInferenceCommand {
 
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
     let env_vars = get_filtered_env_vars();
 
@@ -187,7 +148,7 @@ impl F5TTSInferenceCommand {
         let exit_status = p.wait()?;
         info!("Subprocess exit status: {:?}", exit_status);
         Ok(CommandExitStatus::from_exit_status(exit_status))
-      }
+      },
       Some(timeout) => {
         info!("Executing with timeout: {:?}", &timeout);
         let exit_status = p.wait_timeout(timeout)?;
@@ -198,13 +159,13 @@ impl F5TTSInferenceCommand {
             info!("Subprocess didn't end after timeout: {:?}; terminating...", &timeout);
             let _r = p.terminate()?;
             Ok(CommandExitStatus::Timeout)
-          }
+          },
           Some(exit_status) => {
             info!("Subprocess timed wait exit status: {:?}", exit_status);
             Ok(CommandExitStatus::from_exit_status(exit_status))
-          }
+          },
         }
-      }
+      },
     }
   }
 }

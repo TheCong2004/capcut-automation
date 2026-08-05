@@ -53,15 +53,15 @@ pub struct ModelWeightForElasticsearchRecord {
   pub cached_usage_count: u64,
 
   // TTS extensions
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_tts_ietf_language_tag: Option<String>,
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_tts_ietf_primary_language_subtag: Option<String>,
 
   // VC extensions
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_voice_conversion_ietf_language_tag: Option<String>,
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_voice_conversion_ietf_primary_language_subtag: Option<String>,
 
   pub created_at: DateTime<Utc>,
@@ -73,11 +73,9 @@ pub struct ModelWeightForElasticsearchRecord {
   pub database_read_time: DateTime<Utc>,
 }
 
-pub async fn batch_get_model_weights_for_elastic_search_backfill<'e, 'c, E>(
-  mysql_executor: E,
-  tokens: &Vec<ModelWeightToken>,
-) -> AnyhowResult<Vec<ModelWeightForElasticsearchRecord>>
-  where E: 'e + Executor<'c, Database=MySql>
+pub async fn batch_get_model_weights_for_elastic_search_backfill<'e, 'c, E>(mysql_executor: E, tokens: &Vec<ModelWeightToken>) -> AnyhowResult<Vec<ModelWeightForElasticsearchRecord>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   if tokens.is_empty() {
     // NB: We should always eagerly return, but if we don't, the query builder will build an
@@ -85,69 +83,66 @@ pub async fn batch_get_model_weights_for_elastic_search_backfill<'e, 'c, E>(
     return Ok(Vec::new());
   }
 
-  let maybe_models
-      = list_model_weights(mysql_executor, tokens)
-      .await;
+  let maybe_models = list_model_weights(mysql_executor, tokens).await;
 
-  let models : Vec<RawRecord> = match maybe_models {
+  let models: Vec<RawRecord> = match maybe_models {
     Ok(models) => models,
     Err(sqlx::error::Error::RowNotFound) => return Ok(Vec::new()),
     Err(err) => {
       warn!("model weight list query error: {:?}", err);
       return Err(anyhow!("model weight list query error"));
-    }
+    },
   };
 
-  Ok(models.into_iter()
-      .map(|model| {
-        ModelWeightForElasticsearchRecord {
-          id: model.id,
-          token: model.token,
-          title: model.title,
-          weights_type: model.weights_type,
-          weights_category: model.weights_category,
-          maybe_ietf_language_tag: model.maybe_ietf_language_tag,
-          maybe_ietf_primary_language_subtag: model.maybe_ietf_primary_language_subtag,
-          maybe_cover_image_media_file_token: model.maybe_cover_image_media_file_token,
-          maybe_cover_image_public_bucket_hash: model.maybe_cover_image_public_bucket_hash,
-          maybe_cover_image_public_bucket_prefix: model.maybe_cover_image_public_bucket_prefix,
-          maybe_cover_image_public_bucket_extension: model.maybe_cover_image_public_bucket_extension,
-          creator_user_token: model.creator_user_token,
-          creator_username: model.creator_username,
-          creator_display_name: model.creator_display_name,
-          creator_gravatar_hash: model.creator_gravatar_hash,
-          is_featured: i64_to_bool(model.is_featured),
-          maybe_tts_ietf_language_tag: model.maybe_tts_ietf_language_tag,
-          maybe_tts_ietf_primary_language_subtag: model.maybe_tts_ietf_primary_language_subtag,
-          maybe_voice_conversion_ietf_language_tag: model.maybe_vc_ietf_language_tag,
-          maybe_voice_conversion_ietf_primary_language_subtag: model.maybe_vc_ietf_primary_language_subtag,
-          maybe_ratings_positive_count: model.maybe_ratings_positive_count,
-          maybe_ratings_negative_count: model.maybe_ratings_negative_count,
-          maybe_bookmark_count: model.maybe_bookmark_count,
-          cached_usage_count: model.cached_usage_count,
-          creator_set_visibility: model.creator_set_visibility,
-          created_at: model.created_at,
-          updated_at: model.updated_at,
-          user_deleted_at: model.user_deleted_at,
-          mod_deleted_at: model.mod_deleted_at,
-          database_read_time: model.database_read_time.and_utc(),
-        }
+  Ok(
+    models
+      .into_iter()
+      .map(|model| ModelWeightForElasticsearchRecord {
+        id: model.id,
+        token: model.token,
+        title: model.title,
+        weights_type: model.weights_type,
+        weights_category: model.weights_category,
+        maybe_ietf_language_tag: model.maybe_ietf_language_tag,
+        maybe_ietf_primary_language_subtag: model.maybe_ietf_primary_language_subtag,
+        maybe_cover_image_media_file_token: model.maybe_cover_image_media_file_token,
+        maybe_cover_image_public_bucket_hash: model.maybe_cover_image_public_bucket_hash,
+        maybe_cover_image_public_bucket_prefix: model.maybe_cover_image_public_bucket_prefix,
+        maybe_cover_image_public_bucket_extension: model.maybe_cover_image_public_bucket_extension,
+        creator_user_token: model.creator_user_token,
+        creator_username: model.creator_username,
+        creator_display_name: model.creator_display_name,
+        creator_gravatar_hash: model.creator_gravatar_hash,
+        is_featured: i64_to_bool(model.is_featured),
+        maybe_tts_ietf_language_tag: model.maybe_tts_ietf_language_tag,
+        maybe_tts_ietf_primary_language_subtag: model.maybe_tts_ietf_primary_language_subtag,
+        maybe_voice_conversion_ietf_language_tag: model.maybe_vc_ietf_language_tag,
+        maybe_voice_conversion_ietf_primary_language_subtag: model.maybe_vc_ietf_primary_language_subtag,
+        maybe_ratings_positive_count: model.maybe_ratings_positive_count,
+        maybe_ratings_negative_count: model.maybe_ratings_negative_count,
+        maybe_bookmark_count: model.maybe_bookmark_count,
+        cached_usage_count: model.cached_usage_count,
+        creator_set_visibility: model.creator_set_visibility,
+        created_at: model.created_at,
+        updated_at: model.updated_at,
+        user_deleted_at: model.user_deleted_at,
+        mod_deleted_at: model.mod_deleted_at,
+        database_read_time: model.database_read_time.and_utc(),
       })
-      .collect::<Vec<ModelWeightForElasticsearchRecord>>())
+      .collect::<Vec<ModelWeightForElasticsearchRecord>>(),
+  )
 }
 
-async fn list_model_weights<'e, 'c, E>(
-  mysql_executor: E,
-  tokens: &Vec<ModelWeightToken>,
-) -> Result<Vec<RawRecord>, sqlx::Error>
-  where E: 'e + Executor<'c, Database=MySql>
+async fn list_model_weights<'e, 'c, E>(mysql_executor: E, tokens: &Vec<ModelWeightToken>) -> Result<Vec<RawRecord>, sqlx::Error>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   if tokens.len() == 0 {
     return Ok(Vec::new());
   }
 
   let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
-        r#"
+    r#"
 SELECT
     w.id,
     w.token,
@@ -213,7 +208,8 @@ LEFT OUTER JOIN featured_items
     AND featured_items.deleted_at IS NULL
 
 WHERE w.token IN (
-        "#);
+        "#,
+  );
 
   // NB: Syntax will be wrong if list has zero length
   let mut separated = query_builder.separated(", ");
@@ -271,15 +267,15 @@ struct RawRecord {
   pub cached_usage_count: u64,
 
   // TTS extensions
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_tts_ietf_language_tag: Option<String>,
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_tts_ietf_primary_language_subtag: Option<String>,
 
   // Voice conversion extensions
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_vc_ietf_language_tag: Option<String>,
-  #[deprecated(note="use the fields built into the model_weights table rather than in the join table")]
+  #[deprecated(note = "use the fields built into the model_weights table rather than in the join table")]
   pub maybe_vc_ietf_primary_language_subtag: Option<String>,
 
   pub created_at: DateTime<Utc>,

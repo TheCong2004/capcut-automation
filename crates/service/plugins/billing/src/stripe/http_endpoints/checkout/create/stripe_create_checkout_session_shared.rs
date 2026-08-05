@@ -30,30 +30,25 @@ pub struct CreateStripeCheckoutSessionArgs<'a> {
 
 /// Create a checkout session and return the URL
 /// If anything fails, treat it as a 500 server error.
-pub async fn stripe_create_checkout_session_shared(
-  args: CreateStripeCheckoutSessionArgs<'_>,
-
-) -> Result<String, CreateCheckoutSessionError> {
+pub async fn stripe_create_checkout_session_shared(args: CreateStripeCheckoutSessionArgs<'_>) -> Result<String, CreateCheckoutSessionError> {
   let internal_product_key = match args.maybe_internal_product_key {
     None => return Err(CreateCheckoutSessionError::BadRequest { reason: "no product key supplied".to_string() }),
     Some(internal_product_key) => internal_product_key,
   };
 
-  let stripe_product = args.internal_product_to_stripe_lookup
-      .lookup_stripe_product_from_internal_product_key(args.server_environment, internal_product_key)
-      .map_err(|err| {
-        error!("Error looking up product: {:?}", err);
-        CreateCheckoutSessionError::ServerError // NB: This was probably *our* fault.
-      })?
-      .ok_or(CreateCheckoutSessionError::PlanNotFound)?; // Non-existing product
+  let stripe_product = args
+    .internal_product_to_stripe_lookup
+    .lookup_stripe_product_from_internal_product_key(args.server_environment, internal_product_key)
+    .map_err(|err| {
+      error!("Error looking up product: {:?}", err);
+      CreateCheckoutSessionError::ServerError // NB: This was probably *our* fault.
+    })?
+    .ok_or(CreateCheckoutSessionError::PlanNotFound)?; // Non-existing product
 
-  let maybe_user_metadata = args.internal_user_lookup
-      .lookup_user_from_http_request(args.http_request)
-      .await
-      .map_err(|err| {
-        error!("Error looking up user: {:?}", err);
-        CreateCheckoutSessionError::ServerError // NB: This was probably *our* fault.
-      })?;
+  let maybe_user_metadata = args.internal_user_lookup.lookup_user_from_http_request(args.http_request).await.map_err(|err| {
+    error!("Error looking up user: {:?}", err);
+    CreateCheckoutSessionError::ServerError // NB: This was probably *our* fault.
+  })?;
 
   // NB: Our integration relies on an internal user token being present.
   let user_metadata = match maybe_user_metadata {
@@ -66,19 +61,17 @@ pub async fn stripe_create_checkout_session_shared(
   // TODO: This will not handle a future where we have multiple "namespaces" or can offer users more than one subscription.
   //  It will actively block users from subscribing to two or more websites.
   if !user_metadata.existing_subscription_keys.is_empty() {
-    return Err(CreateCheckoutSessionError::UserAlreadyHasPlan)
+    return Err(CreateCheckoutSessionError::UserAlreadyHasPlan);
   }
 
   let success_url = match &args.stripe_config.checkout.success_url {
     FullUrlOrPath::FullUrl(url) => url.to_string(),
-    FullUrlOrPath::Path(path) => args.url_redirector.frontend_redirect_url_for_path(args.http_request, &path)
-        .map_err(|_e| CreateCheckoutSessionError::ServerError)?,
+    FullUrlOrPath::Path(path) => args.url_redirector.frontend_redirect_url_for_path(args.http_request, &path).map_err(|_e| CreateCheckoutSessionError::ServerError)?,
   };
 
   let cancel_url = match &args.stripe_config.checkout.cancel_url {
     FullUrlOrPath::FullUrl(url) => url.to_string(),
-    FullUrlOrPath::Path(path) => args.url_redirector.frontend_redirect_url_for_path(args.http_request, &path)
-        .map_err(|_e| CreateCheckoutSessionError::ServerError)?,
+    FullUrlOrPath::Path(path) => args.url_redirector.frontend_redirect_url_for_path(args.http_request, &path).map_err(|_e| CreateCheckoutSessionError::ServerError)?,
   };
 
   let checkout_session = {
@@ -139,11 +132,7 @@ pub async fn stripe_create_checkout_session_shared(
       // NB: This metadata attaches to the subscription entity itself.
       // This cannot be used for non-subscription, one-off payments.
       // https://support.stripe.com/questions/using-metadata-with-checkout-sessions
-      params.subscription_data = Some(CreateCheckoutSessionSubscriptionData {
-       metadata: Some(metadata),
-        ..Default::default()
-      });
-
+      params.subscription_data = Some(CreateCheckoutSessionSubscriptionData { metadata: Some(metadata), ..Default::default() });
     } else {
       // Payment mode: Accept one-time payments for cards, iDEAL, and more.
       params.mode = Some(CheckoutSessionMode::Payment);
@@ -151,43 +140,30 @@ pub async fn stripe_create_checkout_session_shared(
       // NB: This metadata attaches to the payment_intent entity itself.
       // This cannot be used for subscriptions.
       // https://support.stripe.com/questions/using-metadata-with-checkout-sessions
-      params.payment_intent_data = Some(CreateCheckoutSessionPaymentIntentData {
-        metadata: Some(metadata.clone()),
-        ..Default::default()
-      });
+      params.payment_intent_data = Some(CreateCheckoutSessionPaymentIntentData { metadata: Some(metadata.clone()), ..Default::default() });
     }
 
     params.automatic_tax = Some(CreateCheckoutSessionAutomaticTax { enabled: true });
 
-    params.line_items = Some(vec![
-      CreateCheckoutSessionLineItems {
-        price: Some(stripe_product.stripe_price_id.to_string()),
-        quantity: Some(1),
-        ..Default::default()
-      }
-    ]);
+    params.line_items = Some(vec![CreateCheckoutSessionLineItems { price: Some(stripe_product.stripe_price_id.to_string()), quantity: Some(1), ..Default::default() }]);
 
     // If we already have a Stripe customer associated with the user account, we'll reuse it.
     if let Some(existing_stripe_customer_id) = user_metadata.maybe_existing_stripe_customer_id.as_deref() {
       match CustomerId::from_str(existing_stripe_customer_id) {
         Ok(customer_id) => {
           params.customer = Some(customer_id);
-        }
+        },
         Err(err) => {
           // NB: Don't block checkout.
-          warn!("Error parsing user's ({}) supposed existing stripe customer id: {:?}",
-            &user_metadata.user_token,
-            err);
-        }
+          warn!("Error parsing user's ({}) supposed existing stripe customer id: {:?}", &user_metadata.user_token, err);
+        },
       }
     }
 
-    CheckoutSession::create(&args.stripe_client, params)
-        .await
-        .map_err(|e| {
-          error!("Error: {:?}", e);
-          CreateCheckoutSessionError::StripeError
-        })?
+    CheckoutSession::create(&args.stripe_client, params).await.map_err(|e| {
+      error!("Error: {:?}", e);
+      CreateCheckoutSessionError::StripeError
+    })?
   };
 
   checkout_session.url.ok_or(CreateCheckoutSessionError::ServerError)

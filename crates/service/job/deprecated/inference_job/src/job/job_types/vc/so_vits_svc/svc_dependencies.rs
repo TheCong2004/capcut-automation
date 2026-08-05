@@ -8,8 +8,6 @@ pub struct SvcDependencies {
 
 impl SvcDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      inference_command: SoVitsSvcInferenceCommand::from_env()?,
-    })
+    Ok(Self { inference_command: SoVitsSvcInferenceCommand::from_env()? })
   }
 }

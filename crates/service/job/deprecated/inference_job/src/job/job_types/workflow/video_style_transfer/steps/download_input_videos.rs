@@ -1,4 +1,3 @@
-
 use anyhow::anyhow;
 use log::{error, info};
 use sqlx::MySqlConnection;
@@ -23,18 +22,14 @@ pub struct DownloadInputVideoArgs<'a> {
   pub remote_cloud_file_client: &'a RemoteCloudFileClient,
 }
 
-pub async fn download_input_videos(
-  mut args: DownloadInputVideoArgs<'_>,
-) -> Result<VideoPathing, ProcessSingleJobError> {
+pub async fn download_input_videos(mut args: DownloadInputVideoArgs<'_>) -> Result<VideoPathing, ProcessSingleJobError> {
   let video_downloads = download_primary_video(&mut args).await?;
   let video_downloads = maybe_download_secondary_videos(video_downloads, &mut args).await?;
   Ok(video_downloads)
 }
 
 // TODO: Consolidate primary video download with secondary download logic.
-async fn download_primary_video(
-  args: &mut DownloadInputVideoArgs<'_>,
-) -> Result<VideoPathing, ProcessSingleJobError> {
+async fn download_primary_video(args: &mut DownloadInputVideoArgs<'_>) -> Result<VideoPathing, ProcessSingleJobError> {
   let input_media_file_token = match args.job_args.maybe_input_file {
     None => return Err(ProcessSingleJobError::InvalidJob(anyhow!("No primary input video file provided"))),
     Some(token) => token.clone(),
@@ -42,11 +37,7 @@ async fn download_primary_video(
 
   info!("Querying primary input media file by token: {:?} ...", &input_media_file_token);
 
-  let mut input_media_file =  get_media_file_with_transactor(
-    &input_media_file_token,
-    false,
-    Transactor::for_connection(args.mysql_connection),
-  ).await?.ok_or_else(|| {
+  let mut input_media_file = get_media_file_with_transactor(&input_media_file_token, false, Transactor::for_connection(args.mysql_connection)).await?.ok_or_else(|| {
     error!("primary input media_file not found: {:?}", &input_media_file_token);
     ProcessSingleJobError::Other(anyhow!("primary input media_file not found: {:?}", &input_media_file_token))
   })?;
@@ -59,21 +50,19 @@ async fn download_primary_video(
     // TODO(bt,2024-05-14): Perhaps fail open and use the first media file if the original
     //  isn't found?
     info!("Looking up original style transfer source media file...");
-    input_media_file =  get_media_file_with_transactor(
+    input_media_file = get_media_file_with_transactor(
       &source_media_file_token,
       true, // NB: In case the original was deleted, allow this to continue.
       Transactor::for_connection(args.mysql_connection),
-    ).await?.ok_or_else(|| {
+    )
+    .await?
+    .ok_or_else(|| {
       error!("source input media_file not found: {:?}", &input_media_file_token);
-      ProcessSingleJobError::Other(anyhow!("source input media_file not found: {:?}",
-        &input_media_file_token))
+      ProcessSingleJobError::Other(anyhow!("source input media_file not found: {:?}", &input_media_file_token))
     })?;
   }
 
-  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-    &input_media_file.public_bucket_directory_hash,
-    input_media_file.maybe_public_bucket_prefix.as_deref(),
-    input_media_file.maybe_public_bucket_extension.as_deref());
+  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&input_media_file.public_bucket_directory_hash, input_media_file.maybe_public_bucket_prefix.as_deref(), input_media_file.maybe_public_bucket_extension.as_deref());
 
   info!("Primary input media file cloud bucket path: {:?}", media_file_bucket_path.get_full_object_path_str());
 
@@ -83,10 +72,7 @@ async fn download_primary_video(
 
   info!("Downloading primary input file to {:?}", download_path);
 
-  args.remote_cloud_file_client.download_media_file(
-    &media_file_bucket_path,
-    path_to_string(&download_path)
-  ).await?;
+  args.remote_cloud_file_client.download_media_file(&media_file_bucket_path, path_to_string(&download_path)).await?;
 
   info!("Downloaded primary input video!");
 
@@ -94,13 +80,7 @@ async fn download_primary_video(
   //  The upstream shouldn't be telling us what to do about this at all.
   let job_output_path = args.job_args.output_path;
 
-  Ok(VideoPathing {
-    primary_video: PrimaryInputVideoAndPaths::new(
-      input_media_file, &args.comfy_dirs, job_output_path),
-    maybe_depth: None,
-    maybe_normal: None,
-    maybe_outline: None,
-  })
+  Ok(VideoPathing { primary_video: PrimaryInputVideoAndPaths::new(input_media_file, &args.comfy_dirs, job_output_path), maybe_depth: None, maybe_normal: None, maybe_outline: None })
 }
 
 #[derive(Clone, Copy)]
@@ -110,11 +90,8 @@ enum SecondaryVideoType {
   Outline,
 }
 
-async fn maybe_download_secondary_videos(
-  mut video_downloads: VideoPathing,
-  args: &mut DownloadInputVideoArgs<'_>,
-) -> Result<VideoPathing, ProcessSingleJobError> {
-  const CAN_SEE_DELETED : bool = true; // We don't need to care about the deleted flag.
+async fn maybe_download_secondary_videos(mut video_downloads: VideoPathing, args: &mut DownloadInputVideoArgs<'_>) -> Result<VideoPathing, ProcessSingleJobError> {
+  const CAN_SEE_DELETED: bool = true; // We don't need to care about the deleted flag.
 
   let mut tokens = Vec::with_capacity(3);
 
@@ -134,40 +111,24 @@ async fn maybe_download_secondary_videos(
     return Ok(video_downloads);
   }
 
-  let results = batch_get_media_files_by_tokens_with_transactor(
-    Transactor::for_connection(args.mysql_connection),
-    &tokens,
-    CAN_SEE_DELETED)
-      .await
-      .map_err(|err| {
-        ProcessSingleJobError::Other(anyhow!("error querying secondary videos: {:?}", &err))
-      })?;
+  let results = batch_get_media_files_by_tokens_with_transactor(Transactor::for_connection(args.mysql_connection), &tokens, CAN_SEE_DELETED).await.map_err(|err| ProcessSingleJobError::Other(anyhow!("error querying secondary videos: {:?}", &err)))?;
 
   if let Some(token) = args.job_args.maybe_depth_input_file {
-    video_downloads.maybe_depth =
-        download_secondary_video(SecondaryVideoType::Depth, token, &results, args).await?;
+    video_downloads.maybe_depth = download_secondary_video(SecondaryVideoType::Depth, token, &results, args).await?;
   }
 
   if let Some(token) = args.job_args.maybe_normal_input_file {
-    video_downloads.maybe_normal =
-        download_secondary_video(SecondaryVideoType::Normal, token, &results, args).await?;
+    video_downloads.maybe_normal = download_secondary_video(SecondaryVideoType::Normal, token, &results, args).await?;
   }
 
   if let Some(token) = args.job_args.maybe_outline_input_file {
-    video_downloads.maybe_outline =
-        download_secondary_video(SecondaryVideoType::Outline, token, &results, args).await?;
+    video_downloads.maybe_outline = download_secondary_video(SecondaryVideoType::Outline, token, &results, args).await?;
   }
 
   Ok(video_downloads)
 }
 
-async fn download_secondary_video(
-  secondary_video_type: SecondaryVideoType,
-  desired_token: &MediaFileToken,
-  all_video_media_files: &[MediaFilesByTokensRecord],
-  args: &DownloadInputVideoArgs<'_>
-) -> Result<Option<SecondaryInputVideoAndPaths>, ProcessSingleJobError> {
-
+async fn download_secondary_video(secondary_video_type: SecondaryVideoType, desired_token: &MediaFileToken, all_video_media_files: &[MediaFilesByTokensRecord], args: &DownloadInputVideoArgs<'_>) -> Result<Option<SecondaryInputVideoAndPaths>, ProcessSingleJobError> {
   let file_description = match secondary_video_type {
     SecondaryVideoType::Depth => "depth video",
     SecondaryVideoType::Normal => "normal video",
@@ -180,36 +141,23 @@ async fn download_secondary_video(
     SecondaryVideoType::Outline => args.comfy_dirs.comfy_input_dir.join("outline_download.mp4"),
   };
 
-  let maybe_media_file = all_video_media_files
-      .iter()
-      .find(|media_file| media_file.token.eq(desired_token));
+  let maybe_media_file = all_video_media_files.iter().find(|media_file| media_file.token.eq(desired_token));
 
   let media_file = match maybe_media_file {
     Some(media_file) => media_file,
     None => {
       error!("secondary input media_file '{}' not found: {:?}", file_description, desired_token);
       return Ok(None);
-    }
+    },
   };
 
-  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-    &media_file.public_bucket_directory_hash,
-    media_file.maybe_public_bucket_prefix.as_deref(),
-    media_file.maybe_public_bucket_extension.as_deref());
+  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&media_file.public_bucket_directory_hash, media_file.maybe_public_bucket_prefix.as_deref(), media_file.maybe_public_bucket_extension.as_deref());
 
-  info!("Media file '{}' cloud bucket path: {:?}",file_description,
-    media_file_bucket_path.get_full_object_path_str());
+  info!("Media file '{}' cloud bucket path: {:?}", file_description, media_file_bucket_path.get_full_object_path_str());
 
   info!("Downloading '{}' media file to {:?}", file_description, download_path);
 
-  args.remote_cloud_file_client.download_media_file(
-    &media_file_bucket_path,
-    path_to_string(&download_path)
-  ).await?;
+  args.remote_cloud_file_client.download_media_file(&media_file_bucket_path, path_to_string(&download_path)).await?;
 
-  Ok(Some(SecondaryInputVideoAndPaths {
-    record: media_file.clone(),
-    original_download_path: download_path,
-    maybe_processed_path: None,
-  }))
+  Ok(Some(SecondaryInputVideoAndPaths { record: media_file.clone(), original_download_path: download_path, maybe_processed_path: None }))
 }

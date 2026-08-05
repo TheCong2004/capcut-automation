@@ -17,7 +17,7 @@ pub struct SyntheticIdRecord {
   pub next_id: i64,
 }
 
-pub struct Args <'a> {
+pub struct Args<'a> {
   pub uuid_idempotency_token: &'a str,
 
   pub media_type: MediaUploadType,
@@ -45,14 +45,13 @@ pub struct Args <'a> {
 }
 
 pub async fn insert_media_upload(args: Args<'_>) -> AnyhowResult<(MediaUploadToken, u64)> {
-
-  let mut maybe_creator_synthetic_id : Option<u64> = None;
+  let mut maybe_creator_synthetic_id: Option<u64> = None;
 
   let mut transaction = args.mysql_pool.begin().await?;
 
   if let Some(creator_user_token) = args.maybe_creator_user_token.as_deref() {
     let query_result = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO media_upload_synthetic_ids
 SET
   user_token = ?,
@@ -64,20 +63,20 @@ ON DUPLICATE KEY UPDATE
       creator_user_token,
       creator_user_token
     )
-        .execute(&mut *transaction)
-        .await;
+    .execute(&mut *transaction)
+    .await;
 
     match query_result {
       Ok(_) => {},
       Err(err) => {
         //transaction.rollback().await?;
         warn!("Transaction failure: {:?}", err);
-      }
+      },
     }
 
     let query_result = sqlx::query_as!(
-    SyntheticIdRecord,
-        r#"
+      SyntheticIdRecord,
+      r#"
 SELECT
   next_id
 FROM
@@ -88,16 +87,16 @@ LIMIT 1
         "#,
       creator_user_token,
     )
-        .fetch_one(&mut *transaction)
-        .await;
+    .fetch_one(&mut *transaction)
+    .await;
 
-    let record : SyntheticIdRecord = match query_result {
+    let record: SyntheticIdRecord = match query_result {
       Ok(record) => record,
       Err(err) => {
         warn!("Transaction failure: {:?}", err);
         transaction.rollback().await?;
         return Err(anyhow!("Transaction failure: {:?}", err));
-      }
+      },
     };
 
     let next_id = record.next_id as u64;
@@ -112,7 +111,7 @@ LIMIT 1
       .transpose()?;
 
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO media_uploads
 SET
   token = ?,
@@ -142,37 +141,31 @@ SET
   creator_set_visibility = ?
 
         "#,
-        media_token.as_str(),
-        args.uuid_idempotency_token,
+    media_token.as_str(),
+    args.uuid_idempotency_token,
+    args.media_type,
+    args.media_source,
+    args.maybe_original_filename,
+    args.original_file_size_bytes,
+    args.maybe_original_duration_millis.unwrap_or(0),
+    args.maybe_original_mime_type,
+    args.maybe_original_audio_encoding,
+    args.maybe_original_video_encoding,
+    args.maybe_original_frame_width,
+    args.maybe_original_frame_height,
+    args.checksum_sha2,
+    args.public_upload_path.get_object_hash(),
+    maybe_extra_file_modification_info,
+    args.maybe_creator_user_token,
+    maybe_creator_synthetic_id,
+    args.maybe_creator_anonymous_visitor_token,
+    args.creator_ip_address,
+    args.creator_set_visibility.to_str(),
+  );
 
-        args.media_type,
-        args.media_source,
+  let query_result = query.execute(&mut *transaction).await;
 
-        args.maybe_original_filename,
-        args.original_file_size_bytes,
-        args.maybe_original_duration_millis.unwrap_or(0),
-        args.maybe_original_mime_type,
-        args.maybe_original_audio_encoding,
-        args.maybe_original_video_encoding,
-        args.maybe_original_frame_width,
-        args.maybe_original_frame_height,
-        args.checksum_sha2,
-
-        args.public_upload_path.get_object_hash(),
-
-        maybe_extra_file_modification_info,
-
-        args.maybe_creator_user_token,
-        maybe_creator_synthetic_id,
-        args.maybe_creator_anonymous_visitor_token,
-        args.creator_ip_address,
-        args.creator_set_visibility.to_str(),
-    );
-
-  let query_result = query.execute(&mut *transaction)
-      .await;
-
-  let result_tuple  = match query_result {
+  let result_tuple = match query_result {
     Ok(res) => (media_token, res.last_insert_id()),
     Err(err) => return Err(anyhow!("error inserting new media upload: {:?}", err)),
   };

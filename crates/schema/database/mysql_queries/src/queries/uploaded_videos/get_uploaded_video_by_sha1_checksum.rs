@@ -19,9 +19,7 @@ where
 
 /// Look up an `uploaded_videos` record by its `sha1_checksum`. `Ok(None)` if no
 /// row matches. Useful for de-duplicating re-uploads of the same bytes.
-pub async fn get_uploaded_video_by_sha1_checksum<'e, 'c: 'e, E>(
-  args: GetUploadedVideoBySha1ChecksumArgs<'e, 'c, E>,
-) -> Result<Option<UploadedVideoRow>, sqlx::Error>
+pub async fn get_uploaded_video_by_sha1_checksum<'e, 'c: 'e, E>(args: GetUploadedVideoBySha1ChecksumArgs<'e, 'c, E>) -> Result<Option<UploadedVideoRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -47,22 +45,8 @@ LIMIT 1
     "#,
     args.sha1_checksum,
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|r| UploadedVideoRow {
-    token: r.token,
-    sha1_checksum: r.sha1_checksum,
-    filesize_bytes: r.filesize_bytes,
-    maybe_width: r.maybe_width,
-    maybe_height: r.maybe_height,
-    maybe_resolution: r.maybe_resolution,
-    maybe_detected_model_family: r.maybe_detected_model_family,
-    maybe_detected_model_type: r.maybe_detected_model_type,
-    maybe_report: r.maybe_report,
-    upload_ip_address: r.upload_ip_address,
-    maybe_updated_ip_address: r.maybe_updated_ip_address,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-  }))
+  Ok(result.map(|r| UploadedVideoRow { token: r.token, sha1_checksum: r.sha1_checksum, filesize_bytes: r.filesize_bytes, maybe_width: r.maybe_width, maybe_height: r.maybe_height, maybe_resolution: r.maybe_resolution, maybe_detected_model_family: r.maybe_detected_model_family, maybe_detected_model_type: r.maybe_detected_model_type, maybe_report: r.maybe_report, upload_ip_address: r.upload_ip_address, maybe_updated_ip_address: r.maybe_updated_ip_address, created_at: r.created_at, updated_at: r.updated_at }))
 }

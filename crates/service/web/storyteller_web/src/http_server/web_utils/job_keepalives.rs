@@ -29,7 +29,7 @@ pub fn write_job_keepalives(redis_pool: &Pool<Client>, job_tokens: &[&str]) {
       // NB: Failing open can kill keepalive-required jobs if Redis is down for a while.
       error!("redis pool error writing job keepalives: {:?}", err);
       return;
-    }
+    },
   };
 
   let mut pipe = redis::pipe();

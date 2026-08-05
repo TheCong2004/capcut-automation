@@ -14,7 +14,6 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
@@ -30,7 +29,7 @@ pub use log::trace;
 pub use log::warn;
 
 /// Name of the environment variable Rust's env logger uses
-pub const ENV_RUST_LOG : &str = "RUST_LOG";
+pub const ENV_RUST_LOG: &str = "RUST_LOG";
 
 /// The default logging level
 pub const DEFAULT_LOG_LEVEL: &str = "info";
@@ -38,7 +37,7 @@ pub const DEFAULT_LOG_LEVEL: &str = "info";
 /// A useful logging level
 /// NB: `sqlx::query` is spammy and dumps all queries as "info"-level log lines.
 /// NB: `hyper::proto::h1::io` is incredibly spammy and logs every chunk of bytes in very large files being downloaded.
-pub const TYPICAL_LOG_LEVEL : &str = concat!(
+pub const TYPICAL_LOG_LEVEL: &str = concat!(
   "debug,",
   "actix_web=info,",
   "sqlx::query=warn,",
@@ -57,14 +56,9 @@ pub const TYPICAL_LOG_LEVEL : &str = concat!(
 /// `"tokio_reactor=warn,hyper=info,debug"`. You can read more in the `log` and `env_logger` crate
 /// docs.
 pub fn init_env_logger(default_if_absent: Option<&str>) {
-  if env::var(ENV_RUST_LOG)
-      .as_ref()
-      .ok()
-      .is_none()
-  {
+  if env::var(ENV_RUST_LOG).as_ref().ok().is_none() {
     let default_log_level = default_if_absent.unwrap_or(DEFAULT_LOG_LEVEL);
-    println!("Setting default logging level to \"{}\", override with env var {}.",
-             default_log_level, ENV_RUST_LOG);
+    println!("Setting default logging level to \"{}\", override with env var {}.", default_log_level, ENV_RUST_LOG);
     env::set_var(ENV_RUST_LOG, default_log_level);
   }
 
@@ -73,32 +67,16 @@ pub fn init_env_logger(default_if_absent: Option<&str>) {
   // the `TraceIdMiddleware` in storyteller-web). Outside of a request scope
   // the trace segment is simply omitted.
   env_logger::Builder::from_env(env_logger::Env::default())
-      .format(|buf, record| {
-        use std::io::Write;
+    .format(|buf, record| {
+      use std::io::Write;
 
-        let timestamp = buf.timestamp();
-        let level_style = buf.default_level_style(record.level());
+      let timestamp = buf.timestamp();
+      let level_style = buf.default_level_style(record.level());
 
-        match trace_id::current_trace_id() {
-          Some(trace) => writeln!(
-            buf,
-            "[{} {level_style}{}{level_style:#} {} {}] {}",
-            timestamp,
-            record.level(),
-            record.target(),
-            trace,
-            record.args(),
-          ),
-          None => writeln!(
-            buf,
-            "[{} {level_style}{}{level_style:#} {}] {}",
-            timestamp,
-            record.level(),
-            record.target(),
-            record.args(),
-          ),
-        }
-      })
-      .init();
+      match trace_id::current_trace_id() {
+        Some(trace) => writeln!(buf, "[{} {level_style}{}{level_style:#} {} {}] {}", timestamp, record.level(), record.target(), trace, record.args(),),
+        None => writeln!(buf, "[{} {level_style}{}{level_style:#} {}] {}", timestamp, record.level(), record.target(), record.args(),),
+      }
+    })
+    .init();
 }
-

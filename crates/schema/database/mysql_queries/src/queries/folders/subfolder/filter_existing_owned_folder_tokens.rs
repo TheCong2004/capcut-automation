@@ -21,9 +21,7 @@ where
 ///
 /// Uses runtime `QueryBuilder` because the IN-list size is dynamic and the
 /// macro form can't express that.
-pub async fn filter_existing_owned_folder_tokens<'e, 'c: 'e, E>(
-  args: FilterExistingOwnedFolderTokensArgs<'e, 'c, E>,
-) -> Result<Vec<FolderToken>, sqlx::Error>
+pub async fn filter_existing_owned_folder_tokens<'e, 'c: 'e, E>(args: FilterExistingOwnedFolderTokensArgs<'e, 'c, E>) -> Result<Vec<FolderToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -31,9 +29,7 @@ where
     return Ok(Vec::new());
   }
 
-  let mut builder = QueryBuilder::<MySql>::new(
-    "SELECT token FROM folders WHERE owner_user_token = ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("SELECT token FROM folders WHERE owner_user_token = ");
   builder.push_bind(args.owner_user_token.as_str());
   builder.push(" AND maybe_deleted_at IS NULL AND token IN (");
 
@@ -45,7 +41,5 @@ where
 
   let rows = builder.build().fetch_all(args.mysql_executor).await?;
 
-  Ok(rows.into_iter()
-    .map(|row| FolderToken::new(row.get::<String, _>(0)))
-    .collect())
+  Ok(rows.into_iter().map(|row| FolderToken::new(row.get::<String, _>(0))).collect())
 }

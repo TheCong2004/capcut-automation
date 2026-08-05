@@ -63,9 +63,7 @@ where
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn upsert_user_spend_summary<'e, 'c: 'e, E>(
-  args: UpsertUserSpendSummaryArgs<'e, 'c, E>,
-) -> Result<(), sqlx::Error>
+pub async fn upsert_user_spend_summary<'e, 'c: 'e, E>(args: UpsertUserSpendSummaryArgs<'e, 'c, E>) -> Result<(), sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -185,8 +183,8 @@ ON DUPLICATE KEY UPDATE
     args.maybe_subscription_interval,
     args.maybe_reengagement_score,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(())
 }

@@ -31,39 +31,23 @@ pub struct MediaFileAndPath {
   pub download_path: PathBuf,
 }
 
-pub async fn download_media_file(
-  args: DownloadMediaFileArgs<'_>
-) -> Result<MediaFileAndPath, ProcessSingleJobError> {
-
+pub async fn download_media_file(args: DownloadMediaFileArgs<'_>) -> Result<MediaFileAndPath, ProcessSingleJobError> {
   info!("Querying media file by token: {:?} ...", &args.media_file_token);
 
-  let media_file =  get_media_file(
-    &args.media_file_token,
-    args.can_see_deleted,
-    args.mysql_pool
-  ).await?.ok_or_else(|| {
+  let media_file = get_media_file(&args.media_file_token, args.can_see_deleted, args.mysql_pool).await?.ok_or_else(|| {
     error!("media file not found: {:?}", &args.media_file_token);
     ProcessSingleJobError::Other(anyhow!("media file not found: {:?}", &args.media_file_token))
   })?;
 
-  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-    &media_file.public_bucket_directory_hash,
-    media_file.maybe_public_bucket_prefix.as_deref(),
-    media_file.maybe_public_bucket_extension.as_deref());
+  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&media_file.public_bucket_directory_hash, media_file.maybe_public_bucket_prefix.as_deref(), media_file.maybe_public_bucket_extension.as_deref());
 
   info!("Media file cloud bucket path: {:?}", media_file_bucket_path.get_full_object_path_str());
 
   info!("Downloading media file to {:?}", args.download_path);
 
-  args.remote_cloud_file_client.download_media_file(
-    &media_file_bucket_path,
-    path_to_string(&args.download_path)
-  ).await?;
+  args.remote_cloud_file_client.download_media_file(&media_file_bucket_path, path_to_string(&args.download_path)).await?;
 
   info!("Downloaded media file!");
 
-  Ok(MediaFileAndPath {
-    media_file,
-    download_path: args.download_path.to_path_buf(),
-  })
+  Ok(MediaFileAndPath { media_file, download_path: args.download_path.to_path_buf() })
 }

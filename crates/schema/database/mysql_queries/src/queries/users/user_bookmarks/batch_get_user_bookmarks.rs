@@ -18,12 +18,7 @@ pub struct BatchUserBookmark {
   pub maybe_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn batch_get_user_bookmarks(
-  user_token: &UserToken,
-  tokens: &HashSet<String>,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<Vec<BatchUserBookmark>>
-{
+pub async fn batch_get_user_bookmarks(user_token: &UserToken, tokens: &HashSet<String>, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<BatchUserBookmark>> {
   if tokens.len() == 0 {
     return Ok(Vec::new());
   }
@@ -39,7 +34,8 @@ SELECT
 FROM user_bookmarks
 
 WHERE user_token =
-  "#);
+  "#,
+  );
 
   query_builder.push_bind(user_token.as_str());
 
@@ -59,23 +55,25 @@ WHERE user_token =
   let maybe_results = query.fetch_all(&mut **mysql_connection).await;
 
   match maybe_results {
-    Ok(records) => Ok(records
+    Ok(records) => Ok(
+      records
         .into_iter()
         .map(|record| BatchUserBookmark {
           token: UserBookmarkToken::new_from_str(&record.token),
           // NB: Fail open; W2lTemplates are dead, so this is a good sentinel value
-          entity_type: UserBookmarkEntityType::from_str(&record.entity_type)
-              .unwrap_or(UserBookmarkEntityType::W2lTemplate),
+          entity_type: UserBookmarkEntityType::from_str(&record.entity_type).unwrap_or(UserBookmarkEntityType::W2lTemplate),
           entity_token: record.entity_token,
           maybe_deleted_at: record.maybe_deleted_at,
-        }).collect::<Vec<_>>()),
+        })
+        .collect::<Vec<_>>(),
+    ),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(Vec::new()),
       _ => {
         error!("error querying : {:?}", err);
         Err(anyhow!("error querying : {:?}", err))
-      }
-    }
+      },
+    },
   }
 }
 

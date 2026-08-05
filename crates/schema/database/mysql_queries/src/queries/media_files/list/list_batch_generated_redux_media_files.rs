@@ -69,7 +69,6 @@ pub struct MediaFile {
 
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
-
   // pub maybe_moderator_fields: Option<MediaFileModeratorFields>,
 }
 
@@ -119,94 +118,64 @@ pub struct MediaFileRaw {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn list_batch_generated_redux_media_files(
-  batch_token: &BatchGenerationToken,
-  can_see_deleted: bool,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<MediaFileBatch> {
-  list_batch_generated_redux_media_files_with_transactor(
-    batch_token,
-    can_see_deleted,
-    Transactor::for_pool(mysql_pool)
-  ).await
+pub async fn list_batch_generated_redux_media_files(batch_token: &BatchGenerationToken, can_see_deleted: bool, mysql_pool: &MySqlPool) -> AnyhowResult<MediaFileBatch> {
+  list_batch_generated_redux_media_files_with_transactor(batch_token, can_see_deleted, Transactor::for_pool(mysql_pool)).await
 }
 
-pub async fn list_batch_generated_redux_media_files_with_connection(
-  batch_token: &BatchGenerationToken,
-  can_see_deleted: bool,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<MediaFileBatch> {
-  list_batch_generated_redux_media_files_with_transactor(
-    batch_token,
-    can_see_deleted,
-    Transactor::for_connection(mysql_connection)
-  ).await
+pub async fn list_batch_generated_redux_media_files_with_connection(batch_token: &BatchGenerationToken, can_see_deleted: bool, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<MediaFileBatch> {
+  list_batch_generated_redux_media_files_with_transactor(batch_token, can_see_deleted, Transactor::for_connection(mysql_connection)).await
 }
 
-pub async fn list_batch_generated_redux_media_files_with_transactor(
-  batch_token: &BatchGenerationToken,
-  can_see_deleted: bool,
-  transactor: Transactor<'_, '_>,
-) -> AnyhowResult<MediaFileBatch> {
-
-  let records = if can_see_deleted {
-    select_including_deleted(batch_token, transactor).await?
-  } else {
-    select_without_deleted(batch_token, transactor).await?
-  };
+pub async fn list_batch_generated_redux_media_files_with_transactor(batch_token: &BatchGenerationToken, can_see_deleted: bool, transactor: Transactor<'_, '_>) -> AnyhowResult<MediaFileBatch> {
+  let records = if can_see_deleted { select_including_deleted(batch_token, transactor).await? } else { select_without_deleted(batch_token, transactor).await? };
 
   let records = records
-      .into_iter()
-      .map(|record| {
-        MediaFile {
-          token: record.token,
-          media_type: record.media_type,
-          media_class: record.media_class,
-          maybe_mime_type: record.maybe_mime_type,
-          maybe_batch_token: record.maybe_batch_token,
-          maybe_title: record.maybe_title,
-          maybe_text_transcript: record.maybe_text_transcript,
-          maybe_origin_filename: record.maybe_origin_filename,
-          maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
-          maybe_creator_user_token: record.maybe_creator_user_token,
-          maybe_creator_username: record.maybe_creator_username,
-          maybe_creator_display_name: record.maybe_creator_display_name,
-          maybe_creator_gravatar_hash: record.maybe_creator_gravatar_hash,
-          maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-          creator_set_visibility: record.creator_set_visibility,
-          is_user_upload: i8_to_bool(record.is_user_upload),
-          is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
-          maybe_prompt_token: record.maybe_prompt_token,
-          maybe_prompt_args: record.maybe_other_prompt_args
+    .into_iter()
+    .map(|record| {
+      MediaFile {
+        token: record.token,
+        media_type: record.media_type,
+        media_class: record.media_class,
+        maybe_mime_type: record.maybe_mime_type,
+        maybe_batch_token: record.maybe_batch_token,
+        maybe_title: record.maybe_title,
+        maybe_text_transcript: record.maybe_text_transcript,
+        maybe_origin_filename: record.maybe_origin_filename,
+        maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
+        maybe_creator_user_token: record.maybe_creator_user_token,
+        maybe_creator_username: record.maybe_creator_username,
+        maybe_creator_display_name: record.maybe_creator_display_name,
+        maybe_creator_gravatar_hash: record.maybe_creator_gravatar_hash,
+        maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
+        creator_set_visibility: record.creator_set_visibility,
+        is_user_upload: i8_to_bool(record.is_user_upload),
+        is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
+        maybe_prompt_token: record.maybe_prompt_token,
+        maybe_prompt_args: record.maybe_other_prompt_args
               .as_deref()
               .map(|args| PromptInnerPayload::from_json(args))
               .transpose()
               .ok() // NB: Fail open
               .flatten(),
-          maybe_file_cover_image_public_bucket_hash: record.maybe_file_cover_image_public_bucket_hash,
-          maybe_file_cover_image_public_bucket_prefix: record.maybe_file_cover_image_public_bucket_prefix,
-          maybe_file_cover_image_public_bucket_extension: record.maybe_file_cover_image_public_bucket_extension,
-          public_bucket_directory_hash: record.public_bucket_directory_hash,
-          maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
-          maybe_public_bucket_extension: record.maybe_public_bucket_extension,
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-        }
-      })
-      .collect();
+        maybe_file_cover_image_public_bucket_hash: record.maybe_file_cover_image_public_bucket_hash,
+        maybe_file_cover_image_public_bucket_prefix: record.maybe_file_cover_image_public_bucket_prefix,
+        maybe_file_cover_image_public_bucket_extension: record.maybe_file_cover_image_public_bucket_extension,
+        public_bucket_directory_hash: record.public_bucket_directory_hash,
+        maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
+        maybe_public_bucket_extension: record.maybe_public_bucket_extension,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+      }
+    })
+    .collect();
 
-  Ok(MediaFileBatch {
-    media_files: records,
-  })
+  Ok(MediaFileBatch { media_files: records })
 }
 
-async fn select_including_deleted(
-  batch_token: &BatchGenerationToken,
-  transactor: Transactor<'_, '_>,
-) -> Result<Vec<MediaFileRaw>, sqlx::Error> {
+async fn select_including_deleted(batch_token: &BatchGenerationToken, transactor: Transactor<'_, '_>) -> Result<Vec<MediaFileRaw>, sqlx::Error> {
   let query = sqlx::query_as!(
-      MediaFileRaw,
-        r#"
+    MediaFileRaw,
+    r#"
 SELECT
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
 
@@ -260,44 +229,31 @@ LEFT OUTER JOIN prompts
 WHERE
     m.maybe_batch_token = ?
         "#,
-      batch_token
-    );
+    batch_token
+  );
 
   let maybe_results = match transactor {
-    Transactor::Pool { pool } => {
-      query.fetch_all(pool).await
-    },
-    Transactor::Connection { connection } => {
-      query.fetch_all(connection).await
-    },
-    Transactor::Transaction { transaction } => {
-      query.fetch_all(&mut **transaction).await
-    },
+    Transactor::Pool { pool } => query.fetch_all(pool).await,
+    Transactor::Connection { connection } => query.fetch_all(connection).await,
+    Transactor::Transaction { transaction } => query.fetch_all(&mut **transaction).await,
   };
 
   match maybe_results {
-    Err(err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          Ok(Vec::new())
-        },
-        _ => {
-          warn!("list ip bans db error: {:?}", err);
-          Err(err)
-        }
-      }
+    Err(err) => match err {
+      sqlx::Error::RowNotFound => Ok(Vec::new()),
+      _ => {
+        warn!("list ip bans db error: {:?}", err);
+        Err(err)
+      },
     },
     Ok(results) => Ok(results),
   }
 }
 
-async fn select_without_deleted(
-  batch_token: &BatchGenerationToken,
-  transactor: Transactor<'_, '_>,
-) -> Result<Vec<MediaFileRaw>, sqlx::Error> {
+async fn select_without_deleted(batch_token: &BatchGenerationToken, transactor: Transactor<'_, '_>) -> Result<Vec<MediaFileRaw>, sqlx::Error> {
   let query = sqlx::query_as!(
-      MediaFileRaw,
-        r#"
+    MediaFileRaw,
+    r#"
 SELECT
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
 
@@ -353,32 +309,22 @@ WHERE
     AND m.user_deleted_at IS NULL
     AND m.mod_deleted_at IS NULL
         "#,
-      batch_token
-    );
+    batch_token
+  );
 
   let maybe_results = match transactor {
-    Transactor::Pool { pool } => {
-      query.fetch_all(pool).await
-    },
-    Transactor::Connection { connection } => {
-      query.fetch_all(connection).await
-    },
-    Transactor::Transaction { transaction } => {
-      query.fetch_all(&mut **transaction).await
-    },
+    Transactor::Pool { pool } => query.fetch_all(pool).await,
+    Transactor::Connection { connection } => query.fetch_all(connection).await,
+    Transactor::Transaction { transaction } => query.fetch_all(&mut **transaction).await,
   };
 
   match maybe_results {
-    Err(err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          Ok(Vec::new())
-        },
-        _ => {
-          warn!("list ip bans db error: {:?}", err);
-          Err(err)
-        }
-      }
+    Err(err) => match err {
+      sqlx::Error::RowNotFound => Ok(Vec::new()),
+      _ => {
+        warn!("list ip bans db error: {:?}", err);
+        Err(err)
+      },
     },
     Ok(results) => Ok(results),
   }

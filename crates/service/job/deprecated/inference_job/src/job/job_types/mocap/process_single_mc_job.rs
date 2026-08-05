@@ -6,12 +6,7 @@ use crate::job::job_types::mocap::mocap_net;
 use crate::state::job_dependencies::JobDependencies;
 
 pub async fn process_single_mc_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
-    let job_success_result = mocap_net::process_job::process_job(
-        mocap_net::process_job::MocapNetProcessJobArgs {
-            job_dependencies,
-            job,
-        }
-    ).await?;
+  let job_success_result = mocap_net::process_job::process_job(mocap_net::process_job::MocapNetProcessJobArgs { job_dependencies, job }).await?;
 
-    Ok(job_success_result)
+  Ok(job_success_result)
 }

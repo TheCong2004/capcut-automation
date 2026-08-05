@@ -15,10 +15,10 @@ use tokens::tokens::user_sessions::UserSessionToken;
 use tokens::tokens::users::UserToken;
 
 /// Name of the HTTP cookie that carries the session payload
-const SESSION_COOKIE_NAME : &str = "session";
+const SESSION_COOKIE_NAME: &str = "session";
 
 /// Name of the HTTP header that carries the session payload
-const SESSION_HEADER_NAME : &str = "session";
+const SESSION_HEADER_NAME: &str = "session";
 
 // TODO(echelon,2022-08-29): Make a CryptedCookieManager that this uses.
 // TODO(echelon,2022-08-29): Fix how domains and "secure" cookies are handled
@@ -31,43 +31,28 @@ pub struct HttpUserSessionManager {
 
 impl HttpUserSessionManager {
   pub fn new(cookie_domain: &str, hmac_secret: &str) -> Result<Self, HttpUserSessionPayloadError> {
-    let payload_signer = HttpUserSessionPayloadSigner::new(hmac_secret)
-      .map_err(|e| {
-        warn!("Failed to construct HttpUserSessionPayloadSigner: {}", e);
-        e
-      })?;
+    let payload_signer = HttpUserSessionPayloadSigner::new(hmac_secret).map_err(|e| {
+      warn!("Failed to construct HttpUserSessionPayloadSigner: {}", e);
+      e
+    })?;
 
-    Ok(Self {
-      cookie_domain: cookie_domain.to_string(),
-      payload_signer,
+    Ok(Self { cookie_domain: cookie_domain.to_string(), payload_signer })
+  }
+
+  pub fn encode_session_payload(&self, session_token: &UserSessionToken, user_token: &UserToken) -> Result<String, HttpUserSessionPayloadError> {
+    self.payload_signer.encode(session_token, user_token).map_err(|e| {
+      warn!("Failed to encode session payload: {}", e);
+      e
     })
   }
 
-  pub fn encode_session_payload(
-    &self,
-    session_token: &UserSessionToken,
-    user_token: &UserToken,
-  ) -> Result<String, HttpUserSessionPayloadError> {
-    self.payload_signer.encode(session_token, user_token)
-      .map_err(|e| {
-        warn!("Failed to encode session payload: {}", e);
-        e
-      })
-  }
+  pub fn create_cookie(&self, session_token: &UserSessionToken, user_token: &UserToken) -> Result<Cookie, HttpUserSessionPayloadError> {
+    let jwt_string = self.payload_signer.encode(session_token, user_token).map_err(|e| {
+      warn!("Failed to encode session cookie payload: {}", e);
+      e
+    })?;
 
-  pub fn create_cookie(
-    &self,
-    session_token: &UserSessionToken,
-    user_token: &UserToken,
-  ) -> Result<Cookie, HttpUserSessionPayloadError> {
-    let jwt_string = self.payload_signer.encode(session_token, user_token)
-      .map_err(|e| {
-        warn!("Failed to encode session cookie payload: {}", e);
-        e
-      })?;
-
-    let make_secure = !self.cookie_domain.to_lowercase().contains("jungle.horse")
-      && !self.cookie_domain.to_lowercase().contains("localhost");
+    let make_secure = !self.cookie_domain.to_lowercase().contains("jungle.horse") && !self.cookie_domain.to_lowercase().contains("localhost");
 
     let same_site = if make_secure {
       SameSite::None // NB: Allow usage from other domains
@@ -95,11 +80,7 @@ impl HttpUserSessionManager {
     cookie
   }
 
-  pub fn decode_session_payload_from_request(
-    &self,
-    request: &HttpRequest,
-  ) -> Result<Option<HttpUserSessionPayload>, HttpUserSessionPayloadError>
-  {
+  pub fn decode_session_payload_from_request(&self, request: &HttpRequest) -> Result<Option<HttpUserSessionPayload>, HttpUserSessionPayloadError> {
     let signed_session_payload = self.session_payload_from_request(request)?;
 
     let signed_session_payload = match signed_session_payload {
@@ -118,10 +99,7 @@ impl HttpUserSessionManager {
 
   // NB: THIS IS ONLY FOR A QUICK HACK FOR FREAKING CORS UGH
   // THIS IS A HUGE STUPID SECURITY VULN. DAMNIT GOOGLE DAMNIT CORS.
-  pub fn check_and_return_session_token_decodes(
-    &self,
-    request: &HttpRequest,
-  ) -> Result<Option<String>, HttpUserSessionPayloadError> {
+  pub fn check_and_return_session_token_decodes(&self, request: &HttpRequest) -> Result<Option<String>, HttpUserSessionPayloadError> {
     let signed_session_payload = self.session_payload_from_request(request)?;
 
     let signed_session_payload = match signed_session_payload {
@@ -140,21 +118,16 @@ impl HttpUserSessionManager {
     Ok(Some(signed_session_payload))
   }
 
-  fn session_payload_from_request(
-    &self,
-    request: &HttpRequest,
-  ) -> Result<Option<String>, HttpUserSessionPayloadError> {
-    let mut signed_session_payload = request.cookie(SESSION_COOKIE_NAME)
-        .map(|cookie| cookie.value().to_string());
+  fn session_payload_from_request(&self, request: &HttpRequest) -> Result<Option<String>, HttpUserSessionPayloadError> {
+    let mut signed_session_payload = request.cookie(SESSION_COOKIE_NAME).map(|cookie| cookie.value().to_string());
 
     if signed_session_payload.is_none() {
       let maybe_header = request.headers().get(SESSION_HEADER_NAME);
       if let Some(header) = maybe_header {
-        let header_str = header.to_str()
-          .map_err(|e| {
-            warn!("Failed to read session HTTP header as str: {}", e);
-            HttpUserSessionPayloadError::HttpSessionHeaderError(e.to_string())
-          })?;
+        let header_str = header.to_str().map_err(|e| {
+          warn!("Failed to read session HTTP header as str: {}", e);
+          HttpUserSessionPayloadError::HttpSessionHeaderError(e.to_string())
+        })?;
         signed_session_payload = Some(header_str.to_string());
       }
     }
@@ -189,13 +162,9 @@ mod tests {
     let manager = HttpUserSessionManager::new("fakeyou.com", "secret").unwrap();
     let cookie = manager.create_cookie(&UserSessionToken::new_from_str("ex_session_token"), &UserToken::new_from_str("ex_user_token")).unwrap();
 
-    let http_request = TestRequest::default()
-        .cookie(cookie)
-        .to_http_request();
+    let http_request = TestRequest::default().cookie(cookie).to_http_request();
 
-    let decoded = manager.decode_session_payload_from_request(&http_request)
-        .expect("no error")
-        .expect("must exist");
+    let decoded = manager.decode_session_payload_from_request(&http_request).expect("no error").expect("must exist");
 
     assert_eq!(decoded.session_token, "ex_session_token".to_string());
     assert_eq!(decoded.maybe_user_token, Some("ex_user_token".to_string()));
@@ -206,13 +175,9 @@ mod tests {
     let manager = HttpUserSessionManager::new("fakeyou.com", "secret").unwrap();
     let encoded_value = manager.payload_signer.encode(&UserSessionToken::new_from_str("ex_session_token"), &UserToken::new_from_str("ex_user_token")).unwrap();
 
-    let http_request = TestRequest::default()
-        .insert_header(("session", encoded_value.as_str()))
-        .to_http_request();
+    let http_request = TestRequest::default().insert_header(("session", encoded_value.as_str())).to_http_request();
 
-    let decoded = manager.decode_session_payload_from_request(&http_request)
-        .expect("no error")
-        .expect("must exist");
+    let decoded = manager.decode_session_payload_from_request(&http_request).expect("no error").expect("must exist");
 
     assert_eq!(decoded.session_token, "ex_session_token".to_string());
     assert_eq!(decoded.maybe_user_token, Some("ex_user_token".to_string()));

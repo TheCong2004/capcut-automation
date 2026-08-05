@@ -35,9 +35,7 @@ where
 }
 
 /// A user's daily spend rows, most-recent payment date first.
-pub async fn list_user_daily_spends<'e, 'c: 'e, E>(
-  args: ListUserDailySpendsArgs<'e, 'c, E>,
-) -> Result<Vec<UserDailySpendRow>, sqlx::Error>
+pub async fn list_user_daily_spends<'e, 'c: 'e, E>(args: ListUserDailySpendsArgs<'e, 'c, E>) -> Result<Vec<UserDailySpendRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -68,8 +66,8 @@ LIMIT ? OFFSET ?
     args.limit,
     args.offset,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

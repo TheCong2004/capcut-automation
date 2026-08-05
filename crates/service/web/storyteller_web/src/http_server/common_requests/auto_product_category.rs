@@ -14,12 +14,10 @@ use enums::by_table::media_files::media_file_origin_product_category::MediaFileO
 #[serde(rename_all = "snake_case")]
 pub enum AutoProductCategory {
   // ===== Synthetic product categories that alias or auto-expand to multiple ===== //
-
   /// Synthetic category that expands to ["tts", "zs_voice", "voice_conversion"]
   Voice,
 
   // ===== Synthetic product categories that alias others ===== //
-
   /// Synthetic category that expands to ["face_animator"]
   Lipsync,
 
@@ -27,7 +25,6 @@ pub enum AutoProductCategory {
   LivePortrait,
 
   // ===== Current Database Product Categories ===== //
-
   FaceAnimator,
 
   FaceMirror,
@@ -52,7 +49,6 @@ pub enum AutoProductCategory {
   ImageGeneration,
 
   // ===== Deprecated Database Product Categories ===== //
-
   #[deprecated]
   VideoFilter,
 
@@ -64,11 +60,7 @@ impl AutoProductCategory {
   pub fn expand_to_db_product_categories(&self) -> HashSet<MediaFileOriginProductCategory> {
     match self {
       // Synthetic product categories that auto-expand to multiple
-      AutoProductCategory::Voice => HashSet::from([
-        MediaFileOriginProductCategory::TextToSpeech,
-        MediaFileOriginProductCategory::ZeroShotVoice,
-        MediaFileOriginProductCategory::VoiceConversion,
-      ]),
+      AutoProductCategory::Voice => HashSet::from([MediaFileOriginProductCategory::TextToSpeech, MediaFileOriginProductCategory::ZeroShotVoice, MediaFileOriginProductCategory::VoiceConversion]),
 
       // Synthetic product categories that alias other product categories
       AutoProductCategory::Lipsync => HashSet::from([MediaFileOriginProductCategory::FaceAnimator]),

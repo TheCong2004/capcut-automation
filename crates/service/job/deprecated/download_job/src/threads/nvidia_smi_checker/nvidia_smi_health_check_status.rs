@@ -9,11 +9,8 @@ pub struct NvidiaSmiHealthCheckStatus {
 }
 
 impl NvidiaSmiHealthCheckStatus {
-
   pub fn new() -> Self {
-    Self {
-      gpu_is_missing: RelaxedAtomicBool::new(false),
-    }
+    Self { gpu_is_missing: RelaxedAtomicBool::new(false) }
   }
 
   /// Read

@@ -26,29 +26,14 @@ pub struct AppStateStatusAlertInfo {
   pub maybe_message: Option<String>,
 }
 
-pub fn get_status_alert(
-  server_state: &ServerState
-) -> Option<AppStateStatusAlertInfo> {
+pub fn get_status_alert(server_state: &ServerState) -> Option<AppStateStatusAlertInfo> {
+  let maybe_category = server_state.flags.maybe_status_alert_category.as_deref().map(|category| category_to_enum(&category)).flatten();
 
-  let maybe_category = server_state
-      .flags
-      .maybe_status_alert_category
-      .as_deref()
-      .map(|category| category_to_enum(&category))
-      .flatten();
-
-  let maybe_message = server_state
-      .flags
-      .maybe_status_alert_custom_message
-      .as_deref()
-      .map(|message| message.trim().to_string());
+  let maybe_message = server_state.flags.maybe_status_alert_custom_message.as_deref().map(|message| message.trim().to_string());
 
   match (maybe_category, maybe_message) {
     (None, None) => None,
-    (category, message) => Some(AppStateStatusAlertInfo {
-      maybe_category: category,
-      maybe_message: message,
-    }),
+    (category, message) => Some(AppStateStatusAlertInfo { maybe_category: category, maybe_message: message }),
   }
 }
 

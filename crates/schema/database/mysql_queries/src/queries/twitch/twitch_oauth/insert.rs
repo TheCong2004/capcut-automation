@@ -6,7 +6,6 @@ use tokens::tokens::twitch_oauth_tokens_internal::TwitchOauthInternalToken;
 
 pub struct TwitchOauthTokenInsertBuilder {
   // ===== Required Fields =====
-
   /// Old APIs return a u32, but this should be a string.
   /// Twitch is migrating IDs to strings.
   twitch_user_id: String,
@@ -21,7 +20,6 @@ pub struct TwitchOauthTokenInsertBuilder {
   oauth_grouping_token: String,
 
   // ===== Optional / Default Fields =====
-
   /// Other half of the access token, for renewal
   maybe_refresh_token: Option<String>,
 
@@ -41,7 +39,6 @@ pub struct TwitchOauthTokenInsertBuilder {
   refresh_count: u32,
 
   // ===== OAuth Scopes =====
-
   has_bits_read: bool,
   has_channel_read_redemptions: bool,
   has_channel_read_subscriptions: bool,
@@ -50,29 +47,8 @@ pub struct TwitchOauthTokenInsertBuilder {
 }
 
 impl TwitchOauthTokenInsertBuilder {
-  pub fn new(
-    twitch_user_id: &str,
-    twitch_username: &str,
-    access_token: &str,
-    oauth_grouping_token: &str
-  ) -> Self {
-    Self {
-      twitch_user_id: twitch_user_id.to_string(),
-      twitch_username: twitch_username.to_string(),
-      access_token: access_token.to_string(),
-      oauth_grouping_token: oauth_grouping_token.to_string(),
-      maybe_refresh_token: None,
-      maybe_user_token: None,
-      maybe_ip_address_creation: None,
-      token_type: None,
-      expires_in_seconds: None,
-      has_bits_read: false,
-      has_channel_read_subscriptions: false,
-      has_channel_read_redemptions: false,
-      has_chat_edit: false,
-      has_chat_read: false,
-      refresh_count: 0,
-    }
+  pub fn new(twitch_user_id: &str, twitch_username: &str, access_token: &str, oauth_grouping_token: &str) -> Self {
+    Self { twitch_user_id: twitch_user_id.to_string(), twitch_username: twitch_username.to_string(), access_token: access_token.to_string(), oauth_grouping_token: oauth_grouping_token.to_string(), maybe_refresh_token: None, maybe_user_token: None, maybe_ip_address_creation: None, token_type: None, expires_in_seconds: None, has_bits_read: false, has_channel_read_subscriptions: false, has_channel_read_redemptions: false, has_chat_edit: false, has_chat_read: false, refresh_count: 0 }
   }
 
   pub fn set_refresh_token(mut self, refresh_token: Option<&str>) -> Self {
@@ -223,16 +199,13 @@ SET
       )
     };
 
-    let query_result = query.execute(mysql_pool)
-        .await;
+    let query_result = query.execute(mysql_pool).await;
 
     let _record_id = match query_result {
-      Ok(res) => {
-        res.last_insert_id()
-      },
+      Ok(res) => res.last_insert_id(),
       Err(err) => {
         return Err(anyhow!("Twitch token insert DB error: {:?}", err));
-      }
+      },
     };
 
     Ok(())

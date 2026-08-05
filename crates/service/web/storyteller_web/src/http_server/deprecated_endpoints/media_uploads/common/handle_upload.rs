@@ -23,12 +23,8 @@ use crate::http_server::validations::validate_idempotency_token_format::validate
 use crate::state::server_state::ServerState;
 
 pub enum SuccessCase {
-  MediaAlreadyUploaded {
-    existing_upload_token: MediaUploadToken,
-  },
-  MediaSuccessfullyUploaded {
-    upload_token: MediaUploadToken,
-  }
+  MediaAlreadyUploaded { existing_upload_token: MediaUploadToken },
+  MediaSuccessfullyUploaded { upload_token: MediaUploadToken },
 }
 
 impl SuccessCase {
@@ -40,31 +36,18 @@ impl SuccessCase {
   }
 }
 
-pub async fn handle_upload(
-  http_request: &HttpRequest,
-  server_state: &web::Data<Arc<ServerState>>,
-  mut multipart_payload: Multipart,
-  allowed_mimetypes: &HashSet<&'static str>,
-) -> Result<SuccessCase, UploadError> {
-
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        UploadError::ServerError
-      })?;
+pub async fn handle_upload(http_request: &HttpRequest, server_state: &web::Data<Arc<ServerState>>, mut multipart_payload: Multipart, allowed_mimetypes: &HashSet<&'static str>) -> Result<SuccessCase, UploadError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    UploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        UploadError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    UploadError::ServerError
+  })?;
 
   // ==================== BANNED USERS ==================== //
 
@@ -87,34 +70,27 @@ pub async fn handle_upload(
 
   // ==================== READ MULTIPART REQUEST ==================== //
 
-  let upload_media_request = drain_multipart_request(multipart_payload)
-      .await
-      .map_err(|e| {
-        // TODO: Error handling could be nicer.
-        UploadError::BadInput("bad request".to_string())
-      })?;
+  let upload_media_request = drain_multipart_request(multipart_payload).await.map_err(|e| {
+    // TODO: Error handling could be nicer.
+    UploadError::BadInput("bad request".to_string())
+  })?;
 
-  let uuid_idempotency_token = upload_media_request.uuid_idempotency_token
-      .ok_or(UploadError::BadInput("no uuid".to_string()))?;
+  let uuid_idempotency_token = upload_media_request.uuid_idempotency_token.ok_or(UploadError::BadInput("no uuid".to_string()))?;
 
-  let maybe_existing_upload =
-      get_media_upload_by_uuid_with_connection(&uuid_idempotency_token, &mut mysql_connection)
-          .await;
+  let maybe_existing_upload = get_media_upload_by_uuid_with_connection(&uuid_idempotency_token, &mut mysql_connection).await;
 
   match maybe_existing_upload {
     Err(err) => {
       error!("Error checking for previous upload: {:?}", err);
       return Err(UploadError::ServerError);
-    }
+    },
     Ok(Some(upload)) => {
       // File already uploaded and frontend didn't protect us.
-      return Ok(SuccessCase::MediaAlreadyUploaded {
-        existing_upload_token: upload.token,
-      });
-    }
+      return Ok(SuccessCase::MediaAlreadyUploaded { existing_upload_token: upload.token });
+    },
     Ok(None) => {
       // Proceed.
-    }
+    },
   }
 
   if let Err(reason) = validate_idempotency_token_format(&uuid_idempotency_token) {
@@ -128,31 +104,23 @@ pub async fn handle_upload(
 
   let ip_address = get_request_ip(&http_request);
 
-  let maybe_user_token = maybe_user_session
-      .as_ref()
-      .map(|session| session.get_user_token());
+  let maybe_user_token = maybe_user_session.as_ref().map(|session| session.get_user_token());
 
-  let maybe_file_size_bytes = upload_media_request.file_bytes
-      .as_ref()
-      .map(|bytes| bytes.len());
+  let maybe_file_size_bytes = upload_media_request.file_bytes.as_ref().map(|bytes| bytes.len());
 
   info!("Upload maybe filesize: {:?}", maybe_file_size_bytes);
 
-  let maybe_mimetype = upload_media_request.file_bytes
-      .as_ref()
-      .map(|bytes| get_mimetype_for_bytes(bytes.as_ref()))
-      .flatten();
+  let maybe_mimetype = upload_media_request.file_bytes.as_ref().map(|bytes| get_mimetype_for_bytes(bytes.as_ref())).flatten();
 
   let bytes = match upload_media_request.file_bytes {
     None => return Err(UploadError::BadInput("missing file contents".to_string())),
     Some(bytes) => bytes,
   };
 
-  let hash = sha256_hash_bytes(&bytes)
-      .map_err(|io_error| {
-        error!("Problem hashing bytes: {:?}", io_error);
-        UploadError::ServerError
-      })?;
+  let hash = sha256_hash_bytes(&bytes).map_err(|io_error| {
+    error!("Problem hashing bytes: {:?}", io_error);
+    UploadError::ServerError
+  })?;
 
   let file_size_bytes = bytes.len();
 
@@ -161,14 +129,9 @@ pub async fn handle_upload(
   let mut media_upload_type = None;
 
   if let Some(mimetype) = maybe_mimetype.as_deref() {
-
     if !allowed_mimetypes.contains(mimetype) {
       // NB: Don't let our error message inject malicious strings
-      let filtered_mimetype = mimetype
-          .chars()
-          .filter(|c| c.is_ascii())
-          .filter(|c| c.is_alphanumeric() || *c == '/')
-          .collect::<String>();
+      let filtered_mimetype = mimetype.chars().filter(|c| c.is_ascii()).filter(|c| c.is_alphanumeric() || *c == '/').collect::<String>();
       return Err(UploadError::BadInput(format!("unpermitted mime type: {}", &filtered_mimetype)));
     }
 
@@ -226,7 +189,7 @@ pub async fn handle_upload(
         //     left: `Unknown`,
         //    right: `Ebml`: EBML element type must be checked before calling this function', /Users/bt/.cargo/git/checkouts/symphonia-8fbe6c90fc095688/e1a7009/symphonia-format-mkv/src/ebml.rs:335:9
         false
-      }
+      },
       // Also, don't decode images
       "image/jpeg" => false,
       "image/png" => false,
@@ -235,11 +198,7 @@ pub async fn handle_upload(
     };
 
     if do_audio_decode && media_upload_type.is_some() {
-      let basic_info = decode_basic_audio_bytes_info(
-        bytes.as_ref(),
-        Some(mimetype),
-        None
-      ).map_err(|e| {
+      let basic_info = decode_basic_audio_bytes_info(bytes.as_ref(), Some(mimetype), None).map_err(|e| {
         warn!("file decoding error: {:?}", e);
         UploadError::BadInput("could not decode file".to_string())
       })?;
@@ -253,7 +212,7 @@ pub async fn handle_upload(
     Some(m) => m,
     None => {
       warn!("Invalid mimetype: {:?}", maybe_mimetype);
-      return Err(UploadError::BadInput(format!("unknown mimetype: {:?}", maybe_mimetype)))
+      return Err(UploadError::BadInput(format!("unknown mimetype: {:?}", maybe_mimetype)));
     },
   };
 
@@ -276,17 +235,12 @@ pub async fn handle_upload(
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    bytes.as_ref(),
-    mime_type)
-      .await
-      .map_err(|e| {
-        warn!("Upload media bytes to bucket error: {:?}", e);
-        UploadError::ServerError
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), bytes.as_ref(), mime_type).await.map_err(|e| {
+    warn!("Upload media bytes to bucket error: {:?}", e);
+    UploadError::ServerError
+  })?;
 
-  let (token, record_id) = insert_media_upload(Args{
+  let (token, record_id) = insert_media_upload(Args {
     uuid_idempotency_token: &uuid_idempotency_token,
     media_type: media_upload_type,
     media_source: media_upload_source,
@@ -296,7 +250,7 @@ pub async fn handle_upload(
     maybe_original_mime_type: maybe_mimetype,
     maybe_original_audio_encoding: maybe_codec_name.as_deref(),
     maybe_original_video_encoding: None,
-    maybe_original_frame_width: None, // TODO
+    maybe_original_frame_width: None,  // TODO
     maybe_original_frame_height: None, // TODO
     checksum_sha2: &hash,
     public_upload_path: &public_upload_path,
@@ -307,25 +261,17 @@ pub async fn handle_upload(
     creator_set_visibility,
     mysql_pool: &server_state.mysql_pool,
   })
-      .await
-      .map_err(|err| {
-        warn!("New generic download creation DB error: {:?}", err);
-        UploadError::ServerError
-      })?;
+  .await
+  .map_err(|err| {
+    warn!("New generic download creation DB error: {:?}", err);
+    UploadError::ServerError
+  })?;
 
   info!("new media upload id: {} token: {:?}", record_id, &token);
 
   let firehose_result = match media_upload_source {
-    MediaUploadSource::DeviceApi => {
-      server_state.firehose_publisher.publish_device_media_recorded(
-        maybe_user_token,
-        &token).await
-    }
-    _ => {
-      server_state.firehose_publisher.publish_media_uploaded(
-        maybe_user_token,
-        &token).await
-    }
+    MediaUploadSource::DeviceApi => server_state.firehose_publisher.publish_device_media_recorded(maybe_user_token, &token).await,
+    _ => server_state.firehose_publisher.publish_media_uploaded(maybe_user_token, &token).await,
   };
 
   let _r = firehose_result.map_err(|e| {
@@ -333,7 +279,5 @@ pub async fn handle_upload(
     UploadError::ServerError
   })?;
 
-  Ok(SuccessCase::MediaSuccessfullyUploaded {
-    upload_token: token,
-  })
+  Ok(SuccessCase::MediaSuccessfullyUploaded { upload_token: token })
 }

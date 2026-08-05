@@ -43,15 +43,8 @@ pub struct SortId {
 
 impl SortKeyCrypto {
   pub fn new(secret: &str) -> Self {
-    let base64_config = GeneralPurposeConfig::new()
-        .with_encode_padding(false)
-        .with_decode_allow_trailing_bits(true)
-        .with_decode_padding_mode(DecodePaddingMode::Indifferent);
-    Self {
-      crypt: new_magic_crypt!(secret, 256),
-      alphabet: URL_SAFE.clone(),
-      base64_config,
-    }
+    let base64_config = GeneralPurposeConfig::new().with_encode_padding(false).with_decode_allow_trailing_bits(true).with_decode_padding_mode(DecodePaddingMode::Indifferent);
+    Self { crypt: new_magic_crypt!(secret, 256), alphabet: URL_SAFE.clone(), base64_config }
   }
 
   pub fn encrypt_id(&self, id: u64) -> AnyhowResult<String> {
@@ -94,19 +87,19 @@ impl SortKeyCrypto {
 mod tests {
   use crate::util::encrypted_sort_id::SortKeyCrypto;
 
-//  #[test]
-//  fn encrypt_entropy_means_no_duplicate_values() {
-//    let sorter = SortKeyCrypto::new("secret");
-//
-//    let mut encrypted_tokens = HashSet::new();
-//
-//    for i in 0 .. 1000 {
-//      let encrypted = sorter.encrypt_id(1234).unwrap();
-//      encrypted_tokens.insert(encrypted);
-//    }
-//
-//    assert_eq!(encrypted_tokens.len(), 1000);
-//  }
+  //  #[test]
+  //  fn encrypt_entropy_means_no_duplicate_values() {
+  //    let sorter = SortKeyCrypto::new("secret");
+  //
+  //    let mut encrypted_tokens = HashSet::new();
+  //
+  //    for i in 0 .. 1000 {
+  //      let encrypted = sorter.encrypt_id(1234).unwrap();
+  //      encrypted_tokens.insert(encrypted);
+  //    }
+  //
+  //    assert_eq!(encrypted_tokens.len(), 1000);
+  //  }
 
   #[test]
   fn decode_encrypted() {
@@ -133,7 +126,7 @@ mod tests {
   fn encrypt_lots_roundtrip_low_numbers() {
     let sorter = SortKeyCrypto::new("secret");
 
-    for i in 0 .. 1000 {
+    for i in 0..1000 {
       let encrypted = sorter.encrypt_id(i).unwrap();
       let decrypted = sorter.decrypt_id(&encrypted).unwrap();
       assert_eq!(decrypted, i);
@@ -144,7 +137,7 @@ mod tests {
   fn encrypt_lots_roundtrip_high_numbers() {
     let sorter = SortKeyCrypto::new("secret");
 
-    for i in 100000000 .. 100005000 {
+    for i in 100000000..100005000 {
       let encrypted = sorter.encrypt_id(i).unwrap();
       let decrypted = sorter.decrypt_id(&encrypted).unwrap();
       assert_eq!(decrypted, i);

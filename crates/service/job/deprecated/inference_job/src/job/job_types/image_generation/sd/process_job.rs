@@ -13,96 +13,77 @@ use crate::state::job_dependencies::JobDependencies;
 use crate::util::extractors::get_polymorphic_args_from_job::get_polymorphic_args_from_job;
 
 pub struct StableDiffusionProcessArgs<'a> {
-    pub job_dependencies: &'a JobDependencies,
-    pub job: &'a AvailableInferenceJob,
+  pub job_dependencies: &'a JobDependencies,
+  pub job: &'a AvailableInferenceJob,
 }
 
 // run inference
 // insert record into the db with the inference job token complete.
-pub async fn sd_args_from_job(
-    args: &StableDiffusionProcessArgs<'_>
-) -> Result<StableDiffusionArgs, ProcessSingleJobError> {
+pub async fn sd_args_from_job(args: &StableDiffusionProcessArgs<'_>) -> Result<StableDiffusionArgs, ProcessSingleJobError> {
+  let polymorphic_args = get_polymorphic_args_from_job(&args.job)?;
 
-    let polymorphic_args = get_polymorphic_args_from_job(&args.job)?;
+  let sd_args = match polymorphic_args {
+    PolymorphicInferenceArgs::Ig(args) => args,
+    _ => {
+      return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inner args for job!")));
+    },
+  };
 
-    let sd_args = match polymorphic_args {
-        PolymorphicInferenceArgs::Ig(args) => args,
-        _ => {
-            return Err(
-                ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inner args for job!"))
-            );
-        }
-    };
- 
-    let stable_diffusion_args: StableDiffusionArgs = StableDiffusionArgs::from(sd_args.clone());
-    Ok(stable_diffusion_args)
+  let stable_diffusion_args: StableDiffusionArgs = StableDiffusionArgs::from(sd_args.clone());
+  Ok(stable_diffusion_args)
 }
 
 // store the prompt and cluster them today.
-pub async fn process_job_selection(
-    args: StableDiffusionProcessArgs<'_>
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
-    let sd_args = sd_args_from_job(&args).await?;
+pub async fn process_job_selection(args: StableDiffusionProcessArgs<'_>) -> Result<JobSuccessResult, ProcessSingleJobError> {
+  let sd_args = sd_args_from_job(&args).await?;
 
-    if sd_args.type_of_inference == "inference" {
-        process_job_inference(&args).await
-    } else if sd_args.type_of_inference == "lora" {
-        process_job_lora_upload(&args).await
-    } else if sd_args.type_of_inference == "model" {
-        process_job_sd_upload(&args).await
-    } else {
-        Err(ProcessSingleJobError::Other(anyhow!("inference type doesn't exist!")))
-    }
+  if sd_args.type_of_inference == "inference" {
+    process_job_inference(&args).await
+  } else if sd_args.type_of_inference == "lora" {
+    process_job_lora_upload(&args).await
+  } else if sd_args.type_of_inference == "model" {
+    process_job_sd_upload(&args).await
+  } else {
+    Err(ProcessSingleJobError::Other(anyhow!("inference type doesn't exist!")))
+  }
 }
-
 
 #[ignore]
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+  use std::path::PathBuf;
 
-    use anyhow::anyhow;
-    use bucket_paths::legacy::remote_file_manager_paths::remote_cloud_bucket_details::RemoteCloudBucketDetails;
-    use cloud_storage::remote_file_manager::remote_cloud_file_manager::RemoteCloudFileClient;
-    use errors::AnyhowResult;
+  use anyhow::anyhow;
+  use bucket_paths::legacy::remote_file_manager_paths::remote_cloud_bucket_details::RemoteCloudBucketDetails;
+  use cloud_storage::remote_file_manager::remote_cloud_file_manager::RemoteCloudFileClient;
+  use errors::AnyhowResult;
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_seed_weights_files() -> AnyhowResult<()> {
-        let seed_path = PathBuf::from("/storyteller/root/custom-seed-tool-data");
-        let remote_cloud_file_client = RemoteCloudFileClient::get_remote_cloud_file_client().await;
-        let remote_cloud_file_client = match remote_cloud_file_client {
-            Ok(res) => { res }
-            Err(_) => {
-                return Err(anyhow!("failed to get remote cloud file client"));
-            }
-        };
+  #[ignore]
+  #[tokio::test]
+  async fn test_seed_weights_files() -> AnyhowResult<()> {
+    let seed_path = PathBuf::from("/storyteller/root/custom-seed-tool-data");
+    let remote_cloud_file_client = RemoteCloudFileClient::get_remote_cloud_file_client().await;
+    let remote_cloud_file_client = match remote_cloud_file_client {
+      Ok(res) => res,
+      Err(_) => {
+        return Err(anyhow!("failed to get remote cloud file client"));
+      },
+    };
 
-        let mut path_dl1 = seed_path.clone();
-        path_dl1.push("downloads/loRA");
-        let mut path_dl2 = seed_path.clone();
-        path_dl2.push("downloads/checkpoint");
+    let mut path_dl1 = seed_path.clone();
+    path_dl1.push("downloads/loRA");
+    let mut path_dl2 = seed_path.clone();
+    path_dl2.push("downloads/checkpoint");
 
-        let bucket_details1 = RemoteCloudBucketDetails {
-            object_hash: String::from("apa0ej6es8d3ss2gwtf1cghge35qn9tn"),
-            prefix: String::from("sd15"),
-            suffix: String::from("safetensors"),
-        };
+    let bucket_details1 = RemoteCloudBucketDetails { object_hash: String::from("apa0ej6es8d3ss2gwtf1cghge35qn9tn"), prefix: String::from("sd15"), suffix: String::from("safetensors") };
 
-        let bucket_details2 = RemoteCloudBucketDetails {
-            object_hash: String::from("27kz11et18fargyyxbj66ntfn621k9d3"),
-            prefix: String::from("loRA"),
-            suffix: String::from("safetensors"),
-        };
+    let bucket_details2 = RemoteCloudBucketDetails { object_hash: String::from("27kz11et18fargyyxbj66ntfn621k9d3"), prefix: String::from("loRA"), suffix: String::from("safetensors") };
 
-        remote_cloud_file_client.download_file(
-            bucket_details1,
-            String::from("./checkpoint")
-        ).await?;
-        remote_cloud_file_client.download_file(bucket_details2, String::from("./loRA")).await?;
+    remote_cloud_file_client.download_file(bucket_details1, String::from("./checkpoint")).await?;
+    remote_cloud_file_client.download_file(bucket_details2, String::from("./loRA")).await?;
 
-        Ok(())
-    }
+    Ok(())
+  }
 }
 
 // /**

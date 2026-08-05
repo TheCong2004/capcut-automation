@@ -33,9 +33,7 @@ where
 /// Insert a new `uploaded_video_notes` record. The `UploadVideoNoteToken` is
 /// minted here (in the data-access layer, not the handler) and returned.
 /// `created_at` is set to `NOW()`.
-pub async fn insert_uploaded_video_note<'e, 'c: 'e, E>(
-  args: InsertUploadedVideoNoteArgs<'e, 'c, E>,
-) -> Result<UploadVideoNoteToken, sqlx::Error>
+pub async fn insert_uploaded_video_note<'e, 'c: 'e, E>(args: InsertUploadedVideoNoteArgs<'e, 'c, E>) -> Result<UploadVideoNoteToken, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -72,8 +70,8 @@ SET
     args.was_scammed,
     args.comment_create_ip_address,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(token)
 }

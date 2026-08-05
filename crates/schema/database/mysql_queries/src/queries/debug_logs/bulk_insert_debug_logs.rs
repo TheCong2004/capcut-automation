@@ -45,9 +45,7 @@ pub struct DebugLogEvent {
 /// Bulk-insert debug log rows. All rows share the same event token.
 ///
 /// Returns the event token used. No-op (with a warning) if `events` is empty.
-pub async fn bulk_insert_debug_logs<'e, 'c: 'e, E>(
-  args: BulkInsertDebugLogsArgs<'e, 'c, E>,
-) -> Result<DebugLogEventToken, sqlx::Error>
+pub async fn bulk_insert_debug_logs<'e, 'c: 'e, E>(args: BulkInsertDebugLogsArgs<'e, 'c, E>) -> Result<DebugLogEventToken, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -65,9 +63,7 @@ where
   let maybe_ip_address = args.maybe_ip_address.map(|ip| truncate_chars(ip, MAX_IP_ADDRESS_CHARS));
   let maybe_url = args.maybe_url.map(|url| truncate_chars(url, MAX_URL_CHARS));
 
-  let mut query_builder = QueryBuilder::new(
-    "INSERT INTO debug_logs (event_token, debug_log_type, maybe_log_level, maybe_creator_user_token, maybe_ip_address, maybe_url, message) VALUES "
-  );
+  let mut query_builder = QueryBuilder::new("INSERT INTO debug_logs (event_token, debug_log_type, maybe_log_level, maybe_creator_user_token, maybe_ip_address, maybe_url, message) VALUES ");
 
   for (i, event) in args.events.iter().enumerate() {
     query_builder.push("(");
@@ -91,9 +87,7 @@ where
     }
   }
 
-  query_builder.build()
-    .execute(args.mysql_executor)
-    .await?;
+  query_builder.build().execute(args.mysql_executor).await?;
 
   Ok(event_token)
 }

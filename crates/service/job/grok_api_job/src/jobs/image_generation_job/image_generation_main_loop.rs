@@ -11,10 +11,7 @@ use crate::job_dependencies::JobDependencies;
 /// instead of polling xAI for status. For now it ticks at the configured
 /// interval and does nothing — the next iteration of this work will fill it in.
 pub async fn image_generation_main_loop(job_dependencies: JobDependencies) {
-  info!(
-    "Grok image_generation_main_loop started (tick interval: {}ms). Stub — no work yet.",
-    job_dependencies.image_generation_poll_interval_millis,
-  );
+  info!("Grok image_generation_main_loop started (tick interval: {}ms). Stub — no work yet.", job_dependencies.image_generation_poll_interval_millis,);
 
   while !job_dependencies.application_shutdown.get() {
     tokio::select! {

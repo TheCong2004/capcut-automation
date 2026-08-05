@@ -3,7 +3,8 @@ use std::marker::PhantomData;
 use sqlx::{Executor, MySql};
 
 pub struct MarkImpersonationTokenAsRedeemedArgs<'a, 'c: 'a, E>
-  where E: 'a + Executor<'c, Database = MySql>
+where
+  E: 'a + Executor<'c, Database = MySql>,
 {
   pub user_impersonation_token: &'a str,
   pub ip_address_redemption: &'a str,
@@ -12,10 +13,9 @@ pub struct MarkImpersonationTokenAsRedeemedArgs<'a, 'c: 'a, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn mark_impersonation_token_as_redeemed<'a, 'c, E>(
-  args: MarkImpersonationTokenAsRedeemedArgs<'a, 'c, E>,
-) -> Result<(), sqlx::Error>
-  where E: 'a + Executor<'c, Database = MySql>
+pub async fn mark_impersonation_token_as_redeemed<'a, 'c, E>(args: MarkImpersonationTokenAsRedeemedArgs<'a, 'c, E>) -> Result<(), sqlx::Error>
+where
+  E: 'a + Executor<'c, Database = MySql>,
 {
   sqlx::query!(
     r#"
@@ -28,8 +28,8 @@ WHERE user_impersonation_token = ?
     args.ip_address_redemption,
     args.user_impersonation_token,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(())
 }

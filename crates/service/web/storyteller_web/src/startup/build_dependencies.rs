@@ -29,10 +29,7 @@ use crate::configs::static_api_tokens::StaticApiTokenSet;
 use crate::http_server::user_lookup::user_session::session_utils::session_checker::SessionChecker;
 use crate::http_server::web_utils::scoped_temp_dir_creator::ScopedTempDirCreator;
 use crate::startup::setup_pager::build_pager;
-use crate::startup::setup_bans::{
-  load_cidr_bans, load_ip_address_troll_bans,
-  load_static_container_ip_bans, load_troll_user_token_bans,
-};
+use crate::startup::setup_bans::{load_cidr_bans, load_ip_address_troll_bans, load_static_container_ip_bans, load_troll_user_token_bans};
 use crate::startup::setup_inference_providers::setup_inference_providers;
 use crate::startup::setup_seedance_video_bucket::setup_seedance_video_bucket;
 use crate::startup::setup_static_feature_flags::setup_static_feature_flags;
@@ -40,11 +37,7 @@ use crate::startup::setup_stripe_artcraft::setup_stripe_artcraft;
 use crate::startup::setup_stripe_fakeyou::setup_stripe_fakeyou;
 use crate::state::certs::google_sign_in_cert::GoogleSignInCert;
 use crate::state::memory_cache::model_token_to_info_cache::ModelTokenToInfoCache;
-use crate::state::server_state::{
-  DurableInMemoryCaches, EnvConfig, EphemeralInMemoryCaches,
-  InMemoryCaches, ResendData, ServerInfo,
-  ServerState, TrollBans,
-};
+use crate::state::server_state::{DurableInMemoryCaches, EnvConfig, EphemeralInMemoryCaches, InMemoryCaches, ResendData, ServerInfo, ServerState, TrollBans};
 use crate::threads::db_health_checker_thread::db_health_check_status::HealthCheckStatus;
 use crate::http_server::web_utils::web_sort_key_crypto::WebSortKeyCrypto;
 
@@ -70,24 +63,16 @@ pub async fn setup_dependencies(server_hostname: &str) -> AnyhowResult<SetupResu
 
   info!("Connected to database.");
 
-  let firehose_publisher = FirehosePublisher {
-    mysql_pool: pool.clone(),
-  };
+  let firehose_publisher = FirehosePublisher { mysql_pool: pool.clone() };
 
-  let badge_granter = BadgeGranter {
-    mysql_pool: pool.clone(),
-    firehose_publisher: firehose_publisher.clone(),
-  };
+  let badge_granter = BadgeGranter { mysql_pool: pool.clone(), firehose_publisher: firehose_publisher.clone() };
 
   info!("Connecting to redis...");
 
   let redis_manager = Client::open(env_get_redis_0_connection_string_or_default())?;
   let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
 
-  let redis_ttl_cache = RedisTtlCache::new_with_ttl(
-    redis_pool.clone(),
-    easyenv::get_env_num("REDIS_CACHE_TTL_SECONDS", 60)?,
-  );
+  let redis_ttl_cache = RedisTtlCache::new_with_ttl(redis_pool.clone(), easyenv::get_env_num("REDIS_CACHE_TTL_SECONDS", 60)?);
 
   info!("Connecting to elasticsearch...");
   let elasticsearch = get_elasticsearch_client()?;
@@ -100,16 +85,12 @@ pub async fn setup_dependencies(server_hostname: &str) -> AnyhowResult<SetupResu
   let cookie_domain = easyenv::get_env_string_or_default("COOKIE_DOMAIN", ".vo.codes");
   let cookie_secure = easyenv::get_env_bool_or_default("COOKIE_SECURE", true);
   let cookie_http_only = easyenv::get_env_bool_or_default("COOKIE_HTTP_ONLY", true);
-  let website_homepage_redirect =
-    easyenv::get_env_string_or_default("WEBSITE_HOMEPAGE_REDIRECT", "https://vo.codes/");
+  let website_homepage_redirect = easyenv::get_env_string_or_default("WEBSITE_HOMEPAGE_REDIRECT", "https://vo.codes/");
 
   let session_cookie_manager = HttpUserSessionManager::new(&cookie_domain, &hmac_secret)?;
   let avt_cookie_manager = AvtCookieManager::new(&cookie_domain, &hmac_secret)?;
 
-  let session_checker = SessionChecker::new_with_cache(
-    &session_cookie_manager,
-    redis_ttl_cache.clone(),
-  );
+  let session_checker = SessionChecker::new_with_cache(&session_cookie_manager, redis_ttl_cache.clone());
 
   let access_key = easyenv::get_env_string_required(ENV_ACCESS_KEY)?;
   let secret_key = easyenv::get_env_string_required(ENV_SECRET_KEY)?;
@@ -124,43 +105,27 @@ pub async fn setup_dependencies(server_hostname: &str) -> AnyhowResult<SetupResu
   let s3_compatible_endpoint_url = easyenv::get_env_string_or_default("S3_COMPATIBLE_ENDPOINT_URL", "https://storage.googleapis.com");
   let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS", Duration::from_secs(60 * 5));
 
-  let private_bucket_client = LegacyBucketClient::create(
-    &access_key, &secret_key, &region_name, &private_bucket_name,
-    &s3_compatible_endpoint_url, None, Some(bucket_timeout),
-  )?;
+  let private_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &private_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  let public_bucket_client = LegacyBucketClient::create(
-    &access_key, &secret_key, &region_name, &public_bucket_name,
-    &s3_compatible_endpoint_url, None, Some(bucket_timeout),
-  )?;
+  let public_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &public_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  let auto_gc_bucket_client = LegacyBucketClient::create(
-    &access_key, &secret_key, &region_name, &gc_enabled_public_bucket_name,
-    &s3_compatible_endpoint_url, None, Some(bucket_timeout),
-  )?;
+  let auto_gc_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &gc_enabled_public_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
   // In-Memory Caches
   let voice_list_cache_ttl = easyenv::get_env_duration_seconds_or_default("VOICE_LIST_CACHE_TTL_SECONDS", Duration::from_secs(60));
   let voice_list_cache = SingleItemTtlCache::create_with_duration(voice_list_cache_ttl);
 
-  let database_tts_category_list_cache = SingleItemTtlCache::create_with_duration(
-    easyenv::get_env_duration_seconds_or_default("DATABASE_TTS_CATEGORY_LIST_CACHE_TTL_SECONDS", Duration::from_secs(60))
-  );
+  let database_tts_category_list_cache = SingleItemTtlCache::create_with_duration(easyenv::get_env_duration_seconds_or_default("DATABASE_TTS_CATEGORY_LIST_CACHE_TTL_SECONDS", Duration::from_secs(60)));
 
-  let tts_model_category_assignments_cache = SingleItemTtlCache::create_with_duration(
-    easyenv::get_env_duration_seconds_or_default("TTS_MODEL_CATEGORY_ASSIGNMENTS_CACHE_TTL_SECONDS", Duration::from_secs(60))
-  );
+  let tts_model_category_assignments_cache = SingleItemTtlCache::create_with_duration(easyenv::get_env_duration_seconds_or_default("TTS_MODEL_CATEGORY_ASSIGNMENTS_CACHE_TTL_SECONDS", Duration::from_secs(60)));
 
-  let inference_queue_length_cache = SingleItemTtlCache::create_with_duration(
-    easyenv::get_env_duration_seconds_or_default("INFERENCE_QUEUE_LENGTH_CACHE_TTL_SECONDS", Duration::from_secs(30))
-  );
+  let inference_queue_length_cache = SingleItemTtlCache::create_with_duration(easyenv::get_env_duration_seconds_or_default("INFERENCE_QUEUE_LENGTH_CACHE_TTL_SECONDS", Duration::from_secs(30)));
 
   let sort_key_crypto_secret = easyenv::get_env_string_or_default("SORT_KEY_SECRET", "webscale");
   let sort_key_crypto = WebSortKeyCrypto::new(&sort_key_crypto_secret);
   let opaque_cursor_encoder = WebOpaqueCursorEncoderV2::new(&sort_key_crypto_secret);
 
-  let health_check_interval = easyenv::get_env_duration_seconds_or_default(
-    "HEALTH_CHECK_INTERVAL_SECS", Duration::from_secs(3));
+  let health_check_interval = easyenv::get_env_duration_seconds_or_default("HEALTH_CHECK_INTERVAL_SECS", Duration::from_secs(3));
 
   let static_api_token_set = read_static_api_tokens();
 
@@ -175,8 +140,7 @@ pub async fn setup_dependencies(server_hostname: &str) -> AnyhowResult<SetupResu
 
   let health_check_status = HealthCheckStatus::new();
 
-  let server_environment = ServerEnvironment::from_str(&easyenv::get_env_string_required("SERVER_ENVIRONMENT")?)
-    .ok_or(anyhow!("invalid server environment"))?;
+  let server_environment = ServerEnvironment::from_str(&easyenv::get_env_string_required("SERVER_ENVIRONMENT")?).ok_or(anyhow!("invalid server environment"))?;
 
   let (pager, pager_worker, paging_flags) = build_pager(server_environment, server_hostname);
 
@@ -185,10 +149,7 @@ pub async fn setup_dependencies(server_hostname: &str) -> AnyhowResult<SetupResu
   let third_party_url_redirector = ThirdPartyUrlRedirector::new(server_environment);
 
   // NB: Docker creates this file within container builds.
-  let build_sha = std::fs::read_to_string("/GIT_SHA")
-    .unwrap_or(String::from("unknown"))
-    .trim()
-    .to_string();
+  let build_sha = std::fs::read_to_string("/GIT_SHA").unwrap_or(String::from("unknown")).trim().to_string();
 
   let inference_providers = setup_inference_providers()?;
 
@@ -197,17 +158,8 @@ pub async fn setup_dependencies(server_hostname: &str) -> AnyhowResult<SetupResu
   let startup_time = Utc::now();
 
   let server_state = ServerState {
-    env_config: EnvConfig {
-      num_workers,
-      bind_address,
-      cookie_domain,
-      cookie_secure,
-      cookie_http_only,
-      website_homepage_redirect,
-    },
-    server_info: ServerInfo {
-      build_sha,
-    },
+    env_config: EnvConfig { num_workers, bind_address, cookie_domain, cookie_secure, cookie_http_only, website_homepage_redirect },
+    server_info: ServerInfo { build_sha },
     stripe: setup_stripe_fakeyou()?,
     stripe_artcraft: setup_stripe_artcraft()?,
     hostname: server_hostname.to_string(),
@@ -235,46 +187,21 @@ pub async fn setup_dependencies(server_hostname: &str) -> AnyhowResult<SetupResu
     opaque_cursors: opaque_cursor_encoder,
     static_api_token_set,
     inference_providers,
-    resend: ResendData {
-      api_key: resend_api_key,
-    },
+    resend: ResendData { api_key: resend_api_key },
     pager,
-    caches: InMemoryCaches {
-      durable: DurableInMemoryCaches {
-        model_token_info: model_token_info_cache,
-      },
-      ephemeral: EphemeralInMemoryCaches {
-        tts_model_list: voice_list_cache,
-        database_tts_category_list: database_tts_category_list_cache,
-        tts_model_category_assignments: tts_model_category_assignments_cache,
-        inference_queue_length: inference_queue_length_cache,
-        featured_media_files_sieve: ArcTtlSieve::with_capacity_and_ttl_duration(
-          easyenv::get_env_num("FEATURED_MEDIA_FILES_CACHE_SIZE", 25)?,
-          easyenv::get_env_duration_seconds_or_default("FEATURED_MEDIA_FILES_TTL_SECONDS", Duration::from_secs(60)),
-        )?,
-      }
-    },
+    caches: InMemoryCaches { durable: DurableInMemoryCaches { model_token_info: model_token_info_cache }, ephemeral: EphemeralInMemoryCaches { tts_model_list: voice_list_cache, database_tts_category_list: database_tts_category_list_cache, tts_model_category_assignments: tts_model_category_assignments_cache, inference_queue_length: inference_queue_length_cache, featured_media_files_sieve: ArcTtlSieve::with_capacity_and_ttl_duration(easyenv::get_env_num("FEATURED_MEDIA_FILES_CACHE_SIZE", 25)?, easyenv::get_env_duration_seconds_or_default("FEATURED_MEDIA_FILES_TTL_SECONDS", Duration::from_secs(60)))? } },
     ip_ban_list,
     cidr_ban_set,
-    troll_bans: TrollBans {
-      user_tokens: user_token_troll_bans,
-      ip_addresses: ip_address_troll_bans,
-    },
+    troll_bans: TrollBans { user_tokens: user_token_troll_bans, ip_addresses: ip_address_troll_bans },
     temp_dir_creator: ScopedTempDirCreator::auto_setup(),
     google_sign_in_cert: GoogleSignInCert::new(),
   };
 
-  Ok(SetupResult {
-    server_state,
-    pager_worker,
-    health_check_interval,
-  })
+  Ok(SetupResult { server_state, pager_worker, health_check_interval })
 }
 
 fn read_static_api_tokens() -> StaticApiTokenSet {
-  let filename = easyenv::get_env_string_or_default(
-    "STATIC_API_TOKENS_CONFIG_FILE",
-    "./configs/static_api_tokens.toml");
+  let filename = easyenv::get_env_string_or_default("STATIC_API_TOKENS_CONFIG_FILE", "./configs/static_api_tokens.toml");
 
   StaticApiTokenSet::from_file(&filename)
 }

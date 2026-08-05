@@ -51,11 +51,7 @@ struct RawRecord {
 }
 
 /// Returns all non-terminal Seedance2Pro video jobs that have an associated order_id.
-pub async fn list_pending_seedance2pro_video_jobs(
-  pool: &MySqlPool,
-  external_third_party: InferenceJobExternalThirdParty,
-  job_type: InferenceJobType,
-) -> Result<Vec<PendingSeedance2ProJob>, sqlx::Error> {
+pub async fn list_pending_seedance2pro_video_jobs(pool: &MySqlPool, external_third_party: InferenceJobExternalThirdParty, job_type: InferenceJobType) -> Result<Vec<PendingSeedance2ProJob>, sqlx::Error> {
   let records = sqlx::query_as!(
     RawRecord,
     r#"
@@ -83,8 +79,8 @@ LIMIT 25000
     external_third_party.to_str(),
     job_type.to_str(),
   )
-    .fetch_all(pool)
-    .await?;
+  .fetch_all(pool)
+  .await?;
 
   let jobs = records
     .into_iter()
@@ -94,21 +90,10 @@ LIMIT 25000
         None => {
           warn!("PendingSeedance2ProJob has no order_id, skipping");
           return None;
-        }
+        },
       };
 
-      Some(PendingSeedance2ProJob {
-        job_token: record.job_token,
-        order_id,
-        maybe_creator_user_token: record.maybe_creator_user_token,
-        maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-        creator_ip_address: record.creator_ip_address,
-        creator_set_visibility: record.creator_set_visibility,
-        maybe_prompt_token: record.maybe_prompt_token,
-        maybe_wallet_ledger_entry_token: record.maybe_wallet_ledger_entry_token,
-        maybe_platform_type: record.maybe_platform_type,
-        created_at: record.created_at,
-      })
+      Some(PendingSeedance2ProJob { job_token: record.job_token, order_id, maybe_creator_user_token: record.maybe_creator_user_token, maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token, creator_ip_address: record.creator_ip_address, creator_set_visibility: record.creator_set_visibility, maybe_prompt_token: record.maybe_prompt_token, maybe_wallet_ledger_entry_token: record.maybe_wallet_ledger_entry_token, maybe_platform_type: record.maybe_platform_type, created_at: record.created_at })
     })
     .collect();
 

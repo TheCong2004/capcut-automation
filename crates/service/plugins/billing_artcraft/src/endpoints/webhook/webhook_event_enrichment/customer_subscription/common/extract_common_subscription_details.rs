@@ -15,38 +15,27 @@ pub struct EventLogAndSubscriptionDetails {
   pub subscription_details: UpsertableSubscriptionDetails,
 }
 
-pub fn extract_common_subscription_details(
-  subscription: &Subscription,
-  server_environment: ServerEnvironment,
-) -> Result<EventLogAndSubscriptionDetails, StripeArtcraftWebhookError> {
-  let summary = subscription_summary_extractor(subscription)
-      .map_err(|err| {
-        let reason = format!("Error extracting subscription from payload: {:?}", err);
-        error!("{}", reason);
-        StripeArtcraftWebhookError::ServerError(reason) // NB: This was probably *our* fault.
-      })?;
+pub fn extract_common_subscription_details(subscription: &Subscription, server_environment: ServerEnvironment) -> Result<EventLogAndSubscriptionDetails, StripeArtcraftWebhookError> {
+  let summary = subscription_summary_extractor(subscription).map_err(|err| {
+    let reason = format!("Error extracting subscription from payload: {:?}", err);
+    error!("{}", reason);
+    StripeArtcraftWebhookError::ServerError(reason) // NB: This was probably *our* fault.
+  })?;
 
-  let event_log_summary = WebhookEventLogSummary {
-    maybe_user_token: summary.user_token.clone(),
-    maybe_event_entity_id: Some(summary.stripe_subscription_id.clone()),
-    maybe_stripe_customer_id: Some(summary.stripe_customer_id.clone()),
-    action_was_taken: false,
-    should_ignore_retry: false,
-  };
+  let event_log_summary = WebhookEventLogSummary { maybe_user_token: summary.user_token.clone(), maybe_event_entity_id: Some(summary.stripe_subscription_id.clone()), maybe_stripe_customer_id: Some(summary.stripe_customer_id.clone()), action_was_taken: false, should_ignore_retry: false };
 
-  let maybe_product = get_artcraft_product_by_stripe_id_and_env(
-    &summary.stripe_product_id, server_environment);
+  let maybe_product = get_artcraft_product_by_stripe_id_and_env(&summary.stripe_product_id, server_environment);
 
   let product = match maybe_product {
     Some(StripeArtcraftGenericProductInfo::Subscription(subscription)) => subscription,
     Some(StripeArtcraftGenericProductInfo::CreditsPack(credits_pack)) => {
       error!("Received a non-subscription credits pack product ({}). This should not happen.", &credits_pack.slug.to_str());
       return Err(StripeArtcraftWebhookError::BadRequest("wrong product type".to_string()));
-    }
+    },
     None => {
       error!("No matching product for stripe product ID: {}", &summary.stripe_product_id);
       return Err(StripeArtcraftWebhookError::BadRequest("no matching product".to_string()));
-    }
+    },
   };
 
   // TODO: Multiple ways to get this; better ways to get this
@@ -55,11 +44,10 @@ pub fn extract_common_subscription_details(
     None => {
       warn!("No user token found in subscription metadata. Cannot proceed.");
       return Err(StripeArtcraftWebhookError::BadRequest("no user token in subscription event".to_string()));
-    }
+    },
   };
 
   let calculated_end_date = calculate_subscription_end_date(&summary);
-
 
   let subscription_details = UpsertableSubscriptionDetails {
     // Unique Stripe foreign key
@@ -91,8 +79,5 @@ pub fn extract_common_subscription_details(
     stripe_is_production: summary.stripe_is_production,
   };
 
-  Ok(EventLogAndSubscriptionDetails {
-    event_log_summary,
-    subscription_details,
-  })
+  Ok(EventLogAndSubscriptionDetails { event_log_summary, subscription_details })
 }

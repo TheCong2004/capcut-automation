@@ -19,75 +19,50 @@ use thumbnail_generator::task_client::thumbnail_task::{ThumbnailTaskBuilder, Thu
 use tokens::tokens::media_files::MediaFileToken;
 use ffmpeg_utils::ffprobe::ffprobe_get_info::ffprobe_get_info;
 
-const PREFIX : Option<&str> = Some("artcraft_");
+const PREFIX: Option<&str> = Some("artcraft_");
 
-pub async fn process_video_payload(
-  video_data: &VideoData,
-  job: &FalJobDetails,
-  server_state: &ServerState,
-) -> Result<MediaFileToken, CommonWebError> {
-  let video_url = video_data.url
-      .as_deref()
-      .ok_or_else(|| {
-        warn!("No `url` in video payload");
-        CommonWebError::server_error_with_message("no `url` in video payload")
-      })?;
+pub async fn process_video_payload(video_data: &VideoData, job: &FalJobDetails, server_state: &ServerState) -> Result<MediaFileToken, CommonWebError> {
+  let video_url = video_data.url.as_deref().ok_or_else(|| {
+    warn!("No `url` in video payload");
+    CommonWebError::server_error_with_message("no `url` in video payload")
+  })?;
 
   // Download with a retry if the first attempt returns suspiciously few bytes.
-  let mut file_bytes = http_download_url_to_bytes(video_url)
-      .await
-      .map_err(|err| {
-        warn!("Failed to download video from {}: {:?}", video_url, err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut file_bytes = http_download_url_to_bytes(video_url).await.map_err(|err| {
+    warn!("Failed to download video from {}: {:?}", video_url, err);
+    CommonWebError::from_error(err)
+  })?;
 
   if file_bytes.len() <= 10 {
-    warn!(
-      "Downloaded only {} bytes from {} — retrying once",
-      file_bytes.len(),
-      video_url,
-    );
-    file_bytes = http_download_url_to_bytes(video_url)
-        .await
-        .map_err(|err| {
-          warn!("Failed to download video on retry from {}: {:?}", video_url, err);
-          CommonWebError::from_error(err)
-        })?;
+    warn!("Downloaded only {} bytes from {} — retrying once", file_bytes.len(), video_url,);
+    file_bytes = http_download_url_to_bytes(video_url).await.map_err(|err| {
+      warn!("Failed to download video on retry from {}: {:?}", video_url, err);
+      CommonWebError::from_error(err)
+    })?;
   }
 
   // Resolve mime type: magic bytes first, fal content_type as fallback.
-  let metadata = resolve_file_metadata(&file_bytes, video_data.content_type.as_deref())
-      .ok_or_else(|| {
-        warn!(
-          "Could not determine file type for video (bytes: {}, fal content_type: {:?})",
-          file_bytes.len(),
-          video_data.content_type,
-        );
-        CommonWebError::server_error_with_message(
-          &format!("Could not determine file type for video (bytes: {}, fal content_type: {:?})",
-            file_bytes.len(), video_data.content_type))
-      })?;
+  let metadata = resolve_file_metadata(&file_bytes, video_data.content_type.as_deref()).ok_or_else(|| {
+    warn!("Could not determine file type for video (bytes: {}, fal content_type: {:?})", file_bytes.len(), video_data.content_type,);
+    CommonWebError::server_error_with_message(&format!("Could not determine file type for video (bytes: {}, fal content_type: {:?})", file_bytes.len(), video_data.content_type))
+  })?;
 
-  info!("File type: {}, extension: {:?}, source: {:?}",
-    metadata.mime_type, metadata.file_extension, metadata.source);
+  info!("File type: {}, extension: {:?}, source: {:?}", metadata.mime_type, metadata.file_extension, metadata.source);
 
   let mime_type = metadata.mime_type.as_str();
 
-  let media_file_type = MediaFileType::try_from_mime_type(mime_type)
-      .ok_or_else(|| {
-        warn!("Unsupported media file type: {}", mime_type);
-        CommonWebError::server_error_with_message(
-          &format!("Unsupported media file type: {}", mime_type))
-      })?;
+  let media_file_type = MediaFileType::try_from_mime_type(mime_type).ok_or_else(|| {
+    warn!("Unsupported media file type: {}", mime_type);
+    CommonWebError::server_error_with_message(&format!("Unsupported media file type: {}", mime_type))
+  })?;
 
   let extension_with_period = metadata.file_extension.extension_with_period();
 
   let file_size_bytes = file_bytes.len();
-  let file_hash = sha256_hash_bytes(&file_bytes)
-      .map_err(|e| {
-        warn!("Failed to hash video bytes: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  let file_hash = sha256_hash_bytes(&file_bytes).map_err(|e| {
+    warn!("Failed to hash video bytes: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
   let mut maybe_duration_millis = None;
   let mut maybe_frame_width = None;
@@ -98,17 +73,11 @@ pub async fn process_video_payload(
     let _r = file.write_all(&file_bytes);
 
     if let Ok(video_info) = ffprobe_get_info(&file.path()) {
-      maybe_duration_millis = video_info.duration
-          .as_ref()
-          .map(|duration| duration.millis as u64);
+      maybe_duration_millis = video_info.duration.as_ref().map(|duration| duration.millis as u64);
 
-      maybe_frame_width = video_info.dimensions
-          .as_ref()
-          .map(|ref dims| dims.width as u32);
+      maybe_frame_width = video_info.dimensions.as_ref().map(|ref dims| dims.width as u32);
 
-      maybe_frame_height = video_info.dimensions
-          .as_ref()
-          .map(|dims| dims.height as u32);
+      maybe_frame_height = video_info.dimensions.as_ref().map(|dims| dims.height as u32);
     }
   }
 
@@ -116,50 +85,19 @@ pub async fn process_video_payload(
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type_process(
-    public_upload_path.get_full_object_path_str(),
-    file_bytes.as_ref(),
-    &mime_type)
-      .await
-      .map_err(|e| {
-        warn!("Failed to upload video to bucket: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type_process(public_upload_path.get_full_object_path_str(), file_bytes.as_ref(), &mime_type).await.map_err(|e| {
+    warn!("Failed to upload video to bucket: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
-  let media_token = MediaFileInsertBuilder::new()
-      .checksum_sha2(&file_hash)
-      .creator_ip_address(&job.creator_ip_address)
-      .file_size_bytes(file_size_bytes as u64)
-      .maybe_creator_anonymous_visitor(job.maybe_creator_anonymous_visitor_token.as_ref())
-      .maybe_creator_user(job.maybe_creator_user_token.as_ref())
-      .maybe_duration_millis(maybe_duration_millis)
-      .maybe_frame_height(maybe_frame_height)
-      .maybe_frame_width(maybe_frame_width)
-      .maybe_generation_provider(Some(GenerationProvider::Artcraft))
-      .maybe_prompt_token(job.maybe_prompt_token.as_ref())
-      .maybe_platform_type(job.maybe_platform_type)
-      .media_file_class(MediaFileClass::Video)
-      .media_file_origin_category(MediaFileOriginCategory::Inference)
-      .media_file_type(media_file_type)
-      .mime_type(mime_type)
-      .public_bucket_directory_hash(&public_upload_path)
-      .insert_pool(&server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Failed to insert video media file record: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let media_token = MediaFileInsertBuilder::new().checksum_sha2(&file_hash).creator_ip_address(&job.creator_ip_address).file_size_bytes(file_size_bytes as u64).maybe_creator_anonymous_visitor(job.maybe_creator_anonymous_visitor_token.as_ref()).maybe_creator_user(job.maybe_creator_user_token.as_ref()).maybe_duration_millis(maybe_duration_millis).maybe_frame_height(maybe_frame_height).maybe_frame_width(maybe_frame_width).maybe_generation_provider(Some(GenerationProvider::Artcraft)).maybe_prompt_token(job.maybe_prompt_token.as_ref()).maybe_platform_type(job.maybe_platform_type).media_file_class(MediaFileClass::Video).media_file_origin_category(MediaFileOriginCategory::Inference).media_file_type(media_file_type).mime_type(mime_type).public_bucket_directory_hash(&public_upload_path).insert_pool(&server_state.mysql_pool).await.map_err(|e| {
+    warn!("Failed to insert video media file record: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   info!("Video media file uploaded with token: {}", media_token);
 
-  let thumbnail_task_result =
-      ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4)
-          .with_bucket(server_state.public_bucket_client.bucket_name().as_str())
-          .with_path(&*path_to_string(public_upload_path.to_full_object_pathbuf()))
-          .with_output_suffix("thumb")
-          .with_event_id(&media_token.to_string())
-          .send_all()
-          .await;
+  let thumbnail_task_result = ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4).with_bucket(server_state.public_bucket_client.bucket_name().as_str()).with_path(&*path_to_string(public_upload_path.to_full_object_pathbuf())).with_output_suffix("thumb").with_event_id(&media_token.to_string()).send_all().await;
 
   if let Err(err) = thumbnail_task_result {
     // Fail open

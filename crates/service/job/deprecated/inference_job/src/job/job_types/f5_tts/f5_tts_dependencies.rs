@@ -8,12 +8,8 @@ pub struct F5TTSDependencies {
   pub ffmpeg_command_runner: FfmpegCommandRunner,
 }
 
-
 impl F5TTSDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      inference_command: F5TTSInferenceCommand::from_env()?,
-      ffmpeg_command_runner: FfmpegCommandRunner::from_env()?,
-    })
+    Ok(Self { inference_command: F5TTSInferenceCommand::from_env()?, ffmpeg_command_runner: FfmpegCommandRunner::from_env()? })
   }
 }

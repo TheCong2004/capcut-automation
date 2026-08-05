@@ -19,7 +19,6 @@ const ENV_SEEDANCE2PRO_BYTEPLUS_COOKIES: &str = "SEEDANCE2PRO_BYTEPLUS_COOKIES";
 // Cookies for BytePlus Ultra
 const ENV_SEEDANCE2PRO_BYTEPLUS_ULTRA_COOKIES: &str = "SEEDANCE2PRO_BYTEPLUS_ULTRA_COOKIES";
 
-
 pub fn get_kinovi_version() -> anyhow::Result<KinoviVersion> {
   info!("Reading kinovi version from first CLI arg (optional - typical production config is via env vars):");
 
@@ -33,10 +32,7 @@ pub fn get_kinovi_version() -> anyhow::Result<KinoviVersion> {
     return parse_kinovi_version(&version);
   }
 
-  Err(anyhow!(
-    "kinovi version not specified: set env var {} or pass volcengine|byteplus|byteplusultra as the first CLI arg",
-    ENV_SEEDANCE2PRO_VERSION,
-  ))
+  Err(anyhow!("kinovi version not specified: set env var {} or pass volcengine|byteplus|byteplusultra as the first CLI arg", ENV_SEEDANCE2PRO_VERSION,))
 }
 
 fn parse_kinovi_version(value: &str) -> anyhow::Result<KinoviVersion> {
@@ -44,10 +40,7 @@ fn parse_kinovi_version(value: &str) -> anyhow::Result<KinoviVersion> {
     "volcengine" => Ok(KinoviVersion::Volcengine),
     "byteplus" => Ok(KinoviVersion::BytePlus),
     "byteplusultra" => Ok(KinoviVersion::BytePlusUltra),
-    other => Err(anyhow!(
-      "invalid kinovi version {:?} (expected volcengine|byteplus|byteplusultra)",
-      other,
-    )),
+    other => Err(anyhow!("invalid kinovi version {:?} (expected volcengine|byteplus|byteplusultra)", other,)),
   }
 }
 
@@ -60,21 +53,17 @@ fn read_kinovi_cookies(version: KinoviVersion) -> anyhow::Result<String> {
   match version {
     KinoviVersion::Volcengine => {
       info!("Using Volcengine cookies from env var: {}", ENV_SEEDANCE2PRO_VOLCENGINE_COOKIES);
-      easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_VOLCENGINE_COOKIES)
-          .or_else(|| easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_LEGACY_COOKIES))
-          .ok_or_else(|| anyhow!("missing Seedance2Pro cookies in in env var {}", ENV_SEEDANCE2PRO_VOLCENGINE_COOKIES))
-    }
+      easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_VOLCENGINE_COOKIES).or_else(|| easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_LEGACY_COOKIES)).ok_or_else(|| anyhow!("missing Seedance2Pro cookies in in env var {}", ENV_SEEDANCE2PRO_VOLCENGINE_COOKIES))
+    },
     KinoviVersion::BytePlus => {
       info!("Using BytePlus cookies from env var: {}", ENV_SEEDANCE2PRO_BYTEPLUS_COOKIES);
-      easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_BYTEPLUS_COOKIES)
-          .or_else(|| easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_LEGACY_ALT_COOKIES))
-          .ok_or_else(|| anyhow!("missing Seedance2Pro cookies in in env var {}", ENV_SEEDANCE2PRO_BYTEPLUS_COOKIES))
-    }
+      easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_BYTEPLUS_COOKIES).or_else(|| easyenv::get_env_string_optional(ENV_SEEDANCE2PRO_LEGACY_ALT_COOKIES)).ok_or_else(|| anyhow!("missing Seedance2Pro cookies in in env var {}", ENV_SEEDANCE2PRO_BYTEPLUS_COOKIES))
+    },
     KinoviVersion::BytePlusUltra => {
       info!("Using BytePlus Ultra cookies from env var: {}", ENV_SEEDANCE2PRO_BYTEPLUS_ULTRA_COOKIES);
       let cookies = easyenv::get_env_string_required(ENV_SEEDANCE2PRO_BYTEPLUS_ULTRA_COOKIES)?;
       Ok(cookies)
-    }
+    },
   }
 }
 

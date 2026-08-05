@@ -24,9 +24,7 @@ where
 ///
 /// `keep_tag_tokens` must be non-empty — to remove everything, use
 /// `clear_media_file_tags` instead (an empty NOT IN list is invalid SQL).
-pub async fn delete_media_file_tags_not_in_set<'e, 'c: 'e, E>(
-  args: DeleteMediaFileTagsNotInSetArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn delete_media_file_tags_not_in_set<'e, 'c: 'e, E>(args: DeleteMediaFileTagsNotInSetArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -34,9 +32,7 @@ where
     return Ok(0);
   }
 
-  let mut builder = QueryBuilder::<MySql>::new(
-    "DELETE FROM media_file_tags WHERE user_token = ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("DELETE FROM media_file_tags WHERE user_token = ");
   builder.push_bind(args.user_token.as_str());
 
   builder.push(" AND media_file_token IN (");

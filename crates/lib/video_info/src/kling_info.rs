@@ -86,26 +86,13 @@ impl KlingInfo {
     let watermark_uuid = find_watermark_uuid(data);
     let has_stream_watermark = watermark_uuid.is_some() || find(data, WATERMARK_MARKER).is_some();
 
-    let has_aigc_label = find(data, b"KLingMuse").is_some()
-      || (find(data, b"\"ContentProducer\"").is_some() && find(data, b"\"Label\"").is_some());
+    let has_aigc_label = find(data, b"KLingMuse").is_some() || (find(data, b"\"ContentProducer\"").is_some() && find(data, b"\"Label\"").is_some());
     if !has_aigc_label && !has_stream_watermark {
       return Err(VideoInfoError::NotKling);
     }
 
     let label = json_str_field(data, "Label");
-    Ok(KlingInfo {
-      model_version: find_model_version(data),
-      is_ai_generated: label.as_deref() == Some("1"),
-      label,
-      content_producer: json_str_field(data, "ContentProducer"),
-      produce_id: json_str_field(data, "ProduceID"),
-      content_propagator: json_str_field(data, "ContentPropagator"),
-      propagate_id: json_str_field(data, "PropagateID"),
-      reserved_code_1: json_str_field(data, "ReservedCode1"),
-      reserved_code_2: json_str_field(data, "ReservedCode2"),
-      has_stream_watermark,
-      watermark_uuid,
-    })
+    Ok(KlingInfo { model_version: find_model_version(data), is_ai_generated: label.as_deref() == Some("1"), label, content_producer: json_str_field(data, "ContentProducer"), produce_id: json_str_field(data, "ProduceID"), content_propagator: json_str_field(data, "ContentPropagator"), propagate_id: json_str_field(data, "PropagateID"), reserved_code_1: json_str_field(data, "ReservedCode1"), reserved_code_2: json_str_field(data, "ReservedCode2"), has_stream_watermark, watermark_uuid })
   }
 }
 
@@ -169,10 +156,7 @@ mod tests {
     v.extend_from_slice(b"....mdat....");
     // SEI: type 6, payload 5, len 0x19, 16-byte UUID, then "kling-ai\0".
     v.extend_from_slice(&[0x06, 0x05, 0x19]);
-    v.extend_from_slice(&[
-      0x91, 0xca, 0x60, 0x61, 0x4a, 0xee, 0x38, 0x54, 0x86, 0x14, 0x2d, 0x5f, 0x73, 0xf4, 0xae,
-      0x2e,
-    ]);
+    v.extend_from_slice(&[0x91, 0xca, 0x60, 0x61, 0x4a, 0xee, 0x38, 0x54, 0x86, 0x14, 0x2d, 0x5f, 0x73, 0xf4, 0xae, 0x2e]);
     v.extend_from_slice(b"kling-ai\0");
     v
   }

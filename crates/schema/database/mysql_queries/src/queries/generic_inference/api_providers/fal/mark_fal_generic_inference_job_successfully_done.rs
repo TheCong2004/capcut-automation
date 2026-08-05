@@ -10,7 +10,8 @@ use tokens::tokens::generic_inference_jobs::InferenceJobToken;
 use tokens::tokens::media_files::MediaFileToken;
 
 pub struct MarkJobArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub job_token: &'e InferenceJobToken,
   pub media_file_token: &'e MediaFileToken,
@@ -18,16 +19,15 @@ pub struct MarkJobArgs<'e, 'c, E>
   pub mysql_executor: E,
   pub phantom: PhantomData<&'c E>,
 }
-pub async fn mark_fal_generic_inference_job_successfully_done<'e, 'c : 'e, E>(
-  args: MarkJobArgs<'e, 'c, E>
-) -> AnyhowResult<()>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn mark_fal_generic_inference_job_successfully_done<'e, 'c: 'e, E>(args: MarkJobArgs<'e, 'c, E>) -> AnyhowResult<()>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-  const STATUS : JobStatusPlus = JobStatusPlus::CompleteSuccess;
-  const RESULT_TYPE : InferenceResultType = InferenceResultType::MediaFile;
+  const STATUS: JobStatusPlus = JobStatusPlus::CompleteSuccess;
+  const RESULT_TYPE: InferenceResultType = InferenceResultType::MediaFile;
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 UPDATE generic_inference_jobs
 SET
   status = ?,
@@ -42,14 +42,14 @@ SET
   successfully_completed_at = NOW()
 WHERE token = ?
         "#,
-        STATUS.to_str(),
-        RESULT_TYPE.to_str(),
-        args.media_file_token,
-        args.maybe_batch_token.map(|t| t.as_str()),
-        args.job_token,
-    )
-      .execute(args.mysql_executor)
-      .await;
+    STATUS.to_str(),
+    RESULT_TYPE.to_str(),
+    args.media_file_token,
+    args.maybe_batch_token.map(|t| t.as_str()),
+    args.job_token,
+  )
+  .execute(args.mysql_executor)
+  .await;
 
   match query_result {
     Err(err) => Err(anyhow!("error with query: {:?}", err)),

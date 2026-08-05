@@ -13,21 +13,14 @@ use mysql_queries::queries::voice_conversion::model_info_lite::list_voice_conver
 
 use crate::state::memory_cache::model_token_to_info_cache::{ModelInfoForInferenceJob, ModelTokenToInfoCache};
 
-pub async fn poll_model_token_info_thread(
-  model_token_info_cache: ModelTokenToInfoCache,
-  mysql_pool: MySqlPool,
-) {
-  let startup_wait = easyenv::get_env_duration_seconds_or_default(
-    "POLL_MODEL_TOKEN_STARTUP_WAIT_DURATION_SECS", Duration::from_secs(5));
+pub async fn poll_model_token_info_thread(model_token_info_cache: ModelTokenToInfoCache, mysql_pool: MySqlPool) {
+  let startup_wait = easyenv::get_env_duration_seconds_or_default("POLL_MODEL_TOKEN_STARTUP_WAIT_DURATION_SECS", Duration::from_secs(5));
 
-  let between_wait = easyenv::get_env_duration_seconds_or_default(
-    "POLL_MODEL_TOKEN_BETWEEN_WAIT_DURATION_SECS", Duration::from_secs(2));
+  let between_wait = easyenv::get_env_duration_seconds_or_default("POLL_MODEL_TOKEN_BETWEEN_WAIT_DURATION_SECS", Duration::from_secs(2));
 
-  let error_wait = easyenv::get_env_duration_seconds_or_default(
-    "POLL_MODEL_TOKEN_ERROR_WAIT_DURATION_SECS", Duration::from_secs(60));
+  let error_wait = easyenv::get_env_duration_seconds_or_default("POLL_MODEL_TOKEN_ERROR_WAIT_DURATION_SECS", Duration::from_secs(60));
 
-  let interval_wait = easyenv::get_env_duration_seconds_or_default(
-    "POLL_MODEL_TOKEN_INTERVAL_SECS", Duration::from_secs(10 * 60));
+  let interval_wait = easyenv::get_env_duration_seconds_or_default("POLL_MODEL_TOKEN_INTERVAL_SECS", Duration::from_secs(10 * 60));
 
   tokio::time::sleep(startup_wait).await;
 
@@ -38,7 +31,7 @@ pub async fn poll_model_token_info_thread(
         error!("Error polling voice conversion model token info: {:?}", err);
         tokio::time::sleep(error_wait).await;
         continue;
-      }
+      },
     };
 
     let database_count = token_info_items.len();
@@ -57,7 +50,7 @@ pub async fn poll_model_token_info_thread(
         error!("Error polling model weight token info: {:?}", err);
         tokio::time::sleep(error_wait).await;
         continue;
-      }
+      },
     };
 
     let database_count = token_info_items.len();
@@ -72,13 +65,10 @@ pub async fn poll_model_token_info_thread(
   }
 }
 
-async fn query_voice_conversion_models(mysql_pool: &MySqlPool)
-  -> AnyhowResult<Vec<(String, ModelInfoForInferenceJob)>>
-{
+async fn query_voice_conversion_models(mysql_pool: &MySqlPool) -> AnyhowResult<Vec<(String, ModelInfoForInferenceJob)>> {
   debug!("Job fetching voice conversion model token info...");
 
-  let token_infos =
-      list_voice_conversion_model_info_lite(&mysql_pool).await?;
+  let token_infos = list_voice_conversion_model_info_lite(&mysql_pool).await?;
 
   let mut token_info_items = Vec::with_capacity(token_infos.len());
 
@@ -87,14 +77,11 @@ async fn query_voice_conversion_models(mysql_pool: &MySqlPool)
       VoiceConversionModelType::RvcV2 => InferenceModelType::RvcV2,
       VoiceConversionModelType::SoVitsSvc => InferenceModelType::SoVitsSvc,
       VoiceConversionModelType::SoftVc => {
-        continue // NB: SoftVC is not supported.
+        continue; // NB: SoftVC is not supported.
       },
     };
 
-    let info = ModelInfoForInferenceJob {
-      job_inference_category: InferenceCategory::VoiceConversion,
-      job_model_type: model_type,
-    };
+    let info = ModelInfoForInferenceJob { job_inference_category: InferenceCategory::VoiceConversion, job_model_type: model_type };
 
     token_info_items.push((token_info.token.to_string(), info));
   }
@@ -102,13 +89,10 @@ async fn query_voice_conversion_models(mysql_pool: &MySqlPool)
   Ok(token_info_items)
 }
 
-async fn query_model_weight_models(mysql_pool: &MySqlPool)
-  -> AnyhowResult<Vec<(String, ModelInfoForInferenceJob)>>
-{
+async fn query_model_weight_models(mysql_pool: &MySqlPool) -> AnyhowResult<Vec<(String, ModelInfoForInferenceJob)>> {
   debug!("Job fetching model weight token info...");
 
-  let token_infos =
-      list_model_weight_info_lite(&mysql_pool).await?;
+  let token_infos = list_model_weight_info_lite(&mysql_pool).await?;
 
   let mut token_info_items = Vec::with_capacity(token_infos.len());
 
@@ -117,19 +101,16 @@ async fn query_model_weight_models(mysql_pool: &MySqlPool)
       WeightsType::RvcV2 => (InferenceCategory::VoiceConversion, InferenceModelType::RvcV2),
       WeightsType::SoVitsSvc => (InferenceCategory::VoiceConversion, InferenceModelType::SoVitsSvc),
       WeightsType::Tacotron2 => (InferenceCategory::TextToSpeech, InferenceModelType::Tacotron2),
-      WeightsType::HifiganTacotron2 => continue, // Not supported for inference
+      WeightsType::HifiganTacotron2 => continue,  // Not supported for inference
       WeightsType::StableDiffusion15 => continue, // TODO(bt,2023-12-18): Not yet set up with enums for inference
       WeightsType::StableDiffusionXL => continue, // TODO(bt,2023-12-18): Not yet set up with enums for inference
-      WeightsType::LoRA => continue, // TODO(bt,2023-12-18): Not yet set up with enums for inference
-      WeightsType::VallE => continue, // TODO(bt,2023-12-18): ??? We have vall-e weights?? Not sure what this means yet.
-      WeightsType::ComfyUi => continue, // Not supported for inference
-      WeightsType::GptSoVits => continue, // TODO: FIXME
+      WeightsType::LoRA => continue,              // TODO(bt,2023-12-18): Not yet set up with enums for inference
+      WeightsType::VallE => continue,             // TODO(bt,2023-12-18): ??? We have vall-e weights?? Not sure what this means yet.
+      WeightsType::ComfyUi => continue,           // Not supported for inference
+      WeightsType::GptSoVits => continue,         // TODO: FIXME
     };
 
-    let info = ModelInfoForInferenceJob {
-      job_inference_category: inference_category,
-      job_model_type: inference_model_type,
-    };
+    let info = ModelInfoForInferenceJob { job_inference_category: inference_category, job_model_type: inference_model_type };
 
     token_info_items.push((token_info.token.to_string(), info));
   }

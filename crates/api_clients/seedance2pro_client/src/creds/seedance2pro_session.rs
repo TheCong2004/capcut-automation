@@ -12,8 +12,6 @@ impl Seedance2ProSession {
   }
 
   pub fn from_cookies_string(cookies: String) -> Self {
-    Seedance2ProSession {
-      cookies: Seedance2ProCookies::new(cookies),
-    }
+    Seedance2ProSession { cookies: Seedance2ProCookies::new(cookies) }
   }
 }

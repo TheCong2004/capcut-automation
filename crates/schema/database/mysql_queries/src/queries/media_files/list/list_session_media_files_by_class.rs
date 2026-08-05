@@ -71,9 +71,7 @@ where
 
 /// List the session user's media files of a single class (e.g. `mesh` or
 /// `splat`), newest first by default, with keyset pagination on `id`.
-pub async fn list_session_media_files_by_class<'a, 'c: 'a, E>(
-  args: ListSessionMediaFilesByClassArgs<'a, 'c, E>,
-) -> Result<SessionMediaFileListPage, sqlx::Error>
+pub async fn list_session_media_files_by_class<'a, 'c: 'a, E>(args: ListSessionMediaFilesByClassArgs<'a, 'c, E>) -> Result<SessionMediaFileListPage, sqlx::Error>
 where
   E: 'a + Executor<'c, Database = MySql>,
 {
@@ -86,51 +84,29 @@ where
   let records = if ascending {
     // NB: IDs start at 1, so a zero sentinel means "no cursor".
     let cursor_id = args.maybe_cursor_id.unwrap_or(0);
-    select_page_ascending(
-      args.user_token,
-      args.media_class,
-      cursor_id,
-      limit,
-      args.mysql_executor,
-    ).await?
+    select_page_ascending(args.user_token, args.media_class, cursor_id, limit, args.mysql_executor).await?
   } else {
     let cursor_id = args.maybe_cursor_id.unwrap_or(u64::MAX);
-    select_page_descending(
-      args.user_token,
-      args.media_class,
-      cursor_id,
-      limit,
-      args.mysql_executor,
-    ).await?
+    select_page_descending(args.user_token, args.media_class, cursor_id, limit, args.mysql_executor).await?
   };
 
   let first_id = records.first().map(|record| record.id);
   let last_id = records.last().map(|record| record.id);
 
-  Ok(SessionMediaFileListPage {
-    records,
-    first_id,
-    last_id,
-  })
+  Ok(SessionMediaFileListPage { records, first_id, last_id })
 }
 
 // NB: The two queries below are intentionally duplicated so that sqlx can check
 // them at compile time (no QueryBuilder). Keep the SELECT lists and predicates
 // in sync; they differ only in the cursor comparison direction and sort order.
 
-async fn select_page_ascending<'a, 'c: 'a, E>(
-  user_token: &'a UserToken,
-  media_class: MediaFileClass,
-  cursor_id: u64,
-  limit: u64,
-  mysql_executor: E,
-) -> Result<Vec<SessionMediaFileListItem>, sqlx::Error>
+async fn select_page_ascending<'a, 'c: 'a, E>(user_token: &'a UserToken, media_class: MediaFileClass, cursor_id: u64, limit: u64, mysql_executor: E) -> Result<Vec<SessionMediaFileListItem>, sqlx::Error>
 where
   E: 'a + Executor<'c, Database = MySql>,
 {
   sqlx::query_as!(
-      SessionMediaFileListItem,
-      r#"
+    SessionMediaFileListItem,
+    r#"
 SELECT
     m.id as `id: u64`,
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
@@ -174,28 +150,22 @@ WHERE
 ORDER BY m.id ASC
 LIMIT ?
       "#,
-      user_token,
-      media_class.to_str(),
-      cursor_id,
-      limit,
-    )
-      .fetch_all(mysql_executor)
-      .await
+    user_token,
+    media_class.to_str(),
+    cursor_id,
+    limit,
+  )
+  .fetch_all(mysql_executor)
+  .await
 }
 
-async fn select_page_descending<'a, 'c: 'a, E>(
-  user_token: &'a UserToken,
-  media_class: MediaFileClass,
-  cursor_id: u64,
-  limit: u64,
-  mysql_executor: E,
-) -> Result<Vec<SessionMediaFileListItem>, sqlx::Error>
+async fn select_page_descending<'a, 'c: 'a, E>(user_token: &'a UserToken, media_class: MediaFileClass, cursor_id: u64, limit: u64, mysql_executor: E) -> Result<Vec<SessionMediaFileListItem>, sqlx::Error>
 where
   E: 'a + Executor<'c, Database = MySql>,
 {
   sqlx::query_as!(
-      SessionMediaFileListItem,
-      r#"
+    SessionMediaFileListItem,
+    r#"
 SELECT
     m.id as `id: u64`,
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
@@ -239,11 +209,11 @@ WHERE
 ORDER BY m.id DESC
 LIMIT ?
       "#,
-      user_token,
-      media_class.to_str(),
-      cursor_id,
-      limit,
-    )
-      .fetch_all(mysql_executor)
-      .await
+    user_token,
+    media_class.to_str(),
+    cursor_id,
+    limit,
+  )
+  .fetch_all(mysql_executor)
+  .await
 }

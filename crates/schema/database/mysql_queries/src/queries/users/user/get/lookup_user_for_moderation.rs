@@ -27,10 +27,7 @@ pub struct LookupUserForModerationResult {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn lookup_user_for_moderation_by_token(
-  token: &str,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Option<LookupUserForModerationResult>> {
+pub async fn lookup_user_for_moderation_by_token(token: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<LookupUserForModerationResult>> {
   let result = sqlx::query_as!(
     LookupUserForModerationResult,
     r#"
@@ -61,8 +58,8 @@ LIMIT 1
     "#,
     token,
   )
-    .fetch_one(mysql_pool)
-    .await;
+  .fetch_one(mysql_pool)
+  .await;
 
   match result {
     Ok(record) => Ok(Some(record)),
@@ -70,14 +67,11 @@ LIMIT 1
     Err(err) => {
       warn!("lookup_user_for_moderation_by_token query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }
 
-pub async fn lookup_user_for_moderation_by_email(
-  email: &str,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Option<LookupUserForModerationResult>> {
+pub async fn lookup_user_for_moderation_by_email(email: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<LookupUserForModerationResult>> {
   let email = email.trim().to_lowercase();
 
   let result = sqlx::query_as!(
@@ -110,8 +104,8 @@ LIMIT 1
     "#,
     email,
   )
-    .fetch_one(mysql_pool)
-    .await;
+  .fetch_one(mysql_pool)
+  .await;
 
   match result {
     Ok(record) => Ok(Some(record)),
@@ -119,14 +113,11 @@ LIMIT 1
     Err(err) => {
       warn!("lookup_user_for_moderation_by_email query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }
 
-pub async fn lookup_user_for_moderation_by_username(
-  username: &str,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Option<LookupUserForModerationResult>> {
+pub async fn lookup_user_for_moderation_by_username(username: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<LookupUserForModerationResult>> {
   let username = username.trim().to_lowercase();
 
   let result = sqlx::query_as!(
@@ -159,8 +150,8 @@ LIMIT 1
     "#,
     username,
   )
-    .fetch_one(mysql_pool)
-    .await;
+  .fetch_one(mysql_pool)
+  .await;
 
   match result {
     Ok(record) => Ok(Some(record)),
@@ -168,6 +159,6 @@ LIMIT 1
     Err(err) => {
       warn!("lookup_user_for_moderation_by_username query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }

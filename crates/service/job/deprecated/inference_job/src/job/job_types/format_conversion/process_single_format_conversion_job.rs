@@ -20,44 +20,32 @@ use crate::state::job_dependencies::JobDependencies;
 // }
 
 pub async fn process_single_format_conversion_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
-
-  let maybe_media_file_token = job.maybe_input_source_token
-      .as_deref()
-      .map(|token| MediaFileToken::new_from_str(token));
+  let maybe_media_file_token = job.maybe_input_source_token.as_deref().map(|token| MediaFileToken::new_from_str(token));
 
   let media_file_token = match maybe_media_file_token {
     None => return Err(ProcessSingleJobError::Other(anyhow!("no associated media file for format conversion job: {:?}", job.inference_job_token))),
     Some(token) => token,
   };
 
-  let maybe_media_file_result =
-      get_media_file_for_inference(&media_file_token, &job_dependencies.db.mysql_pool).await;
+  let maybe_media_file_result = get_media_file_for_inference(&media_file_token, &job_dependencies.db.mysql_pool).await;
 
   let media_file = match maybe_media_file_result {
     Ok(Some(media_file)) => media_file,
     Ok(None) => {
       error!("no media file record found for token: {:?}", media_file_token);
       return Err(ProcessSingleJobError::Other(anyhow!("no media file record found for token: {:?}", media_file_token)));
-    }
+    },
     Err(err) => {
       error!("error fetching media file record from db: {:?}", err);
       return Err(ProcessSingleJobError::Other(err));
-    }
+    },
   };
 
   let job_success_result = match job.maybe_model_type {
-    Some(InferenceModelType::ConvertFbxToGltf) => {
-      fbx_to_gltf::process_job::process_job(FbxToGltfJobArgs {
-        job_dependencies,
-        job,
-        media_file: &media_file,
-      }).await?
-    },
+    Some(InferenceModelType::ConvertFbxToGltf) => fbx_to_gltf::process_job::process_job(FbxToGltfJobArgs { job_dependencies, job, media_file: &media_file }).await?,
     Some(model_type) => return Err(ProcessSingleJobError::Other(anyhow!("wrong model type: {:?}", model_type))),
     None => return Err(ProcessSingleJobError::Other(anyhow!("no model type in record"))),
   };
 
   Ok(job_success_result)
 }
-
-

@@ -35,9 +35,7 @@ where
 ///
 /// Callers should follow up with `select_tags_by_lowercase_values` to
 /// learn the canonical tokens.
-pub async fn upsert_tags<'e, 'c: 'e, E>(
-  args: UpsertTagsArgs<'e, 'c, E>,
-) -> Result<(), sqlx::Error>
+pub async fn upsert_tags<'e, 'c: 'e, E>(args: UpsertTagsArgs<'e, 'c, E>) -> Result<(), sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -46,14 +44,9 @@ where
   }
 
   let creator_user_token_str = args.creator_user_token.as_str();
-  let mut builder = QueryBuilder::<MySql>::new(
-    "INSERT INTO tags (token, tag_value, tag_value_lowercase, creator_user_token) ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("INSERT INTO tags (token, tag_value, tag_value_lowercase, creator_user_token) ");
   builder.push_values(args.new_tags, |mut b, new_tag| {
-    b.push_bind(TagToken::generate().0)
-      .push_bind(new_tag.tag_value.as_str())
-      .push_bind(new_tag.tag_value_lowercase.as_str())
-      .push_bind(creator_user_token_str);
+    b.push_bind(TagToken::generate().0).push_bind(new_tag.tag_value.as_str()).push_bind(new_tag.tag_value_lowercase.as_str()).push_bind(creator_user_token_str);
   });
   builder.push(" ON DUPLICATE KEY UPDATE maybe_deleted_at = NULL");
 

@@ -19,29 +19,20 @@ pub fn setup_seedance_video_bucket() -> Option<BucketClient> {
   let secret_key = read_non_empty_env("SEEDANCE_VIDEO_BUCKET_SECRET_ACCESS_KEY");
 
   match (bucket_name, region, endpoint, access_key, secret_key) {
-    (Some(bucket_name), Some(region), Some(endpoint), Some(access_key), Some(secret_key)) => {
-      match BucketClientBuilder::new()
-        .access_key(access_key)
-        .secret_key(secret_key)
-        .region_name(region)
-        .bucket_name(&bucket_name)
-        .endpoint(endpoint)
-        .build()
-      {
-        Ok(client) => {
-          info!("Seedance video bucket configured: {}", bucket_name);
-          Some(client)
-        }
-        Err(err) => {
-          warn!("Seedance video bucket env present but client setup failed: {}", err);
-          None
-        }
-      }
-    }
+    (Some(bucket_name), Some(region), Some(endpoint), Some(access_key), Some(secret_key)) => match BucketClientBuilder::new().access_key(access_key).secret_key(secret_key).region_name(region).bucket_name(&bucket_name).endpoint(endpoint).build() {
+      Ok(client) => {
+        info!("Seedance video bucket configured: {}", bucket_name);
+        Some(client)
+      },
+      Err(err) => {
+        warn!("Seedance video bucket env present but client setup failed: {}", err);
+        None
+      },
+    },
     (None, None, None, None, None) => {
       info!("Seedance video bucket not configured; archival uploads disabled.");
       None
-    }
+    },
     _ => {
       warn!(
         "Seedance video bucket is only partially configured \
@@ -49,7 +40,7 @@ pub fn setup_seedance_video_bucket() -> Option<BucketClient> {
          _ACCESS_KEY_ID / _SECRET_ACCESS_KEY); skipping setup."
       );
       None
-    }
+    },
   }
 }
 

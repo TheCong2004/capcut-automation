@@ -23,639 +23,313 @@ use crate::database::add_history_internal;
 use crate::database::add_log_internal;
 use crate::database::ensure_collection_for_download_in_db;
 use crate::database::update_history_download;
-use crate::services::{
-    add_safe_filename_args, build_cookie_args, build_proxy_args, build_site_header_args,
-    build_youtube_extractor_args, build_ytdlp_advanced_args, enqueue_post_download_workflow,
-    get_deno_path, get_ffmpeg_path, get_ytdlp_path, get_ytdlp_source, is_upcoming_live_error,
-    redact_ytdlp_advanced_args, resolve_download_workflow_snapshot, run_ytdlp_with_stderr,
-    system_ytdlp_not_found_message, YtdlpAdvancedOption,
-};
-use crate::types::{
-    BackendError, DependencySource, DownloadProgress, PluginWorkflowStepSnapshot,
-    PostDownloadPluginPayload,
-};
-use crate::utils::{
-    build_format_string, format_size, parse_progress, sanitize_output_path, CommandExt,
-};
+use crate::services::{add_safe_filename_args, build_cookie_args, build_proxy_args, build_site_header_args, build_youtube_extractor_args, build_ytdlp_advanced_args, enqueue_post_download_workflow, get_deno_path, get_ffmpeg_path, get_ytdlp_path, get_ytdlp_source, is_upcoming_live_error, redact_ytdlp_advanced_args, resolve_download_workflow_snapshot, run_ytdlp_with_stderr, system_ytdlp_not_found_message, YtdlpAdvancedOption};
+use crate::types::{BackendError, DependencySource, DownloadProgress, PluginWorkflowStepSnapshot, PostDownloadPluginPayload};
+use crate::utils::{build_format_string, format_size, parse_progress, sanitize_output_path, CommandExt};
 
 pub static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
 
 const RECENT_OUTPUT_LIMIT: usize = 30;
 
 fn extract_time_range(download_sections: &Option<String>) -> Option<String> {
-    download_sections.as_ref().and_then(|s| {
-        let stripped = s.strip_prefix('*').unwrap_or(s);
-        if stripped.is_empty() {
-            None
-        } else {
-            Some(stripped.to_string())
-        }
-    })
+  download_sections.as_ref().and_then(|s| {
+    let stripped = s.strip_prefix('*').unwrap_or(s);
+    if stripped.is_empty() {
+      None
+    } else {
+      Some(stripped.to_string())
+    }
+  })
 }
 
 fn number_width(total: Option<u32>) -> usize {
-    total
-        .filter(|value| *value >= 100)
-        .map(|value| value.to_string().len())
-        .unwrap_or(2)
+  total.filter(|value| *value >= 100).map(|value| value.to_string().len()).unwrap_or(2)
 }
 
-fn build_playlist_prefix(
-    enabled: bool,
-    playlist_index: Option<u32>,
-    playlist_total: Option<u32>,
-) -> Option<String> {
-    if !enabled {
-        return None;
+fn build_playlist_prefix(enabled: bool, playlist_index: Option<u32>, playlist_total: Option<u32>) -> Option<String> {
+  if !enabled {
+    return None;
+  }
+
+  let width = number_width(playlist_total);
+  playlist_index.map(|index| format!("{index:0width$} - ")).or_else(|| Some(format!("%(playlist_index)0{width}d - ")))
+}
+
+fn build_queue_prefix(enabled: bool, queue_index: Option<u32>, queue_total: Option<u32>) -> Option<String> {
+  if !enabled {
+    return None;
+  }
+
+  let index = queue_index?;
+  let width = number_width(queue_total);
+  Some(format!("{index:0width$} - "))
+}
+
+fn build_output_template(output_path: &str, number_playlist_items: bool, playlist_index: Option<u32>, playlist_total: Option<u32>, number_queue_items: bool, queue_index: Option<u32>, queue_total: Option<u32>) -> String {
+  let prefix = build_playlist_prefix(number_playlist_items, playlist_index, playlist_total).or_else(|| build_queue_prefix(number_queue_items, queue_index, queue_total)).unwrap_or_default();
+  format!("{output_path}/{prefix}%(title)s.%(ext)s")
+}
+
+fn build_chapter_output_template(output_path: &str, number_playlist_items: bool, playlist_index: Option<u32>, playlist_total: Option<u32>, number_queue_items: bool, queue_index: Option<u32>, queue_total: Option<u32>, number_chapter_files: bool) -> String {
+  let item_prefix = build_playlist_prefix(number_playlist_items, playlist_index, playlist_total).or_else(|| build_queue_prefix(number_queue_items, queue_index, queue_total)).unwrap_or_default();
+  let chapter_prefix = if number_chapter_files { "%(section_number)02d - " } else { "" };
+  format!("{output_path}/{item_prefix}{chapter_prefix}%(section_title)s.%(ext)s")
+}
+
+fn build_auto_collection_names(enabled: bool, playlist_collection_name: Option<&str>, split_embedded_chapters: bool, parent_title: Option<&str>) -> Vec<String> {
+  if !enabled {
+    return Vec::new();
+  }
+
+  let mut names = Vec::new();
+  for raw_name in [playlist_collection_name, split_embedded_chapters.then_some(parent_title).flatten()].into_iter().flatten() {
+    let name = raw_name.trim();
+    if name.is_empty() {
+      continue;
     }
-
-    let width = number_width(playlist_total);
-    playlist_index
-        .map(|index| format!("{index:0width$} - "))
-        .or_else(|| Some(format!("%(playlist_index)0{width}d - ")))
-}
-
-fn build_queue_prefix(
-    enabled: bool,
-    queue_index: Option<u32>,
-    queue_total: Option<u32>,
-) -> Option<String> {
-    if !enabled {
-        return None;
+    let normalized = name.to_lowercase();
+    if names.iter().any(|existing: &String| existing.trim().to_lowercase() == normalized) {
+      continue;
     }
-
-    let index = queue_index?;
-    let width = number_width(queue_total);
-    Some(format!("{index:0width$} - "))
-}
-
-fn build_output_template(
-    output_path: &str,
-    number_playlist_items: bool,
-    playlist_index: Option<u32>,
-    playlist_total: Option<u32>,
-    number_queue_items: bool,
-    queue_index: Option<u32>,
-    queue_total: Option<u32>,
-) -> String {
-    let prefix = build_playlist_prefix(number_playlist_items, playlist_index, playlist_total)
-        .or_else(|| build_queue_prefix(number_queue_items, queue_index, queue_total))
-        .unwrap_or_default();
-    format!("{output_path}/{prefix}%(title)s.%(ext)s")
-}
-
-fn build_chapter_output_template(
-    output_path: &str,
-    number_playlist_items: bool,
-    playlist_index: Option<u32>,
-    playlist_total: Option<u32>,
-    number_queue_items: bool,
-    queue_index: Option<u32>,
-    queue_total: Option<u32>,
-    number_chapter_files: bool,
-) -> String {
-    let item_prefix = build_playlist_prefix(number_playlist_items, playlist_index, playlist_total)
-        .or_else(|| build_queue_prefix(number_queue_items, queue_index, queue_total))
-        .unwrap_or_default();
-    let chapter_prefix = if number_chapter_files {
-        "%(section_number)02d - "
-    } else {
-        ""
-    };
-    format!("{output_path}/{item_prefix}{chapter_prefix}%(section_title)s.%(ext)s")
-}
-
-fn build_auto_collection_names(
-    enabled: bool,
-    playlist_collection_name: Option<&str>,
-    split_embedded_chapters: bool,
-    parent_title: Option<&str>,
-) -> Vec<String> {
-    if !enabled {
-        return Vec::new();
-    }
-
-    let mut names = Vec::new();
-    for raw_name in [
-        playlist_collection_name,
-        split_embedded_chapters.then_some(parent_title).flatten(),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        let name = raw_name.trim();
-        if name.is_empty() {
-            continue;
-        }
-        let normalized = name.to_lowercase();
-        if names
-            .iter()
-            .any(|existing: &String| existing.trim().to_lowercase() == normalized)
-        {
-            continue;
-        }
-        names.push(name.to_string());
-    }
-    names
+    names.push(name.to_string());
+  }
+  names
 }
 
 fn assign_history_auto_collections(history_id: &str, collection_names: &[String]) {
-    for collection_name in collection_names {
-        let result =
-            ensure_collection_for_download_in_db(collection_name, None).and_then(|collection| {
-                add_history_collection_in_db(history_id.to_string(), collection.id)
-            });
-        if let Err(error) = result {
-            add_log_internal(
-                "error",
-                "Failed to organize download into collection",
-                Some(&error),
-                None,
-            )
-            .ok();
-        }
+  for collection_name in collection_names {
+    let result = ensure_collection_for_download_in_db(collection_name, None).and_then(|collection| add_history_collection_in_db(history_id.to_string(), collection.id));
+    if let Err(error) = result {
+      add_log_internal("error", "Failed to organize download into collection", Some(&error), None).ok();
     }
+  }
 }
 
 fn parse_printed_filepaths(contents: &str) -> Vec<String> {
-    let mut paths = Vec::new();
-    for line in contents.lines() {
-        let path = line.trim();
-        if path.is_empty() || paths.iter().any(|existing| existing == path) {
-            continue;
-        }
-        paths.push(path.to_string());
+  let mut paths = Vec::new();
+  for line in contents.lines() {
+    let path = line.trim();
+    if path.is_empty() || paths.iter().any(|existing| existing == path) {
+      continue;
     }
-    paths
+    paths.push(path.to_string());
+  }
+  paths
 }
 
 fn output_filepaths(printed_filepaths: &[String], final_filepath: &Option<String>) -> Vec<String> {
-    if !printed_filepaths.is_empty() {
-        return printed_filepaths.to_vec();
-    }
-    final_filepath.iter().cloned().collect()
+  if !printed_filepaths.is_empty() {
+    return printed_filepaths.to_vec();
+  }
+  final_filepath.iter().cloned().collect()
 }
 
 fn title_from_filepath(filepath: &str) -> Option<String> {
-    std::path::Path::new(filepath)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
+  std::path::Path::new(filepath).file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
 }
 
-fn display_title_for_download(
-    metadata_title: Option<String>,
-    current_title: Option<String>,
-    final_filepath: &Option<String>,
-    total_count: Option<u32>,
-) -> Option<String> {
-    let filepath_title = || {
-        final_filepath
-            .as_ref()
-            .and_then(|path| title_from_filepath(path))
-    };
+fn display_title_for_download(metadata_title: Option<String>, current_title: Option<String>, final_filepath: &Option<String>, total_count: Option<u32>) -> Option<String> {
+  let filepath_title = || final_filepath.as_ref().and_then(|path| title_from_filepath(path));
 
-    if total_count.unwrap_or(1) > 1 {
-        current_title.or_else(filepath_title).or(metadata_title)
-    } else {
-        metadata_title.or_else(filepath_title).or(current_title)
-    }
+  if total_count.unwrap_or(1) > 1 {
+    current_title.or_else(filepath_title).or(metadata_title)
+  } else {
+    metadata_title.or_else(filepath_title).or(current_title)
+  }
 }
 
 #[cfg(test)]
 mod display_title_tests {
-    use super::*;
+  use super::*;
 
-    #[test]
-    fn single_download_display_title_keeps_unicode_metadata_title() {
-        let title = display_title_for_download(
-            Some("Machiot - Đổi Nhạc Nền Vol. 2".to_string()),
-            Some("Machiot - i Nhc Nn Vol. 2".to_string()),
-            &None,
-            None,
-        );
+  #[test]
+  fn single_download_display_title_keeps_unicode_metadata_title() {
+    let title = display_title_for_download(Some("Machiot - Đổi Nhạc Nền Vol. 2".to_string()), Some("Machiot - i Nhc Nn Vol. 2".to_string()), &None, None);
 
-        assert_eq!(title.as_deref(), Some("Machiot - Đổi Nhạc Nền Vol. 2"));
-    }
+    assert_eq!(title.as_deref(), Some("Machiot - Đổi Nhạc Nền Vol. 2"));
+  }
 
-    #[test]
-    fn single_download_display_title_prefers_utf8_filepath_over_stdout_title() {
-        let filepath = Some("Machiot - Đổi Nhạc Nền Vol. 2.mp4".to_string());
-        let title = display_title_for_download(
-            None,
-            Some("Machiot - i Nhc Nn Vol. 2".to_string()),
-            &filepath,
-            None,
-        );
+  #[test]
+  fn single_download_display_title_prefers_utf8_filepath_over_stdout_title() {
+    let filepath = Some("Machiot - Đổi Nhạc Nền Vol. 2.mp4".to_string());
+    let title = display_title_for_download(None, Some("Machiot - i Nhc Nn Vol. 2".to_string()), &filepath, None);
 
-        assert_eq!(title.as_deref(), Some("Machiot - Đổi Nhạc Nền Vol. 2"));
-    }
+    assert_eq!(title.as_deref(), Some("Machiot - Đổi Nhạc Nền Vol. 2"));
+  }
 
-    #[test]
-    fn playlist_display_title_keeps_current_item_title() {
-        let filepath = Some("Playlist name.mp4".to_string());
-        let title = display_title_for_download(
-            Some("Playlist name".to_string()),
-            Some("Video item title".to_string()),
-            &filepath,
-            Some(3),
-        );
+  #[test]
+  fn playlist_display_title_keeps_current_item_title() {
+    let filepath = Some("Playlist name.mp4".to_string());
+    let title = display_title_for_download(Some("Playlist name".to_string()), Some("Video item title".to_string()), &filepath, Some(3));
 
-        assert_eq!(title.as_deref(), Some("Video item title"));
-    }
+    assert_eq!(title.as_deref(), Some("Video item title"));
+  }
 }
 
 #[cfg(test)]
 mod playlist_chapter_tests {
-    use super::*;
+  use super::*;
 
-    #[test]
-    fn output_template_is_unchanged_when_numbering_is_off() {
-        assert_eq!(
-            build_output_template("/tmp/out", false, None, None, false, None, None),
-            "/tmp/out/%(title)s.%(ext)s"
-        );
-    }
+  #[test]
+  fn output_template_is_unchanged_when_numbering_is_off() {
+    assert_eq!(build_output_template("/tmp/out", false, None, None, false, None, None), "/tmp/out/%(title)s.%(ext)s");
+  }
 
-    #[test]
-    fn output_template_uses_frontend_playlist_index_for_expanded_playlist_items() {
-        assert_eq!(
-            build_output_template("/tmp/out", true, Some(3), Some(120), false, None, None),
-            "/tmp/out/003 - %(title)s.%(ext)s"
-        );
-    }
+  #[test]
+  fn output_template_uses_frontend_playlist_index_for_expanded_playlist_items() {
+    assert_eq!(build_output_template("/tmp/out", true, Some(3), Some(120), false, None, None), "/tmp/out/003 - %(title)s.%(ext)s");
+  }
 
-    #[test]
-    fn output_template_uses_frontend_queue_index_for_regular_queue_items() {
-        assert_eq!(
-            build_output_template("/tmp/out", false, None, None, true, Some(7), Some(42)),
-            "/tmp/out/07 - %(title)s.%(ext)s"
-        );
-    }
+  #[test]
+  fn output_template_uses_frontend_queue_index_for_regular_queue_items() {
+    assert_eq!(build_output_template("/tmp/out", false, None, None, true, Some(7), Some(42)), "/tmp/out/07 - %(title)s.%(ext)s");
+  }
 
-    #[test]
-    fn output_template_prefers_playlist_index_over_queue_index() {
-        assert_eq!(
-            build_output_template(
-                "/tmp/out",
-                true,
-                Some(3),
-                Some(120),
-                true,
-                Some(7),
-                Some(42)
-            ),
-            "/tmp/out/003 - %(title)s.%(ext)s"
-        );
-    }
+  #[test]
+  fn output_template_prefers_playlist_index_over_queue_index() {
+    assert_eq!(build_output_template("/tmp/out", true, Some(3), Some(120), true, Some(7), Some(42)), "/tmp/out/003 - %(title)s.%(ext)s");
+  }
 
-    #[test]
-    fn chapter_template_numbers_chapters_without_playlist_prefix() {
-        assert_eq!(
-            build_chapter_output_template("/tmp/out", false, None, None, false, None, None, true),
-            "/tmp/out/%(section_number)02d - %(section_title)s.%(ext)s"
-        );
-    }
+  #[test]
+  fn chapter_template_numbers_chapters_without_playlist_prefix() {
+    assert_eq!(build_chapter_output_template("/tmp/out", false, None, None, false, None, None, true), "/tmp/out/%(section_number)02d - %(section_title)s.%(ext)s");
+  }
 
-    #[test]
-    fn chapter_template_uses_playlist_and_chapter_numbers_when_both_are_enabled() {
-        assert_eq!(
-            build_chapter_output_template(
-                "/tmp/out",
-                true,
-                Some(3),
-                Some(120),
-                false,
-                None,
-                None,
-                true
-            ),
-            "/tmp/out/003 - %(section_number)02d - %(section_title)s.%(ext)s"
-        );
-    }
+  #[test]
+  fn chapter_template_uses_playlist_and_chapter_numbers_when_both_are_enabled() {
+    assert_eq!(build_chapter_output_template("/tmp/out", true, Some(3), Some(120), false, None, None, true), "/tmp/out/003 - %(section_number)02d - %(section_title)s.%(ext)s");
+  }
 
-    #[test]
-    fn printed_filepaths_preserve_multiple_output_files() {
-        let filepaths =
-            parse_printed_filepaths("/tmp/video.mp4\n/tmp/01 - Intro.mp4\n/tmp/02 - End.mp4\n");
+  #[test]
+  fn printed_filepaths_preserve_multiple_output_files() {
+    let filepaths = parse_printed_filepaths("/tmp/video.mp4\n/tmp/01 - Intro.mp4\n/tmp/02 - End.mp4\n");
 
-        assert_eq!(
-            filepaths,
-            vec![
-                "/tmp/video.mp4".to_string(),
-                "/tmp/01 - Intro.mp4".to_string(),
-                "/tmp/02 - End.mp4".to_string(),
-            ]
-        );
-    }
+    assert_eq!(filepaths, vec!["/tmp/video.mp4".to_string(), "/tmp/01 - Intro.mp4".to_string(), "/tmp/02 - End.mp4".to_string(),]);
+  }
 
-    #[test]
-    fn auto_collection_names_are_default_off() {
-        assert!(
-            build_auto_collection_names(false, Some("Playlist"), true, Some("Video")).is_empty()
-        );
-    }
+  #[test]
+  fn auto_collection_names_are_default_off() {
+    assert!(build_auto_collection_names(false, Some("Playlist"), true, Some("Video")).is_empty());
+  }
 
-    #[test]
-    fn auto_collection_names_include_playlist_and_split_parent() {
-        assert_eq!(
-            build_auto_collection_names(true, Some("Playlist"), true, Some("Video")),
-            vec!["Playlist".to_string(), "Video".to_string()]
-        );
-    }
+  #[test]
+  fn auto_collection_names_include_playlist_and_split_parent() {
+    assert_eq!(build_auto_collection_names(true, Some("Playlist"), true, Some("Video")), vec!["Playlist".to_string(), "Video".to_string()]);
+  }
 
-    #[test]
-    fn auto_collection_names_dedupe_playlist_and_parent() {
-        assert_eq!(
-            build_auto_collection_names(true, Some("Same Name"), true, Some(" same name ")),
-            vec!["Same Name".to_string()]
-        );
-    }
+  #[test]
+  fn auto_collection_names_dedupe_playlist_and_parent() {
+    assert_eq!(build_auto_collection_names(true, Some("Same Name"), true, Some(" same name ")), vec!["Same Name".to_string()]);
+  }
 
-    #[test]
-    fn process_exit_errors_include_exit_code_param() {
-        let error = build_download_error_message(Some(15), &["ERROR: interrupted".to_string()]);
-        let wire = error.to_wire();
+  #[test]
+  fn process_exit_errors_include_exit_code_param() {
+    let error = build_download_error_message(Some(15), &["ERROR: interrupted".to_string()]);
+    let wire = error.to_wire();
 
-        assert_eq!(wire.code, crate::types::code::PROCESS_EXIT_NON_ZERO);
-        assert_eq!(
-            wire.params
-                .and_then(|params| params.get("exitCode").cloned()),
-            Some(serde_json::Value::from(15))
-        );
-    }
+    assert_eq!(wire.code, crate::types::code::PROCESS_EXIT_NON_ZERO);
+    assert_eq!(wire.params.and_then(|params| params.get("exitCode").cloned()), Some(serde_json::Value::from(15)));
+  }
 
-    #[test]
-    fn cancelled_download_error_is_non_retryable() {
-        let wire = download_cancelled_error().to_wire();
+  #[test]
+  fn cancelled_download_error_is_non_retryable() {
+    let wire = download_cancelled_error().to_wire();
 
-        assert_eq!(wire.code, crate::types::code::DOWNLOAD_CANCELLED);
-        assert_eq!(wire.message, "Download cancelled");
-        assert_eq!(wire.retryable, Some(false));
-    }
+    assert_eq!(wire.code, crate::types::code::DOWNLOAD_CANCELLED);
+    assert_eq!(wire.message, "Download cancelled");
+    assert_eq!(wire.retryable, Some(false));
+  }
 }
 
-async fn skipped_live_status(
-    app: &AppHandle,
-    url: &str,
-    cookie_mode: Option<&str>,
-    cookie_browser: Option<&str>,
-    cookie_browser_profile: Option<&str>,
-    cookie_file_path: Option<&str>,
-    cookie_skip_patterns: Option<&[String]>,
-    proxy_url: Option<&str>,
-) -> Result<Option<String>, String> {
-    let mut args = vec![
-        "--print".to_string(),
-        "live_status".to_string(),
-        "--output-na-placeholder".to_string(),
-        "not_live".to_string(),
-        "--no-warnings".to_string(),
-        "--no-playlist".to_string(),
-        "--socket-timeout".to_string(),
-        "15".to_string(),
-    ];
+async fn skipped_live_status(app: &AppHandle, url: &str, cookie_mode: Option<&str>, cookie_browser: Option<&str>, cookie_browser_profile: Option<&str>, cookie_file_path: Option<&str>, cookie_skip_patterns: Option<&[String]>, proxy_url: Option<&str>) -> Result<Option<String>, String> {
+  let mut args = vec!["--print".to_string(), "live_status".to_string(), "--output-na-placeholder".to_string(), "not_live".to_string(), "--no-warnings".to_string(), "--no-playlist".to_string(), "--socket-timeout".to_string(), "15".to_string()];
 
-    if url.contains("youtube.com") || url.contains("youtu.be") {
-        if let Some(deno_path) = get_deno_path(app).await {
-            args.push("--js-runtimes".to_string());
-            args.push(format!("deno:{}", deno_path.to_string_lossy()));
-        }
+  if url.contains("youtube.com") || url.contains("youtu.be") {
+    if let Some(deno_path) = get_deno_path(app).await {
+      args.push("--js-runtimes".to_string());
+      args.push(format!("deno:{}", deno_path.to_string_lossy()));
     }
+  }
 
-    args.push("--".to_string());
-    args.push(url.to_string());
+  args.push("--".to_string());
+  args.push(url.to_string());
 
-    let mut extra_args = build_site_header_args(url);
-    extra_args.extend(build_cookie_args(
-        url,
-        cookie_mode,
-        cookie_browser,
-        cookie_browser_profile,
-        cookie_file_path,
-        cookie_skip_patterns,
-    ));
-    extra_args.extend(build_proxy_args(proxy_url));
-    if let Some(separator_index) = args.iter().position(|arg| arg == "--") {
-        args.splice(separator_index..separator_index, extra_args);
+  let mut extra_args = build_site_header_args(url);
+  extra_args.extend(build_cookie_args(url, cookie_mode, cookie_browser, cookie_browser_profile, cookie_file_path, cookie_skip_patterns));
+  extra_args.extend(build_proxy_args(proxy_url));
+  if let Some(separator_index) = args.iter().position(|arg| arg == "--") {
+    args.splice(separator_index..separator_index, extra_args);
+  }
+
+  let command_str = format!("yt-dlp {}", args.join(" "));
+  add_log_internal("command", &command_str, None, Some(url)).ok();
+
+  let args_ref: Vec<&str> = args.iter().map(|arg| arg.as_str()).collect();
+  let output = run_ytdlp_with_stderr(app, &args_ref).await?;
+
+  if !output.stderr.trim().is_empty() {
+    add_log_internal("stderr", output.stderr.trim(), None, Some(url)).ok();
+  }
+
+  if !output.success {
+    let message = output.stderr.trim();
+    if is_upcoming_live_error(message) {
+      return Ok(Some("is_upcoming".to_string()));
     }
+    return Err(BackendError::from_message(if message.is_empty() { "Failed to check live status before download.".to_string() } else { format!("Failed to check live status before download: {}", message) }).to_wire_string());
+  }
 
-    let command_str = format!("yt-dlp {}", args.join(" "));
-    add_log_internal("command", &command_str, None, Some(url)).ok();
-
-    let args_ref: Vec<&str> = args.iter().map(|arg| arg.as_str()).collect();
-    let output = run_ytdlp_with_stderr(app, &args_ref).await?;
-
-    if !output.stderr.trim().is_empty() {
-        add_log_internal("stderr", output.stderr.trim(), None, Some(url)).ok();
-    }
-
-    if !output.success {
-        let message = output.stderr.trim();
-        if is_upcoming_live_error(message) {
-            return Ok(Some("is_upcoming".to_string()));
-        }
-        return Err(BackendError::from_message(if message.is_empty() {
-            "Failed to check live status before download.".to_string()
-        } else {
-            format!("Failed to check live status before download: {}", message)
-        })
-        .to_wire_string());
-    }
-
-    let status = output.stdout.lines().last().unwrap_or("").trim();
-    if status.is_empty() || status == "not_live" {
-        Ok(None)
-    } else {
-        Ok(Some(status.to_string()))
-    }
+  let status = output.stdout.lines().last().unwrap_or("").trim();
+  if status.is_empty() || status == "not_live" {
+    Ok(None)
+  } else {
+    Ok(Some(status.to_string()))
+  }
 }
 
-fn workflow_steps_for_trigger(
-    app: &AppHandle,
-    trigger: &str,
-    workflow_snapshots: &BTreeMap<String, Vec<PluginWorkflowStepSnapshot>>,
-) -> Vec<PluginWorkflowStepSnapshot> {
-    workflow_snapshots
-        .get(trigger)
-        .cloned()
-        .unwrap_or_else(|| resolve_download_workflow_snapshot(app, trigger, None, &[]))
+fn workflow_steps_for_trigger(app: &AppHandle, trigger: &str, workflow_snapshots: &BTreeMap<String, Vec<PluginWorkflowStepSnapshot>>) -> Vec<PluginWorkflowStepSnapshot> {
+  workflow_snapshots.get(trigger).cloned().unwrap_or_else(|| resolve_download_workflow_snapshot(app, trigger, None, &[]))
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_trigger_payload(
-    job_id: &str,
-    source: Option<String>,
-    trigger: &str,
-    output_path: &str,
-    filesize: Option<u64>,
-    format: Option<String>,
-    quality: Option<String>,
-    url: &str,
-    title: Option<String>,
-    thumbnail: Option<String>,
-    history_id: Option<String>,
-    time_range: Option<String>,
-    download_kind: &str,
-) -> PostDownloadPluginPayload {
-    let display_name = title
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| url.to_string());
+fn build_trigger_payload(job_id: &str, source: Option<String>, trigger: &str, output_path: &str, filesize: Option<u64>, format: Option<String>, quality: Option<String>, url: &str, title: Option<String>, thumbnail: Option<String>, history_id: Option<String>, time_range: Option<String>, download_kind: &str) -> PostDownloadPluginPayload {
+  let display_name = title.clone().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| url.to_string());
 
-    PostDownloadPluginPayload {
-        job_id: job_id.to_string(),
-        source,
-        trigger: trigger.to_string(),
-        filepath: String::new(),
-        filename: display_name,
-        directory: output_path.to_string(),
-        filesize,
-        format,
-        quality,
-        url: url.to_string(),
-        title,
-        thumbnail,
-        history_id,
-        time_range,
-        download_kind: download_kind.to_string(),
-        workflow_run_id: None,
-        workflow_step_index: None,
-        workflow_step_plugin_id: None,
-        chain_state: None,
-    }
+  PostDownloadPluginPayload { job_id: job_id.to_string(), source, trigger: trigger.to_string(), filepath: String::new(), filename: display_name, directory: output_path.to_string(), filesize, format, quality, url: url.to_string(), title, thumbnail, history_id, time_range, download_kind: download_kind.to_string(), workflow_run_id: None, workflow_step_index: None, workflow_step_plugin_id: None, chain_state: None }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn enqueue_failed_workflow(
-    app: &AppHandle,
-    workflow_steps: &[PluginWorkflowStepSnapshot],
-    job_id: &str,
-    source: Option<String>,
-    output_path: &str,
-    format: Option<String>,
-    quality: Option<String>,
-    url: &str,
-    title: Option<String>,
-    thumbnail: Option<String>,
-    history_id: Option<String>,
-    time_range: Option<String>,
-    download_kind: &str,
-) {
-    if workflow_steps.is_empty() {
-        return;
-    }
+fn enqueue_failed_workflow(app: &AppHandle, workflow_steps: &[PluginWorkflowStepSnapshot], job_id: &str, source: Option<String>, output_path: &str, format: Option<String>, quality: Option<String>, url: &str, title: Option<String>, thumbnail: Option<String>, history_id: Option<String>, time_range: Option<String>, download_kind: &str) {
+  if workflow_steps.is_empty() {
+    return;
+  }
 
-    let payload = build_trigger_payload(
-        job_id,
-        source,
-        "download.failed",
-        output_path,
-        None,
-        format,
-        quality,
-        url,
-        title,
-        thumbnail,
-        history_id,
-        time_range,
-        download_kind,
-    );
-    let _ = enqueue_post_download_workflow(app, workflow_steps.to_vec(), payload);
+  let payload = build_trigger_payload(job_id, source, "download.failed", output_path, None, format, quality, url, title, thumbnail, history_id, time_range, download_kind);
+  let _ = enqueue_post_download_workflow(app, workflow_steps.to_vec(), payload);
 }
 
 #[allow(clippy::too_many_arguments)]
-fn enqueue_before_start_workflow(
-    app: &AppHandle,
-    workflow_steps: &[PluginWorkflowStepSnapshot],
-    job_id: &str,
-    source: Option<String>,
-    output_path: &str,
-    format: Option<String>,
-    quality: Option<String>,
-    url: &str,
-    title: Option<String>,
-    thumbnail: Option<String>,
-    history_id: Option<String>,
-    time_range: Option<String>,
-    download_kind: &str,
-) {
-    if workflow_steps.is_empty() {
-        return;
-    }
+fn enqueue_before_start_workflow(app: &AppHandle, workflow_steps: &[PluginWorkflowStepSnapshot], job_id: &str, source: Option<String>, output_path: &str, format: Option<String>, quality: Option<String>, url: &str, title: Option<String>, thumbnail: Option<String>, history_id: Option<String>, time_range: Option<String>, download_kind: &str) {
+  if workflow_steps.is_empty() {
+    return;
+  }
 
-    let payload = build_trigger_payload(
-        job_id,
-        source,
-        "download.beforeStart",
-        output_path,
-        None,
-        format,
-        quality,
-        url,
-        title,
-        thumbnail,
-        history_id,
-        time_range,
-        download_kind,
-    );
-    let _ = enqueue_post_download_workflow(app, workflow_steps.to_vec(), payload);
+  let payload = build_trigger_payload(job_id, source, "download.beforeStart", output_path, None, format, quality, url, title, thumbnail, history_id, time_range, download_kind);
+  let _ = enqueue_post_download_workflow(app, workflow_steps.to_vec(), payload);
 }
 
-async fn run_completed_plugins(
-    app: &AppHandle,
-    workflow_steps: &[PluginWorkflowStepSnapshot],
-    job_id: &str,
-    source: Option<String>,
-    filepath: &str,
-    filesize: Option<u64>,
-    format: Option<String>,
-    quality: Option<String>,
-    url: &str,
-    title: Option<String>,
-    thumbnail: Option<String>,
-    history_id: Option<String>,
-    time_range: Option<String>,
-    download_kind: &str,
-) {
-    if workflow_steps.is_empty() {
-        return;
-    }
+async fn run_completed_plugins(app: &AppHandle, workflow_steps: &[PluginWorkflowStepSnapshot], job_id: &str, source: Option<String>, filepath: &str, filesize: Option<u64>, format: Option<String>, quality: Option<String>, url: &str, title: Option<String>, thumbnail: Option<String>, history_id: Option<String>, time_range: Option<String>, download_kind: &str) {
+  if workflow_steps.is_empty() {
+    return;
+  }
 
-    let path = std::path::Path::new(filepath);
-    let filename = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(filepath)
-        .to_string();
-    let directory = path
-        .parent()
-        .map(|parent| parent.to_string_lossy().to_string())
-        .unwrap_or_default();
+  let path = std::path::Path::new(filepath);
+  let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or(filepath).to_string();
+  let directory = path.parent().map(|parent| parent.to_string_lossy().to_string()).unwrap_or_default();
 
-    let payload = PostDownloadPluginPayload {
-        job_id: job_id.to_string(),
-        source,
-        trigger: "download.completed".to_string(),
-        filepath: filepath.to_string(),
-        filename,
-        directory,
-        filesize,
-        format,
-        quality,
-        url: url.to_string(),
-        title,
-        thumbnail,
-        history_id,
-        time_range,
-        download_kind: download_kind.to_string(),
-        workflow_run_id: None,
-        workflow_step_index: None,
-        workflow_step_plugin_id: None,
-        chain_state: None,
-    };
+  let payload = PostDownloadPluginPayload { job_id: job_id.to_string(), source, trigger: "download.completed".to_string(), filepath: filepath.to_string(), filename, directory, filesize, format, quality, url: url.to_string(), title, thumbnail, history_id, time_range, download_kind: download_kind.to_string(), workflow_run_id: None, workflow_step_index: None, workflow_step_plugin_id: None, chain_state: None };
 
-    let _ = enqueue_post_download_workflow(app, workflow_steps.to_vec(), payload);
+  let _ = enqueue_post_download_workflow(app, workflow_steps.to_vec(), payload);
 }
 
 /// Decode raw bytes from a child process into a Rust String.
@@ -668,1397 +342,497 @@ async fn run_completed_plugins(
 /// the full filepath (including CJK characters) is preserved.
 #[cfg(windows)]
 fn decode_process_output(bytes: &[u8]) -> String {
-    // Fast path: already valid UTF-8
-    if let Ok(s) = std::str::from_utf8(bytes) {
-        return s.to_string();
+  // Fast path: already valid UTF-8
+  if let Ok(s) = std::str::from_utf8(bytes) {
+    return s.to_string();
+  }
+
+  use std::ffi::OsString;
+  use std::os::windows::ffi::OsStringExt;
+
+  extern "system" {
+    fn MultiByteToWideChar(code_page: u32, flags: u32, multi_byte_str: *const u8, multi_byte: i32, wide_char_str: *mut u16, wide_char: i32) -> i32;
+  }
+
+  const CP_ACP: u32 = 0; // System default Windows ANSI code page
+
+  unsafe {
+    let len = MultiByteToWideChar(CP_ACP, 0, bytes.as_ptr(), bytes.len() as i32, std::ptr::null_mut(), 0);
+    if len <= 0 {
+      return String::from_utf8_lossy(bytes).into_owned();
     }
-
-    use std::ffi::OsString;
-    use std::os::windows::ffi::OsStringExt;
-
-    extern "system" {
-        fn MultiByteToWideChar(
-            code_page: u32,
-            flags: u32,
-            multi_byte_str: *const u8,
-            multi_byte: i32,
-            wide_char_str: *mut u16,
-            wide_char: i32,
-        ) -> i32;
-    }
-
-    const CP_ACP: u32 = 0; // System default Windows ANSI code page
-
-    unsafe {
-        let len = MultiByteToWideChar(
-            CP_ACP,
-            0,
-            bytes.as_ptr(),
-            bytes.len() as i32,
-            std::ptr::null_mut(),
-            0,
-        );
-        if len <= 0 {
-            return String::from_utf8_lossy(bytes).into_owned();
-        }
-        let mut wide = vec![0u16; len as usize];
-        MultiByteToWideChar(
-            CP_ACP,
-            0,
-            bytes.as_ptr(),
-            bytes.len() as i32,
-            wide.as_mut_ptr(),
-            len,
-        );
-        OsString::from_wide(&wide).to_string_lossy().into_owned()
-    }
+    let mut wide = vec![0u16; len as usize];
+    MultiByteToWideChar(CP_ACP, 0, bytes.as_ptr(), bytes.len() as i32, wide.as_mut_ptr(), len);
+    OsString::from_wide(&wide).to_string_lossy().into_owned()
+  }
 }
 
 #[cfg(not(windows))]
 fn decode_process_output(bytes: &[u8]) -> String {
-    String::from_utf8_lossy(bytes).into_owned()
+  String::from_utf8_lossy(bytes).into_owned()
 }
 
 /// Kill all yt-dlp and ffmpeg processes
 fn kill_all_download_processes() {
-    #[cfg(unix)]
-    {
-        use std::process::Command as StdCommand;
-        StdCommand::new("pkill")
-            .args(["-9", "-f", "yt-dlp"])
-            .spawn()
-            .ok();
-        StdCommand::new("pkill")
-            .args(["-9", "-f", "ffmpeg"])
-            .spawn()
-            .ok();
-    }
-    #[cfg(windows)]
-    {
-        use crate::utils::CommandExt as _;
-        use std::process::Command as StdCommand;
-        let mut cmd1 = StdCommand::new("taskkill");
-        cmd1.args(["/F", "/IM", "yt-dlp.exe"]);
-        cmd1.hide_window();
-        cmd1.spawn().ok();
+  #[cfg(unix)]
+  {
+    use std::process::Command as StdCommand;
+    StdCommand::new("pkill").args(["-9", "-f", "yt-dlp"]).spawn().ok();
+    StdCommand::new("pkill").args(["-9", "-f", "ffmpeg"]).spawn().ok();
+  }
+  #[cfg(windows)]
+  {
+    use crate::utils::CommandExt as _;
+    use std::process::Command as StdCommand;
+    let mut cmd1 = StdCommand::new("taskkill");
+    cmd1.args(["/F", "/IM", "yt-dlp.exe"]);
+    cmd1.hide_window();
+    cmd1.spawn().ok();
 
-        let mut cmd2 = StdCommand::new("taskkill");
-        cmd2.args(["/F", "/IM", "ffmpeg.exe"]);
-        cmd2.hide_window();
-        cmd2.spawn().ok();
-    }
+    let mut cmd2 = StdCommand::new("taskkill");
+    cmd2.args(["/F", "/IM", "ffmpeg.exe"]);
+    cmd2.hide_window();
+    cmd2.spawn().ok();
+  }
 }
 
 fn push_recent_output(buffer: &mut VecDeque<String>, line: &str) {
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return;
-    }
-    if buffer.len() >= RECENT_OUTPUT_LIMIT {
-        buffer.pop_front();
-    }
-    buffer.push_back(trimmed.to_string());
+  let trimmed = line.trim();
+  if trimmed.is_empty() {
+    return;
+  }
+  if buffer.len() >= RECENT_OUTPUT_LIMIT {
+    buffer.pop_front();
+  }
+  buffer.push_back(trimmed.to_string());
 }
 
 fn push_recent_output_shared(buffer: &Arc<Mutex<VecDeque<String>>>, line: &str) {
-    if let Ok(mut guard) = buffer.lock() {
-        push_recent_output(&mut guard, line);
-    }
+  if let Ok(mut guard) = buffer.lock() {
+    push_recent_output(&mut guard, line);
+  }
 }
 
 fn recent_output_snapshot(buffer: &Arc<Mutex<VecDeque<String>>>) -> Vec<String> {
-    buffer
-        .lock()
-        .map(|guard| guard.iter().cloned().collect())
-        .unwrap_or_default()
+  buffer.lock().map(|guard| guard.iter().cloned().collect()).unwrap_or_default()
 }
 
 fn is_aria2_not_found_line(line: &str) -> bool {
-    let lower = line.to_lowercase();
-    (lower.contains("aria2c") || lower.contains("aria2"))
-        && (lower.contains("not found")
-            || lower.contains("no such file")
-            || lower.contains("is not recognized"))
+  let lower = line.to_lowercase();
+  (lower.contains("aria2c") || lower.contains("aria2")) && (lower.contains("not found") || lower.contains("no such file") || lower.contains("is not recognized"))
 }
 
 fn download_cancelled_error() -> BackendError {
-    BackendError::new(crate::types::code::DOWNLOAD_CANCELLED, "Download cancelled")
-        .with_retryable(false)
+  BackendError::new(crate::types::code::DOWNLOAD_CANCELLED, "Download cancelled").with_retryable(false)
 }
 
 fn normalize_aria2_args(raw_args: &str) -> Option<String> {
-    let trimmed = raw_args.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
+  let trimmed = raw_args.trim();
+  if trimmed.is_empty() {
+    return None;
+  }
 
-    if let Some(rest) = trimmed.strip_prefix("aria2c:") {
-        let normalized = rest.trim_start();
-        return if normalized.is_empty() {
-            None
-        } else {
-            Some(format!("aria2c:{}", normalized))
-        };
-    }
-    if let Some(rest) = trimmed.strip_prefix("aria2:") {
-        let normalized = rest.trim_start();
-        return if normalized.is_empty() {
-            None
-        } else {
-            Some(format!("aria2c:{}", normalized))
-        };
-    }
-    Some(format!("aria2c:{}", trimmed))
+  if let Some(rest) = trimmed.strip_prefix("aria2c:") {
+    let normalized = rest.trim_start();
+    return if normalized.is_empty() { None } else { Some(format!("aria2c:{}", normalized)) };
+  }
+  if let Some(rest) = trimmed.strip_prefix("aria2:") {
+    let normalized = rest.trim_start();
+    return if normalized.is_empty() { None } else { Some(format!("aria2c:{}", normalized)) };
+  }
+  Some(format!("aria2c:{}", trimmed))
 }
 
 fn build_download_error_message(exit_code: Option<i32>, recent_lines: &[String]) -> BackendError {
-    if recent_lines
-        .iter()
-        .any(|line| is_aria2_not_found_line(line))
-    {
-        return BackendError::new(
-            crate::types::code::ARIA2_NOT_FOUND,
-            "aria2c not found. Install aria2 and ensure aria2c is available in PATH.",
-        )
-        .with_retryable(false);
-    }
+  if recent_lines.iter().any(|line| is_aria2_not_found_line(line)) {
+    return BackendError::new(crate::types::code::ARIA2_NOT_FOUND, "aria2c not found. Install aria2 and ensure aria2c is available in PATH.").with_retryable(false);
+  }
 
-    if recent_lines.iter().any(|line| {
-        let lower = line.to_lowercase();
-        lower.contains("does not pass filter") || lower.contains("skipped by filter")
-    }) {
-        return BackendError::new(
-            crate::types::code::YT_SKIPPED_FILTER,
-            "Skipped by yt-dlp match filter.",
-        )
-        .with_retryable(false);
-    }
+  if recent_lines.iter().any(|line| {
+    let lower = line.to_lowercase();
+    lower.contains("does not pass filter") || lower.contains("skipped by filter")
+  }) {
+    return BackendError::new(crate::types::code::YT_SKIPPED_FILTER, "Skipped by yt-dlp match filter.").with_retryable(false);
+  }
 
-    let reason = recent_lines
-        .iter()
-        .rev()
-        .find(|line| {
-            let lower = line.to_lowercase();
-            lower.contains("error")
-                || lower.contains("unable")
-                || lower.contains("failed")
-                || lower.contains("http error")
-                || lower.contains("forbidden")
-                || lower.contains("too many requests")
-                || lower.contains("timed out")
-        })
-        .cloned()
-        .or_else(|| recent_lines.last().cloned())
-        .unwrap_or_else(|| "Unknown error".to_string());
+  let reason = recent_lines
+    .iter()
+    .rev()
+    .find(|line| {
+      let lower = line.to_lowercase();
+      lower.contains("error") || lower.contains("unable") || lower.contains("failed") || lower.contains("http error") || lower.contains("forbidden") || lower.contains("too many requests") || lower.contains("timed out")
+    })
+    .cloned()
+    .or_else(|| recent_lines.last().cloned())
+    .unwrap_or_else(|| "Unknown error".to_string());
 
-    match exit_code {
-        Some(code) => {
-            BackendError::from_message(format!("Download failed (exit code {}): {}", code, reason))
-                .with_param("exitCode", code)
-        }
-        None => BackendError::from_message(format!("Download failed: {}", reason)),
-    }
+  match exit_code {
+    Some(code) => BackendError::from_message(format!("Download failed (exit code {}): {}", code, reason)).with_param("exitCode", code),
+    None => BackendError::from_message(format!("Download failed: {}", reason)),
+  }
 }
 
 #[tauri::command]
 pub async fn download_video(
-    app: AppHandle,
-    id: String,
-    url: String,
-    output_path: String,
-    quality: String,
-    format: String,
-    download_playlist: bool,
-    playlist_index: Option<u32>,
-    playlist_total: Option<u32>,
-    number_playlist_items: Option<bool>,
-    queue_index: Option<u32>,
-    queue_total: Option<u32>,
-    number_queue_items: Option<bool>,
-    split_embedded_chapters: Option<bool>,
-    number_chapter_files: Option<bool>,
-    auto_organize_collections: Option<bool>,
-    playlist_collection_name: Option<String>,
-    video_codec: String,
-    preferred_fps: Option<String>,
-    audio_bitrate: String,
-    playlist_limit: Option<u32>,
-    subtitle_mode: String,
-    subtitle_langs: String,
-    subtitle_embed: bool,
-    subtitle_format: String,
-    log_stderr: Option<bool>,
-    _use_bun_runtime: Option<bool>, // Deprecated - now auto uses deno
-    use_actual_player_js: Option<bool>,
-    history_id: Option<String>,
-    // Cookie settings
-    cookie_mode: Option<String>,
-    cookie_browser: Option<String>,
-    cookie_browser_profile: Option<String>,
-    cookie_file_path: Option<String>,
-    cookie_skip_patterns: Option<Vec<String>>,
-    // Embed settings
-    embed_metadata: Option<bool>,
-    embed_thumbnail: Option<bool>,
-    // Proxy settings
-    proxy_url: Option<String>,
-    // Live stream settings
-    live_from_start: Option<bool>,
-    skip_live: Option<bool>,
-    // Speed limit settings
-    speed_limit: Option<String>,
-    // External downloader settings
-    use_aria2: Option<bool>,
-    aria2_args: Option<String>,
-    // Vetted yt-dlp advanced options
-    ytdlp_advanced_options_enabled: Option<bool>,
-    ytdlp_advanced_options: Option<Vec<YtdlpAdvancedOption>>,
-    // SponsorBlock settings
-    sponsorblock_remove: Option<String>, // comma-separated categories to remove
-    sponsorblock_mark: Option<String>,   // comma-separated categories to mark as chapters
-    // Download sections (time range)
-    download_sections: Option<String>, // e.g. "*10:30-14:30" for partial download
-    // Title (optional, passed from frontend for display purposes)
-    title: Option<String>,
-    // Thumbnail URL (optional, passed from frontend for non-YouTube sites)
-    thumbnail: Option<String>,
-    // Source/extractor name (optional, from yt-dlp extractor e.g. "BiliBili", "TikTok")
-    source: Option<String>,
-    // Legacy snapshot of plugin ids enabled when the job was queued
-    post_download_plugins: Option<Vec<String>>,
-    // Snapshot of workflow steps by trigger at queue time
-    plugin_workflow_snapshots: Option<BTreeMap<String, Vec<PluginWorkflowStepSnapshot>>>,
-    // Full workflow step snapshot used for post-processing
-    post_download_workflow_steps: Option<Vec<PluginWorkflowStepSnapshot>>,
-    // When false, caller is responsible for firing the final download.failed workflow.
-    emit_failed_workflow: Option<bool>,
-    // Caller context used in plugin payload
-    download_kind: Option<String>,
+  app: AppHandle,
+  id: String,
+  url: String,
+  output_path: String,
+  quality: String,
+  format: String,
+  download_playlist: bool,
+  playlist_index: Option<u32>,
+  playlist_total: Option<u32>,
+  number_playlist_items: Option<bool>,
+  queue_index: Option<u32>,
+  queue_total: Option<u32>,
+  number_queue_items: Option<bool>,
+  split_embedded_chapters: Option<bool>,
+  number_chapter_files: Option<bool>,
+  auto_organize_collections: Option<bool>,
+  playlist_collection_name: Option<String>,
+  video_codec: String,
+  preferred_fps: Option<String>,
+  audio_bitrate: String,
+  playlist_limit: Option<u32>,
+  subtitle_mode: String,
+  subtitle_langs: String,
+  subtitle_embed: bool,
+  subtitle_format: String,
+  log_stderr: Option<bool>,
+  _use_bun_runtime: Option<bool>, // Deprecated - now auto uses deno
+  use_actual_player_js: Option<bool>,
+  history_id: Option<String>,
+  // Cookie settings
+  cookie_mode: Option<String>,
+  cookie_browser: Option<String>,
+  cookie_browser_profile: Option<String>,
+  cookie_file_path: Option<String>,
+  cookie_skip_patterns: Option<Vec<String>>,
+  // Embed settings
+  embed_metadata: Option<bool>,
+  embed_thumbnail: Option<bool>,
+  // Proxy settings
+  proxy_url: Option<String>,
+  // Live stream settings
+  live_from_start: Option<bool>,
+  skip_live: Option<bool>,
+  // Speed limit settings
+  speed_limit: Option<String>,
+  // External downloader settings
+  use_aria2: Option<bool>,
+  aria2_args: Option<String>,
+  // Vetted yt-dlp advanced options
+  ytdlp_advanced_options_enabled: Option<bool>,
+  ytdlp_advanced_options: Option<Vec<YtdlpAdvancedOption>>,
+  // SponsorBlock settings
+  sponsorblock_remove: Option<String>, // comma-separated categories to remove
+  sponsorblock_mark: Option<String>,   // comma-separated categories to mark as chapters
+  // Download sections (time range)
+  download_sections: Option<String>, // e.g. "*10:30-14:30" for partial download
+  // Title (optional, passed from frontend for display purposes)
+  title: Option<String>,
+  // Thumbnail URL (optional, passed from frontend for non-YouTube sites)
+  thumbnail: Option<String>,
+  // Source/extractor name (optional, from yt-dlp extractor e.g. "BiliBili", "TikTok")
+  source: Option<String>,
+  // Legacy snapshot of plugin ids enabled when the job was queued
+  post_download_plugins: Option<Vec<String>>,
+  // Snapshot of workflow steps by trigger at queue time
+  plugin_workflow_snapshots: Option<BTreeMap<String, Vec<PluginWorkflowStepSnapshot>>>,
+  // Full workflow step snapshot used for post-processing
+  post_download_workflow_steps: Option<Vec<PluginWorkflowStepSnapshot>>,
+  // When false, caller is responsible for firing the final download.failed workflow.
+  emit_failed_workflow: Option<bool>,
+  // Caller context used in plugin payload
+  download_kind: Option<String>,
 ) -> Result<(), String> {
-    CANCEL_FLAG.store(false, Ordering::SeqCst);
-    validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
-    let url = normalize_url(&url);
-    let post_download_plugins = post_download_plugins.unwrap_or_default();
-    let mut plugin_workflow_snapshots = plugin_workflow_snapshots.unwrap_or_default();
-    if !plugin_workflow_snapshots.contains_key("download.completed") {
-        let completed_steps = resolve_download_workflow_snapshot(
-            &app,
-            "download.completed",
-            post_download_workflow_steps,
-            &post_download_plugins,
-        );
-        plugin_workflow_snapshots.insert("download.completed".to_string(), completed_steps);
+  CANCEL_FLAG.store(false, Ordering::SeqCst);
+  validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
+  let url = normalize_url(&url);
+  let post_download_plugins = post_download_plugins.unwrap_or_default();
+  let mut plugin_workflow_snapshots = plugin_workflow_snapshots.unwrap_or_default();
+  if !plugin_workflow_snapshots.contains_key("download.completed") {
+    let completed_steps = resolve_download_workflow_snapshot(&app, "download.completed", post_download_workflow_steps, &post_download_plugins);
+    plugin_workflow_snapshots.insert("download.completed".to_string(), completed_steps);
+  }
+  let emit_failed_workflow = emit_failed_workflow.unwrap_or(true);
+  let download_kind = download_kind.unwrap_or_else(|| "download".to_string());
+
+  if skip_live.unwrap_or(false) {
+    if let Some(live_status) = skipped_live_status(&app, &url, cookie_mode.as_deref(), cookie_browser.as_deref(), cookie_browser_profile.as_deref(), cookie_file_path.as_deref(), cookie_skip_patterns.as_deref(), proxy_url.as_deref()).await? {
+      add_log_internal("info", &format!("Skipped live video due to --skip-live (status: {})", live_status), None, Some(&url)).ok();
+      return Err(BackendError::new(crate::types::code::YT_SKIPPED_LIVE, format!("Skipped live video (status: {})", live_status)).with_retryable(false).with_param("liveStatus", live_status).to_wire_string());
     }
-    let emit_failed_workflow = emit_failed_workflow.unwrap_or(true);
-    let download_kind = download_kind.unwrap_or_else(|| "download".to_string());
+  }
 
-    if skip_live.unwrap_or(false) {
-        if let Some(live_status) = skipped_live_status(
-            &app,
-            &url,
-            cookie_mode.as_deref(),
-            cookie_browser.as_deref(),
-            cookie_browser_profile.as_deref(),
-            cookie_file_path.as_deref(),
-            cookie_skip_patterns.as_deref(),
-            proxy_url.as_deref(),
-        )
-        .await?
-        {
-            add_log_internal(
-                "info",
-                &format!(
-                    "Skipped live video due to --skip-live (status: {})",
-                    live_status
-                ),
-                None,
-                Some(&url),
-            )
-            .ok();
-            return Err(BackendError::new(
-                crate::types::code::YT_SKIPPED_LIVE,
-                format!("Skipped live video (status: {})", live_status),
-            )
-            .with_retryable(false)
-            .with_param("liveStatus", live_status)
-            .to_wire_string());
-        }
+  let should_log_stderr = log_stderr.unwrap_or(true);
+  let sanitized_path = sanitize_output_path(&output_path).map_err(|e| BackendError::from_message(e).to_wire_string())?;
+  let format_string = build_format_string(&quality, &format, &video_codec, preferred_fps.as_deref());
+  let number_playlist_items = number_playlist_items.unwrap_or(false);
+  let number_queue_items = number_queue_items.unwrap_or(false);
+  let split_embedded_chapters = split_embedded_chapters.unwrap_or(false);
+  let number_chapter_files = number_chapter_files.unwrap_or(true);
+  let output_template = build_output_template(&sanitized_path, number_playlist_items, playlist_index, playlist_total, number_queue_items, queue_index, queue_total);
+
+  // Use a temp file to capture the final filepath from yt-dlp.
+  // On Windows with non-UTF-8 locales (e.g. Chinese/GBK), stdout is encoded
+  // in the system ANSI code page which cannot represent all Unicode characters
+  // (such as ⧸ U+29F8 used by yt-dlp to replace / in filenames).
+  // --print-to-file always writes UTF-8, so we get the exact filepath.
+  let filepath_tmp = std::env::temp_dir().join(format!("youwee-fp-{}.txt", id));
+
+  let mut args = vec!["--newline".to_string(), "--progress".to_string(), "--no-warnings".to_string(), "-f".to_string(), format_string, "-o".to_string(), output_template, "--print-to-file".to_string(), "after_move:filepath".to_string(), filepath_tmp.to_string_lossy().to_string(), "--no-keep-video".to_string(), "--no-keep-fragments".to_string(), "--retries".to_string(), "3".to_string(), "--fragment-retries".to_string(), "3".to_string(), "--extractor-retries".to_string(), "2".to_string(), "--file-access-retries".to_string(), "2".to_string()];
+  add_safe_filename_args(&mut args, Some(&sanitized_path));
+
+  if split_embedded_chapters {
+    args.push("--split-chapters".to_string());
+    args.push("-o".to_string());
+    args.push(format!("chapter:{}", build_chapter_output_template(&sanitized_path, number_playlist_items, playlist_index, playlist_total, number_queue_items, queue_index, queue_total, number_chapter_files,)));
+  }
+
+  // Auto use Deno runtime for YouTube (required for JS extractor)
+  // Use --js-runtimes instead of --extractor-args (handles spaces in path correctly)
+  if url.contains("youtube.com") || url.contains("youtu.be") {
+    if let Some(deno_path) = get_deno_path(&app).await {
+      args.push("--js-runtimes".to_string());
+      args.push(format!("deno:{}", deno_path.to_string_lossy()));
     }
+  }
 
-    let should_log_stderr = log_stderr.unwrap_or(true);
-    let sanitized_path = sanitize_output_path(&output_path)
-        .map_err(|e| BackendError::from_message(e).to_wire_string())?;
-    let format_string =
-        build_format_string(&quality, &format, &video_codec, preferred_fps.as_deref());
-    let number_playlist_items = number_playlist_items.unwrap_or(false);
-    let number_queue_items = number_queue_items.unwrap_or(false);
-    let split_embedded_chapters = split_embedded_chapters.unwrap_or(false);
-    let number_chapter_files = number_chapter_files.unwrap_or(true);
-    let output_template = build_output_template(
-        &sanitized_path,
-        number_playlist_items,
-        playlist_index,
-        playlist_total,
-        number_queue_items,
-        queue_index,
-        queue_total,
-    );
-
-    // Use a temp file to capture the final filepath from yt-dlp.
-    // On Windows with non-UTF-8 locales (e.g. Chinese/GBK), stdout is encoded
-    // in the system ANSI code page which cannot represent all Unicode characters
-    // (such as ⧸ U+29F8 used by yt-dlp to replace / in filenames).
-    // --print-to-file always writes UTF-8, so we get the exact filepath.
-    let filepath_tmp = std::env::temp_dir().join(format!("youwee-fp-{}.txt", id));
-
-    let mut args = vec![
-        "--newline".to_string(),
-        "--progress".to_string(),
-        "--no-warnings".to_string(),
-        "-f".to_string(),
-        format_string,
-        "-o".to_string(),
-        output_template,
-        "--print-to-file".to_string(),
-        "after_move:filepath".to_string(),
-        filepath_tmp.to_string_lossy().to_string(),
-        "--no-keep-video".to_string(),
-        "--no-keep-fragments".to_string(),
-        "--retries".to_string(),
-        "3".to_string(),
-        "--fragment-retries".to_string(),
-        "3".to_string(),
-        "--extractor-retries".to_string(),
-        "2".to_string(),
-        "--file-access-retries".to_string(),
-        "2".to_string(),
-    ];
-    add_safe_filename_args(&mut args, Some(&sanitized_path));
-
-    if split_embedded_chapters {
-        args.push("--split-chapters".to_string());
-        args.push("-o".to_string());
-        args.push(format!(
-            "chapter:{}",
-            build_chapter_output_template(
-                &sanitized_path,
-                number_playlist_items,
-                playlist_index,
-                playlist_total,
-                number_queue_items,
-                queue_index,
-                queue_total,
-                number_chapter_files,
-            )
-        ));
+  // Add FFmpeg location if available
+  if let Some(ffmpeg_path) = get_ffmpeg_path(&app).await {
+    if let Some(parent) = ffmpeg_path.parent() {
+      args.push("--ffmpeg-location".to_string());
+      args.push(parent.to_string_lossy().to_string());
     }
+  }
 
-    // Auto use Deno runtime for YouTube (required for JS extractor)
-    // Use --js-runtimes instead of --extractor-args (handles spaces in path correctly)
-    if url.contains("youtube.com") || url.contains("youtu.be") {
-        if let Some(deno_path) = get_deno_path(&app).await {
-            args.push("--js-runtimes".to_string());
-            args.push(format!("deno:{}", deno_path.to_string_lossy()));
-        }
-    }
-
-    // Add FFmpeg location if available
-    if let Some(ffmpeg_path) = get_ffmpeg_path(&app).await {
-        if let Some(parent) = ffmpeg_path.parent() {
-            args.push("--ffmpeg-location".to_string());
-            args.push(parent.to_string_lossy().to_string());
-        }
-    }
-
-    // Subtitle settings
-    if subtitle_mode != "off" {
-        args.push("--write-subs".to_string());
-        if subtitle_mode == "auto" {
-            args.push("--write-auto-subs".to_string());
-            args.push("--sub-langs".to_string());
-            args.push("all".to_string());
-        } else {
-            args.push("--sub-langs".to_string());
-            args.push(subtitle_langs.clone());
-        }
-        args.push("--sub-format".to_string());
-        args.push(subtitle_format.clone());
-        if subtitle_embed {
-            args.push("--embed-subs".to_string());
-        }
-    }
-
-    args.extend(build_site_header_args(&url));
-
-    args.extend(build_cookie_args(
-        &url,
-        cookie_mode.as_deref(),
-        cookie_browser.as_deref(),
-        cookie_browser_profile.as_deref(),
-        cookie_file_path.as_deref(),
-        cookie_skip_patterns.as_deref(),
-    ));
-
-    // Proxy settings
-    if let Some(proxy) = proxy_url.as_ref() {
-        if !proxy.is_empty() {
-            args.push("--proxy".to_string());
-            args.push(proxy.clone());
-        }
-    }
-
-    let ytdlp_advanced_options = ytdlp_advanced_options.unwrap_or_default();
-    let advanced_args = build_ytdlp_advanced_args(
-        &url,
-        ytdlp_advanced_options_enabled.unwrap_or(false),
-        &ytdlp_advanced_options,
-    )
-    .map_err(|e| e.to_wire_string())?;
-    if !advanced_args.skipped_options.is_empty() {
-        add_log_internal(
-            "info",
-            &format!(
-                "Skipped yt-dlp advanced option(s) for Bilibili because Youwee uses app-managed headers: {}",
-                advanced_args.skipped_options.join(", ")
-            ),
-            None,
-            Some(&url),
-        )
-        .ok();
-    }
-    args.extend(advanced_args.args);
-
-    // Merge YouTube extractor settings into a single --extractor-args value.
-    // See: https://github.com/yt-dlp/yt-dlp/issues/14680
-    let is_youtube_url = url.contains("youtube.com") || url.contains("youtu.be");
-    if is_youtube_url {
-        if let Some(extractor_args) = build_youtube_extractor_args(
-            use_actual_player_js.unwrap_or(false),
-            advanced_args.youtube_player_client.as_deref(),
-        ) {
-            args.push("--extractor-args".to_string());
-            args.push(extractor_args);
-        }
-    } else if advanced_args.youtube_player_client.is_some() {
-        add_log_internal(
-            "info",
-            "Skipped YouTube player client preset because the download URL is not YouTube.",
-            None,
-            Some(&url),
-        )
-        .ok();
-    }
-
-    // Live stream settings
-    if live_from_start.unwrap_or(false) {
-        args.push("--live-from-start".to_string());
-        args.push("--no-part".to_string());
-    }
-
-    // Speed limit settings
-    if let Some(limit) = speed_limit.as_ref() {
-        if !limit.is_empty() {
-            args.push("--limit-rate".to_string());
-            args.push(limit.clone());
-        }
-    }
-
-    // External downloader settings (aria2c)
-    if use_aria2.unwrap_or(false) {
-        args.push("--downloader".to_string());
-        args.push("aria2c".to_string());
-        if let Some(raw_args) = aria2_args.as_ref() {
-            if let Some(normalized_args) = normalize_aria2_args(raw_args) {
-                args.push("--downloader-args".to_string());
-                args.push(normalized_args);
-            }
-        }
-    }
-
-    // Force overwrite to avoid HTTP 416 errors from stale .part files
-    args.push("--force-overwrites".to_string());
-
-    // Playlist handling
-    if !download_playlist {
-        args.push("--no-playlist".to_string());
-    } else if let Some(limit) = playlist_limit {
-        if limit > 0 {
-            args.push("--playlist-end".to_string());
-            args.push(limit.to_string());
-        }
-    }
-
-    // Audio formats
-    let is_audio_format =
-        format == "mp3" || format == "m4a" || format == "opus" || quality == "audio";
-
-    if is_audio_format {
-        args.push("-x".to_string());
-        args.push("--audio-format".to_string());
-        match format.as_str() {
-            "mp3" => args.push("mp3".to_string()),
-            "m4a" => args.push("m4a".to_string()),
-            "opus" => args.push("opus".to_string()),
-            _ => args.push("mp3".to_string()),
-        }
-        args.push("--audio-quality".to_string());
-        match audio_bitrate.as_str() {
-            "128" => args.push("128K".to_string()),
-            _ => args.push("0".to_string()),
-        }
+  // Subtitle settings
+  if subtitle_mode != "off" {
+    args.push("--write-subs".to_string());
+    if subtitle_mode == "auto" {
+      args.push("--write-auto-subs".to_string());
+      args.push("--sub-langs".to_string());
+      args.push("all".to_string());
     } else {
-        args.push("--merge-output-format".to_string());
-        args.push(format.clone());
+      args.push("--sub-langs".to_string());
+      args.push(subtitle_langs.clone());
     }
-
-    // Embed metadata and thumbnail
-    if embed_metadata.unwrap_or(false) {
-        args.push("--embed-metadata".to_string());
+    args.push("--sub-format".to_string());
+    args.push(subtitle_format.clone());
+    if subtitle_embed {
+      args.push("--embed-subs".to_string());
     }
-    if embed_thumbnail.unwrap_or(false) {
-        args.push("--embed-thumbnail".to_string());
-        // Convert thumbnail to jpg for better compatibility with MP4 container
-        args.push("--convert-thumbnails".to_string());
-        args.push("jpg".to_string());
+  }
+
+  args.extend(build_site_header_args(&url));
+
+  args.extend(build_cookie_args(&url, cookie_mode.as_deref(), cookie_browser.as_deref(), cookie_browser_profile.as_deref(), cookie_file_path.as_deref(), cookie_skip_patterns.as_deref()));
+
+  // Proxy settings
+  if let Some(proxy) = proxy_url.as_ref() {
+    if !proxy.is_empty() {
+      args.push("--proxy".to_string());
+      args.push(proxy.clone());
     }
+  }
 
-    // SponsorBlock settings
-    if let Some(ref remove_cats) = sponsorblock_remove {
-        if !remove_cats.is_empty() {
-            args.push("--sponsorblock-remove".to_string());
-            args.push(remove_cats.clone());
-        }
+  let ytdlp_advanced_options = ytdlp_advanced_options.unwrap_or_default();
+  let advanced_args = build_ytdlp_advanced_args(&url, ytdlp_advanced_options_enabled.unwrap_or(false), &ytdlp_advanced_options).map_err(|e| e.to_wire_string())?;
+  if !advanced_args.skipped_options.is_empty() {
+    add_log_internal("info", &format!("Skipped yt-dlp advanced option(s) for Bilibili because Youwee uses app-managed headers: {}", advanced_args.skipped_options.join(", ")), None, Some(&url)).ok();
+  }
+  args.extend(advanced_args.args);
+
+  // Merge YouTube extractor settings into a single --extractor-args value.
+  // See: https://github.com/yt-dlp/yt-dlp/issues/14680
+  let is_youtube_url = url.contains("youtube.com") || url.contains("youtu.be");
+  if is_youtube_url {
+    if let Some(extractor_args) = build_youtube_extractor_args(use_actual_player_js.unwrap_or(false), advanced_args.youtube_player_client.as_deref()) {
+      args.push("--extractor-args".to_string());
+      args.push(extractor_args);
     }
-    if let Some(ref mark_cats) = sponsorblock_mark {
-        if !mark_cats.is_empty() {
-            args.push("--sponsorblock-mark".to_string());
-            args.push(mark_cats.clone());
-        }
+  } else if advanced_args.youtube_player_client.is_some() {
+    add_log_internal("info", "Skipped YouTube player client preset because the download URL is not YouTube.", None, Some(&url)).ok();
+  }
+
+  // Live stream settings
+  if live_from_start.unwrap_or(false) {
+    args.push("--live-from-start".to_string());
+    args.push("--no-part".to_string());
+  }
+
+  // Speed limit settings
+  if let Some(limit) = speed_limit.as_ref() {
+    if !limit.is_empty() {
+      args.push("--limit-rate".to_string());
+      args.push(limit.clone());
     }
+  }
 
-    // Download sections (time range)
-    if let Some(ref sections) = download_sections {
-        if !sections.is_empty() {
-            args.push("--download-sections".to_string());
-            args.push(sections.clone());
-        }
+  // External downloader settings (aria2c)
+  if use_aria2.unwrap_or(false) {
+    args.push("--downloader".to_string());
+    args.push("aria2c".to_string());
+    if let Some(raw_args) = aria2_args.as_ref() {
+      if let Some(normalized_args) = normalize_aria2_args(raw_args) {
+        args.push("--downloader-args".to_string());
+        args.push(normalized_args);
+      }
     }
+  }
 
-    args.push("--".to_string());
-    args.push(url.clone());
+  // Force overwrite to avoid HTTP 416 errors from stale .part files
+  args.push("--force-overwrites".to_string());
 
-    // Get binary info for logging
-    let binary_info = get_ytdlp_path(&app).await;
-    let binary_path_str = binary_info
-        .as_ref()
-        .map(|(p, is_bundled)| format!("{} (bundled: {})", p.display(), is_bundled))
-        .unwrap_or_else(|| "sidecar".to_string());
-
-    // Log command with binary path
-    let command_args_for_log = redact_ytdlp_advanced_args(&args);
-    let command_str = format!(
-        "[{}] yt-dlp {}",
-        binary_path_str,
-        command_args_for_log.join(" ")
-    );
-    add_log_internal("command", &command_str, None, Some(&url)).ok();
-
-    let trigger_source = source.clone().or_else(|| detect_source(&url));
-    let trigger_time_range = extract_time_range(&download_sections);
-    let before_start_steps =
-        workflow_steps_for_trigger(&app, "download.beforeStart", &plugin_workflow_snapshots);
-    let completed_workflow_steps =
-        workflow_steps_for_trigger(&app, "download.completed", &plugin_workflow_snapshots);
-    let failed_workflow_steps =
-        workflow_steps_for_trigger(&app, "download.failed", &plugin_workflow_snapshots);
-
-    // Try to get yt-dlp path (prioritizes bundled version for stability)
-    if let Some((binary_path, _)) = get_ytdlp_path(&app).await {
-        // Build extended PATH with deno/bun locations for JavaScript runtime support
-        let home_dir = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
-        let mut path_entries: Vec<std::path::PathBuf> = std::env::var_os("PATH")
-            .map(|paths| std::env::split_paths(&paths).collect())
-            .unwrap_or_default();
-        path_entries.extend([
-            std::path::PathBuf::from(&home_dir).join(".deno/bin"),
-            std::path::PathBuf::from(&home_dir).join(".bun/bin"),
-            std::path::PathBuf::from("/opt/homebrew/bin"),
-            std::path::PathBuf::from("/usr/local/bin"),
-        ]);
-        let extended_path = std::env::join_paths(path_entries)
-            .unwrap_or_else(|_| std::env::var_os("PATH").unwrap_or_default());
-
-        let mut cmd = Command::new(&binary_path);
-        cmd.args(&args)
-            .env("HOME", &home_dir)
-            .env("PATH", &extended_path)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        cmd.hide_window();
-
-        let process = match cmd.spawn() {
-            Ok(process) => process,
-            Err(error) => {
-                if emit_failed_workflow {
-                    enqueue_failed_workflow(
-                        &app,
-                        &failed_workflow_steps,
-                        &id,
-                        trigger_source.clone(),
-                        &sanitized_path,
-                        Some(format.clone()),
-                        Some(quality.clone()),
-                        &url,
-                        title.clone(),
-                        thumbnail.clone(),
-                        history_id.clone(),
-                        trigger_time_range.clone(),
-                        &download_kind,
-                    );
-                }
-                return Err(BackendError::from_message(format!(
-                    "Failed to start yt-dlp: {}",
-                    error
-                ))
-                .to_wire_string());
-            }
-        };
-
-        enqueue_before_start_workflow(
-            &app,
-            &before_start_steps,
-            &id,
-            trigger_source.clone(),
-            &sanitized_path,
-            Some(format.clone()),
-            Some(quality.clone()),
-            &url,
-            title.clone(),
-            thumbnail.clone(),
-            history_id.clone(),
-            trigger_time_range.clone(),
-            &download_kind,
-        );
-
-        return handle_tokio_download(
-            app,
-            id,
-            process,
-            quality,
-            format,
-            url,
-            should_log_stderr,
-            title,
-            thumbnail,
-            source,
-            download_sections,
-            history_id.clone(),
-            filepath_tmp.clone(),
-            sanitized_path.clone(),
-            completed_workflow_steps.clone(),
-            failed_workflow_steps.clone(),
-            emit_failed_workflow,
-            download_kind.clone(),
-            auto_organize_collections.unwrap_or(false),
-            playlist_collection_name.clone(),
-            split_embedded_chapters,
-        )
-        .await;
+  // Playlist handling
+  if !download_playlist {
+    args.push("--no-playlist".to_string());
+  } else if let Some(limit) = playlist_limit {
+    if limit > 0 {
+      args.push("--playlist-end".to_string());
+      args.push(limit.to_string());
     }
+  }
 
-    let ytdlp_source = get_ytdlp_source(&app).await;
-    if ytdlp_source == DependencySource::System {
+  // Audio formats
+  let is_audio_format = format == "mp3" || format == "m4a" || format == "opus" || quality == "audio";
+
+  if is_audio_format {
+    args.push("-x".to_string());
+    args.push("--audio-format".to_string());
+    match format.as_str() {
+      "mp3" => args.push("mp3".to_string()),
+      "m4a" => args.push("m4a".to_string()),
+      "opus" => args.push("opus".to_string()),
+      _ => args.push("mp3".to_string()),
+    }
+    args.push("--audio-quality".to_string());
+    match audio_bitrate.as_str() {
+      "128" => args.push("128K".to_string()),
+      _ => args.push("0".to_string()),
+    }
+  } else {
+    args.push("--merge-output-format".to_string());
+    args.push(format.clone());
+  }
+
+  // Embed metadata and thumbnail
+  if embed_metadata.unwrap_or(false) {
+    args.push("--embed-metadata".to_string());
+  }
+  if embed_thumbnail.unwrap_or(false) {
+    args.push("--embed-thumbnail".to_string());
+    // Convert thumbnail to jpg for better compatibility with MP4 container
+    args.push("--convert-thumbnails".to_string());
+    args.push("jpg".to_string());
+  }
+
+  // SponsorBlock settings
+  if let Some(ref remove_cats) = sponsorblock_remove {
+    if !remove_cats.is_empty() {
+      args.push("--sponsorblock-remove".to_string());
+      args.push(remove_cats.clone());
+    }
+  }
+  if let Some(ref mark_cats) = sponsorblock_mark {
+    if !mark_cats.is_empty() {
+      args.push("--sponsorblock-mark".to_string());
+      args.push(mark_cats.clone());
+    }
+  }
+
+  // Download sections (time range)
+  if let Some(ref sections) = download_sections {
+    if !sections.is_empty() {
+      args.push("--download-sections".to_string());
+      args.push(sections.clone());
+    }
+  }
+
+  args.push("--".to_string());
+  args.push(url.clone());
+
+  // Get binary info for logging
+  let binary_info = get_ytdlp_path(&app).await;
+  let binary_path_str = binary_info.as_ref().map(|(p, is_bundled)| format!("{} (bundled: {})", p.display(), is_bundled)).unwrap_or_else(|| "sidecar".to_string());
+
+  // Log command with binary path
+  let command_args_for_log = redact_ytdlp_advanced_args(&args);
+  let command_str = format!("[{}] yt-dlp {}", binary_path_str, command_args_for_log.join(" "));
+  add_log_internal("command", &command_str, None, Some(&url)).ok();
+
+  let trigger_source = source.clone().or_else(|| detect_source(&url));
+  let trigger_time_range = extract_time_range(&download_sections);
+  let before_start_steps = workflow_steps_for_trigger(&app, "download.beforeStart", &plugin_workflow_snapshots);
+  let completed_workflow_steps = workflow_steps_for_trigger(&app, "download.completed", &plugin_workflow_snapshots);
+  let failed_workflow_steps = workflow_steps_for_trigger(&app, "download.failed", &plugin_workflow_snapshots);
+
+  // Try to get yt-dlp path (prioritizes bundled version for stability)
+  if let Some((binary_path, _)) = get_ytdlp_path(&app).await {
+    // Build extended PATH with deno/bun locations for JavaScript runtime support
+    let home_dir = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
+    let mut path_entries: Vec<std::path::PathBuf> = std::env::var_os("PATH").map(|paths| std::env::split_paths(&paths).collect()).unwrap_or_default();
+    path_entries.extend([std::path::PathBuf::from(&home_dir).join(".deno/bin"), std::path::PathBuf::from(&home_dir).join(".bun/bin"), std::path::PathBuf::from("/opt/homebrew/bin"), std::path::PathBuf::from("/usr/local/bin")]);
+    let extended_path = std::env::join_paths(path_entries).unwrap_or_else(|_| std::env::var_os("PATH").unwrap_or_default());
+
+    let mut cmd = Command::new(&binary_path);
+    cmd.args(&args).env("HOME", &home_dir).env("PATH", &extended_path).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.hide_window();
+
+    let process = match cmd.spawn() {
+      Ok(process) => process,
+      Err(error) => {
         if emit_failed_workflow {
-            enqueue_failed_workflow(
-                &app,
-                &failed_workflow_steps,
-                &id,
-                trigger_source.clone(),
-                &sanitized_path,
-                Some(format.clone()),
-                Some(quality.clone()),
-                &url,
-                title.clone(),
-                thumbnail.clone(),
-                history_id.clone(),
-                trigger_time_range.clone(),
-                &download_kind,
-            );
+          enqueue_failed_workflow(&app, &failed_workflow_steps, &id, trigger_source.clone(), &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), trigger_time_range.clone(), &download_kind);
         }
-        return Err(BackendError::new(
-            crate::types::code::YTDLP_SYSTEM_NOT_FOUND,
-            system_ytdlp_not_found_message(),
-        )
-        .to_wire_string());
+        return Err(BackendError::from_message(format!("Failed to start yt-dlp: {}", error)).to_wire_string());
+      },
+    };
+
+    enqueue_before_start_workflow(&app, &before_start_steps, &id, trigger_source.clone(), &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), trigger_time_range.clone(), &download_kind);
+
+    return handle_tokio_download(app, id, process, quality, format, url, should_log_stderr, title, thumbnail, source, download_sections, history_id.clone(), filepath_tmp.clone(), sanitized_path.clone(), completed_workflow_steps.clone(), failed_workflow_steps.clone(), emit_failed_workflow, download_kind.clone(), auto_organize_collections.unwrap_or(false), playlist_collection_name.clone(), split_embedded_chapters).await;
+  }
+
+  let ytdlp_source = get_ytdlp_source(&app).await;
+  if ytdlp_source == DependencySource::System {
+    if emit_failed_workflow {
+      enqueue_failed_workflow(&app, &failed_workflow_steps, &id, trigger_source.clone(), &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), trigger_time_range.clone(), &download_kind);
     }
+    return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_NOT_FOUND, system_ytdlp_not_found_message()).to_wire_string());
+  }
 
-    // Fallback to sidecar
-    let sidecar_result = app.shell().sidecar("yt-dlp");
+  // Fallback to sidecar
+  let sidecar_result = app.shell().sidecar("yt-dlp");
 
-    match sidecar_result {
-        Ok(sidecar) => {
-            let (mut rx, child) = match sidecar.args(&args).spawn() {
-                Ok(result) => result,
-                Err(error) => {
-                    if emit_failed_workflow {
-                        enqueue_failed_workflow(
-                            &app,
-                            &failed_workflow_steps,
-                            &id,
-                            trigger_source.clone(),
-                            &sanitized_path,
-                            Some(format.clone()),
-                            Some(quality.clone()),
-                            &url,
-                            title.clone(),
-                            thumbnail.clone(),
-                            history_id.clone(),
-                            trigger_time_range.clone(),
-                            &download_kind,
-                        );
-                    }
-                    return Err(BackendError::from_message(format!(
-                        "Failed to start bundled yt-dlp: {}",
-                        error
-                    ))
-                    .to_wire_string());
-                }
-            };
+  match sidecar_result {
+    Ok(sidecar) => {
+      let (mut rx, child) = match sidecar.args(&args).spawn() {
+        Ok(result) => result,
+        Err(error) => {
+          if emit_failed_workflow {
+            enqueue_failed_workflow(&app, &failed_workflow_steps, &id, trigger_source.clone(), &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), trigger_time_range.clone(), &download_kind);
+          }
+          return Err(BackendError::from_message(format!("Failed to start bundled yt-dlp: {}", error)).to_wire_string());
+        },
+      };
 
-            enqueue_before_start_workflow(
-                &app,
-                &before_start_steps,
-                &id,
-                trigger_source.clone(),
-                &sanitized_path,
-                Some(format.clone()),
-                Some(quality.clone()),
-                &url,
-                title.clone(),
-                thumbnail.clone(),
-                history_id.clone(),
-                trigger_time_range.clone(),
-                &download_kind,
-            );
+      enqueue_before_start_workflow(&app, &before_start_steps, &id, trigger_source.clone(), &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), trigger_time_range.clone(), &download_kind);
 
-            // Only use frontend title if it's not a URL (placeholder)
-            let metadata_title: Option<String> = title.clone().filter(|t| !t.starts_with("http"));
-            let mut current_title = metadata_title.clone();
-            let mut current_index: Option<u32> = None;
-            let mut total_count: Option<u32> = None;
-            let mut total_filesize: u64 = 0;
-            let mut current_stream_size: Option<u64> = None;
-            let mut final_filepath: Option<String> = None;
-            let mut printed_filepaths: Vec<String> = Vec::new();
-            let mut recent_output: VecDeque<String> = VecDeque::new();
+      // Only use frontend title if it's not a URL (placeholder)
+      let metadata_title: Option<String> = title.clone().filter(|t| !t.starts_with("http"));
+      let mut current_title = metadata_title.clone();
+      let mut current_index: Option<u32> = None;
+      let mut total_count: Option<u32> = None;
+      let mut total_filesize: u64 = 0;
+      let mut current_stream_size: Option<u64> = None;
+      let mut final_filepath: Option<String> = None;
+      let mut printed_filepaths: Vec<String> = Vec::new();
+      let mut recent_output: VecDeque<String> = VecDeque::new();
 
-            let quality_display = match quality.as_str() {
-                "8k" => Some("8K".to_string()),
-                "4k" => Some("4K".to_string()),
-                "2k" => Some("2K".to_string()),
-                "1080" => Some("1080p".to_string()),
-                "720" => Some("720p".to_string()),
-                "480" => Some("480p".to_string()),
-                "360" => Some("360p".to_string()),
-                "audio" => Some("Audio".to_string()),
-                "best" => Some("Best".to_string()),
-                _ => None,
-            };
-
-            while let Some(event) = rx.recv().await {
-                if CANCEL_FLAG.load(Ordering::SeqCst) {
-                    child.kill().ok();
-                    kill_all_download_processes();
-                    return Err(BackendError::from_message("Download cancelled").to_wire_string());
-                }
-
-                match event {
-                    CommandEvent::Stdout(line_bytes) => {
-                        let line = decode_process_output(&line_bytes);
-                        push_recent_output(&mut recent_output, &line);
-
-                        // Parse playlist item info
-                        if line.contains("Downloading item") {
-                            if let Some(re) =
-                                regex::Regex::new(r"Downloading item (\d+) of (\d+)").ok()
-                            {
-                                if let Some(caps) = re.captures(&line) {
-                                    current_index =
-                                        caps.get(1).and_then(|m| m.as_str().parse().ok());
-                                    total_count = caps.get(2).and_then(|m| m.as_str().parse().ok());
-                                }
-                            }
-                        }
-
-                        // Extract title from [download] messages
-                        // Handles both: "Destination: /path/file.mp4" and "/path/file.mp4 has already been downloaded"
-                        if line.contains("[download]")
-                            && (line.contains("Destination:")
-                                || line.contains("has already been downloaded")
-                                || line.contains("[ExtractAudio]"))
-                        {
-                            let path_sep = if line.contains('\\') { '\\' } else { '/' };
-                            if let Some(start) = line.rfind(path_sep) {
-                                let filename = &line[start + 1..];
-                                // Remove suffix if present
-                                let filename =
-                                    filename.trim_end_matches(" has already been downloaded");
-                                if let Some(end) = filename.rfind('.') {
-                                    current_title = Some(filename[..end].to_string());
-                                }
-                            }
-                        }
-
-                        // Capture final filepath
-                        let trimmed = line.trim();
-                        if !trimmed.is_empty()
-                            && !trimmed.starts_with('[')
-                            && !trimmed.starts_with("Deleting")
-                            && !trimmed.starts_with("WARNING")
-                            && !trimmed.starts_with("ERROR")
-                            && (trimmed.ends_with(".mp3")
-                                || trimmed.ends_with(".m4a")
-                                || trimmed.ends_with(".opus")
-                                || trimmed.ends_with(".mp4")
-                                || trimmed.ends_with(".mkv")
-                                || trimmed.ends_with(".webm")
-                                || trimmed.ends_with(".flac")
-                                || trimmed.ends_with(".wav"))
-                        {
-                            final_filepath = Some(trimmed.to_string());
-                        }
-
-                        // Parse filesize
-                        if line.contains(" of ")
-                            && (line.contains("MiB")
-                                || line.contains("GiB")
-                                || line.contains("KiB"))
-                        {
-                            if let Some(re) =
-                                regex::Regex::new(r"of\s+(\d+(?:\.\d+)?)\s*(GiB|MiB|KiB)").ok()
-                            {
-                                if let Some(caps) = re.captures(&line) {
-                                    if let (Some(num), Some(unit)) = (caps.get(1), caps.get(2)) {
-                                        if let Ok(size) = num.as_str().parse::<f64>() {
-                                            let size_bytes = match unit.as_str() {
-                                                "GiB" => (size * 1024.0 * 1024.0 * 1024.0) as u64,
-                                                "MiB" => (size * 1024.0 * 1024.0) as u64,
-                                                "KiB" => (size * 1024.0) as u64,
-                                                _ => size as u64,
-                                            };
-                                            if current_stream_size != Some(size_bytes) {
-                                                if let Some(prev_size) = current_stream_size {
-                                                    total_filesize += prev_size;
-                                                }
-                                                current_stream_size = Some(size_bytes);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Parse progress
-                        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
-                            parse_progress(&line)
-                        {
-                            if pi.is_some() {
-                                current_index = pi;
-                            }
-                            if pc.is_some() {
-                                total_count = pc;
-                            }
-
-                            let progress = DownloadProgress {
-                                id: id.clone(),
-                                percent,
-                                speed,
-                                eta,
-                                status: "downloading".to_string(),
-                                title: current_title.clone(),
-                                playlist_index: current_index,
-                                playlist_count: total_count,
-                                filesize: None,
-                                resolution: None,
-                                format_ext: None,
-                                error_message: None,
-                                error_code: None,
-                                error_params: None,
-                                history_id: None,
-                                filepath: None,
-                                downloaded_size,
-                                elapsed_time,
-                            };
-                            app.emit("download-progress", progress).ok();
-                        }
-                    }
-                    CommandEvent::Stderr(bytes) => {
-                        let stderr_line = decode_process_output(&bytes);
-                        let stderr_line = stderr_line.trim().to_string();
-                        push_recent_output(&mut recent_output, &stderr_line);
-
-                        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
-                            parse_progress(&stderr_line)
-                        {
-                            if pi.is_some() {
-                                current_index = pi;
-                            }
-                            if pc.is_some() {
-                                total_count = pc;
-                            }
-
-                            let progress = DownloadProgress {
-                                id: id.clone(),
-                                percent,
-                                speed,
-                                eta,
-                                status: "downloading".to_string(),
-                                title: current_title.clone(),
-                                playlist_index: current_index,
-                                playlist_count: total_count,
-                                filesize: None,
-                                resolution: None,
-                                format_ext: None,
-                                error_message: None,
-                                error_code: None,
-                                error_params: None,
-                                history_id: None,
-                                filepath: None,
-                                downloaded_size,
-                                elapsed_time,
-                            };
-                            app.emit("download-progress", progress).ok();
-                        }
-
-                        if should_log_stderr && !stderr_line.is_empty() {
-                            add_log_internal("stderr", &stderr_line, None, Some(&url)).ok();
-                        }
-                    }
-                    CommandEvent::Error(err) => {
-                        let error = BackendError::from_message(format!("Process error: {}", err));
-                        add_log_internal("error", error.message(), None, Some(&url)).ok();
-                        if emit_failed_workflow {
-                            enqueue_failed_workflow(
-                                &app,
-                                &failed_workflow_steps,
-                                &id,
-                                source.clone().or_else(|| detect_source(&url)),
-                                &sanitized_path,
-                                Some(format.clone()),
-                                quality_display.clone().or_else(|| Some(quality.clone())),
-                                &url,
-                                current_title.clone(),
-                                thumbnail.clone(),
-                                history_id.clone(),
-                                extract_time_range(&download_sections),
-                                &download_kind,
-                            );
-                        }
-                        return Err(error.to_wire_string());
-                    }
-                    CommandEvent::Terminated(status) => {
-                        if CANCEL_FLAG.load(Ordering::SeqCst) {
-                            add_log_internal(
-                                "info",
-                                "Download cancelled by user",
-                                None,
-                                Some(&url),
-                            )
-                            .ok();
-                            return Err(
-                                BackendError::from_message("Download cancelled").to_wire_string()
-                            );
-                        }
-
-                        // Primary filepath source: read from --print-to-file temp file (UTF-8)
-                        if let Ok(contents) = std::fs::read_to_string(&filepath_tmp) {
-                            printed_filepaths = parse_printed_filepaths(&contents);
-                            if let Some(path) = printed_filepaths.first() {
-                                final_filepath = Some(path.clone());
-                            }
-                        }
-                        std::fs::remove_file(&filepath_tmp).ok();
-
-                        if status.code == Some(0) {
-                            let actual_filesize = final_filepath
-                                .as_ref()
-                                .and_then(|fp| std::fs::metadata(fp).ok())
-                                .map(|m| m.len());
-
-                            let reported_filesize = actual_filesize.or_else(|| {
-                                if let Some(last_size) = current_stream_size {
-                                    Some(total_filesize + last_size)
-                                } else if total_filesize > 0 {
-                                    Some(total_filesize)
-                                } else {
-                                    None
-                                }
-                            });
-
-                            let display_title = display_title_for_download(
-                                metadata_title.clone(),
-                                current_title.clone(),
-                                &final_filepath,
-                                total_count,
-                            );
-                            let output_paths =
-                                output_filepaths(&printed_filepaths, &final_filepath);
-                            let auto_collection_names = build_auto_collection_names(
-                                auto_organize_collections.unwrap_or(false),
-                                playlist_collection_name.as_deref(),
-                                split_embedded_chapters && output_paths.len() > 1,
-                                display_title.as_deref(),
-                            );
-
-                            // Log success
-                            let success_msg = format!(
-                                "Downloaded: {}",
-                                display_title
-                                    .clone()
-                                    .unwrap_or_else(|| "Unknown".to_string())
-                            );
-                            let details = format!(
-                                "Size: {} · Quality: {} · Format: {}",
-                                reported_filesize
-                                    .map(format_size)
-                                    .unwrap_or_else(|| "Unknown".to_string()),
-                                quality_display.clone().unwrap_or_else(|| quality.clone()),
-                                format.clone()
-                            );
-                            add_log_internal("success", &success_msg, Some(&details), Some(&url))
-                                .ok();
-
-                            // Save each emitted output to history. The first file remains the
-                            // queue representative; split chapters are extra history rows.
-                            let mut progress_history_id = None;
-                            for (index, filepath) in output_paths.iter().enumerate() {
-                                let time_range = extract_time_range(&download_sections);
-                                let file_filesize = std::fs::metadata(filepath)
-                                    .ok()
-                                    .map(|m| m.len())
-                                    .or(if index == 0 { reported_filesize } else { None });
-                                let entry_title = if index == 0 {
-                                    display_title
-                                        .clone()
-                                        .unwrap_or_else(|| "Unknown".to_string())
-                                } else {
-                                    title_from_filepath(filepath)
-                                        .or_else(|| display_title.clone())
-                                        .unwrap_or_else(|| "Unknown".to_string())
-                                };
-
-                                if index == 0 {
-                                    if let Some(ref hist_id) = history_id {
-                                        update_history_download(
-                                            hist_id.clone(),
-                                            filepath.clone(),
-                                            file_filesize,
-                                            quality_display.clone(),
-                                            Some(format.clone()),
-                                            time_range,
-                                        )
-                                        .ok();
-                                        assign_history_auto_collections(
-                                            hist_id,
-                                            &auto_collection_names,
-                                        );
-                                        progress_history_id = Some(hist_id.clone());
-                                        continue;
-                                    }
-                                }
-
-                                let history_row_id = add_history_internal(
-                                    url.clone(),
-                                    entry_title,
-                                    thumbnail.clone().or_else(|| generate_thumbnail_url(&url)),
-                                    filepath.clone(),
-                                    file_filesize,
-                                    None,
-                                    quality_display.clone(),
-                                    Some(format.clone()),
-                                    source.clone().or_else(|| detect_source(&url)),
-                                    time_range,
-                                )
-                                .ok();
-                                if let Some(ref hist_id) = history_row_id {
-                                    assign_history_auto_collections(
-                                        hist_id,
-                                        &auto_collection_names,
-                                    );
-                                }
-                                if index == 0 {
-                                    progress_history_id = history_row_id;
-                                }
-                            }
-
-                            let progress = DownloadProgress {
-                                id: id.clone(),
-                                percent: 100.0,
-                                speed: String::new(),
-                                eta: String::new(),
-                                status: "finished".to_string(),
-                                title: display_title.clone(),
-                                playlist_index: current_index,
-                                playlist_count: total_count,
-                                filesize: reported_filesize,
-                                resolution: quality_display.clone(),
-                                format_ext: Some(format.clone()),
-                                error_message: None,
-                                error_code: None,
-                                error_params: None,
-                                history_id: progress_history_id.clone(),
-                                filepath: final_filepath.clone(),
-                                downloaded_size: None,
-                                elapsed_time: None,
-                            };
-                            app.emit("download-progress", progress).ok();
-                            for (index, filepath) in output_paths.iter().enumerate() {
-                                let file_filesize = std::fs::metadata(filepath)
-                                    .ok()
-                                    .map(|m| m.len())
-                                    .or(if index == 0 { reported_filesize } else { None });
-                                let plugin_title = if index == 0 {
-                                    display_title.clone()
-                                } else {
-                                    title_from_filepath(filepath).or_else(|| display_title.clone())
-                                };
-                                run_completed_plugins(
-                                    &app,
-                                    &completed_workflow_steps,
-                                    &id,
-                                    source.clone().or_else(|| detect_source(&url)),
-                                    filepath,
-                                    file_filesize,
-                                    Some(format.clone()),
-                                    quality_display.clone().or_else(|| Some(quality.clone())),
-                                    &url,
-                                    plugin_title,
-                                    thumbnail.clone().or_else(|| generate_thumbnail_url(&url)),
-                                    if index == 0 {
-                                        progress_history_id.clone()
-                                    } else {
-                                        None
-                                    },
-                                    extract_time_range(&download_sections),
-                                    &download_kind,
-                                )
-                                .await;
-                            }
-                            return Ok(());
-                        } else {
-                            if CANCEL_FLAG.load(Ordering::SeqCst) {
-                                let error = download_cancelled_error();
-                                add_log_internal("info", error.message(), None, Some(&url)).ok();
-                                return Err(error.to_wire_string());
-                            }
-
-                            let recent_lines: Vec<String> = recent_output.iter().cloned().collect();
-                            let error = build_download_error_message(status.code, &recent_lines);
-                            add_log_internal("error", error.message(), None, Some(&url)).ok();
-
-                            // Emit error progress so frontend can display error message
-                            let progress = DownloadProgress {
-                                id: id.clone(),
-                                percent: 0.0,
-                                speed: String::new(),
-                                eta: String::new(),
-                                status: "error".to_string(),
-                                title: current_title.clone(),
-                                playlist_index: current_index,
-                                playlist_count: total_count,
-                                filesize: None,
-                                resolution: None,
-                                format_ext: None,
-                                error_message: Some(error.message().to_string()),
-                                error_code: Some(error.code().to_string()),
-                                error_params: error.params().cloned(),
-                                history_id: None,
-                                filepath: None,
-                                downloaded_size: None,
-                                elapsed_time: None,
-                            };
-                            app.emit("download-progress", progress).ok();
-
-                            if emit_failed_workflow && !failed_workflow_steps.is_empty() {
-                                let payload = build_trigger_payload(
-                                    &id,
-                                    source.clone().or_else(|| detect_source(&url)),
-                                    "download.failed",
-                                    &sanitized_path,
-                                    None,
-                                    Some(format.clone()),
-                                    quality_display.clone().or_else(|| Some(quality.clone())),
-                                    &url,
-                                    current_title.clone(),
-                                    thumbnail.clone(),
-                                    history_id.clone(),
-                                    extract_time_range(&download_sections),
-                                    &download_kind,
-                                );
-                                let _ = enqueue_post_download_workflow(
-                                    &app,
-                                    failed_workflow_steps.clone(),
-                                    payload,
-                                );
-                            }
-
-                            return Err(error.to_wire_string());
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Ok(())
-        }
-        Err(_) => {
-            if ytdlp_source == DependencySource::App {
-                if emit_failed_workflow {
-                    enqueue_failed_workflow(
-                        &app,
-                        &failed_workflow_steps,
-                        &id,
-                        trigger_source.clone(),
-                        &sanitized_path,
-                        Some(format.clone()),
-                        Some(quality.clone()),
-                        &url,
-                        title.clone(),
-                        thumbnail.clone(),
-                        history_id.clone(),
-                        trigger_time_range.clone(),
-                        &download_kind,
-                    );
-                }
-                return Err(BackendError::new(
-                    crate::types::code::YTDLP_APP_NOT_FOUND,
-                    "App-managed yt-dlp not found. Please install it from Settings > Dependencies.",
-                )
-                .with_retryable(false)
-                .to_wire_string());
-            }
-
-            // Fallback to system yt-dlp
-            let mut cmd = Command::new("yt-dlp");
-            cmd.args(&args)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            cmd.hide_window();
-
-            let process = match cmd.spawn() {
-                Ok(process) => process,
-                Err(error) => {
-                    if emit_failed_workflow {
-                        enqueue_failed_workflow(
-                            &app,
-                            &failed_workflow_steps,
-                            &id,
-                            trigger_source,
-                            &sanitized_path,
-                            Some(format.clone()),
-                            Some(quality.clone()),
-                            &url,
-                            title.clone(),
-                            thumbnail.clone(),
-                            history_id.clone(),
-                            trigger_time_range,
-                            &download_kind,
-                        );
-                    }
-                    return Err(BackendError::from_message(format!(
-                        "Failed to start yt-dlp: {}",
-                        error
-                    ))
-                    .to_wire_string());
-                }
-            };
-
-            enqueue_before_start_workflow(
-                &app,
-                &before_start_steps,
-                &id,
-                source.clone().or_else(|| detect_source(&url)),
-                &sanitized_path,
-                Some(format.clone()),
-                Some(quality.clone()),
-                &url,
-                title.clone(),
-                thumbnail.clone(),
-                history_id.clone(),
-                extract_time_range(&download_sections),
-                &download_kind,
-            );
-
-            handle_tokio_download(
-                app,
-                id,
-                process,
-                quality,
-                format,
-                url,
-                should_log_stderr,
-                title,
-                thumbnail,
-                source,
-                download_sections,
-                history_id.clone(),
-                filepath_tmp,
-                sanitized_path,
-                completed_workflow_steps,
-                failed_workflow_steps,
-                emit_failed_workflow,
-                download_kind,
-                auto_organize_collections.unwrap_or(false),
-                playlist_collection_name,
-                split_embedded_chapters,
-            )
-            .await
-        }
-    }
-}
-
-async fn handle_tokio_download(
-    app: AppHandle,
-    id: String,
-    mut process: tokio::process::Child,
-    quality: String,
-    format: String,
-    url: String,
-    should_log_stderr: bool,
-    title: Option<String>,
-    thumbnail: Option<String>,
-    source: Option<String>,
-    download_sections: Option<String>,
-    history_id: Option<String>,
-    filepath_tmp: std::path::PathBuf,
-    output_directory: String,
-    completed_workflow_steps: Vec<PluginWorkflowStepSnapshot>,
-    failed_workflow_steps: Vec<PluginWorkflowStepSnapshot>,
-    emit_failed_workflow: bool,
-    download_kind: String,
-    auto_organize_collections: bool,
-    playlist_collection_name: Option<String>,
-    split_embedded_chapters: bool,
-) -> Result<(), String> {
-    let stdout = process
-        .stdout
-        .take()
-        .ok_or_else(|| BackendError::from_message("Failed to get stdout").to_wire_string())?;
-    let stderr = process.stderr.take();
-    let mut stdout_reader = BufReader::new(stdout);
-
-    // Only use frontend title if it's not a URL (placeholder)
-    let metadata_title: Option<String> = title.filter(|t| !t.starts_with("http"));
-    let mut current_title = metadata_title.clone();
-    let mut current_index: Option<u32> = None;
-    let mut total_count: Option<u32> = None;
-    let mut total_filesize: u64 = 0;
-    let mut current_stream_size: Option<u64> = None;
-    let mut final_filepath: Option<String> = None;
-    let mut printed_filepaths: Vec<String> = Vec::new();
-    let recent_output = Arc::new(Mutex::new(VecDeque::new()));
-    let stderr_filepath: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-
-    let quality_display = match quality.as_str() {
+      let quality_display = match quality.as_str() {
         "8k" => Some("8K".to_string()),
         "4k" => Some("4K".to_string()),
         "2k" => Some("2K".to_string()),
@@ -2069,536 +843,587 @@ async fn handle_tokio_download(
         "audio" => Some("Audio".to_string()),
         "best" => Some("Best".to_string()),
         _ => None,
-    };
+      };
 
-    // Spawn task to read stderr in parallel (for live stream progress)
-    let stderr_app = app.clone();
-    let stderr_id = id.clone();
-    let stderr_url = url.clone();
-    let stderr_recent_output = recent_output.clone();
-    let stderr_fp_clone = stderr_filepath.clone();
-    let stderr_task = if let Some(stderr_handle) = stderr {
-        Some(tokio::spawn(async move {
-            let mut stderr_reader = BufReader::new(stderr_handle);
-            let mut line_buf = Vec::new();
-            loop {
-                line_buf.clear();
-                match stderr_reader.read_until(b'\n', &mut line_buf).await {
-                    Ok(0) => break,
-                    Ok(_) => {}
-                    Err(_) => break,
-                }
-                while line_buf.last().map_or(false, |&b| b == b'\n' || b == b'\r') {
-                    line_buf.pop();
-                }
-                let line = decode_process_output(&line_buf);
-
-                if CANCEL_FLAG.load(Ordering::SeqCst) {
-                    break;
-                }
-                push_recent_output_shared(&stderr_recent_output, &line);
-
-                // On Windows, yt-dlp may print --print after_move:filepath to stderr.
-                // Capture it here as a fallback in case stdout doesn't contain the path.
-                let t = line.trim();
-                if !t.is_empty()
-                    && !t.starts_with('[')
-                    && (t.ends_with(".mp4")
-                        || t.ends_with(".mkv")
-                        || t.ends_with(".mp3")
-                        || t.ends_with(".m4a")
-                        || t.ends_with(".opus")
-                        || t.ends_with(".webm")
-                        || t.ends_with(".flac")
-                        || t.ends_with(".wav"))
-                {
-                    if let Ok(mut guard) = stderr_fp_clone.lock() {
-                        *guard = Some(t.to_string());
-                    }
-                }
-
-                // Capture audio filepath from [ExtractAudio] Destination lines in stderr
-                // e.g. "[ExtractAudio] Destination: C:\Users\...\song.mp3"
-                if line.contains("[ExtractAudio]") && line.contains("Destination:") {
-                    if let Some(pos) = line.find("Destination:") {
-                        let path = line[pos + "Destination:".len()..].trim();
-                        if !path.is_empty() {
-                            if let Ok(mut guard) = stderr_fp_clone.lock() {
-                                *guard = Some(path.to_string());
-                            }
-                        }
-                    }
-                }
-
-                // Parse progress from stderr (live streams output here)
-                if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
-                    parse_progress(&line)
-                {
-                    let progress = DownloadProgress {
-                        id: stderr_id.clone(),
-                        percent,
-                        speed,
-                        eta,
-                        status: "downloading".to_string(),
-                        title: None,
-                        playlist_index: pi,
-                        playlist_count: pc,
-                        filesize: None,
-                        resolution: None,
-                        format_ext: None,
-                        error_message: None,
-                        error_code: None,
-                        error_params: None,
-                        history_id: None,
-                        filepath: None,
-                        downloaded_size,
-                        elapsed_time,
-                    };
-                    stderr_app.emit("download-progress", progress).ok();
-                }
-
-                // Log stderr if enabled
-                if should_log_stderr && !line.trim().is_empty() {
-                    add_log_internal("stderr", line.trim(), None, Some(&stderr_url)).ok();
-                }
-            }
-        }))
-    } else {
-        None
-    };
-
-    // Read stdout — use raw byte reading + decode_process_output to handle
-    // non-UTF-8 encodings (e.g. GBK on Chinese Windows).
-    let mut stdout_line_buf = Vec::new();
-    loop {
-        stdout_line_buf.clear();
-        match stdout_reader.read_until(b'\n', &mut stdout_line_buf).await {
-            Ok(0) => break, // EOF
-            Ok(_) => {}
-            Err(_) => break,
-        }
-        while stdout_line_buf
-            .last()
-            .map_or(false, |&b| b == b'\n' || b == b'\r')
-        {
-            stdout_line_buf.pop();
-        }
-        let line = decode_process_output(&stdout_line_buf);
-
+      while let Some(event) = rx.recv().await {
         if CANCEL_FLAG.load(Ordering::SeqCst) {
-            process.kill().await.ok();
-            kill_all_download_processes();
-            return Err(BackendError::from_message("Download cancelled").to_wire_string());
-        }
-        push_recent_output_shared(&recent_output, &line);
-
-        // Parse progress and emit events
-        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
-            parse_progress(&line)
-        {
-            if pi.is_some() {
-                current_index = pi;
-            }
-            if pc.is_some() {
-                total_count = pc;
-            }
-
-            let progress = DownloadProgress {
-                id: id.clone(),
-                percent,
-                speed,
-                eta,
-                status: "downloading".to_string(),
-                title: current_title.clone(),
-                playlist_index: current_index,
-                playlist_count: total_count,
-                filesize: None,
-                resolution: None,
-                format_ext: None,
-                error_message: None,
-                error_code: None,
-                error_params: None,
-                history_id: None,
-                filepath: None,
-                downloaded_size,
-                elapsed_time,
-            };
-            app.emit("download-progress", progress).ok();
+          child.kill().ok();
+          kill_all_download_processes();
+          return Err(BackendError::from_message("Download cancelled").to_wire_string());
         }
 
-        // Extract title from [download] messages
-        // Handles both: "Destination: /path/file.mp4" and "/path/file.mp4 has already been downloaded"
-        if line.contains("[download]")
-            && (line.contains("Destination:") || line.contains("has already been downloaded"))
-        {
-            let path_sep = if line.contains('\\') { '\\' } else { '/' };
-            if let Some(start) = line.rfind(path_sep) {
+        match event {
+          CommandEvent::Stdout(line_bytes) => {
+            let line = decode_process_output(&line_bytes);
+            push_recent_output(&mut recent_output, &line);
+
+            // Parse playlist item info
+            if line.contains("Downloading item") {
+              if let Some(re) = regex::Regex::new(r"Downloading item (\d+) of (\d+)").ok() {
+                if let Some(caps) = re.captures(&line) {
+                  current_index = caps.get(1).and_then(|m| m.as_str().parse().ok());
+                  total_count = caps.get(2).and_then(|m| m.as_str().parse().ok());
+                }
+              }
+            }
+
+            // Extract title from [download] messages
+            // Handles both: "Destination: /path/file.mp4" and "/path/file.mp4 has already been downloaded"
+            if line.contains("[download]") && (line.contains("Destination:") || line.contains("has already been downloaded") || line.contains("[ExtractAudio]")) {
+              let path_sep = if line.contains('\\') { '\\' } else { '/' };
+              if let Some(start) = line.rfind(path_sep) {
                 let filename = &line[start + 1..];
                 // Remove suffix if present
                 let filename = filename.trim_end_matches(" has already been downloaded");
                 if let Some(end) = filename.rfind('.') {
-                    current_title = Some(filename[..end].to_string());
+                  current_title = Some(filename[..end].to_string());
                 }
+              }
             }
-        }
 
-        // Capture final filepath
-        let trimmed = line.trim();
-        if !trimmed.is_empty()
-            && !trimmed.starts_with('[')
-            && (trimmed.ends_with(".mp3")
-                || trimmed.ends_with(".m4a")
-                || trimmed.ends_with(".opus")
-                || trimmed.ends_with(".mp4")
-                || trimmed.ends_with(".mkv")
-                || trimmed.ends_with(".webm")
-                || trimmed.ends_with(".flac")
-                || trimmed.ends_with(".wav"))
-        {
-            final_filepath = Some(trimmed.to_string());
-        }
-
-        // Capture audio filepath from [ExtractAudio] Destination lines
-        // e.g. "[ExtractAudio] Destination: C:\Users\...\song.mp3"
-        if line.contains("[ExtractAudio]") && line.contains("Destination:") {
-            if let Some(pos) = line.find("Destination:") {
-                let path = line[pos + "Destination:".len()..].trim();
-                if !path.is_empty() {
-                    final_filepath = Some(path.to_string());
-                }
+            // Capture final filepath
+            let trimmed = line.trim();
+            if !trimmed.is_empty() && !trimmed.starts_with('[') && !trimmed.starts_with("Deleting") && !trimmed.starts_with("WARNING") && !trimmed.starts_with("ERROR") && (trimmed.ends_with(".mp3") || trimmed.ends_with(".m4a") || trimmed.ends_with(".opus") || trimmed.ends_with(".mp4") || trimmed.ends_with(".mkv") || trimmed.ends_with(".webm") || trimmed.ends_with(".flac") || trimmed.ends_with(".wav")) {
+              final_filepath = Some(trimmed.to_string());
             }
-        }
 
-        // Parse filesize
-        if line.contains(" of ") && (line.contains("MiB") || line.contains("GiB")) {
-            if let Some(re) = regex::Regex::new(r"of\s+(\d+(?:\.\d+)?)\s*(GiB|MiB|KiB)").ok() {
+            // Parse filesize
+            if line.contains(" of ") && (line.contains("MiB") || line.contains("GiB") || line.contains("KiB")) {
+              if let Some(re) = regex::Regex::new(r"of\s+(\d+(?:\.\d+)?)\s*(GiB|MiB|KiB)").ok() {
                 if let Some(caps) = re.captures(&line) {
-                    if let (Some(num), Some(unit)) = (caps.get(1), caps.get(2)) {
-                        if let Ok(size) = num.as_str().parse::<f64>() {
-                            let size_bytes = match unit.as_str() {
-                                "GiB" => (size * 1024.0 * 1024.0 * 1024.0) as u64,
-                                "MiB" => (size * 1024.0 * 1024.0) as u64,
-                                "KiB" => (size * 1024.0) as u64,
-                                _ => size as u64,
-                            };
-                            if current_stream_size != Some(size_bytes) {
-                                if let Some(prev_size) = current_stream_size {
-                                    total_filesize += prev_size;
-                                }
-                                current_stream_size = Some(size_bytes);
-                            }
+                  if let (Some(num), Some(unit)) = (caps.get(1), caps.get(2)) {
+                    if let Ok(size) = num.as_str().parse::<f64>() {
+                      let size_bytes = match unit.as_str() {
+                        "GiB" => (size * 1024.0 * 1024.0 * 1024.0) as u64,
+                        "MiB" => (size * 1024.0 * 1024.0) as u64,
+                        "KiB" => (size * 1024.0) as u64,
+                        _ => size as u64,
+                      };
+                      if current_stream_size != Some(size_bytes) {
+                        if let Some(prev_size) = current_stream_size {
+                          total_filesize += prev_size;
                         }
+                        current_stream_size = Some(size_bytes);
+                      }
                     }
+                  }
                 }
+              }
             }
-        }
-    }
 
-    // Wait for stderr task to finish reading all lines.
-    if let Some(task) = stderr_task {
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), task).await;
-    }
+            // Parse progress
+            if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
+              if pi.is_some() {
+                current_index = pi;
+              }
+              if pc.is_some() {
+                total_count = pc;
+              }
 
-    // Wait for process to fully exit before reading the temp file.
-    // yt-dlp writes --print-to-file after_move:filepath near process exit;
-    // reading before wait() can race and miss the path.
-    let status = match process.wait().await {
-        Ok(status) => status,
-        Err(error) => {
+              let progress = DownloadProgress { id: id.clone(), percent, speed, eta, status: "downloading".to_string(), title: current_title.clone(), playlist_index: current_index, playlist_count: total_count, filesize: None, resolution: None, format_ext: None, error_message: None, error_code: None, error_params: None, history_id: None, filepath: None, downloaded_size, elapsed_time };
+              app.emit("download-progress", progress).ok();
+            }
+          },
+          CommandEvent::Stderr(bytes) => {
+            let stderr_line = decode_process_output(&bytes);
+            let stderr_line = stderr_line.trim().to_string();
+            push_recent_output(&mut recent_output, &stderr_line);
+
+            if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&stderr_line) {
+              if pi.is_some() {
+                current_index = pi;
+              }
+              if pc.is_some() {
+                total_count = pc;
+              }
+
+              let progress = DownloadProgress { id: id.clone(), percent, speed, eta, status: "downloading".to_string(), title: current_title.clone(), playlist_index: current_index, playlist_count: total_count, filesize: None, resolution: None, format_ext: None, error_message: None, error_code: None, error_params: None, history_id: None, filepath: None, downloaded_size, elapsed_time };
+              app.emit("download-progress", progress).ok();
+            }
+
+            if should_log_stderr && !stderr_line.is_empty() {
+              add_log_internal("stderr", &stderr_line, None, Some(&url)).ok();
+            }
+          },
+          CommandEvent::Error(err) => {
+            let error = BackendError::from_message(format!("Process error: {}", err));
+            add_log_internal("error", error.message(), None, Some(&url)).ok();
             if emit_failed_workflow {
-                enqueue_failed_workflow(
-                    &app,
-                    &failed_workflow_steps,
-                    &id,
-                    source.clone().or_else(|| detect_source(&url)),
-                    &output_directory,
-                    Some(format.clone()),
-                    quality_display.clone().or_else(|| Some(quality.clone())),
-                    &url,
-                    current_title.clone(),
-                    thumbnail.clone(),
-                    history_id.clone(),
-                    extract_time_range(&download_sections),
-                    &download_kind,
-                );
+              enqueue_failed_workflow(&app, &failed_workflow_steps, &id, source.clone().or_else(|| detect_source(&url)), &sanitized_path, Some(format.clone()), quality_display.clone().or_else(|| Some(quality.clone())), &url, current_title.clone(), thumbnail.clone(), history_id.clone(), extract_time_range(&download_sections), &download_kind);
             }
-            return Err(
-                BackendError::from_message(format!("Process error: {}", error)).to_wire_string(),
-            );
-        }
-    };
-
-    // Primary filepath source: read from the --print-to-file temp file (UTF-8).
-    // This is reliable on all platforms, especially Windows with non-UTF-8 locales
-    // where stdout encoding (GBK) corrupts Unicode characters in file paths.
-    if let Ok(contents) = std::fs::read_to_string(&filepath_tmp) {
-        printed_filepaths = parse_printed_filepaths(&contents);
-        if let Some(path) = printed_filepaths.first() {
-            final_filepath = Some(path.clone());
-        }
-    }
-    // Clean up the temp file
-    std::fs::remove_file(&filepath_tmp).ok();
-
-    // Fallback: if the temp file didn't yield a filepath, try stdout/stderr captures
-    if final_filepath.is_none() {
-        if let Ok(guard) = stderr_filepath.lock() {
-            if guard.is_some() {
-                final_filepath = guard.clone();
+            return Err(error.to_wire_string());
+          },
+          CommandEvent::Terminated(status) => {
+            if CANCEL_FLAG.load(Ordering::SeqCst) {
+              add_log_internal("info", "Download cancelled by user", None, Some(&url)).ok();
+              return Err(BackendError::from_message("Download cancelled").to_wire_string());
             }
-        }
-    }
 
-    if status.success() {
-        let actual_filesize = final_filepath
-            .as_ref()
-            .and_then(|fp| std::fs::metadata(fp).ok())
-            .map(|m| m.len());
-
-        let reported_filesize = actual_filesize.or_else(|| {
-            if let Some(last_size) = current_stream_size {
-                Some(total_filesize + last_size)
-            } else if total_filesize > 0 {
-                Some(total_filesize)
-            } else {
-                None
+            // Primary filepath source: read from --print-to-file temp file (UTF-8)
+            if let Ok(contents) = std::fs::read_to_string(&filepath_tmp) {
+              printed_filepaths = parse_printed_filepaths(&contents);
+              if let Some(path) = printed_filepaths.first() {
+                final_filepath = Some(path.clone());
+              }
             }
-        });
+            std::fs::remove_file(&filepath_tmp).ok();
 
-        let display_title =
-            display_title_for_download(metadata_title, current_title, &final_filepath, total_count);
-        let output_paths = output_filepaths(&printed_filepaths, &final_filepath);
-        let auto_collection_names = build_auto_collection_names(
-            auto_organize_collections,
-            playlist_collection_name.as_deref(),
-            split_embedded_chapters && output_paths.len() > 1,
-            display_title.as_deref(),
-        );
+            if status.code == Some(0) {
+              let actual_filesize = final_filepath.as_ref().and_then(|fp| std::fs::metadata(fp).ok()).map(|m| m.len());
 
-        let success_msg = format!(
-            "Downloaded: {}",
-            display_title
-                .clone()
-                .unwrap_or_else(|| "Unknown".to_string())
-        );
-        let details = format!(
-            "Size: {} · Quality: {} · Format: {}",
-            reported_filesize
-                .map(format_size)
-                .unwrap_or_else(|| "Unknown".to_string()),
-            quality_display.clone().unwrap_or_else(|| quality.clone()),
-            format.clone()
-        );
-        add_log_internal("success", &success_msg, Some(&details), Some(&url)).ok();
+              let reported_filesize = actual_filesize.or_else(|| {
+                if let Some(last_size) = current_stream_size {
+                  Some(total_filesize + last_size)
+                } else if total_filesize > 0 {
+                  Some(total_filesize)
+                } else {
+                  None
+                }
+              });
 
-        let mut progress_history_id = None;
-        for (index, filepath) in output_paths.iter().enumerate() {
-            let time_range = extract_time_range(&download_sections);
-            let file_filesize = std::fs::metadata(filepath)
-                .ok()
-                .map(|m| m.len())
-                .or(if index == 0 { reported_filesize } else { None });
-            let entry_title = if index == 0 {
-                display_title
-                    .clone()
-                    .unwrap_or_else(|| "Unknown".to_string())
-            } else {
-                title_from_filepath(filepath)
-                    .or_else(|| display_title.clone())
-                    .unwrap_or_else(|| "Unknown".to_string())
-            };
+              let display_title = display_title_for_download(metadata_title.clone(), current_title.clone(), &final_filepath, total_count);
+              let output_paths = output_filepaths(&printed_filepaths, &final_filepath);
+              let auto_collection_names = build_auto_collection_names(auto_organize_collections.unwrap_or(false), playlist_collection_name.as_deref(), split_embedded_chapters && output_paths.len() > 1, display_title.as_deref());
 
-            if index == 0 {
-                if let Some(ref hist_id) = history_id {
-                    update_history_download(
-                        hist_id.clone(),
-                        filepath.clone(),
-                        file_filesize,
-                        quality_display.clone(),
-                        Some(format.clone()),
-                        time_range,
-                    )
-                    .ok();
+              // Log success
+              let success_msg = format!("Downloaded: {}", display_title.clone().unwrap_or_else(|| "Unknown".to_string()));
+              let details = format!("Size: {} · Quality: {} · Format: {}", reported_filesize.map(format_size).unwrap_or_else(|| "Unknown".to_string()), quality_display.clone().unwrap_or_else(|| quality.clone()), format.clone());
+              add_log_internal("success", &success_msg, Some(&details), Some(&url)).ok();
+
+              // Save each emitted output to history. The first file remains the
+              // queue representative; split chapters are extra history rows.
+              let mut progress_history_id = None;
+              for (index, filepath) in output_paths.iter().enumerate() {
+                let time_range = extract_time_range(&download_sections);
+                let file_filesize = std::fs::metadata(filepath).ok().map(|m| m.len()).or(if index == 0 { reported_filesize } else { None });
+                let entry_title = if index == 0 { display_title.clone().unwrap_or_else(|| "Unknown".to_string()) } else { title_from_filepath(filepath).or_else(|| display_title.clone()).unwrap_or_else(|| "Unknown".to_string()) };
+
+                if index == 0 {
+                  if let Some(ref hist_id) = history_id {
+                    update_history_download(hist_id.clone(), filepath.clone(), file_filesize, quality_display.clone(), Some(format.clone()), time_range).ok();
                     assign_history_auto_collections(hist_id, &auto_collection_names);
                     progress_history_id = Some(hist_id.clone());
                     continue;
+                  }
                 }
-            }
 
-            let history_row_id = add_history_internal(
-                url.clone(),
-                entry_title,
-                thumbnail.clone().or_else(|| generate_thumbnail_url(&url)),
-                filepath.clone(),
-                file_filesize,
-                None,
-                quality_display.clone(),
-                Some(format.clone()),
-                source.clone().or_else(|| detect_source(&url)),
-                time_range,
-            )
-            .ok();
-            if let Some(ref hist_id) = history_row_id {
-                assign_history_auto_collections(hist_id, &auto_collection_names);
-            }
-            if index == 0 {
-                progress_history_id = history_row_id;
-            }
-        }
-
-        let progress = DownloadProgress {
-            id: id.clone(),
-            percent: 100.0,
-            speed: String::new(),
-            eta: String::new(),
-            status: "finished".to_string(),
-            title: display_title.clone(),
-            playlist_index: current_index,
-            playlist_count: total_count,
-            filesize: reported_filesize,
-            resolution: quality_display.clone(),
-            format_ext: Some(format.clone()),
-            error_message: None,
-            error_code: None,
-            error_params: None,
-            history_id: progress_history_id.clone(),
-            filepath: final_filepath.clone(),
-            downloaded_size: None,
-            elapsed_time: None,
-        };
-        app.emit("download-progress", progress).ok();
-        for (index, filepath) in output_paths.iter().enumerate() {
-            let file_filesize = std::fs::metadata(filepath)
-                .ok()
-                .map(|m| m.len())
-                .or(if index == 0 { reported_filesize } else { None });
-            let plugin_title = if index == 0 {
-                display_title.clone()
-            } else {
-                title_from_filepath(filepath).or_else(|| display_title.clone())
-            };
-            run_completed_plugins(
-                &app,
-                &completed_workflow_steps,
-                &id,
-                source.clone().or_else(|| detect_source(&url)),
-                filepath,
-                file_filesize,
-                Some(format.clone()),
-                quality_display.clone().or_else(|| Some(quality.clone())),
-                &url,
-                plugin_title,
-                thumbnail.clone().or_else(|| generate_thumbnail_url(&url)),
+                let history_row_id = add_history_internal(url.clone(), entry_title, thumbnail.clone().or_else(|| generate_thumbnail_url(&url)), filepath.clone(), file_filesize, None, quality_display.clone(), Some(format.clone()), source.clone().or_else(|| detect_source(&url)), time_range).ok();
+                if let Some(ref hist_id) = history_row_id {
+                  assign_history_auto_collections(hist_id, &auto_collection_names);
+                }
                 if index == 0 {
-                    progress_history_id.clone()
-                } else {
-                    None
-                },
-                extract_time_range(&download_sections),
-                &download_kind,
-            )
-            .await;
+                  progress_history_id = history_row_id;
+                }
+              }
+
+              let progress = DownloadProgress { id: id.clone(), percent: 100.0, speed: String::new(), eta: String::new(), status: "finished".to_string(), title: display_title.clone(), playlist_index: current_index, playlist_count: total_count, filesize: reported_filesize, resolution: quality_display.clone(), format_ext: Some(format.clone()), error_message: None, error_code: None, error_params: None, history_id: progress_history_id.clone(), filepath: final_filepath.clone(), downloaded_size: None, elapsed_time: None };
+              app.emit("download-progress", progress).ok();
+              for (index, filepath) in output_paths.iter().enumerate() {
+                let file_filesize = std::fs::metadata(filepath).ok().map(|m| m.len()).or(if index == 0 { reported_filesize } else { None });
+                let plugin_title = if index == 0 { display_title.clone() } else { title_from_filepath(filepath).or_else(|| display_title.clone()) };
+                run_completed_plugins(&app, &completed_workflow_steps, &id, source.clone().or_else(|| detect_source(&url)), filepath, file_filesize, Some(format.clone()), quality_display.clone().or_else(|| Some(quality.clone())), &url, plugin_title, thumbnail.clone().or_else(|| generate_thumbnail_url(&url)), if index == 0 { progress_history_id.clone() } else { None }, extract_time_range(&download_sections), &download_kind).await;
+              }
+              return Ok(());
+            } else {
+              if CANCEL_FLAG.load(Ordering::SeqCst) {
+                let error = download_cancelled_error();
+                add_log_internal("info", error.message(), None, Some(&url)).ok();
+                return Err(error.to_wire_string());
+              }
+
+              let recent_lines: Vec<String> = recent_output.iter().cloned().collect();
+              let error = build_download_error_message(status.code, &recent_lines);
+              add_log_internal("error", error.message(), None, Some(&url)).ok();
+
+              // Emit error progress so frontend can display error message
+              let progress = DownloadProgress { id: id.clone(), percent: 0.0, speed: String::new(), eta: String::new(), status: "error".to_string(), title: current_title.clone(), playlist_index: current_index, playlist_count: total_count, filesize: None, resolution: None, format_ext: None, error_message: Some(error.message().to_string()), error_code: Some(error.code().to_string()), error_params: error.params().cloned(), history_id: None, filepath: None, downloaded_size: None, elapsed_time: None };
+              app.emit("download-progress", progress).ok();
+
+              if emit_failed_workflow && !failed_workflow_steps.is_empty() {
+                let payload = build_trigger_payload(&id, source.clone().or_else(|| detect_source(&url)), "download.failed", &sanitized_path, None, Some(format.clone()), quality_display.clone().or_else(|| Some(quality.clone())), &url, current_title.clone(), thumbnail.clone(), history_id.clone(), extract_time_range(&download_sections), &download_kind);
+                let _ = enqueue_post_download_workflow(&app, failed_workflow_steps.clone(), payload);
+              }
+
+              return Err(error.to_wire_string());
+            }
+          },
+          _ => {},
         }
-        Ok(())
-    } else {
+      }
+      Ok(())
+    },
+    Err(_) => {
+      if ytdlp_source == DependencySource::App {
+        if emit_failed_workflow {
+          enqueue_failed_workflow(&app, &failed_workflow_steps, &id, trigger_source.clone(), &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), trigger_time_range.clone(), &download_kind);
+        }
+        return Err(BackendError::new(crate::types::code::YTDLP_APP_NOT_FOUND, "App-managed yt-dlp not found. Please install it from Settings > Dependencies.").with_retryable(false).to_wire_string());
+      }
+
+      // Fallback to system yt-dlp
+      let mut cmd = Command::new("yt-dlp");
+      cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
+      cmd.hide_window();
+
+      let process = match cmd.spawn() {
+        Ok(process) => process,
+        Err(error) => {
+          if emit_failed_workflow {
+            enqueue_failed_workflow(&app, &failed_workflow_steps, &id, trigger_source, &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), trigger_time_range, &download_kind);
+          }
+          return Err(BackendError::from_message(format!("Failed to start yt-dlp: {}", error)).to_wire_string());
+        },
+      };
+
+      enqueue_before_start_workflow(&app, &before_start_steps, &id, source.clone().or_else(|| detect_source(&url)), &sanitized_path, Some(format.clone()), Some(quality.clone()), &url, title.clone(), thumbnail.clone(), history_id.clone(), extract_time_range(&download_sections), &download_kind);
+
+      handle_tokio_download(app, id, process, quality, format, url, should_log_stderr, title, thumbnail, source, download_sections, history_id.clone(), filepath_tmp, sanitized_path, completed_workflow_steps, failed_workflow_steps, emit_failed_workflow, download_kind, auto_organize_collections.unwrap_or(false), playlist_collection_name, split_embedded_chapters).await
+    },
+  }
+}
+
+async fn handle_tokio_download(app: AppHandle, id: String, mut process: tokio::process::Child, quality: String, format: String, url: String, should_log_stderr: bool, title: Option<String>, thumbnail: Option<String>, source: Option<String>, download_sections: Option<String>, history_id: Option<String>, filepath_tmp: std::path::PathBuf, output_directory: String, completed_workflow_steps: Vec<PluginWorkflowStepSnapshot>, failed_workflow_steps: Vec<PluginWorkflowStepSnapshot>, emit_failed_workflow: bool, download_kind: String, auto_organize_collections: bool, playlist_collection_name: Option<String>, split_embedded_chapters: bool) -> Result<(), String> {
+  let stdout = process.stdout.take().ok_or_else(|| BackendError::from_message("Failed to get stdout").to_wire_string())?;
+  let stderr = process.stderr.take();
+  let mut stdout_reader = BufReader::new(stdout);
+
+  // Only use frontend title if it's not a URL (placeholder)
+  let metadata_title: Option<String> = title.filter(|t| !t.starts_with("http"));
+  let mut current_title = metadata_title.clone();
+  let mut current_index: Option<u32> = None;
+  let mut total_count: Option<u32> = None;
+  let mut total_filesize: u64 = 0;
+  let mut current_stream_size: Option<u64> = None;
+  let mut final_filepath: Option<String> = None;
+  let mut printed_filepaths: Vec<String> = Vec::new();
+  let recent_output = Arc::new(Mutex::new(VecDeque::new()));
+  let stderr_filepath: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+
+  let quality_display = match quality.as_str() {
+    "8k" => Some("8K".to_string()),
+    "4k" => Some("4K".to_string()),
+    "2k" => Some("2K".to_string()),
+    "1080" => Some("1080p".to_string()),
+    "720" => Some("720p".to_string()),
+    "480" => Some("480p".to_string()),
+    "360" => Some("360p".to_string()),
+    "audio" => Some("Audio".to_string()),
+    "best" => Some("Best".to_string()),
+    _ => None,
+  };
+
+  // Spawn task to read stderr in parallel (for live stream progress)
+  let stderr_app = app.clone();
+  let stderr_id = id.clone();
+  let stderr_url = url.clone();
+  let stderr_recent_output = recent_output.clone();
+  let stderr_fp_clone = stderr_filepath.clone();
+  let stderr_task = if let Some(stderr_handle) = stderr {
+    Some(tokio::spawn(async move {
+      let mut stderr_reader = BufReader::new(stderr_handle);
+      let mut line_buf = Vec::new();
+      loop {
+        line_buf.clear();
+        match stderr_reader.read_until(b'\n', &mut line_buf).await {
+          Ok(0) => break,
+          Ok(_) => {},
+          Err(_) => break,
+        }
+        while line_buf.last().map_or(false, |&b| b == b'\n' || b == b'\r') {
+          line_buf.pop();
+        }
+        let line = decode_process_output(&line_buf);
+
         if CANCEL_FLAG.load(Ordering::SeqCst) {
-            let error = download_cancelled_error();
-            add_log_internal("info", error.message(), None, Some(&url)).ok();
-            return Err(error.to_wire_string());
+          break;
+        }
+        push_recent_output_shared(&stderr_recent_output, &line);
+
+        // On Windows, yt-dlp may print --print after_move:filepath to stderr.
+        // Capture it here as a fallback in case stdout doesn't contain the path.
+        let t = line.trim();
+        if !t.is_empty() && !t.starts_with('[') && (t.ends_with(".mp4") || t.ends_with(".mkv") || t.ends_with(".mp3") || t.ends_with(".m4a") || t.ends_with(".opus") || t.ends_with(".webm") || t.ends_with(".flac") || t.ends_with(".wav")) {
+          if let Ok(mut guard) = stderr_fp_clone.lock() {
+            *guard = Some(t.to_string());
+          }
         }
 
-        let recent_lines = recent_output_snapshot(&recent_output);
-        let error = build_download_error_message(status.code(), &recent_lines);
-        add_log_internal("error", error.message(), None, Some(&url)).ok();
-
-        // Emit error progress so frontend can display error message
-        let progress = DownloadProgress {
-            id: id.clone(),
-            percent: 0.0,
-            speed: String::new(),
-            eta: String::new(),
-            status: "error".to_string(),
-            title: current_title.clone(),
-            playlist_index: current_index,
-            playlist_count: total_count,
-            filesize: None,
-            resolution: None,
-            format_ext: None,
-            error_message: Some(error.message().to_string()),
-            error_code: Some(error.code().to_string()),
-            error_params: error.params().cloned(),
-            history_id: None,
-            filepath: None,
-            downloaded_size: None,
-            elapsed_time: None,
-        };
-        app.emit("download-progress", progress).ok();
-
-        if emit_failed_workflow && !failed_workflow_steps.is_empty() {
-            let payload = build_trigger_payload(
-                &id,
-                source.clone().or_else(|| detect_source(&url)),
-                "download.failed",
-                &output_directory,
-                None,
-                Some(format.clone()),
-                quality_display.clone().or_else(|| Some(quality.clone())),
-                &url,
-                current_title.clone(),
-                thumbnail.clone(),
-                history_id.clone(),
-                extract_time_range(&download_sections),
-                &download_kind,
-            );
-            let _ = enqueue_post_download_workflow(&app, failed_workflow_steps, payload);
+        // Capture audio filepath from [ExtractAudio] Destination lines in stderr
+        // e.g. "[ExtractAudio] Destination: C:\Users\...\song.mp3"
+        if line.contains("[ExtractAudio]") && line.contains("Destination:") {
+          if let Some(pos) = line.find("Destination:") {
+            let path = line[pos + "Destination:".len()..].trim();
+            if !path.is_empty() {
+              if let Ok(mut guard) = stderr_fp_clone.lock() {
+                *guard = Some(path.to_string());
+              }
+            }
+          }
         }
 
-        Err(error.to_wire_string())
+        // Parse progress from stderr (live streams output here)
+        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
+          let progress = DownloadProgress { id: stderr_id.clone(), percent, speed, eta, status: "downloading".to_string(), title: None, playlist_index: pi, playlist_count: pc, filesize: None, resolution: None, format_ext: None, error_message: None, error_code: None, error_params: None, history_id: None, filepath: None, downloaded_size, elapsed_time };
+          stderr_app.emit("download-progress", progress).ok();
+        }
+
+        // Log stderr if enabled
+        if should_log_stderr && !line.trim().is_empty() {
+          add_log_internal("stderr", line.trim(), None, Some(&stderr_url)).ok();
+        }
+      }
+    }))
+  } else {
+    None
+  };
+
+  // Read stdout — use raw byte reading + decode_process_output to handle
+  // non-UTF-8 encodings (e.g. GBK on Chinese Windows).
+  let mut stdout_line_buf = Vec::new();
+  loop {
+    stdout_line_buf.clear();
+    match stdout_reader.read_until(b'\n', &mut stdout_line_buf).await {
+      Ok(0) => break, // EOF
+      Ok(_) => {},
+      Err(_) => break,
     }
+    while stdout_line_buf.last().map_or(false, |&b| b == b'\n' || b == b'\r') {
+      stdout_line_buf.pop();
+    }
+    let line = decode_process_output(&stdout_line_buf);
+
+    if CANCEL_FLAG.load(Ordering::SeqCst) {
+      process.kill().await.ok();
+      kill_all_download_processes();
+      return Err(BackendError::from_message("Download cancelled").to_wire_string());
+    }
+    push_recent_output_shared(&recent_output, &line);
+
+    // Parse progress and emit events
+    if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
+      if pi.is_some() {
+        current_index = pi;
+      }
+      if pc.is_some() {
+        total_count = pc;
+      }
+
+      let progress = DownloadProgress { id: id.clone(), percent, speed, eta, status: "downloading".to_string(), title: current_title.clone(), playlist_index: current_index, playlist_count: total_count, filesize: None, resolution: None, format_ext: None, error_message: None, error_code: None, error_params: None, history_id: None, filepath: None, downloaded_size, elapsed_time };
+      app.emit("download-progress", progress).ok();
+    }
+
+    // Extract title from [download] messages
+    // Handles both: "Destination: /path/file.mp4" and "/path/file.mp4 has already been downloaded"
+    if line.contains("[download]") && (line.contains("Destination:") || line.contains("has already been downloaded")) {
+      let path_sep = if line.contains('\\') { '\\' } else { '/' };
+      if let Some(start) = line.rfind(path_sep) {
+        let filename = &line[start + 1..];
+        // Remove suffix if present
+        let filename = filename.trim_end_matches(" has already been downloaded");
+        if let Some(end) = filename.rfind('.') {
+          current_title = Some(filename[..end].to_string());
+        }
+      }
+    }
+
+    // Capture final filepath
+    let trimmed = line.trim();
+    if !trimmed.is_empty() && !trimmed.starts_with('[') && (trimmed.ends_with(".mp3") || trimmed.ends_with(".m4a") || trimmed.ends_with(".opus") || trimmed.ends_with(".mp4") || trimmed.ends_with(".mkv") || trimmed.ends_with(".webm") || trimmed.ends_with(".flac") || trimmed.ends_with(".wav")) {
+      final_filepath = Some(trimmed.to_string());
+    }
+
+    // Capture audio filepath from [ExtractAudio] Destination lines
+    // e.g. "[ExtractAudio] Destination: C:\Users\...\song.mp3"
+    if line.contains("[ExtractAudio]") && line.contains("Destination:") {
+      if let Some(pos) = line.find("Destination:") {
+        let path = line[pos + "Destination:".len()..].trim();
+        if !path.is_empty() {
+          final_filepath = Some(path.to_string());
+        }
+      }
+    }
+
+    // Parse filesize
+    if line.contains(" of ") && (line.contains("MiB") || line.contains("GiB")) {
+      if let Some(re) = regex::Regex::new(r"of\s+(\d+(?:\.\d+)?)\s*(GiB|MiB|KiB)").ok() {
+        if let Some(caps) = re.captures(&line) {
+          if let (Some(num), Some(unit)) = (caps.get(1), caps.get(2)) {
+            if let Ok(size) = num.as_str().parse::<f64>() {
+              let size_bytes = match unit.as_str() {
+                "GiB" => (size * 1024.0 * 1024.0 * 1024.0) as u64,
+                "MiB" => (size * 1024.0 * 1024.0) as u64,
+                "KiB" => (size * 1024.0) as u64,
+                _ => size as u64,
+              };
+              if current_stream_size != Some(size_bytes) {
+                if let Some(prev_size) = current_stream_size {
+                  total_filesize += prev_size;
+                }
+                current_stream_size = Some(size_bytes);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Wait for stderr task to finish reading all lines.
+  if let Some(task) = stderr_task {
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), task).await;
+  }
+
+  // Wait for process to fully exit before reading the temp file.
+  // yt-dlp writes --print-to-file after_move:filepath near process exit;
+  // reading before wait() can race and miss the path.
+  let status = match process.wait().await {
+    Ok(status) => status,
+    Err(error) => {
+      if emit_failed_workflow {
+        enqueue_failed_workflow(&app, &failed_workflow_steps, &id, source.clone().or_else(|| detect_source(&url)), &output_directory, Some(format.clone()), quality_display.clone().or_else(|| Some(quality.clone())), &url, current_title.clone(), thumbnail.clone(), history_id.clone(), extract_time_range(&download_sections), &download_kind);
+      }
+      return Err(BackendError::from_message(format!("Process error: {}", error)).to_wire_string());
+    },
+  };
+
+  // Primary filepath source: read from the --print-to-file temp file (UTF-8).
+  // This is reliable on all platforms, especially Windows with non-UTF-8 locales
+  // where stdout encoding (GBK) corrupts Unicode characters in file paths.
+  if let Ok(contents) = std::fs::read_to_string(&filepath_tmp) {
+    printed_filepaths = parse_printed_filepaths(&contents);
+    if let Some(path) = printed_filepaths.first() {
+      final_filepath = Some(path.clone());
+    }
+  }
+  // Clean up the temp file
+  std::fs::remove_file(&filepath_tmp).ok();
+
+  // Fallback: if the temp file didn't yield a filepath, try stdout/stderr captures
+  if final_filepath.is_none() {
+    if let Ok(guard) = stderr_filepath.lock() {
+      if guard.is_some() {
+        final_filepath = guard.clone();
+      }
+    }
+  }
+
+  if status.success() {
+    let actual_filesize = final_filepath.as_ref().and_then(|fp| std::fs::metadata(fp).ok()).map(|m| m.len());
+
+    let reported_filesize = actual_filesize.or_else(|| {
+      if let Some(last_size) = current_stream_size {
+        Some(total_filesize + last_size)
+      } else if total_filesize > 0 {
+        Some(total_filesize)
+      } else {
+        None
+      }
+    });
+
+    let display_title = display_title_for_download(metadata_title, current_title, &final_filepath, total_count);
+    let output_paths = output_filepaths(&printed_filepaths, &final_filepath);
+    let auto_collection_names = build_auto_collection_names(auto_organize_collections, playlist_collection_name.as_deref(), split_embedded_chapters && output_paths.len() > 1, display_title.as_deref());
+
+    let success_msg = format!("Downloaded: {}", display_title.clone().unwrap_or_else(|| "Unknown".to_string()));
+    let details = format!("Size: {} · Quality: {} · Format: {}", reported_filesize.map(format_size).unwrap_or_else(|| "Unknown".to_string()), quality_display.clone().unwrap_or_else(|| quality.clone()), format.clone());
+    add_log_internal("success", &success_msg, Some(&details), Some(&url)).ok();
+
+    let mut progress_history_id = None;
+    for (index, filepath) in output_paths.iter().enumerate() {
+      let time_range = extract_time_range(&download_sections);
+      let file_filesize = std::fs::metadata(filepath).ok().map(|m| m.len()).or(if index == 0 { reported_filesize } else { None });
+      let entry_title = if index == 0 { display_title.clone().unwrap_or_else(|| "Unknown".to_string()) } else { title_from_filepath(filepath).or_else(|| display_title.clone()).unwrap_or_else(|| "Unknown".to_string()) };
+
+      if index == 0 {
+        if let Some(ref hist_id) = history_id {
+          update_history_download(hist_id.clone(), filepath.clone(), file_filesize, quality_display.clone(), Some(format.clone()), time_range).ok();
+          assign_history_auto_collections(hist_id, &auto_collection_names);
+          progress_history_id = Some(hist_id.clone());
+          continue;
+        }
+      }
+
+      let history_row_id = add_history_internal(url.clone(), entry_title, thumbnail.clone().or_else(|| generate_thumbnail_url(&url)), filepath.clone(), file_filesize, None, quality_display.clone(), Some(format.clone()), source.clone().or_else(|| detect_source(&url)), time_range).ok();
+      if let Some(ref hist_id) = history_row_id {
+        assign_history_auto_collections(hist_id, &auto_collection_names);
+      }
+      if index == 0 {
+        progress_history_id = history_row_id;
+      }
+    }
+
+    let progress = DownloadProgress { id: id.clone(), percent: 100.0, speed: String::new(), eta: String::new(), status: "finished".to_string(), title: display_title.clone(), playlist_index: current_index, playlist_count: total_count, filesize: reported_filesize, resolution: quality_display.clone(), format_ext: Some(format.clone()), error_message: None, error_code: None, error_params: None, history_id: progress_history_id.clone(), filepath: final_filepath.clone(), downloaded_size: None, elapsed_time: None };
+    app.emit("download-progress", progress).ok();
+    for (index, filepath) in output_paths.iter().enumerate() {
+      let file_filesize = std::fs::metadata(filepath).ok().map(|m| m.len()).or(if index == 0 { reported_filesize } else { None });
+      let plugin_title = if index == 0 { display_title.clone() } else { title_from_filepath(filepath).or_else(|| display_title.clone()) };
+      run_completed_plugins(&app, &completed_workflow_steps, &id, source.clone().or_else(|| detect_source(&url)), filepath, file_filesize, Some(format.clone()), quality_display.clone().or_else(|| Some(quality.clone())), &url, plugin_title, thumbnail.clone().or_else(|| generate_thumbnail_url(&url)), if index == 0 { progress_history_id.clone() } else { None }, extract_time_range(&download_sections), &download_kind).await;
+    }
+    Ok(())
+  } else {
+    if CANCEL_FLAG.load(Ordering::SeqCst) {
+      let error = download_cancelled_error();
+      add_log_internal("info", error.message(), None, Some(&url)).ok();
+      return Err(error.to_wire_string());
+    }
+
+    let recent_lines = recent_output_snapshot(&recent_output);
+    let error = build_download_error_message(status.code(), &recent_lines);
+    add_log_internal("error", error.message(), None, Some(&url)).ok();
+
+    // Emit error progress so frontend can display error message
+    let progress = DownloadProgress { id: id.clone(), percent: 0.0, speed: String::new(), eta: String::new(), status: "error".to_string(), title: current_title.clone(), playlist_index: current_index, playlist_count: total_count, filesize: None, resolution: None, format_ext: None, error_message: Some(error.message().to_string()), error_code: Some(error.code().to_string()), error_params: error.params().cloned(), history_id: None, filepath: None, downloaded_size: None, elapsed_time: None };
+    app.emit("download-progress", progress).ok();
+
+    if emit_failed_workflow && !failed_workflow_steps.is_empty() {
+      let payload = build_trigger_payload(&id, source.clone().or_else(|| detect_source(&url)), "download.failed", &output_directory, None, Some(format.clone()), quality_display.clone().or_else(|| Some(quality.clone())), &url, current_title.clone(), thumbnail.clone(), history_id.clone(), extract_time_range(&download_sections), &download_kind);
+      let _ = enqueue_post_download_workflow(&app, failed_workflow_steps, payload);
+    }
+
+    Err(error.to_wire_string())
+  }
 }
 
 #[tauri::command]
 pub async fn stop_download() -> Result<(), String> {
-    CANCEL_FLAG.store(true, Ordering::SeqCst);
-    kill_all_download_processes();
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    kill_all_download_processes();
-    Ok(())
+  CANCEL_FLAG.store(true, Ordering::SeqCst);
+  kill_all_download_processes();
+  tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+  kill_all_download_processes();
+  Ok(())
 }
 
 fn detect_source(url: &str) -> Option<String> {
-    if url.contains("youtube.com") || url.contains("youtu.be") {
-        Some("youtube".to_string())
-    } else if url.contains("tiktok.com") {
-        Some("tiktok".to_string())
-    } else if url.contains("facebook.com") || url.contains("fb.watch") {
-        Some("facebook".to_string())
-    } else if url.contains("instagram.com") {
-        Some("instagram".to_string())
-    } else if url.contains("twitter.com") || url.contains("x.com") {
-        Some("twitter".to_string())
-    } else if url.contains("bilibili.com") || url.contains("b23.tv") {
-        Some("bilibili".to_string())
-    } else if url.contains("youku.com") {
-        Some("youku".to_string())
-    } else {
-        Some("other".to_string())
-    }
+  if url.contains("youtube.com") || url.contains("youtu.be") {
+    Some("youtube".to_string())
+  } else if url.contains("tiktok.com") {
+    Some("tiktok".to_string())
+  } else if url.contains("facebook.com") || url.contains("fb.watch") {
+    Some("facebook".to_string())
+  } else if url.contains("instagram.com") {
+    Some("instagram".to_string())
+  } else if url.contains("twitter.com") || url.contains("x.com") {
+    Some("twitter".to_string())
+  } else if url.contains("bilibili.com") || url.contains("b23.tv") {
+    Some("bilibili".to_string())
+  } else if url.contains("youku.com") {
+    Some("youku".to_string())
+  } else {
+    Some("other".to_string())
+  }
 }
 
 fn generate_thumbnail_url(url: &str) -> Option<String> {
-    if url.contains("youtube.com") || url.contains("youtu.be") {
-        let video_id = if url.contains("v=") {
-            url.split("v=").nth(1).and_then(|s| s.split('&').next())
-        } else if url.contains("youtu.be/") {
-            url.split("youtu.be/")
-                .nth(1)
-                .and_then(|s| s.split('?').next())
-        } else {
-            None
-        };
-        video_id.map(|id| format!("https://i.ytimg.com/vi/{}/mqdefault.jpg", id))
+  if url.contains("youtube.com") || url.contains("youtu.be") {
+    let video_id = if url.contains("v=") {
+      url.split("v=").nth(1).and_then(|s| s.split('&').next())
+    } else if url.contains("youtu.be/") {
+      url.split("youtu.be/").nth(1).and_then(|s| s.split('?').next())
     } else {
-        None
-    }
+      None
+    };
+    video_id.map(|id| format!("https://i.ytimg.com/vi/{}/mqdefault.jpg", id))
+  } else {
+    None
+  }
 }

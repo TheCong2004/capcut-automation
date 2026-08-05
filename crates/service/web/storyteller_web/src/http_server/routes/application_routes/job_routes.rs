@@ -12,42 +12,12 @@ use crate::http_server::endpoints::inference_job::get::get_inference_job_status_
 use crate::http_server::endpoints::inference_job::list::list_session_jobs_handler::list_session_jobs_handler;
 use crate::http_server::endpoints::inference_job::stats::get_pending_inference_job_count_handler::get_pending_inference_job_count_handler;
 
-pub fn add_job_routes<T, B> (app: App<T>) -> App<T>
-  where
-      B: MessageBody,
-      T: ServiceFactory<
-        ServiceRequest,
-        Config = (),
-        Response = ServiceResponse<B>,
-        Error = Error,
-        InitError = (),
-      >,
+pub fn add_job_routes<T, B>(app: App<T>) -> App<T>
+where
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
-  let mut app =
-      app.service(
-        web::scope("/v1/jobs")
-            .service(
-              web::resource("/job/{token}")
-                  .route(web::get().to(get_inference_job_status_handler))
-                  .route(web::delete().to(terminate_inference_job_handler))
-                  .route(web::head().to(|| HttpResponse::Ok()))
-            )
-            .service(
-              web::resource("/batch")
-                  .route(web::get().to(batch_get_inference_job_status_handler))
-                  .route(web::head().to(|| HttpResponse::Ok()))
-            )
-            .service(
-              web::resource("/session")
-                  .route(web::get().to(list_session_jobs_handler))
-                  .route(web::head().to(|| HttpResponse::Ok()))
-            )
-            .service(
-              web::resource("/session/dismiss_finished")
-                  .route(web::post().to(dismiss_finished_session_jobs_handler))
-                  .route(web::head().to(|| HttpResponse::Ok()))
-            )
-      );
+  let mut app = app.service(web::scope("/v1/jobs").service(web::resource("/job/{token}").route(web::get().to(get_inference_job_status_handler)).route(web::delete().to(terminate_inference_job_handler)).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/batch").route(web::get().to(batch_get_inference_job_status_handler)).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/session").route(web::get().to(list_session_jobs_handler)).route(web::head().to(|| HttpResponse::Ok()))).service(web::resource("/session/dismiss_finished").route(web::post().to(dismiss_finished_session_jobs_handler)).route(web::head().to(|| HttpResponse::Ok()))));
 
   // NB(bt): Old routes (these must be supported for AI streamers).
   let mut app = RouteBuilder::from_app(app)

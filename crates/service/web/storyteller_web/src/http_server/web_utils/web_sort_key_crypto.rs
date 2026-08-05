@@ -14,19 +14,16 @@ pub struct WebSortKeyCrypto {
 
 impl WebSortKeyCrypto {
   pub fn new(secret: &str) -> Self {
-    Self {
-      crypto: SortKeyCrypto::new(secret),
-    }
+    Self { crypto: SortKeyCrypto::new(secret) }
   }
 
   /// Encrypt a row id into an opaque pagination cursor.
   /// Failure is a genuine server fault (500).
   pub fn encrypt_id(&self, id: u64) -> Result<String, CommonWebError> {
-    self.crypto.encrypt_id(id)
-        .map_err(|err| {
-          warn!("Failed to encrypt pagination cursor: {:?}", err);
-          CommonWebError::from_anyhow_error(err)
-        })
+    self.crypto.encrypt_id(id).map_err(|err| {
+      warn!("Failed to encrypt pagination cursor: {:?}", err);
+      CommonWebError::from_anyhow_error(err)
+    })
   }
 
   /// Decrypt a client-supplied pagination cursor.
@@ -34,10 +31,9 @@ impl WebSortKeyCrypto {
   /// not a server fault — a 500 here would trip the error-alerting
   /// middleware on any bot or stale client.
   pub fn decrypt_id(&self, cursor: &str) -> Result<u64, CommonWebError> {
-    self.crypto.decrypt_id(cursor)
-        .map_err(|err| {
-          warn!("Invalid pagination cursor: {:?}", err);
-          CommonWebError::BadInputWithSimpleMessage("Invalid pagination cursor.".to_string())
-        })
+    self.crypto.decrypt_id(cursor).map_err(|err| {
+      warn!("Invalid pagination cursor: {:?}", err);
+      CommonWebError::BadInputWithSimpleMessage("Invalid pagination cursor.".to_string())
+    })
   }
 }

@@ -7,9 +7,7 @@ use log::warn;
 use serde_derive::Serialize;
 use utoipa::ToSchema;
 
-use mysql_queries::queries::generic_inference::moderation::get_job_by_token_for_moderation::{
-  get_job_by_token_for_moderation, GetJobByTokenForModerationArgs,
-};
+use mysql_queries::queries::generic_inference::moderation::get_job_by_token_for_moderation::{get_job_by_token_for_moderation, GetJobByTokenForModerationArgs};
 use tokens::tokens::generic_inference_jobs::InferenceJobToken;
 use tokens::tokens::non_unique::debug_logs_event_token::DebugLogEventToken;
 use tokens::tokens::prompts::PromptToken;
@@ -85,20 +83,12 @@ pub struct ModerationJobResponse {
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn moderation_get_job_by_token_handler(
-  http_request: HttpRequest,
-  path: web::Path<GetJobByTokenPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<GetJobByTokenSuccessResponse>, CommonWebError> {
+pub async fn moderation_get_job_by_token_handler(http_request: HttpRequest, path: web::Path<GetJobByTokenPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetJobByTokenSuccessResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let job = get_job_by_token_for_moderation(GetJobByTokenForModerationArgs {
-    job_token: &path.token,
-    mysql_executor: &mut *mysql_connection,
-    phantom: Default::default(),
-  }).await.map_err(|err| {
+  let job = get_job_by_token_for_moderation(GetJobByTokenForModerationArgs { job_token: &path.token, mysql_executor: &mut *mysql_connection, phantom: Default::default() }).await.map_err(|err| {
     warn!("Error fetching job by token {}: {:?}", path.token, err);
     CommonWebError::from_error(err)
   })?;

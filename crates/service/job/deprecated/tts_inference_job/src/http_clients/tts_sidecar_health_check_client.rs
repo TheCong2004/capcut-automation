@@ -48,19 +48,13 @@ impl TtsSidecarHealthCheckClient {
 
     let client = Client::new();
 
-    let response = client.get(self.health_check_url.clone())
-        .send()
-        .await?;
+    let response = client.get(self.health_check_url.clone()).send().await?;
 
     let response_body = response.text().await?;
 
     let response_json = serde_json::from_str::<HealthCheckResponse>(&response_body)?;
 
-    let status = if response_json.success && response_json.is_healthy {
-      HealthState::Healthy
-    } else {
-      HealthState::Unhealthy
-    };
+    let status = if response_json.success && response_json.is_healthy { HealthState::Healthy } else { HealthState::Unhealthy };
 
     Ok(status)
   }

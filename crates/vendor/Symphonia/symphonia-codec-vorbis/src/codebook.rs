@@ -27,8 +27,7 @@ fn float32_unpack(x: u32) -> f32 {
     let value = (mantissa as f32) * 2.0f32.powi(exponent as i32 - 788);
     if sign == 0 {
         value
-    }
-    else {
+    } else {
         -value
     }
 }
@@ -190,8 +189,7 @@ fn synthesize_codewords(code_lens: &[u8]) -> Result<Vec<u32>> {
             // as a prefix, move it to the next branch.
             if *next == codeword << i {
                 *next = branch << i;
-            }
-            else {
+            } else {
                 break;
             }
         }
@@ -252,24 +250,21 @@ impl VorbisCodebook {
                     let code_len = if is_used {
                         // Entry is used.
                         bs.read_bits_leq32(5)? as u8 + 1
-                    }
-                    else {
+                    } else {
                         // Unused entries have a length of 0.
                         0
                     };
 
                     code_lens.push(code_len);
                 }
-            }
-            else {
+            } else {
                 // Densely packed codeword entry list.
                 for _ in 0..codebook_entries {
                     let code_len = bs.read_bits_leq32(5)? as u8 + 1;
                     code_lens.push(code_len)
                 }
             }
-        }
-        else {
+        } else {
             // Codeword list is length ordered.
             let mut cur_entry = 0;
             let mut cur_len = bs.read_bits_leq32(5)? + 1;
@@ -277,8 +272,7 @@ impl VorbisCodebook {
             loop {
                 let num_bits = if codebook_entries > cur_entry {
                     ilog(codebook_entries - cur_entry)
-                }
-                else {
+                } else {
                     0
                 };
 
@@ -379,8 +373,7 @@ impl VorbisCodebook {
             let start = dim * entry.0 as usize;
 
             Ok(&vq[start..start + dim])
-        }
-        else {
+        } else {
             decode_error("vorbis: not a vq codebook")
         }
     }

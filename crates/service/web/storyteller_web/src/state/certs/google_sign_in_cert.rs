@@ -9,14 +9,12 @@ use std::sync::{Arc, RwLock};
 #[derive(Clone)]
 pub struct GoogleSignInCert {
   /// Multiple recent JWK public keys from Google
-  key_map: Arc<RwLock<Option<KeyMap>>>
+  key_map: Arc<RwLock<Option<KeyMap>>>,
 }
 
 impl GoogleSignInCert {
   pub fn new() -> Self {
-    Self {
-      key_map: Arc::new(RwLock::new(None))
-    }
+    Self { key_map: Arc::new(RwLock::new(None)) }
   }
 
   /// Get the current key map
@@ -27,12 +25,12 @@ impl GoogleSignInCert {
         Err(err) => {
           error!("Error reading lock: {:?}", err);
           return Err(anyhow!("Error reading lock: {:?}", err));
-        }
+        },
         Ok(read) => {
           if let Some(key_map) = &*read {
             return Ok(key_map.clone());
           }
-        }
+        },
       }
     }
     info!("Fetching Google Sign In certs...");
@@ -46,11 +44,11 @@ impl GoogleSignInCert {
       Err(err) => {
         error!("Error writing lock: {:?}", err);
         Err(anyhow!("Error writing lock: {:?}", err))
-      }
+      },
       Ok(mut write) => {
         *write = Some(key_map);
         Ok(())
-      }
+      },
     }
   }
 }

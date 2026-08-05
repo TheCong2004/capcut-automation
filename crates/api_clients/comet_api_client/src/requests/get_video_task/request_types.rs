@@ -78,8 +78,7 @@ mod tests {
 
   #[test]
   fn parse_real_in_progress_response() {
-    let response: VideoTaskRawResponse = serde_json::from_str(REAL_IN_PROGRESS_RESPONSE)
-      .expect("should parse");
+    let response: VideoTaskRawResponse = serde_json::from_str(REAL_IN_PROGRESS_RESPONSE).expect("should parse");
 
     assert_eq!(response.id, "task_abc123");
     assert_eq!(response.status, CometVideoTaskStatus::InProgress);
@@ -90,8 +89,7 @@ mod tests {
 
   #[test]
   fn parse_real_completed_response() {
-    let response: VideoTaskRawResponse = serde_json::from_str(REAL_COMPLETED_RESPONSE)
-      .expect("should parse");
+    let response: VideoTaskRawResponse = serde_json::from_str(REAL_COMPLETED_RESPONSE).expect("should parse");
 
     assert_eq!(response.status, CometVideoTaskStatus::Completed);
     assert_eq!(response.progress, Some(100));
@@ -102,8 +100,7 @@ mod tests {
 
   #[test]
   fn parse_real_failed_response() {
-    let response: VideoTaskRawResponse = serde_json::from_str(REAL_FAILED_RESPONSE)
-      .expect("should parse");
+    let response: VideoTaskRawResponse = serde_json::from_str(REAL_FAILED_RESPONSE).expect("should parse");
 
     assert_eq!(response.status, CometVideoTaskStatus::Failed);
     assert_eq!(response.video_url, None);

@@ -104,13 +104,8 @@ pub struct BetaKeyItem {
     (status = 500, description = "Server error", body = CommonWebError),
   ),
 )]
-pub async fn list_beta_keys_handler(
-  http_request: HttpRequest,
-  query: Query<ListBetaKeysQueryParams>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListBetaKeysSuccessResponse>, CommonWebError> {
-  let user_session = require_user_session(&http_request, &server_state.session_checker, &server_state.mysql_pool)
-      .await?;
+pub async fn list_beta_keys_handler(http_request: HttpRequest, query: Query<ListBetaKeysQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListBetaKeysSuccessResponse>, CommonWebError> {
+  let user_session = require_user_session(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
   let mut is_mod = user_session.can_ban_users;
 
@@ -122,12 +117,10 @@ pub async fn list_beta_keys_handler(
   } else if let Some(referrer_username) = query.maybe_referrer_username.as_deref() {
     // Mods can optionally scope to a different user by username.
     let referrer_username = referrer_username.to_lowercase();
-    let maybe_referrer_user = get_user_profile_by_username(&referrer_username, &server_state.mysql_pool)
-        .await
-        .map_err(|e| {
-          warn!("get user profile error: {:?}", e);
-          CommonWebError::from_anyhow_error(e)
-        })?;
+    let maybe_referrer_user = get_user_profile_by_username(&referrer_username, &server_state.mysql_pool).await.map_err(|e| {
+      warn!("get user profile error: {:?}", e);
+      CommonWebError::from_anyhow_error(e)
+    })?;
 
     match maybe_referrer_user {
       None => return Err(CommonWebError::BadInputWithSimpleMessage("referrer user not found".to_string())),
@@ -137,81 +130,41 @@ pub async fn list_beta_keys_handler(
     }
   }
 
-  let filter_keys = query.filter
-      .or_else(|| match query.only_list_remaining {
-        Some(true) => Some(ListBetaKeysFilterOption::Unredeemed),
-        _ => Some(ListBetaKeysFilterOption::All),
-      })
-      .map(|filter| match filter {
-        ListBetaKeysFilterOption::All => FilterToKeys::All,
-        ListBetaKeysFilterOption::Redeemed => FilterToKeys::Redeemed,
-        ListBetaKeysFilterOption::Unredeemed => FilterToKeys::Unredeemed,
-      })
-      .unwrap_or(FilterToKeys::All);
+  let filter_keys = query
+    .filter
+    .or_else(|| match query.only_list_remaining {
+      Some(true) => Some(ListBetaKeysFilterOption::Unredeemed),
+      _ => Some(ListBetaKeysFilterOption::All),
+    })
+    .map(|filter| match filter {
+      ListBetaKeysFilterOption::All => FilterToKeys::All,
+      ListBetaKeysFilterOption::Redeemed => FilterToKeys::Redeemed,
+      ListBetaKeysFilterOption::Unredeemed => FilterToKeys::Unredeemed,
+    })
+    .unwrap_or(FilterToKeys::All);
 
   // TODO(bt,2023-12-04): Enforce real maximums and defaults
   let sort_ascending = query.sort_ascending.unwrap_or(false);
   let page_size = query.page_size.unwrap_or_else(|| 500);
   let page_index = query.page_index.unwrap_or_else(|| 0);
 
-  let query_results = list_beta_keys(ListBetaKeysArgs {
-    filter_to_referrer_user_token: maybe_scope_user_token.as_ref(),
-    filter_to_keys: filter_keys,
-    page_size,
-    page_index,
-    sort_ascending,
-    mysql_pool: &server_state.mysql_pool,
-  }).await;
+  let query_results = list_beta_keys(ListBetaKeysArgs { filter_to_referrer_user_token: maybe_scope_user_token.as_ref(), filter_to_keys: filter_keys, page_size, page_index, sort_ascending, mysql_pool: &server_state.mysql_pool }).await;
 
   let results_page = match query_results {
     Ok(results) => results,
     Err(err) => {
       warn!("Query error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
-  let results = results_page.records.into_iter()
-      .map(|beta_key| {
-        BetaKeyItem {
-          token: beta_key.token.clone(),
-          product: beta_key.product,
-          key_value: beta_key.key_value,
-          creator: UserDetailsLight::from_db_fields(
-            &beta_key.creator_user_token,
-            &beta_key.creator_username,
-            &beta_key.creator_display_name,
-            &beta_key.creator_gravatar_hash),
-          maybe_referrer: UserDetailsLight::from_optional_db_fields_owned(
-            beta_key.maybe_referrer_user_token,
-            beta_key.maybe_referrer_username,
-            beta_key.maybe_referrer_display_name,
-            beta_key.maybe_referrer_gravatar_hash
-          ),
-          maybe_redeemer: UserDetailsLight::from_optional_db_fields_owned(
-            beta_key.maybe_redeemer_user_token,
-            beta_key.maybe_redeemer_username,
-            beta_key.maybe_redeemer_display_name,
-            beta_key.maybe_redeemer_gravatar_hash
-          ),
-          is_distributed: beta_key.is_distributed,
-          maybe_note_html: beta_key.maybe_notes
-              .as_deref()
-              .map(|notes| markdown_with_socials_to_html(notes)),
-          maybe_note: beta_key.maybe_notes,
-          created_at: beta_key.created_at,
-          maybe_redeemed_at: beta_key.maybe_redeemed_at,
-        }
-      }).collect::<Vec<_>>();
+  let results = results_page
+    .records
+    .into_iter()
+    .map(|beta_key| BetaKeyItem { token: beta_key.token.clone(), product: beta_key.product, key_value: beta_key.key_value, creator: UserDetailsLight::from_db_fields(&beta_key.creator_user_token, &beta_key.creator_username, &beta_key.creator_display_name, &beta_key.creator_gravatar_hash), maybe_referrer: UserDetailsLight::from_optional_db_fields_owned(beta_key.maybe_referrer_user_token, beta_key.maybe_referrer_username, beta_key.maybe_referrer_display_name, beta_key.maybe_referrer_gravatar_hash), maybe_redeemer: UserDetailsLight::from_optional_db_fields_owned(beta_key.maybe_redeemer_user_token, beta_key.maybe_redeemer_username, beta_key.maybe_redeemer_display_name, beta_key.maybe_redeemer_gravatar_hash), is_distributed: beta_key.is_distributed, maybe_note_html: beta_key.maybe_notes.as_deref().map(|notes| markdown_with_socials_to_html(notes)), maybe_note: beta_key.maybe_notes, created_at: beta_key.created_at, maybe_redeemed_at: beta_key.maybe_redeemed_at })
+    .collect::<Vec<_>>();
 
-  let response = ListBetaKeysSuccessResponse {
-    success: true,
-    beta_keys: results,
-    pagination: PaginationPage{
-      current: results_page.current_page,
-      total_page_count: results_page.total_page_count,
-    }
-  };
+  let response = ListBetaKeysSuccessResponse { success: true, beta_keys: results, pagination: PaginationPage { current: results_page.current_page, total_page_count: results_page.total_page_count } };
 
   Ok(Json(response))
 }

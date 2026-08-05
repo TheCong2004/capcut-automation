@@ -7,12 +7,8 @@ use sqlx::{Executor, MySql};
 
 use actix_artcraft::sessions::anonymous_visitor_tracking::avt_cookie_manager::AvtCookieManager;
 use mysql_queries::queries::users::api_or_web_sessions::api_or_web_session_user_record::ApiOrWebSessionUserRecord;
-use mysql_queries::queries::users::api_or_web_sessions::get_api_or_web_session_user_by_api_key::{
-  get_api_or_web_session_user_by_api_key, GetApiOrWebSessionUserByApiKeyArgs,
-};
-use mysql_queries::queries::users::api_or_web_sessions::get_api_or_web_session_user_by_session_token::{
-  get_api_or_web_session_user_by_session_token, GetApiOrWebSessionUserBySessionTokenArgs,
-};
+use mysql_queries::queries::users::api_or_web_sessions::get_api_or_web_session_user_by_api_key::{get_api_or_web_session_user_by_api_key, GetApiOrWebSessionUserByApiKeyArgs};
+use mysql_queries::queries::users::api_or_web_sessions::get_api_or_web_session_user_by_session_token::{get_api_or_web_session_user_by_session_token, GetApiOrWebSessionUserBySessionTokenArgs};
 use tokens::tokens::anonymous_visitor_tracking::AnonymousVisitorTrackingToken;
 use tokens::tokens::api_keys::ApiKeyToken;
 use tokens::tokens::users::UserToken;
@@ -66,13 +62,9 @@ impl ApiOrWebSession {
 /// Neither path is cached: every request performs a fresh MySQL lookup. `mysql_executor` can be
 /// any sqlx executor — prefer passing an already-open connection (`&mut *connection`) so the
 /// lookup reuses it rather than acquiring a fresh one from the pool.
-pub async fn require_api_or_web_session<'c, E>(
-  http_request: &HttpRequest,
-  session_checker: &SessionChecker,
-  avt_cookie_manager: &AvtCookieManager,
-  mysql_executor: E,
-) -> Result<ApiOrWebSession, CommonWebError>
-  where E: 'c + Executor<'c, Database = MySql>
+pub async fn require_api_or_web_session<'c, E>(http_request: &HttpRequest, session_checker: &SessionChecker, avt_cookie_manager: &AvtCookieManager, mysql_executor: E) -> Result<ApiOrWebSession, CommonWebError>
+where
+  E: 'c + Executor<'c, Database = MySql>,
 {
   if http_request.headers().contains_key(header::AUTHORIZATION) {
     authenticate_by_api_key(http_request, mysql_executor).await
@@ -81,30 +73,22 @@ pub async fn require_api_or_web_session<'c, E>(
   }
 }
 
-async fn authenticate_by_api_key<'c, E>(
-  http_request: &HttpRequest,
-  mysql_executor: E,
-) -> Result<ApiOrWebSession, CommonWebError>
-  where E: 'c + Executor<'c, Database = MySql>
+async fn authenticate_by_api_key<'c, E>(http_request: &HttpRequest, mysql_executor: E) -> Result<ApiOrWebSession, CommonWebError>
+where
+  E: 'c + Executor<'c, Database = MySql>,
 {
   let api_key = match get_authorization_header_api_key(http_request) {
     Some(api_key) => api_key,
     None => {
       warn!("Authorization header present but not a usable API key");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
-  let maybe_record = get_api_or_web_session_user_by_api_key(GetApiOrWebSessionUserByApiKeyArgs {
-    api_key: &api_key,
-    mysql_executor,
-    phantom: PhantomData,
-  })
-    .await
-    .map_err(|err| {
-      warn!("API key user lookup error: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let maybe_record = get_api_or_web_session_user_by_api_key(GetApiOrWebSessionUserByApiKeyArgs { api_key: &api_key, mysql_executor, phantom: PhantomData }).await.map_err(|err| {
+    warn!("API key user lookup error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // A missing or soft-deleted key (or a key whose owner no longer exists) is a 401, not a leak of
   // which case occurred.
@@ -113,52 +97,40 @@ async fn authenticate_by_api_key<'c, E>(
     None => {
       warn!("No live API key user for presented key: {:?}", api_key);
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   into_session_rejecting_banned(record, SessionType::Api, None)
 }
 
-async fn authenticate_by_web_session<'c, E>(
-  http_request: &HttpRequest,
-  session_checker: &SessionChecker,
-  avt_cookie_manager: &AvtCookieManager,
-  mysql_executor: E,
-) -> Result<ApiOrWebSession, CommonWebError>
-  where E: 'c + Executor<'c, Database = MySql>
+async fn authenticate_by_web_session<'c, E>(http_request: &HttpRequest, session_checker: &SessionChecker, avt_cookie_manager: &AvtCookieManager, mysql_executor: E) -> Result<ApiOrWebSession, CommonWebError>
+where
+  E: 'c + Executor<'c, Database = MySql>,
 {
-  let maybe_session_token = session_checker
-      .get_session_token(http_request)
-      .map_err(|err| {
-        warn!("Session cookie decode error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let maybe_session_token = session_checker.get_session_token(http_request).map_err(|err| {
+    warn!("Session cookie decode error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   let session_token = match maybe_session_token {
     Some(session_token) => session_token,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
-  let maybe_record = get_api_or_web_session_user_by_session_token(GetApiOrWebSessionUserBySessionTokenArgs {
-    session_token: &session_token,
-    mysql_executor,
-    phantom: PhantomData,
-  })
-    .await
-    .map_err(|err| {
-      warn!("Web session user lookup error: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let maybe_record = get_api_or_web_session_user_by_session_token(GetApiOrWebSessionUserBySessionTokenArgs { session_token: &session_token, mysql_executor, phantom: PhantomData }).await.map_err(|err| {
+    warn!("Web session user lookup error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   let record = match maybe_record {
     Some(record) => record,
     None => {
       warn!("Valid cookie; invalid session: {}", session_token);
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   let maybe_avt_token = avt_cookie_manager.get_avt_token_from_request(http_request);
@@ -166,25 +138,11 @@ async fn authenticate_by_web_session<'c, E>(
   into_session_rejecting_banned(record, SessionType::WebSession, maybe_avt_token)
 }
 
-fn into_session_rejecting_banned(
-  record: ApiOrWebSessionUserRecord,
-  session_type: SessionType,
-  maybe_avt_token: Option<AnonymousVisitorTrackingToken>,
-) -> Result<ApiOrWebSession, CommonWebError> {
+fn into_session_rejecting_banned(record: ApiOrWebSessionUserRecord, session_type: SessionType, maybe_avt_token: Option<AnonymousVisitorTrackingToken>) -> Result<ApiOrWebSession, CommonWebError> {
   if record.is_banned {
     warn!("user is banned: {:?}", record.user_token.as_str());
     return Err(CommonWebError::NotAuthorized);
   }
 
-  Ok(ApiOrWebSession {
-    session_type,
-    user_token: record.user_token,
-    username: record.username,
-    display_name: record.display_name,
-    email_address: record.email_address,
-    user_role_slug: record.user_role_slug,
-    can_ban_users: record.can_ban_users,
-    maybe_api_key_token: record.maybe_api_key_token,
-    maybe_avt_token,
-  })
+  Ok(ApiOrWebSession { session_type, user_token: record.user_token, username: record.username, display_name: record.display_name, email_address: record.email_address, user_role_slug: record.user_role_slug, can_ban_users: record.can_ban_users, maybe_api_key_token: record.maybe_api_key_token, maybe_avt_token })
 }

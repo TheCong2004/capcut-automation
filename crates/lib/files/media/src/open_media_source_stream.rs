@@ -12,8 +12,7 @@ pub fn open_file_media_source_stream<P: AsRef<Path>>(file_path: P) -> AnyhowResu
 
   //let reader = Cursor::new(file_reader);
   let source = ReadOnlySource::new(file_reader);
-  let media_source_stream =
-      MediaSourceStream::new(Box::new(source), Default::default());
+  let media_source_stream = MediaSourceStream::new(Box::new(source), Default::default());
 
   Ok(media_source_stream)
 }
@@ -24,8 +23,7 @@ pub fn open_bytes_media_source_stream(audio_bytes: &[u8]) -> AnyhowResult<MediaS
   let reader = Cursor::new(bytes);
 
   let source = ReadOnlySource::new(reader);
-  let media_source_stream =
-      MediaSourceStream::new(Box::new(source), Default::default());
+  let media_source_stream = MediaSourceStream::new(Box::new(source), Default::default());
 
   Ok(media_source_stream)
 }

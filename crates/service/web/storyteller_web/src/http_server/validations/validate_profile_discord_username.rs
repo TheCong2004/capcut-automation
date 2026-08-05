@@ -2,9 +2,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 pub fn validate_profile_discord_username(username: &str) -> Result<(), String> {
-  static DISCORD_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^@?[^#@:]{2,32}(#[0-9]{4})?$").expect("should be valid regex")
-  });
+  static DISCORD_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^@?[^#@:]{2,32}(#[0-9]{4})?$").expect("should be valid regex"));
 
   if username.len() < 2 {
     return Err("discord username is too short".to_string());

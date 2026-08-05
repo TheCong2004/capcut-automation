@@ -391,8 +391,7 @@ impl BitResevoir {
             self.len = main_data_end;
 
             0
-        }
-        else {
+        } else {
             // Shift all the unread bytes to the front of the resevoir. Since this is an underflow
             // condition, all unread bytes will be unconditionally reused.
             self.buf.copy_within(self.len - unread..self.len, 0);

@@ -30,20 +30,7 @@ pub struct TextToImageError {
 pub async fn text_to_image(req: TextToImageRequest<'_>) -> Result<TextToImageResponse, MidjourneyError> {
   let channel_id = req.channel_id.to_string();
 
-  let response = submit_job(SubmitJobRequest {
-    prompt: req.prompt,
-    channel_id: &channel_id,
-    hostname: req.hostname,
-    cookie_header: req.cookie_header,
-  }).await?;
+  let response = submit_job(SubmitJobRequest { prompt: req.prompt, channel_id: &channel_id, hostname: req.hostname, cookie_header: req.cookie_header }).await?;
 
-  Ok(TextToImageResponse {
-    maybe_job_id: response.maybe_job_id,
-    maybe_errors: response.maybe_errors.map(|errs| {
-      errs.into_iter().map(|e| TextToImageError {
-        error_type: e.error_type,
-        message: e.message,
-      }).collect()
-    }),
-  })
+  Ok(TextToImageResponse { maybe_job_id: response.maybe_job_id, maybe_errors: response.maybe_errors.map(|errs| errs.into_iter().map(|e| TextToImageError { error_type: e.error_type, message: e.message }).collect()) })
 }

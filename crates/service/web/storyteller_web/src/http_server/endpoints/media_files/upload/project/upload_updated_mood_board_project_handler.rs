@@ -36,22 +36,8 @@ use crate::state::server_state::ServerState;
     ),
   )
 )]
-pub async fn upload_updated_mood_board_project_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  path: Path<UploadUpdatedMoodBoardProjectPathInfo>,
-  MultipartForm(form): MultipartForm<UpdateProjectMultipartForm>,
-) -> Result<Json<UploadUpdatedMoodBoardProjectSuccessResponse>, CommonWebError> {
-  update_project(UpdateProjectArgs {
-    http_request: &http_request,
-    server_state: &server_state,
-    config: &MOOD_BOARD_PROJECT_CONFIG,
-    media_file_token: &path.token,
-    form,
-  }).await?;
+pub async fn upload_updated_mood_board_project_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, path: Path<UploadUpdatedMoodBoardProjectPathInfo>, MultipartForm(form): MultipartForm<UpdateProjectMultipartForm>) -> Result<Json<UploadUpdatedMoodBoardProjectSuccessResponse>, CommonWebError> {
+  update_project(UpdateProjectArgs { http_request: &http_request, server_state: &server_state, config: &MOOD_BOARD_PROJECT_CONFIG, media_file_token: &path.token, form }).await?;
 
-  Ok(Json(UploadUpdatedMoodBoardProjectSuccessResponse {
-    success: true,
-    media_file_token: path.into_inner().token,
-  }))
+  Ok(Json(UploadUpdatedMoodBoardProjectSuccessResponse { success: true, media_file_token: path.into_inner().token }))
 }

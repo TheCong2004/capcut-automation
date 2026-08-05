@@ -101,8 +101,7 @@ fn alaw_to_linear(mut a_val: u8) -> i16 {
 
     if a_val & 0x80 == 0x80 {
         t
-    }
-    else {
+    } else {
         -t
     }
 }
@@ -120,8 +119,7 @@ fn mulaw_to_linear(mut mu_val: u8) -> i16 {
 
     if mu_val & 0x80 == 0x80 {
         t - BIAS
-    }
-    else {
+    } else {
         BIAS - t
     }
 }
@@ -237,11 +235,9 @@ impl Decoder for PcmDecoder {
 
         let spec = if let Some(channels) = params.channels {
             SignalSpec::new(rate, channels)
-        }
-        else if let Some(layout) = params.channel_layout {
+        } else if let Some(layout) = params.channel_layout {
             SignalSpec::new_with_layout(rate, layout)
-        }
-        else {
+        } else {
             return unsupported_error("pcm: channels or channel_layout is required");
         };
 
@@ -458,8 +454,7 @@ impl Decoder for PcmDecoder {
         if let Err(e) = self.decode_inner(packet) {
             self.buf.clear();
             Err(e)
-        }
-        else {
+        } else {
             Ok(self.buf.as_audio_buffer_ref())
         }
     }

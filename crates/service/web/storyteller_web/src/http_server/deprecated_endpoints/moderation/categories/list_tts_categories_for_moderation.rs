@@ -74,26 +74,18 @@ pub struct CategoryForModeration {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn list_tts_categories_for_moderation_handler(
-  http_request: HttpRequest,
-  query: web::Query<QueryParams>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn list_tts_categories_for_moderation_handler(http_request: HttpRequest, query: web::Query<QueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: We don't have a permission for categories, so we use this as a proxy.
@@ -106,8 +98,7 @@ pub async fn list_tts_categories_for_moderation_handler(
   let delete_state = query.deleted.unwrap_or(ViewState::Exclude);
   let unapproved_state = query.unapproved.unwrap_or(ViewState::Include);
 
-  let mut query_builder = ListCategoriesQueryBuilder::new()
-      .scope_model_type(Some("tts"));
+  let mut query_builder = ListCategoriesQueryBuilder::new().scope_model_type(Some("tts"));
 
   query_builder = match delete_state {
     ViewState::Exclude => query_builder.show_deleted(false),
@@ -121,55 +112,26 @@ pub async fn list_tts_categories_for_moderation_handler(
     ViewState::Only => query_builder.show_unapproved(true).hide_approved(true),
   };
 
-  let query_result =
-      query_builder.perform_query(&server_state.mysql_pool).await;
+  let query_result = query_builder.perform_query(&server_state.mysql_pool).await;
 
   let results = match query_result {
     Ok(results) => results,
     Err(err) => {
       warn!("DB error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   warn!("Number of categories: {:?}", results.categories.len());
 
-  let mut categories = results.categories.iter()
-      .map(|c| {
-        CategoryForModeration {
-          category_token: c.category_token.clone(),
-          model_type: c.model_type.clone(),
-          maybe_super_category_token: c.maybe_super_category_token.clone(),
-          can_directly_have_models: c.can_directly_have_models,
-          can_have_subcategories: c.can_have_subcategories,
-          can_only_mods_apply: c.can_only_mods_apply,
-          name: c.name.clone(),
-          maybe_dropdown_name:c.maybe_dropdown_name.clone(),
-          creator_user_token: c.creator_user_token.clone(),
-          creator_username: c.creator_username.clone(),
-          creator_display_name: c.creator_display_name.clone(),
-          creator_gravatar_hash: c.creator_gravatar_hash.clone(),
-          is_mod_approved: c.is_mod_approved,
-          maybe_mod_comments: c.maybe_mod_comments.clone(),
-          created_at: c.created_at,
-          updated_at: c.updated_at,
-          deleted_at: c.deleted_at,
-        }
-      })
-      .collect::<Vec<CategoryForModeration>>();
+  let mut categories = results.categories.iter().map(|c| CategoryForModeration { category_token: c.category_token.clone(), model_type: c.model_type.clone(), maybe_super_category_token: c.maybe_super_category_token.clone(), can_directly_have_models: c.can_directly_have_models, can_have_subcategories: c.can_have_subcategories, can_only_mods_apply: c.can_only_mods_apply, name: c.name.clone(), maybe_dropdown_name: c.maybe_dropdown_name.clone(), creator_user_token: c.creator_user_token.clone(), creator_username: c.creator_username.clone(), creator_display_name: c.creator_display_name.clone(), creator_gravatar_hash: c.creator_gravatar_hash.clone(), is_mod_approved: c.is_mod_approved, maybe_mod_comments: c.maybe_mod_comments.clone(), created_at: c.created_at, updated_at: c.updated_at, deleted_at: c.deleted_at }).collect::<Vec<CategoryForModeration>>();
 
   // TODO: Sort by dropdown name too.
   categories.sort_by(|c1, c2| c1.name.cmp(&c2.name));
 
-  let response = ListTtsCategoriesForModerationResponse {
-    success: true,
-    categories,
-  };
+  let response = ListTtsCategoriesForModerationResponse { success: true, categories };
 
-  let body = serde_json::to_string(&response)
-      .map_err(CommonWebError::from_error)?;
+  let body = serde_json::to_string(&response).map_err(CommonWebError::from_error)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

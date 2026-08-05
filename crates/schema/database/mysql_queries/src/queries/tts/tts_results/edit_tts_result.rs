@@ -13,16 +13,11 @@ pub struct EditTtsResultArgs<'a> {
 }
 
 pub enum CreatorOrModFields<'a> {
-  CreatorFields {
-    creator_ip_address: &'a str,
-  },
-  ModFields {
-    mod_user_token: &'a str,
-  }
+  CreatorFields { creator_ip_address: &'a str },
+  ModFields { mod_user_token: &'a str },
 }
 
 pub async fn edit_tts_result(args: EditTtsResultArgs<'_>) -> AnyhowResult<()> {
-
   let query_result = match args.role_dependent_fields {
     //
     // For creator users
@@ -41,8 +36,8 @@ LIMIT 1
         creator_ip_address,
         args.tts_result_token,
       )
-          .execute(args.mysql_pool)
-          .await
+      .execute(args.mysql_pool)
+      .await
     },
 
     //
@@ -61,8 +56,8 @@ LIMIT 1
         mod_user_token,
         args.tts_result_token,
       )
-          .execute(args.mysql_pool)
-          .await
+      .execute(args.mysql_pool)
+      .await
     },
   };
 

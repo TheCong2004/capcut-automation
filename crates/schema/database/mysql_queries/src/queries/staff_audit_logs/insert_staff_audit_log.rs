@@ -8,7 +8,8 @@ use tokens::tokens::staff_audit_logs::StaffAuditLogToken;
 use tokens::tokens::users::UserToken;
 
 pub struct InsertStaffAuditLogArgs<'a, 'c: 'a, E>
-  where E: 'a + Executor<'c, Database = MySql>
+where
+  E: 'a + Executor<'c, Database = MySql>,
 {
   pub audit_action: StaffAuditAction,
 
@@ -22,10 +23,9 @@ pub struct InsertStaffAuditLogArgs<'a, 'c: 'a, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn insert_staff_audit_log<'a, 'c, E>(
-  args: InsertStaffAuditLogArgs<'a, 'c, E>,
-) -> Result<StaffAuditLogToken, sqlx::Error>
-  where E: 'a + Executor<'c, Database = MySql>
+pub async fn insert_staff_audit_log<'a, 'c, E>(args: InsertStaffAuditLogArgs<'a, 'c, E>) -> Result<StaffAuditLogToken, sqlx::Error>
+where
+  E: 'a + Executor<'c, Database = MySql>,
 {
   let token = StaffAuditLogToken::generate();
 
@@ -47,8 +47,8 @@ SET
     args.staff_user_token.as_str(),
     args.actor_ip_address,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(token)
 }

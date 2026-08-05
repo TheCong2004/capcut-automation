@@ -7,10 +7,7 @@ use tokens::tokens::media_files::MediaFileToken;
 
 /// For providers that take URLs directly (Fal), swap
 /// `MediaFileTokens` → `Urls` using the resolved map.
-pub fn resolve_media_tokens_to_urls(
-  builder: &mut GenerateAudioRequestBuilder,
-  url_map: Option<&HashMap<MediaFileToken, String>>,
-) {
+pub fn resolve_media_tokens_to_urls(builder: &mut GenerateAudioRequestBuilder, url_map: Option<&HashMap<MediaFileToken, String>>) {
   let map = match url_map {
     Some(m) => m,
     None => return,
@@ -18,9 +15,7 @@ pub fn resolve_media_tokens_to_urls(
 
   // audio_references
   if let Some(AudioListRef::MediaFileTokens(ref tokens)) = builder.audio_references {
-    let urls: Vec<String> = tokens.iter()
-      .filter_map(|t| map.get(t).cloned())
-      .collect();
+    let urls: Vec<String> = tokens.iter().filter_map(|t| map.get(t).cloned()).collect();
     if !urls.is_empty() {
       builder.audio_references = Some(AudioListRef::Urls(urls));
     }
@@ -28,9 +23,7 @@ pub fn resolve_media_tokens_to_urls(
 
   // image_references
   if let Some(ImageListRef::MediaFileTokens(ref tokens)) = builder.image_references {
-    let urls: Vec<String> = tokens.iter()
-      .filter_map(|t| map.get(t).cloned())
-      .collect();
+    let urls: Vec<String> = tokens.iter().filter_map(|t| map.get(t).cloned()).collect();
     if !urls.is_empty() {
       builder.image_references = Some(ImageListRef::Urls(urls));
     }

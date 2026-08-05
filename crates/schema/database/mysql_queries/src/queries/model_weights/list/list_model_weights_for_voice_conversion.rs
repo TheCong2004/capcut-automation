@@ -26,7 +26,6 @@ pub struct ModelWeightForVoiceConversion {
 
   // TODO(bt,2023-12-18): This should probably live in the extension table.
   //pub is_front_page_featured: bool,
-
   pub creator_set_visibility: Visibility,
 
   pub created_at: DateTime<Utc>,
@@ -39,36 +38,13 @@ pub struct ModelWeightForVoiceConversion {
 
 /// This is to support the voice conversion list page.
 /// Later this will be migrated or replaced with a more generic query.
-pub async fn list_model_weights_for_voice_conversion(
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<Vec<ModelWeightForVoiceConversion>> {
+pub async fn list_model_weights_for_voice_conversion(mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<ModelWeightForVoiceConversion>> {
+  let models = list_voice_conversion_models_for_all_creators(mysql_connection).await?;
 
-  let models =
-      list_voice_conversion_models_for_all_creators(mysql_connection).await?;
-
-  Ok(models.into_iter()
-      .map(|model| {
-        ModelWeightForVoiceConversion {
-          token: model.token,
-          weight_type: model.weight_type,
-          creator_user_token: model.creator_user_token,
-          creator_username: model.creator_username,
-          creator_display_name: model.creator_display_name,
-          creator_gravatar_hash: model.creator_gravatar_hash,
-          title: model.title,
-          ietf_language_tag: model.ietf_language_tag.unwrap_or("en".to_string()),
-          ietf_primary_language_subtag: model.ietf_primary_language_subtag.unwrap_or("en".to_string()),
-          creator_set_visibility: model.creator_set_visibility,
-          created_at: model.created_at,
-          updated_at: model.updated_at,
-        }
-      })
-      .collect::<Vec<ModelWeightForVoiceConversion>>())
+  Ok(models.into_iter().map(|model| ModelWeightForVoiceConversion { token: model.token, weight_type: model.weight_type, creator_user_token: model.creator_user_token, creator_username: model.creator_username, creator_display_name: model.creator_display_name, creator_gravatar_hash: model.creator_gravatar_hash, title: model.title, ietf_language_tag: model.ietf_language_tag.unwrap_or("en".to_string()), ietf_primary_language_subtag: model.ietf_primary_language_subtag.unwrap_or("en".to_string()), creator_set_visibility: model.creator_set_visibility, created_at: model.created_at, updated_at: model.updated_at }).collect::<Vec<ModelWeightForVoiceConversion>>())
 }
 
-async fn list_voice_conversion_models_for_all_creators(
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<Vec<RawModelWeightForVoiceConversion>> {
+async fn list_voice_conversion_models_for_all_creators(mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<RawModelWeightForVoiceConversion>> {
   // NB: Scoped to only rvc_v2 and so_vits_svc weights
   let maybe_results = sqlx::query_as!(
     RawModelWeightForVoiceConversion,
@@ -97,17 +73,15 @@ WHERE
     AND w.mod_deleted_at IS NULL
     "#
   )
-      .fetch_all(&mut **mysql_connection)
-      .await;
+  .fetch_all(&mut **mysql_connection)
+  .await;
 
   match maybe_results {
     Ok(results) => Ok(results),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(Vec::new()),
-      _ => {
-        Err(anyhow!("error querying : {:?}", err))
-      }
-    }
+      _ => Err(anyhow!("error querying : {:?}", err)),
+    },
   }
 }
 

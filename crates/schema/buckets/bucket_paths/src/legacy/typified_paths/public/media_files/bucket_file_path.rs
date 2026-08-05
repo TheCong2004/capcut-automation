@@ -5,7 +5,7 @@ use crockford::crockford_entropy_lower;
 use crate::legacy::typified_paths::public::media_files::bucket_directory::MediaFileBucketDirectory;
 use crate::legacy::typified_paths::public::public_path::PublicPath;
 
-const ORIGINAL_FILE_BASENAME : &str = "file.bin";
+const ORIGINAL_FILE_BASENAME: &str = "file.bin";
 
 // TODO: Generate these from a macro.
 
@@ -26,7 +26,6 @@ pub struct MediaFileBucketPath {
 impl PublicPath for MediaFileBucketPath {}
 
 impl MediaFileBucketPath {
-
   /// NB: The `optional_extension` needs to include a "." (period) if you want it in the file.
   pub fn generate_new(optional_prefix: Option<&str>, optional_extension: Option<&str>) -> Self {
     let entropy = crockford_entropy_lower(32);
@@ -47,13 +46,7 @@ impl MediaFileBucketPath {
 
     let full_object_path = format!("{}/{}", directory.get_directory_path_str(), filename);
 
-    Self {
-      directory,
-      filename,
-      full_object_path,
-      optional_prefix: optional_prefix.map(|p| p.to_string()),
-      optional_extension: optional_extension.map(|e| e.to_string()),
-    }
+    Self { directory, filename, full_object_path, optional_prefix: optional_prefix.map(|p| p.to_string()), optional_extension: optional_extension.map(|e| e.to_string()) }
   }
 
   pub fn get_full_object_path_str(&self) -> &str {

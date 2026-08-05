@@ -35,7 +35,7 @@ pub struct UpsertUserSubscriptionWithInvoicePaidStatus<'a> {
   pub maybe_stripe_product_id: Option<&'a str>,
   pub maybe_stripe_price_id: Option<&'a str>,
 
-  pub maybe_stripe_recurring_interval : Option<StripeRecurringInterval>,
+  pub maybe_stripe_recurring_interval: Option<StripeRecurringInterval>,
   pub maybe_stripe_subscription_status: Option<StripeSubscriptionStatus>,
   pub maybe_stripe_is_production: Option<bool>,
 
@@ -48,7 +48,6 @@ pub struct UpsertUserSubscriptionWithInvoicePaidStatus<'a> {
   pub maybe_stripe_billing_cycle_anchor: Option<NaiveDateTime>,
 
   // Billing periods for the subscription...
-
   pub current_billing_period_start_at: NaiveDateTime,
   pub current_billing_period_end_at: NaiveDateTime,
 
@@ -61,13 +60,12 @@ pub struct UpsertUserSubscriptionWithInvoicePaidStatus<'a> {
   pub maybe_canceled_at: Option<NaiveDateTime>,
 }
 
-impl <'a> UpsertUserSubscriptionWithInvoicePaidStatus<'a> {
-
+impl<'a> UpsertUserSubscriptionWithInvoicePaidStatus<'a> {
   pub async fn upsert(&'a self, mysql_pool: &MySqlPool) -> AnyhowResult<()> {
     let mut conn = mysql_pool.acquire().await?;
     self.upsert_with_connection(&mut conn).await
   }
-  
+
   pub async fn upsert_with_connection(&'a self, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<()> {
     let query = self.query();
 
@@ -93,8 +91,7 @@ impl <'a> UpsertUserSubscriptionWithInvoicePaidStatus<'a> {
 
     Ok(())
   }
-  
-  
+
   fn query(&self) -> Query<MySql, MySqlArguments> {
     let token = UserSubscriptionToken::generate().to_string();
 
@@ -107,7 +104,7 @@ impl <'a> UpsertUserSubscriptionWithInvoicePaidStatus<'a> {
     //  - The product and price can change (eg. upgrades, downgrades).
     //  - Other "static" fields do not need to change on update, either.
     sqlx::query!(
-        r#"
+      r#"
 INSERT INTO user_subscriptions
 SET
   token = ?,
@@ -163,46 +160,33 @@ ON DUPLICATE KEY UPDATE
         "#,
       // Insert
       token,
-
       self.invoice_is_paid,
-
       self.user_token,
       self.subscription_namespace.to_str(),
       self.subscription_product_slug,
-
       self.stripe_subscription_id,
       self.maybe_stripe_customer_id,
-
       self.maybe_stripe_product_id,
       self.maybe_stripe_price_id,
-
       self.maybe_stripe_recurring_interval.as_deref(),
       self.maybe_stripe_subscription_status.as_deref(),
       self.maybe_stripe_is_production,
-      
       self.maybe_stripe_billing_cycle_anchor,
-
       self.subscription_start_at,
       self.current_billing_period_start_at,
       self.current_billing_period_end_at,
       self.subscription_expires_at,
       self.maybe_cancel_at,
       self.maybe_canceled_at,
-
       // Upsert
       self.invoice_is_paid,
-
       self.subscription_namespace,
       self.subscription_product_slug,
-
       self.maybe_stripe_product_id,
       self.maybe_stripe_price_id,
-
       self.maybe_stripe_recurring_interval.as_deref(),
       self.maybe_stripe_subscription_status.as_deref(),
-      
       self.maybe_stripe_billing_cycle_anchor,
-
       self.current_billing_period_start_at,
       self.current_billing_period_end_at,
       self.subscription_expires_at,

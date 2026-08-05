@@ -21,8 +21,7 @@ impl std::fmt::Display for VcModelError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       VcModelError::ModelDeleted => write!(f, "ModelDeleted"),
-      VcModelError::DatabaseError { reason} =>
-        write!(f, "Database error: {:?}", reason),
+      VcModelError::DatabaseError { reason } => write!(f, "Database error: {:?}", reason),
     }
   }
 }
@@ -36,27 +35,19 @@ pub async fn query_vc_model_for_migration(model_token: &str, mysql_pool: &MySqlP
   if model_token.starts_with(ModelWeightToken::token_prefix()) {
     let model_weights_token = ModelWeightToken::new_from_str(model_token);
 
-    let maybe_model = get_model_weight_for_voice_conversion_inference(
-      &mysql_pool, &model_weights_token).await.map_err(|err|
-      match err {
-        ModelWeightError::ModelDeleted =>  VcModelError::ModelDeleted,
-        ModelWeightError::DatabaseError { reason } => VcModelError::DatabaseError { reason },
-      }
-    )?;
+    let maybe_model = get_model_weight_for_voice_conversion_inference(&mysql_pool, &model_weights_token).await.map_err(|err| match err {
+      ModelWeightError::ModelDeleted => VcModelError::ModelDeleted,
+      ModelWeightError::DatabaseError { reason } => VcModelError::DatabaseError { reason },
+    })?;
 
-    Ok(maybe_model
-        .map(|model| VcModel::ModelWeight(model)))
-
+    Ok(maybe_model.map(|model| VcModel::ModelWeight(model)))
   } else {
-    let maybe_vc_model = get_voice_conversion_model_for_inference(
-      &mysql_pool, model_token).await.map_err(|err|
-      match err {
-        VoiceConversionModelForInferenceError::ModelDeleted =>  VcModelError::ModelDeleted,
-        VoiceConversionModelForInferenceError::DatabaseError { reason } => VcModelError::DatabaseError { reason },
-      })?;
+    let maybe_vc_model = get_voice_conversion_model_for_inference(&mysql_pool, model_token).await.map_err(|err| match err {
+      VoiceConversionModelForInferenceError::ModelDeleted => VcModelError::ModelDeleted,
+      VoiceConversionModelForInferenceError::DatabaseError { reason } => VcModelError::DatabaseError { reason },
+    })?;
 
-    Ok(maybe_vc_model
-        .map(|model| VcModel::LegacyVoiceConversion(model)))
+    Ok(maybe_vc_model.map(|model| VcModel::LegacyVoiceConversion(model)))
   }
 }
 
@@ -94,7 +85,7 @@ impl VcModel {
         VoiceConversionModelType::RvcV2 => VcModelType::RvcV2,
         VoiceConversionModelType::SoftVc => VcModelType::SoftVc,
         VoiceConversionModelType::SoVitsSvc => VcModelType::SoVitsSvc,
-      }
+      },
       VcModel::ModelWeight(ref model) => match model.weights_type {
         // Valid types
         WeightsType::SoVitsSvc => VcModelType::SoVitsSvc,
@@ -108,25 +99,21 @@ impl VcModel {
         WeightsType::VallE => VcModelType::Invalid,
         WeightsType::ComfyUi => VcModelType::Invalid,
         WeightsType::GptSoVits => VcModelType::Invalid,
-      }
+      },
     }
   }
 
   /// Whether the model has an associated speaker index file. Only applies to certain RVC models.
   pub fn has_index_file(&self) -> bool {
     match self {
-      VcModel::LegacyVoiceConversion(ref model) => {
-        match model.model_type {
-          VoiceConversionModelType::RvcV2 => model.has_index_file,
-          _ => false,
-        }
-      }
-      VcModel::ModelWeight(ref model) => {
-        match model.weights_type {
-          WeightsType::RvcV2 => model.has_index_file,
-          _ => false,
-        }
-      }
+      VcModel::LegacyVoiceConversion(ref model) => match model.model_type {
+        VoiceConversionModelType::RvcV2 => model.has_index_file,
+        _ => false,
+      },
+      VcModel::ModelWeight(ref model) => match model.weights_type {
+        WeightsType::RvcV2 => model.has_index_file,
+        _ => false,
+      },
     }
   }
 
@@ -135,27 +122,20 @@ impl VcModel {
     match self {
       VcModel::LegacyVoiceConversion(ref model) => {
         match model.model_type {
-          VoiceConversionModelType::RvcV2 => {
-            bucket_path_unifier.rvc_v2_model_path(&model.private_bucket_hash)
-          }
-          VoiceConversionModelType::SoVitsSvc => {
-            bucket_path_unifier.so_vits_svc_model_path(&model.private_bucket_hash)
-          }
+          VoiceConversionModelType::RvcV2 => bucket_path_unifier.rvc_v2_model_path(&model.private_bucket_hash),
+          VoiceConversionModelType::SoVitsSvc => bucket_path_unifier.so_vits_svc_model_path(&model.private_bucket_hash),
           VoiceConversionModelType::SoftVc => {
             // NB: Technically wrong, but there are none of these models and I want the
             // method to be infallible since it is in all other cases.
             PathBuf::from("SOFT_VC_UNUSED_AND_UNIMPLEMENTED")
-          }
+          },
         }
-      }
+      },
       VcModel::ModelWeight(ref model) => {
-        let path = WeightFileBucketPath::from_object_hash(
-          &model.public_bucket_hash,
-          model.maybe_public_bucket_prefix.as_deref(),
-          model.maybe_public_bucket_extension.as_deref());
+        let path = WeightFileBucketPath::from_object_hash(&model.public_bucket_hash, model.maybe_public_bucket_prefix.as_deref(), model.maybe_public_bucket_extension.as_deref());
 
         PathBuf::from(path.get_full_object_path_str())
-      }
+      },
     }
   }
 
@@ -170,11 +150,9 @@ impl VcModel {
         match model.model_type {
           VoiceConversionModelType::SoVitsSvc => None,
           VoiceConversionModelType::SoftVc => None,
-          VoiceConversionModelType::RvcV2 => {
-            Some(bucket_path_unifier.rvc_v2_model_index_path(&model.private_bucket_hash))
-          }
+          VoiceConversionModelType::RvcV2 => Some(bucket_path_unifier.rvc_v2_model_index_path(&model.private_bucket_hash)),
         }
-      }
+      },
       VcModel::ModelWeight(ref model) => {
         if !model.has_index_file {
           return None;
@@ -182,7 +160,7 @@ impl VcModel {
         // NB: Technically, we should read prefix/extension from DB. We keep index file extensions by convention, however.
         let path = WeightFileBucketPath::rvc_index_file_from_object_hash(&model.public_bucket_hash);
         Some(PathBuf::from(path.get_full_object_path_str()))
-      }
+      },
     }
   }
 
@@ -211,7 +189,6 @@ impl VcModel {
   }
 }
 
-
 #[cfg(test)]
 mod tests {
 
@@ -228,17 +205,7 @@ mod tests {
 
     fn default_model() -> VoiceConversionModelForInference {
       // NB: We could implement/derive the default trait, but this works just as well for now.
-      VoiceConversionModelForInference {
-        token: VoiceConversionModelToken::new_from_str("vcm_entropy"),
-        model_type: VoiceConversionModelType::RvcV2,
-        private_bucket_hash: "hash".to_string(),
-        has_index_file: false,
-        title: "title".to_string(),
-        created_at: Default::default(),
-        updated_at: Default::default(),
-        user_deleted_at: None,
-        mod_deleted_at: None,
-      }
+      VoiceConversionModelForInference { token: VoiceConversionModelToken::new_from_str("vcm_entropy"), model_type: VoiceConversionModelType::RvcV2, private_bucket_hash: "hash".to_string(), has_index_file: false, title: "title".to_string(), created_at: Default::default(), updated_at: Default::default(), user_deleted_at: None, mod_deleted_at: None }
     }
 
     #[test]
@@ -316,19 +283,7 @@ mod tests {
 
     fn default_model() -> ModelWeightForVoiceConversionInference {
       // NB: We could implement/derive the default trait, but this works just as well for now.
-      ModelWeightForVoiceConversionInference {
-        token: ModelWeightToken::new_from_str("weight_entropy"),
-        weights_type: WeightsType::RvcV2,
-        has_index_file: false,
-        public_bucket_hash: "hash".to_string(),
-        maybe_public_bucket_prefix: None,
-        maybe_public_bucket_extension: None,
-        title: "title".to_string(),
-        created_at: Default::default(),
-        updated_at: Default::default(),
-        user_deleted_at: None,
-        mod_deleted_at: None,
-      }
+      ModelWeightForVoiceConversionInference { token: ModelWeightToken::new_from_str("weight_entropy"), weights_type: WeightsType::RvcV2, has_index_file: false, public_bucket_hash: "hash".to_string(), maybe_public_bucket_prefix: None, maybe_public_bucket_extension: None, title: "title".to_string(), created_at: Default::default(), updated_at: Default::default(), user_deleted_at: None, mod_deleted_at: None }
     }
 
     #[test]

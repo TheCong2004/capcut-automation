@@ -17,7 +17,7 @@ pub enum ArtcraftBillingAction {
   SubscriptionCreated(UpsertableSubscriptionDetails),
   SubscriptionUpdated(UpsertableSubscriptionDetails),
   SubscriptionDeleted(UpsertableSubscriptionDetails),
-  
+
   SubscriptionPaid(SubscriptionPaidEvent),
 
   CustomerCreated(UserCustomerLink),
@@ -45,7 +45,7 @@ pub struct WalletCreditsPurchaseEvent {
 
   // NB: This is a multiplier on the pack's base value.
   pub quantity: u64,
-  
+
   /// Token to track in the wallet_ledger_events
   pub ledger_event_ref: Option<String>,
 
@@ -68,13 +68,11 @@ pub struct WalletCreditsPurchaseEvent {
   pub maybe_stripe_event_id: Option<String>,
 }
 
-
 pub struct UpsertableSubscriptionDetails {
   /// Stripe's subscription_id is a unique foreign key  in the `users_subscriptions` table!
   pub stripe_subscription_id: String,
 
   // Other stripe foreign keys ...
-
   pub stripe_customer_id: String,
   pub stripe_product_id: String,
   pub stripe_price_id: String,
@@ -88,7 +86,7 @@ pub struct UpsertableSubscriptionDetails {
   /// The state of the subscription: active, cancelled, and other states.
   pub stripe_subscription_status: StripeSubscriptionStatus,
 
-  pub stripe_recurring_interval : StripeRecurringInterval,
+  pub stripe_recurring_interval: StripeRecurringInterval,
 
   // Which day of the month / month of the year to anchor the subscription against.
   // See the Stripe docs.
@@ -118,7 +116,6 @@ pub struct SubscriptionPaidEvent {
   pub stripe_subscription_id: String,
 
   // Other stripe foreign keys ...
-
   pub stripe_customer_id: String,
   pub stripe_product_id: String,
   pub stripe_price_id: String,
@@ -132,7 +129,7 @@ pub struct SubscriptionPaidEvent {
   /// The state of the subscription: active, cancelled, and other states.
   pub stripe_subscription_status: StripeSubscriptionStatus,
 
-  pub stripe_recurring_interval : StripeRecurringInterval,
+  pub stripe_recurring_interval: StripeRecurringInterval,
 
   // Which day of the month / month of the year to anchor the subscription against.
   // See the Stripe docs.
@@ -158,7 +155,7 @@ pub struct SubscriptionPaidEvent {
 
   /// Token to track in the wallet_ledger_events
   pub ledger_event_ref: Option<String>,
-  
+
   /// For eagerly created user records (in the new checkout flow), we need to update the user's email.
   /// We started creating user accounts without a username, email, and password - so we need to collect it here.
   pub customer_email: Option<String>,

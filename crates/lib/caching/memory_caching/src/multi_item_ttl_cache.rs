@@ -12,21 +12,17 @@ pub struct MultiItemTtlCache<K: Ord + Clone, V: Clone + ?Sized> {
   cache: Arc<Mutex<LruCache<K, V>>>,
 }
 
-impl <K: Ord + Clone, V: Clone + ?Sized> MultiItemTtlCache<K, V> {
+impl<K: Ord + Clone, V: Clone + ?Sized> MultiItemTtlCache<K, V> {
   pub fn create_with_duration(time_to_live: Duration) -> Self {
     let cache = LruCache::with_expiry_duration(time_to_live);
     let cache = Arc::new(Mutex::new(cache));
-    Self {
-      cache,
-    }
+    Self { cache }
   }
 
   pub fn copy_without_bump_if_unexpired(&self, key: K) -> AnyhowResult<Option<V>> {
     let maybe_copy = match self.cache.lock() {
       Err(e) => bail!("could not unlock mutex to read: {:?}", e),
-      Ok(cache) => {
-        cache.peek(&key).map(|inner| inner.clone())
-      },
+      Ok(cache) => cache.peek(&key).map(|inner| inner.clone()),
     };
     Ok(maybe_copy)
   }

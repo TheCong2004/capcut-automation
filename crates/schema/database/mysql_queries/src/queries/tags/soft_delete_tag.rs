@@ -20,9 +20,7 @@ where
 /// (`delete_media_file_tags_for_tag`), so `use_count` is zeroed here.
 /// Returns the number of rows updated (0 = not found / not owned /
 /// already deleted).
-pub async fn soft_delete_tag<'e, 'c: 'e, E>(
-  args: SoftDeleteTagArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn soft_delete_tag<'e, 'c: 'e, E>(args: SoftDeleteTagArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -38,8 +36,8 @@ WHERE token = ?
     args.tag_token.as_str(),
     args.creator_user_token.as_str(),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(result.rows_affected())
 }

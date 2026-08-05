@@ -6,7 +6,8 @@ use errors::AnyhowResult;
 use tokens::tokens::model_weights::ModelWeightToken;
 
 pub struct Args<'e, 'c, E>
-where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   /// The model we're updating.
   pub model_weight_token: &'e ModelWeightToken,
@@ -21,14 +22,14 @@ where E: 'e + Executor<'c, Database = MySql>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn update_model_weight_cached_usage_count<'e, 'c : 'e, E>(
-  args: Args<'e, 'c, E>,
-) -> AnyhowResult<()> where E: 'e + Executor<'c, Database = MySql> {
-
+pub async fn update_model_weight_cached_usage_count<'e, 'c: 'e, E>(args: Args<'e, 'c, E>) -> AnyhowResult<()>
+where
+  E: 'e + Executor<'c, Database = MySql>,
+{
   // NB: Since this is an automation, don't trigger the updated_at trigger.
   // Force by writing the updated_at field with the current value.
   let _query_result = sqlx::query!(
-        r#"
+    r#"
         UPDATE model_weights
         SET
             cached_usage_count = ?,
@@ -36,9 +37,11 @@ pub async fn update_model_weight_cached_usage_count<'e, 'c : 'e, E>(
         WHERE token = ?
         LIMIT 1
         "#,
-        args.usage_count,
-        args.model_weight_token,
-    ).execute(args.mysql_executor).await?;
+    args.usage_count,
+    args.model_weight_token,
+  )
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(())
 }

@@ -16,20 +16,7 @@ struct BackendSpec {
   port: u16,
 }
 
-const BACKENDS: [BackendSpec; 2] = [
-  BackendSpec {
-    label: "MediaCrawler",
-    directory: "media-crawler",
-    executable: "media-crawler-server.exe",
-    port: 8080,
-  },
-  BackendSpec {
-    label: "OpenMontage",
-    directory: "openmontage",
-    executable: "openmontage-server.exe",
-    port: 4750,
-  },
-];
+const BACKENDS: [BackendSpec; 2] = [BackendSpec { label: "MediaCrawler", directory: "media-crawler", executable: "media-crawler-server.exe", port: 8080 }, BackendSpec { label: "OpenMontage", directory: "openmontage", executable: "openmontage-server.exe", port: 4750 }];
 
 pub struct AuxiliaryBackendProcesses {
   children: Mutex<Vec<Child>>,
@@ -67,48 +54,22 @@ fn resolve_sidecar(app: &AppHandle, spec: &BackendSpec) -> Option<PathBuf> {
   if let Ok(executable) = std::env::current_exe() {
     if let Some(directory) = executable.parent() {
       push_unique(&mut candidates, directory.join(spec.executable));
-      push_unique(
-        &mut candidates,
-        directory.join(spec.directory).join(spec.executable),
-      );
-      push_unique(
-        &mut candidates,
-        directory
-          .join("resources")
-          .join(spec.directory)
-          .join(spec.executable),
-      );
+      push_unique(&mut candidates, directory.join(spec.directory).join(spec.executable));
+      push_unique(&mut candidates, directory.join("resources").join(spec.directory).join(spec.executable));
     }
   }
 
   if let Ok(resources) = app.path().resource_dir() {
-    push_unique(
-      &mut candidates,
-      resources.join(spec.directory).join(spec.executable),
-    );
-    push_unique(
-      &mut candidates,
-      resources
-        .join("resources")
-        .join(spec.directory)
-        .join(spec.executable),
-    );
+    push_unique(&mut candidates, resources.join(spec.directory).join(spec.executable));
+    push_unique(&mut candidates, resources.join("resources").join(spec.directory).join(spec.executable));
   }
 
   candidates.into_iter().find(|candidate| candidate.is_file())
 }
 
-fn spawn_sidecar(
-  executable: &Path,
-  spec: &BackendSpec,
-  runtime_root: &Path,
-) -> Result<Child, String> {
+fn spawn_sidecar(executable: &Path, spec: &BackendSpec, runtime_root: &Path) -> Result<Child, String> {
   let mut command = Command::new(executable);
-  command
-    .current_dir(runtime_root)
-    .stdin(Stdio::null())
-    .stdout(Stdio::null())
-    .stderr(Stdio::null());
+  command.current_dir(runtime_root).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
 
   match spec.label {
     "MediaCrawler" => {
@@ -120,25 +81,20 @@ fn spawn_sidecar(
           command.env("PLAYWRIGHT_BROWSERS_PATH", browsers);
         }
       }
-    }
+    },
     "OpenMontage" => {
       command.env("OPENMONTAGE_PROJECTS_DIR", runtime_root.join("projects"));
       command.env("BACKLOT_PORT", spec.port.to_string());
-    }
-    _ => {}
+    },
+    _ => {},
   }
 
-  command
-    .spawn()
-    .map_err(|error| format!("Failed to start {}: {error}", spec.label))
+  command.spawn().map_err(|error| format!("Failed to start {}: {error}", spec.label))
 }
 
 /// Starts packaged sidecars when present. Missing sidecars never crash Artcraft.
 pub fn spawn_auxiliary_backends(app: &AppHandle) {
-  let app_data = app
-    .path()
-    .app_data_dir()
-    .unwrap_or_else(|_| std::env::temp_dir().join("ArtCraft"));
+  let app_data = app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("ArtCraft"));
   let mut children = Vec::new();
 
   for spec in &BACKENDS {
@@ -148,40 +104,24 @@ pub fn spawn_auxiliary_backends(app: &AppHandle) {
     }
 
     let Some(sidecar) = resolve_sidecar(app, spec) else {
-      info!(
-        "{} sidecar not found; skipping packaged auto-start",
-        spec.label
-      );
+      info!("{} sidecar not found; skipping packaged auto-start", spec.label);
       continue;
     };
 
     let runtime_root = app_data.join(spec.directory);
     if let Err(error) = std::fs::create_dir_all(&runtime_root) {
-      warn!(
-        "Cannot create {} runtime directory {}: {}",
-        spec.label,
-        runtime_root.display(),
-        error
-      );
+      warn!("Cannot create {} runtime directory {}: {}", spec.label, runtime_root.display(), error);
       continue;
     }
 
     match spawn_sidecar(&sidecar, spec, &runtime_root) {
       Ok(child) => {
-        info!(
-          "Started {} sidecar {} (pid={}, port={})",
-          spec.label,
-          sidecar.display(),
-          child.id(),
-          spec.port
-        );
+        info!("Started {} sidecar {} (pid={}, port={})", spec.label, sidecar.display(), child.id(), spec.port);
         children.push(child);
-      }
+      },
       Err(error) => warn!("{error}"),
     }
   }
 
-  app.manage(AuxiliaryBackendProcesses {
-    children: Mutex::new(children),
-  });
+  app.manage(AuxiliaryBackendProcesses { children: Mutex::new(children) });
 }

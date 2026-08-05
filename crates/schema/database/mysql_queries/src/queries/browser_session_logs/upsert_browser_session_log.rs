@@ -20,20 +20,16 @@ pub struct UpsertBrowserSessionLogArgs<'a> {
 }
 
 pub async fn upsert_browser_session_log<'a>(args: UpsertBrowserSessionLogArgs<'a>) -> AnyhowResult<BrowserSessionLogToken> {
+  let token = args.maybe_log_token.map(|token| token.clone()).unwrap_or_else(|| BrowserSessionLogToken::generate());
 
-  let token = args.maybe_log_token
-      .map(|token| token.clone())
-      .unwrap_or_else(|| BrowserSessionLogToken::generate());
-
-  let maybe_last_action = args.maybe_last_action
-      .map(|action| {
-        let mut action = action.trim().to_string();
-        action.truncate(32); // NB: Field is 32 wide.
-        action
-      });
+  let maybe_last_action = args.maybe_last_action.map(|action| {
+    let mut action = action.trim().to_string();
+    action.truncate(32); // NB: Field is 32 wide.
+    action
+  });
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO browser_session_logs
 SET
   token = ?,
@@ -46,15 +42,15 @@ ON DUPLICATE KEY UPDATE
   update_count = update_count + 1,
   maybe_last_updated_at = NOW()
         "#,
-      token.as_str(),
-      args.ip_address,
-      args.maybe_user_token.map(|t| t.as_str()),
-      args.maybe_visitor_token.map(|t| t.as_str()),
-      maybe_last_action.as_deref(),
-      maybe_last_action.as_deref(),
-    )
-      .execute(args.mysql_pool)
-      .await;
+    token.as_str(),
+    args.ip_address,
+    args.maybe_user_token.map(|t| t.as_str()),
+    args.maybe_visitor_token.map(|t| t.as_str()),
+    maybe_last_action.as_deref(),
+    maybe_last_action.as_deref(),
+  )
+  .execute(args.mysql_pool)
+  .await;
 
   match query_result {
     Ok(_) => Ok(token),

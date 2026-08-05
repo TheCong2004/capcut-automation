@@ -21,25 +21,21 @@ use crate::queries::generic_inference::web::job_status::{GenericInferenceJobStat
 
 /// Look up job status.
 /// Returns Ok(None) when the record cannot be found.
-pub async fn get_inference_job_status(job_token: &InferenceJobToken, mysql_pool: &MySqlPool)
-  -> AnyhowResult<Option<GenericInferenceJobStatus>>
-{
+pub async fn get_inference_job_status(job_token: &InferenceJobToken, mysql_pool: &MySqlPool) -> AnyhowResult<Option<GenericInferenceJobStatus>> {
   let mut connection = mysql_pool.acquire().await?;
   get_inference_job_status_from_connection(job_token, &mut connection).await
 }
 
 /// Look up job status.
 /// Returns Ok(None) when the record cannot be found.
-pub async fn get_inference_job_status_from_connection(job_token: &InferenceJobToken, mysql_connection: &mut PoolConnection<MySql>)
-  -> AnyhowResult<Option<GenericInferenceJobStatus>>
-{
+pub async fn get_inference_job_status_from_connection(job_token: &InferenceJobToken, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<GenericInferenceJobStatus>> {
   // NB(bt): jobs.uuid_idempotency_token is the current way to reconstruct the hash of the
   // TTS result since we don't store a bucket hash on the table. This is an ugly hack :(
   // TODO(bt,2023-10-12): ^^^ Is this comment still accurate? I don't see that field referenced below.
 
   let maybe_status = sqlx::query_as!(
-      RawGenericInferenceJobStatus,
-        r#"
+    RawGenericInferenceJobStatus,
+    r#"
 SELECT
     jobs.token as `job_token: tokens::tokens::generic_inference_jobs::InferenceJobToken`,
 
@@ -101,10 +97,10 @@ LEFT OUTER JOIN media_files ON jobs.on_success_result_entity_token = media_files
 
 WHERE jobs.token = ?
         "#,
-      job_token
-    )
-      .fetch_one(&mut **mysql_connection)
-      .await;
+    job_token
+  )
+  .fetch_one(&mut **mysql_connection)
+  .await;
 
   let record = match maybe_status {
     Ok(record) => record,
@@ -113,8 +109,8 @@ WHERE jobs.token = ?
       _ => {
         warn!("error querying job record: {:?}", err);
         return Err(anyhow!("error querying job record: {:?}", err));
-      }
-    }
+      },
+    },
   };
 
   Ok(Some(raw_record_to_public_result(record)))
@@ -136,8 +132,8 @@ fn raw_record_to_public_result(record: RawGenericInferenceJobStatus) -> GenericI
   match maybe_args {
     Some(PolymorphicInferenceArgs::Cu(workflow_args)) => {
       maybe_style_name = workflow_args.style_name;
-    }
-    _ => {}
+    },
+    _ => {},
   }
 
   let mut maybe_model_title = None;
@@ -200,33 +196,11 @@ fn raw_record_to_public_result(record: RawGenericInferenceJobStatus) -> GenericI
     Some("media_file") => {
       bucket_path_is_hash = true;
       maybe_public_bucket_hash = record.maybe_media_file_public_bucket_directory_hash.as_deref();
-    }
-    _ => {}
+    },
+    _ => {},
   }
 
-  let maybe_result_details = record
-      .maybe_result_entity_type
-      .as_deref()
-      .and_then(|entity_type| {
-        record.maybe_result_entity_token
-            .as_deref()
-            .and_then(|entity_token| {
-              maybe_public_bucket_hash.map(|public_bucket_hash| {
-                ResultDetails {
-                  entity_type: entity_type.to_string(),
-                  entity_token: entity_token.to_string(),
-                  maybe_batch_token: record.maybe_result_batch_token
-                      .as_ref()
-                      .map(|token| BatchGenerationToken::new_from_str(token)),
-                  public_bucket_location_or_hash: public_bucket_hash.to_string(),
-                  maybe_media_file_public_bucket_prefix: record.maybe_media_file_public_bucket_prefix.clone(),
-                  maybe_media_file_public_bucket_extension: record.maybe_media_file_public_bucket_extension.clone(),
-                  public_bucket_location_is_hash: bucket_path_is_hash,
-                  maybe_successfully_completed_at: record.maybe_successfully_completed_at,
-                }
-              })
-            })
-      });
+  let maybe_result_details = record.maybe_result_entity_type.as_deref().and_then(|entity_type| record.maybe_result_entity_token.as_deref().and_then(|entity_token| maybe_public_bucket_hash.map(|public_bucket_hash| ResultDetails { entity_type: entity_type.to_string(), entity_token: entity_token.to_string(), maybe_batch_token: record.maybe_result_batch_token.as_ref().map(|token| BatchGenerationToken::new_from_str(token)), public_bucket_location_or_hash: public_bucket_hash.to_string(), maybe_media_file_public_bucket_prefix: record.maybe_media_file_public_bucket_prefix.clone(), maybe_media_file_public_bucket_extension: record.maybe_media_file_public_bucket_extension.clone(), public_bucket_location_is_hash: bucket_path_is_hash, maybe_successfully_completed_at: record.maybe_successfully_completed_at })));
 
   GenericInferenceJobStatus {
     job_token: record.job_token,
@@ -237,23 +211,9 @@ fn raw_record_to_public_result(record: RawGenericInferenceJobStatus) -> GenericI
     maybe_first_started_at: record.maybe_first_started_at,
     maybe_frontend_failure_category: record.maybe_frontend_failure_category,
     failure_reason: record.failure_reason,
-    request_details: RequestDetails {
-      maybe_product_category: record.product_category,
-      inference_category: record.inference_category,
-      maybe_model_type: record.maybe_model_type,
-      maybe_model_token: record.maybe_model_token,
-      maybe_model_title: maybe_model_title.map(|title| title.to_string()),
-      maybe_raw_inference_text: record.maybe_raw_inference_text,
-      maybe_inference_args: record.maybe_inference_args,
-      maybe_prompt_token: record.maybe_prompt_token,
-      maybe_style_name,
-    },
+    request_details: RequestDetails { maybe_product_category: record.product_category, inference_category: record.inference_category, maybe_model_type: record.maybe_model_type, maybe_model_token: record.maybe_model_token, maybe_model_title: maybe_model_title.map(|title| title.to_string()), maybe_raw_inference_text: record.maybe_raw_inference_text, maybe_inference_args: record.maybe_inference_args, maybe_prompt_token: record.maybe_prompt_token, maybe_style_name },
     maybe_result_details,
-    user_details: UserDetails {
-      maybe_creator_user_token: record.maybe_creator_user_token,
-      maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-      creator_ip_address: record.creator_ip_address,
-    },
+    user_details: UserDetails { maybe_creator_user_token: record.maybe_creator_user_token, maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token, creator_ip_address: record.creator_ip_address },
     is_keepalive_required: i8_to_bool(record.is_keepalive_required),
     created_at: record.created_at,
     updated_at: record.updated_at,
@@ -288,8 +248,8 @@ struct RawGenericInferenceJobStatus {
   pub maybe_tts_model_title: Option<String>,
   pub maybe_voice_conversion_model_title: Option<String>,
 
-  pub maybe_voice_conversion_public_bucket_hash: Option<String>, // NB: This is the bucket hash.
-  pub maybe_tts_public_bucket_path: Option<String>, // NB: This isn't the bucket path, but the whole hash.
+  pub maybe_voice_conversion_public_bucket_hash: Option<String>,     // NB: This is the bucket hash.
+  pub maybe_tts_public_bucket_path: Option<String>,                  // NB: This isn't the bucket path, but the whole hash.
   pub maybe_media_file_public_bucket_directory_hash: Option<String>, // NB: This is the bucket directory hash
   pub maybe_media_file_public_bucket_prefix: Option<String>,
   pub maybe_media_file_public_bucket_extension: Option<String>,
@@ -323,7 +283,7 @@ mod tests {
   fn text_to_speech_as_media_file() {
     // NB(bt,2023-12-06): After tts migration to media files, these are the results the job system will return
     let record = RawGenericInferenceJobStatus {
-      inference_category:  InferenceCategory::TextToSpeech,
+      inference_category: InferenceCategory::TextToSpeech,
       maybe_result_entity_type: Some("media_file".to_string()), // NB: Media file record
       maybe_result_entity_token: Some("m_00af018cy75pxytpb8wbdx9jqgtp0p".to_string()),
       maybe_media_file_public_bucket_directory_hash: Some("3vb91yq71z5zne56saazn4qntt52yter".to_string()), // NB: Media file
@@ -349,11 +309,11 @@ mod tests {
   fn text_to_speech_as_tts_result() {
     // NB(bt,2023-12-06): Prior to tts migration to media files, these are the results the job system will return
     let record = RawGenericInferenceJobStatus {
-      inference_category:  InferenceCategory::TextToSpeech,
+      inference_category: InferenceCategory::TextToSpeech,
       maybe_result_entity_type: Some("text_to_speech".to_string()), // NB: TTS record
       maybe_result_entity_token: Some("TR:wefhbk4j3yc8d6zwembedbdw4ad4s".to_string()),
       maybe_tts_public_bucket_path: Some("/tts_inference_output/c/5/8/vocodes_c58aeaef-84df-4478-9e7f-c64280a852e8.wav".to_string()), // NB: tts_result!
-      maybe_media_file_public_bucket_directory_hash: None, // NB: Not a media file!
+      maybe_media_file_public_bucket_directory_hash: None,                                                                            // NB: Not a media file!
       maybe_media_file_public_bucket_prefix: None,
       maybe_media_file_public_bucket_extension: None,
       ..Default::default()

@@ -26,48 +26,26 @@ pub struct ListTtsModelsForUserSuccessResponse {
   pub models: Vec<TtsModelRecordForList>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn list_user_tts_models_handler(
-  http_request: HttpRequest,
-  path: Path<GetProfilePathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError>
-{
-  return Ok(HttpResponse::Gone()
-      .content_type(ContentType::plaintext())
-      .body("This endpoint has been removed."))
+pub async fn list_user_tts_models_handler(http_request: HttpRequest, path: Path<GetProfilePathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  return Ok(HttpResponse::Gone().content_type(ContentType::plaintext()).body("This endpoint has been removed."));
 }
 
-pub async fn original_list_user_tts_models_handler(
-  http_request: HttpRequest,
-  path: Path<GetProfilePathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError>
-{
+pub async fn original_list_user_tts_models_handler(http_request: HttpRequest, path: Path<GetProfilePathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
   info!("Fetching templates for user: {}", &path.username);
 
-  let query_results = list_tts_models(
-    &server_state.mysql_pool,
-    Some(path.username.as_ref()),
-    false
-  ).await;
+  let query_results = list_tts_models(&server_state.mysql_pool, Some(path.username.as_ref()), false).await;
 
   let models = match query_results {
     Ok(results) => results,
     Err(e) => {
       warn!("Query error: {:?}", e);
       return Err(CommonWebError::from_anyhow_error(e));
-    }
+    },
   };
 
-  let response = ListTtsModelsForUserSuccessResponse {
-    success: true,
-    models,
-  };
+  let response = ListTtsModelsForUserSuccessResponse { success: true, models };
 
-  let body = serde_json::to_string(&response)
-    .map_err(|e| CommonWebError::from_error(e))?;
+  let body = serde_json::to_string(&response).map_err(|e| CommonWebError::from_error(e))?;
 
-  Ok(HttpResponse::Ok()
-    .content_type("application/json")
-    .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

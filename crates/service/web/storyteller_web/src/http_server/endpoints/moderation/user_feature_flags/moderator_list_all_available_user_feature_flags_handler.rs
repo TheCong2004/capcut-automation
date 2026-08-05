@@ -43,23 +43,10 @@ pub struct FeatureFlagDescriptor {
     (status = 401, description = "Unauthorized"),
   ),
 )]
-pub async fn moderator_list_all_available_user_feature_flags_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ModeratorListUserFeatureFlagsResponse>, CommonWebError> {
+pub async fn moderator_list_all_available_user_feature_flags_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModeratorListUserFeatureFlagsResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
-  let feature_flags: Vec<FeatureFlagDescriptor> = UserFeatureFlag::all_variants()
-    .into_iter()
-    .map(|flag| FeatureFlagDescriptor {
-      key: flag.to_str().to_string(),
-      full_name: flag.name().to_string(),
-      description: flag.description().to_string(),
-    })
-    .collect();
+  let feature_flags: Vec<FeatureFlagDescriptor> = UserFeatureFlag::all_variants().into_iter().map(|flag| FeatureFlagDescriptor { key: flag.to_str().to_string(), full_name: flag.name().to_string(), description: flag.description().to_string() }).collect();
 
-  Ok(Json(ModeratorListUserFeatureFlagsResponse {
-    success: true,
-    feature_flags,
-  }))
+  Ok(Json(ModeratorListUserFeatureFlagsResponse { success: true, feature_flags }))
 }

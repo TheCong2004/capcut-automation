@@ -6,7 +6,7 @@ use mysql_queries::payloads::generic_inference_args::inner_payloads::workflow_pa
 use crate::http_server::endpoints::inference_job::utils::estimates::percent::percent;
 use crate::http_server::endpoints::inference_job::utils::extractors::extract_comfy_workflow_args::extract_comfy_workflow_args;
 
-const COMFY_JOB_DEFAULT_VIDEO_LENGTH_SECONDS : u64 = 3;
+const COMFY_JOB_DEFAULT_VIDEO_LENGTH_SECONDS: u64 = 3;
 
 // TODO: These numbers are made up. We should measure the average job durations.
 const COMFY_JOB_AVERAGE_EXECUTION_SECONDS_PER_SECOND: u64 = 40;
@@ -30,32 +30,25 @@ pub fn comfy_workflow_estimate(maybe_args: Option<&PolymorphicInferenceArgs>, jo
   let video_length_seconds = comfy_video_length(&args);
 
   // TODO: Better estimate
-  let mut estimated_job_duration_seconds =
-      COMFY_JOB_AVERAGE_EXECUTION_SECONDS_PER_SECOND * video_length_seconds;
+  let mut estimated_job_duration_seconds = COMFY_JOB_AVERAGE_EXECUTION_SECONDS_PER_SECOND * video_length_seconds;
 
   // TODO: Better estimate
   if args.use_face_detailer.unwrap_or(false) {
-    estimated_job_duration_seconds +=
-        video_length_seconds * COMFY_JOB_AVERAGE_FACE_DETAILER_EXECUTION_SECONDS_PER_SECOND;
+    estimated_job_duration_seconds += video_length_seconds * COMFY_JOB_AVERAGE_FACE_DETAILER_EXECUTION_SECONDS_PER_SECOND;
   }
 
   // TODO: Better estimate
   if args.lipsync_enabled.unwrap_or(false) || args.enable_lipsync.unwrap_or(false) {
-    estimated_job_duration_seconds +=
-        video_length_seconds * COMFY_JOB_AVERAGE_FACE_FUSION_EXECUTION_SECONDS_PER_SECOND;
+    estimated_job_duration_seconds += video_length_seconds * COMFY_JOB_AVERAGE_FACE_FUSION_EXECUTION_SECONDS_PER_SECOND;
   }
 
   percent(job_duration_seconds, estimated_job_duration_seconds)
 }
 
 fn comfy_video_length(args: &WorkflowArgs) -> u64 {
-  let trim_start_millis = args.trim_start_milliseconds
-      .or_else(|| args.trim_start_seconds.map(|s| s as u64 * 1_000))
-      .unwrap_or(0);
+  let trim_start_millis = args.trim_start_milliseconds.or_else(|| args.trim_start_seconds.map(|s| s as u64 * 1_000)).unwrap_or(0);
 
-  let trim_end_millis = args.trim_end_milliseconds
-      .or_else(|| args.trim_end_seconds.map(|s| s as u64 * 1_000))
-      .unwrap_or(3_000);
+  let trim_end_millis = args.trim_end_milliseconds.or_else(|| args.trim_end_seconds.map(|s| s as u64 * 1_000)).unwrap_or(3_000);
 
   let mut video_length_seconds = COMFY_JOB_DEFAULT_VIDEO_LENGTH_SECONDS;
 

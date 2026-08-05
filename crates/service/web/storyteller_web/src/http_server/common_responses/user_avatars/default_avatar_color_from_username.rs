@@ -3,10 +3,10 @@ use std::hash::{Hash, Hasher};
 
 /// The frontend folks will tell us how many colors to use.
 /// We'll return an index from [0, NUMBER_OF_COLORS) - [inclusive, exclusive)
-const NUMBER_OF_COLORS : u64 = 9;
+const NUMBER_OF_COLORS: u64 = 9;
 
 /// Not that it matters, but this perturbs the hash.
-const SALT_LIKE_OFFSET : u8 = 51;
+const SALT_LIKE_OFFSET: u8 = 51;
 
 /// We return an index instead of a color, that way the frontend can drive.
 /// The hash should be stable with respect to username.

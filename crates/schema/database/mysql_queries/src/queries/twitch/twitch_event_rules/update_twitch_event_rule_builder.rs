@@ -14,11 +14,9 @@ pub struct UpdateTwitchEventRuleBuilder {
 }
 
 impl UpdateTwitchEventRuleBuilder {
-
   pub async fn update(&self, mysql_pool: &MySqlPool) -> AnyhowResult<()> {
-
     let query = sqlx::query!(
-        r#"
+      r#"
 UPDATE twitch_event_rules
 SET
   event_match_predicate = ?,

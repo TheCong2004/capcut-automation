@@ -8,7 +8,7 @@ use crate::sessions::anonymous_visitor_tracking::avt_cookie_payload_error::AvtCo
 use crate::sessions::anonymous_visitor_tracking::avt_payload_signer::AvtPayloadSigner;
 use tokens::tokens::anonymous_visitor_tracking::AnonymousVisitorTrackingToken;
 
-const VISITOR_COOKIE_NAME : &str = "visitor";
+const VISITOR_COOKIE_NAME: &str = "visitor";
 
 /// Handle "anonymous visitor tracking" cookies.
 /// This enables us to associate results with an anonymous user for a better experience,
@@ -20,12 +20,8 @@ pub struct AvtCookieManager {
 }
 
 impl AvtCookieManager {
-
   pub fn new(cookie_domain: &str, hmac_secret: &str) -> Result<Self, AvtCookiePayloadError> {
-    Ok(Self {
-      cookie_domain: cookie_domain.to_string(),
-      payload_signer: AvtPayloadSigner::new(hmac_secret)?,
-    })
+    Ok(Self { cookie_domain: cookie_domain.to_string(), payload_signer: AvtPayloadSigner::new(hmac_secret)? })
   }
 
   pub fn make_new_cookie(&self) -> Result<Cookie, AvtCookiePayloadError> {
@@ -33,15 +29,11 @@ impl AvtCookieManager {
     self.make_new_cookie_with_apriori_token(&token)
   }
 
-  pub fn make_new_cookie_with_apriori_token(
-    &self,
-    token: &AnonymousVisitorTrackingToken,
-  ) -> Result<Cookie, AvtCookiePayloadError> {
+  pub fn make_new_cookie_with_apriori_token(&self, token: &AnonymousVisitorTrackingToken) -> Result<Cookie, AvtCookiePayloadError> {
     let payload = AvtCookiePayload::from_token(token.clone());
     let jwt_string = self.payload_signer.encode(&payload)?;
 
-    let make_secure = !self.cookie_domain.to_lowercase().contains("jungle.horse")
-        && !self.cookie_domain.to_lowercase().contains("localhost");
+    let make_secure = !self.cookie_domain.to_lowercase().contains("jungle.horse") && !self.cookie_domain.to_lowercase().contains("localhost");
 
     let same_site = if make_secure {
       SameSite::None // NB: Allow usage from other domains
@@ -68,17 +60,11 @@ impl AvtCookieManager {
     cookie
   }
 
-  pub fn decode_cookie_payload(
-    &self,
-    visitor_cookie: &Cookie,
-  ) -> Result<AvtCookiePayload, AvtCookiePayloadError> {
+  pub fn decode_cookie_payload(&self, visitor_cookie: &Cookie) -> Result<AvtCookiePayload, AvtCookiePayloadError> {
     self.payload_signer.decode(visitor_cookie.value())
   }
 
-  pub fn decode_cookie_payload_from_request(
-    &self,
-    request: &HttpRequest,
-  ) -> Result<Option<AvtCookiePayload>, AvtCookiePayloadError> {
+  pub fn decode_cookie_payload_from_request(&self, request: &HttpRequest) -> Result<Option<AvtCookiePayload>, AvtCookiePayloadError> {
     let cookie = match request.cookie(VISITOR_COOKIE_NAME) {
       None => return Ok(None),
       Some(cookie) => cookie,
@@ -93,14 +79,8 @@ impl AvtCookieManager {
     }
   }
 
-  pub fn get_avt_token_from_request(
-    &self,
-    request: &HttpRequest,
-  ) -> Option<AnonymousVisitorTrackingToken> {
-    self.decode_cookie_payload_from_request(request)
-        .ok()
-        .flatten()
-        .map(|payload| payload.avt_token)
+  pub fn get_avt_token_from_request(&self, request: &HttpRequest) -> Option<AnonymousVisitorTrackingToken> {
+    self.decode_cookie_payload_from_request(request).ok().flatten().map(|payload| payload.avt_token)
   }
 }
 
@@ -128,13 +108,9 @@ mod tests {
     let token = AnonymousVisitorTrackingToken::new_from_str("avt_ex_anonymous_visitor_tracking_token");
     let cookie = manager.make_new_cookie_with_apriori_token(&token).unwrap();
 
-    let http_request = TestRequest::default()
-        .cookie(cookie)
-        .to_http_request();
+    let http_request = TestRequest::default().cookie(cookie).to_http_request();
 
-    let decoded = manager.decode_cookie_payload_from_request(&http_request)
-        .expect("no error")
-        .expect("must exist");
+    let decoded = manager.decode_cookie_payload_from_request(&http_request).expect("no error").expect("must exist");
 
     assert_eq!(decoded.avt_token.as_str(), "avt_ex_anonymous_visitor_tracking_token");
     assert_eq!(decoded.cookie_version, 1);

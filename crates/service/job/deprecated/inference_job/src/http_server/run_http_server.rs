@@ -12,26 +12,21 @@ use jobs_common::job_stats::JobStats;
 use crate::http_server::endpoints::health_check_handler::get_health_check_handler;
 use crate::http_server::http_server_shared_state::HttpServerSharedState;
 
-const DEFAULT_BIND_ADDRESS : &str = "0.0.0.0:12345";
-const DEFAULT_NUM_WORKERS : usize = 4;
+const DEFAULT_BIND_ADDRESS: &str = "0.0.0.0:12345";
+const DEFAULT_NUM_WORKERS: usize = 4;
 
 pub struct CreateServerArgs {
   pub container_environment: ContainerEnvironment,
   pub job_stats: JobStats,
 }
 
-pub fn run_http_server(args: CreateServerArgs) -> AnyhowResult<Server>
-{
+pub fn run_http_server(args: CreateServerArgs) -> AnyhowResult<Server> {
   // HTTP server args
   let bind_address = easyenv::get_env_string_or_default("HTTP_BIND_ADDRESS", DEFAULT_BIND_ADDRESS);
   let num_workers = easyenv::get_env_num("HTTP_NUM_WORKERS", DEFAULT_NUM_WORKERS)?;
   let _hostname = args.container_environment.hostname.clone();
 
-  let server_state = HttpServerSharedState {
-    job_stats: args.job_stats.clone(),
-    consecutive_failure_unhealthy_threshold:
-      easyenv::get_env_num("CONSECUTIVE_FAILURE_UNHEALTHY_THRESHOLD", 3)?,
-  };
+  let server_state = HttpServerSharedState { job_stats: args.job_stats.clone(), consecutive_failure_unhealthy_threshold: easyenv::get_env_num("CONSECUTIVE_FAILURE_UNHEALTHY_THRESHOLD", 3)? };
 
   let server_state_arc = web::Data::new(Arc::new(server_state));
 
@@ -61,9 +56,9 @@ pub fn run_http_server(args: CreateServerArgs) -> AnyhowResult<Server>
               .route(web::head().to(|| HttpResponse::Ok()))
         )
   })
-      .bind(bind_address)?
-      .workers(num_workers)
-      .run();
+  .bind(bind_address)?
+  .workers(num_workers)
+  .run();
 
   Ok(handle)
 }

@@ -7,7 +7,7 @@ use lru_time_cache::LruCache;
 use errors::AnyhowResult;
 
 /// NB: There's only ONE ITEM of ONE TYPE in the cache. We can use a single key.
-const CACHE_KEY : &str = "ITEM";
+const CACHE_KEY: &str = "ITEM";
 
 /// Store a single payload in the cache
 /// There's only ONE ITEM of ONE TYPE in the cache.
@@ -17,21 +17,17 @@ pub struct SingleItemTtlCache<T: Clone + ?Sized> {
   cache: Arc<Mutex<LruCache<String, T>>>,
 }
 
-impl <T: Clone + ?Sized> SingleItemTtlCache<T> {
+impl<T: Clone + ?Sized> SingleItemTtlCache<T> {
   pub fn create_with_duration(time_to_live: Duration) -> Self {
     let cache = LruCache::with_expiry_duration(time_to_live);
     let cache = Arc::new(Mutex::new(cache));
-    Self {
-      cache,
-    }
+    Self { cache }
   }
 
   pub fn grab_copy_without_bump_if_unexpired(&self) -> AnyhowResult<Option<T>> {
     let maybe_copy = match self.cache.lock() {
       Err(e) => bail!("could not unlock mutex to read: {:?}", e),
-      Ok(cache) => {
-        cache.peek(CACHE_KEY).map(|inner| inner.clone())
-      },
+      Ok(cache) => cache.peek(CACHE_KEY).map(|inner| inner.clone()),
     };
     Ok(maybe_copy)
   }

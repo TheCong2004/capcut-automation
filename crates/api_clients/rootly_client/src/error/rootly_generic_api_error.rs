@@ -12,10 +12,7 @@ pub enum RootlyGenericApiError {
   UncategorizedBadResponse(String),
 
   /// An uncategorized bad HTTP response with status code and body.
-  UncategorizedBadResponseWithStatusAndBody {
-    status_code: StatusCode,
-    body: String,
-  },
+  UncategorizedBadResponseWithStatusAndBody { status_code: StatusCode, body: String },
 
   /// An uncaught error from the HTTP client.
   ReqwestError(reqwest::Error),

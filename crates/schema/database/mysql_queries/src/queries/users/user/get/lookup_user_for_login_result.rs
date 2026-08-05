@@ -37,7 +37,7 @@ pub struct UserRecordForLogin {
 }
 
 #[derive(Debug)]
-pub (crate) struct UserRecordForLoginRaw {
+pub(crate) struct UserRecordForLoginRaw {
   pub token: UserToken,
   pub username: String,
   pub display_name: String,
@@ -51,16 +51,6 @@ pub (crate) struct UserRecordForLoginRaw {
 
 impl From<UserRecordForLoginRaw> for UserRecordForLogin {
   fn from(raw: UserRecordForLoginRaw) -> Self {
-    Self {
-      token: raw.token,
-      username: raw.username,
-      display_name: raw.display_name,
-      username_is_not_customized: i8_to_bool(raw.username_is_not_customized),
-      email_address: raw.email_address,
-      password_hash: raw.password_hash,
-      password_version: raw.password_version,
-      is_banned: i8_to_bool(raw.is_banned),
-      maybe_feature_flags: raw.maybe_feature_flags,
-    }
+    Self { token: raw.token, username: raw.username, display_name: raw.display_name, username_is_not_customized: i8_to_bool(raw.username_is_not_customized), email_address: raw.email_address, password_hash: raw.password_hash, password_version: raw.password_version, is_banned: i8_to_bool(raw.is_banned), maybe_feature_flags: raw.maybe_feature_flags }
   }
 }

@@ -63,7 +63,7 @@ pub struct RequestDetailsResponse {
   pub inference_category: InferenceCategory,
 
   pub maybe_prompt_token: Option<PromptToken>,
-  
+
   pub maybe_model_type: Option<String>,
   pub maybe_model_token: Option<String>,
 
@@ -122,7 +122,7 @@ pub struct ResultDetailsResponse {
   pub entity_token: String,
 
   /// (DEPRECATED) URL path to the media file
-  #[deprecated(note="This field doesn't point to the full URL. Use media_links instead to leverage the CDN.")]
+  #[deprecated(note = "This field doesn't point to the full URL. Use media_links instead to leverage the CDN.")]
   pub maybe_public_bucket_media_path: Option<String>,
 
   /// Rich CDN links to the media, including thumbnails, previews, and more.
@@ -145,20 +145,12 @@ pub struct ResultDetailsResponse {
     (status = 500),
   ),
 )]
-pub async fn get_inference_job_status_handler(
-  http_request: HttpRequest,
-  path: Path<GetInferenceJobStatusPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<GetInferenceJobStatusSuccessResponse>, CommonWebError> {
-
+pub async fn get_inference_job_status_handler(http_request: HttpRequest, path: Path<GetInferenceJobStatusPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetInferenceJobStatusSuccessResponse>, CommonWebError> {
   // Don't serve bad traffic
   blackhole_jobs(&path.token)?;
 
   // NB: Since this is publicly exposed, we don't query sensitive data.
-  let maybe_status = get_inference_job_status(
-    &path.token,
-    &server_state.mysql_pool
-  ).await;
+  let maybe_status = get_inference_job_status(&path.token, &server_state.mysql_pool).await;
 
   let record = match maybe_status {
     Ok(Some(record)) => record,
@@ -166,19 +158,17 @@ pub async fn get_inference_job_status_handler(
     Err(err) => {
       warn!("Job query error for token {}: {:?}", path.token.as_str(), err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
-  let mut redis = server_state.redis_pool
-      .get()
-      .map_err(|e| {
-        warn!("Redis pool error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut redis = server_state.redis_pool.get().map_err(|e| {
+    warn!("Redis pool error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   // TODO(bt,2023-05-21): Make async.
   let extra_status_key = RedisKeys::generic_inference_extra_status_info(path.token.as_str());
-  let maybe_extra_status_value : RedisResult<Option<String>> = redis.get(&extra_status_key);
+  let maybe_extra_status_value: RedisResult<Option<String>> = redis.get(&extra_status_key);
 
   let maybe_extra_status_description = match maybe_extra_status_value {
     Err(e) => {
@@ -193,7 +183,7 @@ pub async fn get_inference_job_status_handler(
       },
       Some(value) => Some(value.to_string()),
       None => None,
-    }
+    },
   };
 
   if record.is_keepalive_required {
@@ -205,17 +195,9 @@ pub async fn get_inference_job_status_handler(
 
   let media_domain = get_media_domain(&http_request);
 
-  let record_for_response = record_to_payload(
-    record,
-    maybe_extra_status_description,
-    server_state.server_environment,
-    media_domain,
-  );
+  let record_for_response = record_to_payload(record, maybe_extra_status_description, server_state.server_environment, media_domain);
 
-  Ok(Json(GetInferenceJobStatusSuccessResponse {
-    success: true,
-    state: record_for_response,
-  }))
+  Ok(Json(GetInferenceJobStatusSuccessResponse { success: true, state: record_for_response }))
 }
 
 /// Reject junk job tokens that abusive or broken clients poll in high volume, before they reach
@@ -236,124 +218,60 @@ fn blackhole_jobs(token: &InferenceJobToken) -> Result<(), CommonWebError> {
   }
 }
 
-fn record_to_payload(
-  record: GenericInferenceJobStatus,
-  maybe_extra_status_description: Option<String>,
-  server_environment: ServerEnvironment,
-  media_domain: MediaDomain,
-) -> InferenceJobStatusResponsePayload {
+fn record_to_payload(record: GenericInferenceJobStatus, maybe_extra_status_description: Option<String>, server_environment: ServerEnvironment, media_domain: MediaDomain) -> InferenceJobStatusResponsePayload {
   let inference_category = record.request_details.inference_category;
 
   // NB: Fail open. We don't want to fail the request if we can't extract the args.
-  let maybe_polymorphic_args = extract_polymorphic_inference_args(&record)
-      .ok()
-      .flatten();
+  let maybe_polymorphic_args = extract_polymorphic_inference_args(&record).ok().flatten();
 
   let progress_percentage = estimate_job_progress(&record, maybe_polymorphic_args.as_ref());
 
   InferenceJobStatusResponsePayload {
     job_token: record.job_token,
-    request: RequestDetailsResponse {
-      inference_category: record.request_details.inference_category,
-      maybe_prompt_token: record.request_details.maybe_prompt_token,
-      maybe_model_type: maybe_filter_model_name(record.request_details.maybe_model_type.as_deref()),
-      maybe_model_token: record.request_details.maybe_model_token,
-      maybe_model_title: record.request_details.maybe_model_title,
-      maybe_raw_inference_text: record.request_details.maybe_raw_inference_text,
-      maybe_style_name: record.request_details.maybe_style_name,
-      maybe_live_portrait_details: maybe_polymorphic_args
-          .as_ref()
-          .and_then(|args| extract_live_portrait_details(args)),
-      maybe_lipsync_details: maybe_polymorphic_args
-          .as_ref()
-          .and_then(|args| extract_lipsync_details(args)),
-    },
-    status: StatusDetailsResponse {
-      status: record.status,
-      maybe_extra_status_description,
-      maybe_assigned_worker: maybe_filter_model_name(record.maybe_assigned_worker.as_deref()),
-      maybe_assigned_cluster: record.maybe_assigned_cluster,
-      maybe_first_started_at: record.maybe_first_started_at,
-      attempt_count: record.attempt_count as u8,
-      requires_keepalive: record.is_keepalive_required,
-      maybe_failure_category: record.maybe_frontend_failure_category,
-      progress_percentage,
-    },
+    request: RequestDetailsResponse { inference_category: record.request_details.inference_category, maybe_prompt_token: record.request_details.maybe_prompt_token, maybe_model_type: maybe_filter_model_name(record.request_details.maybe_model_type.as_deref()), maybe_model_token: record.request_details.maybe_model_token, maybe_model_title: record.request_details.maybe_model_title, maybe_raw_inference_text: record.request_details.maybe_raw_inference_text, maybe_style_name: record.request_details.maybe_style_name, maybe_live_portrait_details: maybe_polymorphic_args.as_ref().and_then(|args| extract_live_portrait_details(args)), maybe_lipsync_details: maybe_polymorphic_args.as_ref().and_then(|args| extract_lipsync_details(args)) },
+    status: StatusDetailsResponse { status: record.status, maybe_extra_status_description, maybe_assigned_worker: maybe_filter_model_name(record.maybe_assigned_worker.as_deref()), maybe_assigned_cluster: record.maybe_assigned_cluster, maybe_first_started_at: record.maybe_first_started_at, attempt_count: record.attempt_count as u8, requires_keepalive: record.is_keepalive_required, maybe_failure_category: record.maybe_frontend_failure_category, progress_percentage },
     maybe_result: record.maybe_result_details.map(|result_details| {
       // NB: Be careful here, because this varies based on the type of inference result.
       let public_bucket_media_path = match inference_category {
         // NB: TTS has to be special cased due to legacy behavior
-        InferenceCategory::TextToSpeech
-        | InferenceCategory::F5TTS => {
+        InferenceCategory::TextToSpeech | InferenceCategory::F5TTS => {
           match result_details.entity_type.as_str() {
             "media_file" => {
               // NB: We're migrating TTS to media_files.
               // Zero shot TTS uses media files.
               // Legacy TT2 uses old pathing.
-              MediaFileBucketPath::from_object_hash(
-                &result_details.public_bucket_location_or_hash,
-                result_details.maybe_media_file_public_bucket_prefix.as_deref(),
-                result_details.maybe_media_file_public_bucket_extension.as_deref())
-                  .get_full_object_path_str()
-                  .to_string()
-            }
+              MediaFileBucketPath::from_object_hash(&result_details.public_bucket_location_or_hash, result_details.maybe_media_file_public_bucket_prefix.as_deref(), result_details.maybe_media_file_public_bucket_extension.as_deref()).get_full_object_path_str().to_string()
+            },
             _ => {
               // NB: TTS results receive the legacy treatment where their table only reports the full bucket path
               result_details.public_bucket_location_or_hash
-            }
+            },
           }
-        }
+        },
         // NB: Voice conversion has to be special cased due to legacy behavior
         InferenceCategory::VoiceConversion | InferenceCategory::SeedVc => {
           match result_details.entity_type.as_str() {
             "media_file" => {
               // NB: We're migrating voice conversion to media_files.
-              MediaFileBucketPath::from_object_hash(
-                &result_details.public_bucket_location_or_hash,
-                result_details.maybe_media_file_public_bucket_prefix.as_deref(),
-                result_details.maybe_media_file_public_bucket_extension.as_deref())
-                  .get_full_object_path_str()
-                  .to_string()
-            }
+              MediaFileBucketPath::from_object_hash(&result_details.public_bucket_location_or_hash, result_details.maybe_media_file_public_bucket_prefix.as_deref(), result_details.maybe_media_file_public_bucket_extension.as_deref()).get_full_object_path_str().to_string()
+            },
             _ => {
               // NB: This is the old voice conversion result pathing.
-              VoiceConversionResultOriginalFilePath::from_object_hash(&result_details.public_bucket_location_or_hash)
-                  .get_full_object_path_str()
-                  .to_string()
-            }
+              VoiceConversionResultOriginalFilePath::from_object_hash(&result_details.public_bucket_location_or_hash).get_full_object_path_str().to_string()
+            },
           }
-        }
+        },
         // Unsupported media files.
-        InferenceCategory::FormatConversion |
-        InferenceCategory::ConvertBvhToWorkflow => {
-          "".to_string()
-        }
+        InferenceCategory::FormatConversion | InferenceCategory::ConvertBvhToWorkflow => "".to_string(),
         // Deprecated
         InferenceCategory::DeprecatedField => {
           "".to_string() // TODO(bt,2024-07-16): Read job type instead
-        }
+        },
         // The blessed path that modern media files use.
-        _ => {
-          MediaFileBucketPath::from_object_hash(
-            &result_details.public_bucket_location_or_hash,
-            result_details.maybe_media_file_public_bucket_prefix.as_deref(),
-            result_details.maybe_media_file_public_bucket_extension.as_deref())
-              .get_full_object_path_str()
-              .to_string()
-        }
+        _ => MediaFileBucketPath::from_object_hash(&result_details.public_bucket_location_or_hash, result_details.maybe_media_file_public_bucket_prefix.as_deref(), result_details.maybe_media_file_public_bucket_extension.as_deref()).get_full_object_path_str().to_string(),
       };
-     
-      ResultDetailsResponse {
-        entity_type: result_details.entity_type,
-        entity_token: result_details.entity_token,
-        media_links: MediaLinksBuilder::from_rooted_path_and_env(
-          media_domain,
-          server_environment,
-          &public_bucket_media_path
-        ),
-        maybe_public_bucket_media_path: Some(public_bucket_media_path),
-        maybe_successfully_completed_at: result_details.maybe_successfully_completed_at,
-      }
+
+      ResultDetailsResponse { entity_type: result_details.entity_type, entity_token: result_details.entity_token, media_links: MediaLinksBuilder::from_rooted_path_and_env(media_domain, server_environment, &public_bucket_media_path), maybe_public_bucket_media_path: Some(public_bucket_media_path), maybe_successfully_completed_at: result_details.maybe_successfully_completed_at }
     }),
     created_at: record.created_at,
     updated_at: record.updated_at,
@@ -371,78 +289,31 @@ mod tests {
 
   #[test]
   fn text_to_speech_as_media_file() {
-    let status = GenericInferenceJobStatus {
-      request_details: RequestDetails {
-        inference_category: InferenceCategory::TextToSpeech,
-        maybe_model_type: Some("tacotron2".to_string()),
-        ..Default::default()
-      },
-      maybe_result_details: Some(ResultDetails {
-        entity_type: "media_file".to_string(),
-        entity_token: "m_024pk3p3xrmeyk83chps90jeymnygk".to_string(),
-        public_bucket_location_or_hash: "tpk848b5s5zwhnwrph75jhyfyja3j42v".to_string(),
-        maybe_media_file_public_bucket_prefix: Some("fakeyou_".to_string()),
-        maybe_media_file_public_bucket_extension: Some(".wav".to_string()),
-        public_bucket_location_is_hash: true,
-        ..Default::default()
-      }),
-      ..Default::default()
-    };
+    let status = GenericInferenceJobStatus { request_details: RequestDetails { inference_category: InferenceCategory::TextToSpeech, maybe_model_type: Some("tacotron2".to_string()), ..Default::default() }, maybe_result_details: Some(ResultDetails { entity_type: "media_file".to_string(), entity_token: "m_024pk3p3xrmeyk83chps90jeymnygk".to_string(), public_bucket_location_or_hash: "tpk848b5s5zwhnwrph75jhyfyja3j42v".to_string(), maybe_media_file_public_bucket_prefix: Some("fakeyou_".to_string()), maybe_media_file_public_bucket_extension: Some(".wav".to_string()), public_bucket_location_is_hash: true, ..Default::default() }), ..Default::default() };
 
-    let payload =
-        record_to_payload(status, None, ServerEnvironment::Production, MediaDomain::Storyteller);
+    let payload = record_to_payload(status, None, ServerEnvironment::Production, MediaDomain::Storyteller);
 
     assert!(payload.maybe_result.is_some());
 
     let result = payload.maybe_result.expect("should have result");
 
-    assert_eq!(
-      Url::parse("https://cdn-2.fakeyou.com/media/t/p/k/8/4/tpk848b5s5zwhnwrph75jhyfyja3j42v/fakeyou_tpk848b5s5zwhnwrph75jhyfyja3j42v.wav").unwrap(),
-      result.media_links.cdn_url
-    );
+    assert_eq!(Url::parse("https://cdn-2.fakeyou.com/media/t/p/k/8/4/tpk848b5s5zwhnwrph75jhyfyja3j42v/fakeyou_tpk848b5s5zwhnwrph75jhyfyja3j42v.wav").unwrap(), result.media_links.cdn_url);
 
-    assert_eq!(
-      Some("/media/t/p/k/8/4/tpk848b5s5zwhnwrph75jhyfyja3j42v/fakeyou_tpk848b5s5zwhnwrph75jhyfyja3j42v.wav"),
-      result.maybe_public_bucket_media_path.as_deref()
-    );
+    assert_eq!(Some("/media/t/p/k/8/4/tpk848b5s5zwhnwrph75jhyfyja3j42v/fakeyou_tpk848b5s5zwhnwrph75jhyfyja3j42v.wav"), result.maybe_public_bucket_media_path.as_deref());
   }
 
   #[test]
   fn text_to_speech_as_tts_result() {
-    let status = GenericInferenceJobStatus {
-      request_details: RequestDetails {
-        inference_category: InferenceCategory::TextToSpeech,
-        maybe_model_type: Some("tacotron2".to_string()),
-        ..Default::default()
-      },
-      maybe_result_details: Some(ResultDetails {
-        entity_type: "text_to_speech".to_string(),
-        entity_token: "TR:qvgdvngw4y54t7rmfepwv8fd965eh".to_string(),
-        public_bucket_location_or_hash:
-          "/tts_inference_output/9/9/7/vocodes_997e710c-d733-406c-9b6e-5e1d0c471816.wav".to_string(),
-        maybe_media_file_public_bucket_prefix: None,
-        maybe_media_file_public_bucket_extension: None,
-        public_bucket_location_is_hash: false,
-        ..Default::default()
-      }),
-      ..Default::default()
-    };
+    let status = GenericInferenceJobStatus { request_details: RequestDetails { inference_category: InferenceCategory::TextToSpeech, maybe_model_type: Some("tacotron2".to_string()), ..Default::default() }, maybe_result_details: Some(ResultDetails { entity_type: "text_to_speech".to_string(), entity_token: "TR:qvgdvngw4y54t7rmfepwv8fd965eh".to_string(), public_bucket_location_or_hash: "/tts_inference_output/9/9/7/vocodes_997e710c-d733-406c-9b6e-5e1d0c471816.wav".to_string(), maybe_media_file_public_bucket_prefix: None, maybe_media_file_public_bucket_extension: None, public_bucket_location_is_hash: false, ..Default::default() }), ..Default::default() };
 
-    let payload =
-        record_to_payload(status, None, ServerEnvironment::Production, MediaDomain::FakeYou);
+    let payload = record_to_payload(status, None, ServerEnvironment::Production, MediaDomain::FakeYou);
 
     assert!(payload.maybe_result.is_some());
 
     let result = payload.maybe_result.expect("should have result");
 
-    assert_eq!(
-      Url::parse("https://cdn-2.fakeyou.com/tts_inference_output/9/9/7/vocodes_997e710c-d733-406c-9b6e-5e1d0c471816.wav").unwrap(),
-      result.media_links.cdn_url
-    );
+    assert_eq!(Url::parse("https://cdn-2.fakeyou.com/tts_inference_output/9/9/7/vocodes_997e710c-d733-406c-9b6e-5e1d0c471816.wav").unwrap(), result.media_links.cdn_url);
 
-    assert_eq!(
-      Some("/tts_inference_output/9/9/7/vocodes_997e710c-d733-406c-9b6e-5e1d0c471816.wav"),
-      result.maybe_public_bucket_media_path.as_deref(),
-    );
+    assert_eq!(Some("/tts_inference_output/9/9/7/vocodes_997e710c-d733-406c-9b6e-5e1d0c471816.wav"), result.maybe_public_bucket_media_path.as_deref(),);
   }
 }

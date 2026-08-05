@@ -7,5 +7,5 @@ pub struct TTSArgs {
 
   #[serde(rename = "dt")]
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub dataset_token: Option<String>
+  pub dataset_token: Option<String>,
 }

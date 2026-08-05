@@ -20,8 +20,8 @@ pub struct IpBanRecord {
 pub async fn get_ip_ban(ip_address: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<IpBanRecord>> {
   // NB: Lookup failure is Err(RowNotFound).
   let maybe_result = sqlx::query_as!(
-      IpBanRecord,
-        r#"
+    IpBanRecord,
+    r#"
 SELECT
     ip_bans.ip_address,
 
@@ -45,16 +45,16 @@ WHERE
     ip_bans.ip_address = ?
 LIMIT 1
         "#,
-      ip_address
-    )
-      .fetch_one(mysql_pool)
-      .await;
+    ip_address
+  )
+  .fetch_one(mysql_pool)
+  .await;
 
   match maybe_result {
     Ok(result) => Ok(Some(result)),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(None),
       _ => Err(anyhow!("Error querying for IP ban: {:?}", err)),
-    }
+    },
   }
 }

@@ -51,26 +51,18 @@ pub struct KillInferenceJobsResponse {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn kill_generic_inference_jobs_handler(
-  http_request: HttpRequest,
-  request: Json<KillInferenceJobsRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<KillInferenceJobsResponse>, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn kill_generic_inference_jobs_handler(http_request: HttpRequest, request: Json<KillInferenceJobsRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<KillInferenceJobsResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: We don't have a permission for this, so use this as a proxy permission
@@ -79,13 +71,15 @@ pub async fn kill_generic_inference_jobs_handler(
     return Err(CommonWebError::NotAuthorized);
   }
 
-  let job_statuses = request.job_statuses.iter()
-      .map(|status| match status {
-        KillableStatus::Failed => kill_generic_inference_jobs::KillableStatus::Failed,
-        KillableStatus::Pending => kill_generic_inference_jobs::KillableStatus::Pending,
-        KillableStatus::Started => kill_generic_inference_jobs::KillableStatus::Started,
-      })
-      .collect::<HashSet<_>>();
+  let job_statuses = request
+    .job_statuses
+    .iter()
+    .map(|status| match status {
+      KillableStatus::Failed => kill_generic_inference_jobs::KillableStatus::Failed,
+      KillableStatus::Pending => kill_generic_inference_jobs::KillableStatus::Pending,
+      KillableStatus::Started => kill_generic_inference_jobs::KillableStatus::Started,
+    })
+    .collect::<HashSet<_>>();
 
   let target = match request.target {
     KillableTarget::AllJobs => kill_generic_inference_jobs::KillableTarget::AllJobs,
@@ -93,19 +87,12 @@ pub async fn kill_generic_inference_jobs_handler(
     KillableTarget::ModelType(model_type) => kill_generic_inference_jobs::KillableTarget::ModelType(model_type),
   };
 
-  kill_generic_inference_jobs(KillGenericInferenceJobsArgs {
-    job_statuses,
-    target,
-    maybe_priority_or_lower: request.maybe_priority_or_lower,
-    mysql_pool: &server_state.mysql_pool,
-  }).await.map_err(|err| {
+  kill_generic_inference_jobs(KillGenericInferenceJobsArgs { job_statuses, target, maybe_priority_or_lower: request.maybe_priority_or_lower, mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
     warn!("Query Error: {:?}", err);
     CommonWebError::from_anyhow_error(err)
   })?;
 
-  let response = KillInferenceJobsResponse {
-    success: true,
-  };
+  let response = KillInferenceJobsResponse { success: true };
 
   Ok(Json(response))
 }

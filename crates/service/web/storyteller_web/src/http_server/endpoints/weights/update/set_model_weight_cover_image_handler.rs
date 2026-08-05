@@ -52,38 +52,25 @@ pub struct SetModelWeightCoverImagePathInfo {
     ("path" = SetModelWeightCoverImagePathInfo, description = "Path for Request")
   )
 )]
-pub async fn set_model_weight_cover_image_handler(
-  http_request: HttpRequest,
-  path: Path<SetModelWeightCoverImagePathInfo>,
-  request: Json<SetModelWeightCoverImageRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<SetModelWeightCoverImageResponse>, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn set_model_weight_cover_image_handler(http_request: HttpRequest, path: Path<SetModelWeightCoverImagePathInfo>, request: Json<SetModelWeightCoverImageRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SetModelWeightCoverImageResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   let media_file_token = path.token.clone();
 
   let is_mod = user_session.can_ban_users;
 
-  let model_weight_lookup_result = get_weight_by_token(
-    &path.token,
-    is_mod,
-    &server_state.mysql_pool,
-  ).await;
+  let model_weight_lookup_result = get_weight_by_token(&path.token, is_mod, &server_state.mysql_pool).await;
 
   let model_weight = match model_weight_lookup_result {
     Ok(Some(model_weight)) => model_weight,
@@ -94,7 +81,7 @@ pub async fn set_model_weight_cover_image_handler(
     Err(err) => {
       warn!("Error looking up model_weights : {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   let is_creator = model_weight.creator_user_token.as_str() == user_session.user_token.as_str();
@@ -106,18 +93,11 @@ pub async fn set_model_weight_cover_image_handler(
 
   let mut maybe_set_media_file_token = None;
 
-  let delete_cover_image = request.cover_image_media_file_token
-      .as_ref()
-      .map(|token| token.as_str().trim().is_empty())
-      .unwrap_or(true);
+  let delete_cover_image = request.cover_image_media_file_token.as_ref().map(|token| token.as_str().trim().is_empty()).unwrap_or(true);
 
   if !delete_cover_image {
     if let Some(media_file_token) = &request.cover_image_media_file_token {
-      let media_file_lookup_result = get_media_file(
-        &media_file_token,
-        false,
-        &server_state.mysql_pool,
-      ).await;
+      let media_file_lookup_result = get_media_file(&media_file_token, false, &server_state.mysql_pool).await;
 
       let media_file = match media_file_lookup_result {
         Ok(Some(media_file)) => media_file,
@@ -128,7 +108,7 @@ pub async fn set_model_weight_cover_image_handler(
         Err(err) => {
           warn!("Error looking up model_weights : {:?}", err);
           return Err(CommonWebError::from_anyhow_error(err));
-        }
+        },
       };
 
       //let can_use_image = media_file.creator_set_visibility == Visibility::Public
@@ -147,18 +127,14 @@ pub async fn set_model_weight_cover_image_handler(
   // TODO(bt,2023-12-21): DB needs a column, or we need an ip audit log
   let _ip_address = get_request_ip(&http_request);
 
-  let query_result = set_model_weight_cover_image(UpdateArgs {
-    model_weight_token: &path.token,
-    maybe_cover_image_media_file_token: maybe_set_media_file_token.as_ref(),
-    mysql_pool: &server_state.mysql_pool,
-  }).await;
+  let query_result = set_model_weight_cover_image(UpdateArgs { model_weight_token: &path.token, maybe_cover_image_media_file_token: maybe_set_media_file_token.as_ref(), mysql_pool: &server_state.mysql_pool }).await;
 
   match query_result {
     Ok(_) => {},
     Err(err) => {
       warn!("Update MediaFile DB error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   Ok(Json(SetModelWeightCoverImageResponse { success: true }))

@@ -23,7 +23,6 @@ pub struct SubscriptionAndProduct {
   pub maybe_user_token: Option<UserToken>,
 
   // Stripe foreign keys
-
   pub stripe_subscription_id: String,
   pub stripe_product_id: String,
   pub stripe_customer_id: String,
@@ -63,39 +62,25 @@ pub struct SubscriptionAndProduct {
   pub maybe_canceled_at: Option<NaiveDateTime>,
 }
 
-pub async fn stripe_lookup_subscription_from_subscription_id(
-  subscription_id: &str,
-  stripe_client: &Client
-) -> anyhow::Result<SubscriptionAndProduct> {
-
-  let subscription = RetrieveSubscription::new(subscription_id)
-      .build()
-      .customize::<Subscription>()
-      .request_strategy(STRIPE_CLIENT_RETRY_STRATEGY)
-      .send(stripe_client)
-      .await
-      .map_err(|err| {
-        error!("Stripe Error looking up subscription for subscription id{}: {:?}", &subscription_id, err);
-        err
-      })?;
+pub async fn stripe_lookup_subscription_from_subscription_id(subscription_id: &str, stripe_client: &Client) -> anyhow::Result<SubscriptionAndProduct> {
+  let subscription = RetrieveSubscription::new(subscription_id).build().customize::<Subscription>().request_strategy(STRIPE_CLIENT_RETRY_STRATEGY).send(stripe_client).await.map_err(|err| {
+    error!("Stripe Error looking up subscription for subscription id{}: {:?}", &subscription_id, err);
+    err
+  })?;
 
   if subscription.items.data.len() != 1 {
     warn!("Unexpected number of line items: {} for subscription {}", subscription.items.data.len(), subscription_id);
   }
 
-  let line_item = subscription
-      .items
-      .data
-      .get(0)
-      .ok_or_else(|| anyhow::anyhow!("No line items found in subscription."))?;
+  let line_item = subscription.items.data.get(0).ok_or_else(|| anyhow::anyhow!("No line items found in subscription."))?;
 
   let subscription_item_id = line_item.id.to_string();
-  
+
   let price = &line_item.price;
 
   match price.type_ {
-    PriceType::OneTime => {}
-    PriceType::Recurring => {}
+    PriceType::OneTime => {},
+    PriceType::Recurring => {},
   }
 
   let price_id = price.id.to_string();
@@ -121,23 +106,5 @@ pub async fn stripe_lookup_subscription_from_subscription_id(
 
   //let quantity = line_item.quantity.unwrap_or(1);
 
-  Ok(SubscriptionAndProduct {
-    stripe_subscription_id: subscription_id.to_string(),
-    stripe_subscription_item_id: subscription_item_id,
-    stripe_product_id: product_id,
-    stripe_customer_id: customer_id,
-    stripe_price_id: price_id,
-    stripe_is_production: subscription.livemode,
-    stripe_subscription_status: subscription_status_to_reusable_type(subscription.status),
-    maybe_user_token,
-    subscription_is_active: subscription.status == SubscriptionStatus::Active,
-    subscription_interval: recurring_interval_to_reusable_type(recurring.interval),
-    subscription_start_date: start_date,
-    current_billing_period_start: period_start,
-    current_billing_period_end: period_end,
-    stripe_billing_cycle_anchor,
-    maybe_cancel_at,
-    maybe_canceled_at,
-    cancel_at_period_end: false,
-  })
+  Ok(SubscriptionAndProduct { stripe_subscription_id: subscription_id.to_string(), stripe_subscription_item_id: subscription_item_id, stripe_product_id: product_id, stripe_customer_id: customer_id, stripe_price_id: price_id, stripe_is_production: subscription.livemode, stripe_subscription_status: subscription_status_to_reusable_type(subscription.status), maybe_user_token, subscription_is_active: subscription.status == SubscriptionStatus::Active, subscription_interval: recurring_interval_to_reusable_type(recurring.interval), subscription_start_date: start_date, current_billing_period_start: period_start, current_billing_period_end: period_end, stripe_billing_cycle_anchor, maybe_cancel_at, maybe_canceled_at, cancel_at_period_end: false })
 }

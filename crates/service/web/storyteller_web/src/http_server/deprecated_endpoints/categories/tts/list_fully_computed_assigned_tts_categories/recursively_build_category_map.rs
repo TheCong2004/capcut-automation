@@ -12,9 +12,7 @@ use crate::http_server::deprecated_endpoints::categories::tts::list_fully_comput
 fn recursive_category_tokens(model_category_map: &ModelTokenToCategoryTokensMap, all_categories: &Vec<CategoryInfoLite>) -> BTreeSet<ModelCategoryToken> {
   let mut category_tokens = leaf_category_tokens(model_category_map);
 
-  let all_categories_by_token = all_categories.iter()
-      .map(|cat| (cat.category_token.clone(), cat.clone()))
-      .collect::<HashMap<ModelCategoryToken, CategoryInfoLite>>();
+  let all_categories_by_token = all_categories.iter().map(|cat| (cat.category_token.clone(), cat.clone())).collect::<HashMap<ModelCategoryToken, CategoryInfoLite>>();
 
   let mut last_size = 0;
 
@@ -25,8 +23,7 @@ fn recursive_category_tokens(model_category_map: &ModelTokenToCategoryTokensMap,
     let mut new_category_tokens = HashSet::new();
 
     for category_token in category_tokens.iter() {
-      let maybe_parent_category_token= all_categories_by_token.get(category_token)
-          .and_then(|category| category.maybe_parent_category_token.as_ref());
+      let maybe_parent_category_token = all_categories_by_token.get(category_token).and_then(|category| category.maybe_parent_category_token.as_ref());
 
       let parent_category_token = match maybe_parent_category_token {
         Some(parent_category_token) => parent_category_token,
@@ -47,15 +44,11 @@ fn recursive_category_tokens(model_category_map: &ModelTokenToCategoryTokensMap,
 }
 
 fn leaf_category_tokens(model_category_map: &ModelTokenToCategoryTokensMap) -> BTreeSet<ModelCategoryToken> {
-  model_category_map
-      .values()
-      .flatten()
-      .map(|category_token| category_token.clone())
-      .collect::<BTreeSet<ModelCategoryToken>>()
+  model_category_map.values().flatten().map(|category_token| category_token.clone()).collect::<BTreeSet<ModelCategoryToken>>()
 }
 
 fn leaf_category_to_model_map(model_category_map: &ModelTokenToCategoryTokensMap) -> CategoryTokenToModelTokensMap {
-  let mut category_token_to_model_tokens : CategoryTokenToModelTokensMap = BTreeMap::new();
+  let mut category_token_to_model_tokens: CategoryTokenToModelTokensMap = BTreeMap::new();
 
   for (model_token, category_tokens) in model_category_map.iter() {
     for category_token in category_tokens {
@@ -73,25 +66,20 @@ fn leaf_category_to_model_map(model_category_map: &ModelTokenToCategoryTokensMap
 }
 
 pub fn recursive_category_to_model_map(model_category_map: &ModelTokenToCategoryTokensMap, all_categories: &Vec<CategoryInfoLite>) -> CategoryTokenToModelTokensMap {
-  let category_token_to_category_map = all_categories.iter()
-      .map(|category| {
-        (category.category_token.clone(), category.clone())
-      })
-      .collect::<HashMap<ModelCategoryToken, CategoryInfoLite>>();
+  let category_token_to_category_map = all_categories.iter().map(|category| (category.category_token.clone(), category.clone())).collect::<HashMap<ModelCategoryToken, CategoryInfoLite>>();
 
-//  // Build a map of category => all ancestor categories.
-//  let category_token_to_all_category_parent_tokens_map = all_categories.iter()
-//      .map(|category| {
-//        let category_token = category.category_token.clone();
-//        let parent_category_tokens = find_category_ancestors(&category_token, &category_token_to_category_map);
-//        (category_token, parent_category_tokens)
-//      })
-//      .collect::<HashMap<ModelCategoryToken, HashSet<ModelCategoryToken>>>();
+  //  // Build a map of category => all ancestor categories.
+  //  let category_token_to_all_category_parent_tokens_map = all_categories.iter()
+  //      .map(|category| {
+  //        let category_token = category.category_token.clone();
+  //        let parent_category_tokens = find_category_ancestors(&category_token, &category_token_to_category_map);
+  //        (category_token, parent_category_tokens)
+  //      })
+  //      .collect::<HashMap<ModelCategoryToken, HashSet<ModelCategoryToken>>>();
 
   let mut category_token_to_model_tokens = BTreeMap::new();
 
   for (model_token, model_category_tokens) in model_category_map.iter() {
-
     for direct_category_token in model_category_tokens {
       // FIXME(bt, 2023-01-13): Cleanup overly verbose implementation
 
@@ -99,7 +87,6 @@ pub fn recursive_category_to_model_map(model_category_map: &ModelTokenToCategory
       all_ancestor_categories.insert(direct_category_token.clone());
 
       for category_token in all_ancestor_categories.iter() {
-
         if !category_token_to_model_tokens.contains_key(category_token) {
           category_token_to_model_tokens.insert(category_token.clone(), BTreeSet::new());
         }
@@ -117,22 +104,17 @@ fn find_category_ancestors(category_token: &ModelCategoryToken, token_to_categor
   recursively_find_category_ancestors(category_token, token_to_category_map)
 }
 
-fn recursively_find_category_ancestors(
-  category_token: &ModelCategoryToken,
-  token_to_category_map: &CategoryTokenToCategoryMap,
-) -> HashSet<ModelCategoryToken> {
+fn recursively_find_category_ancestors(category_token: &ModelCategoryToken, token_to_category_map: &CategoryTokenToCategoryMap) -> HashSet<ModelCategoryToken> {
   match token_to_category_map.get(category_token) {
     None => HashSet::new(),
-    Some(category) => {
-      match category.maybe_parent_category_token {
-        None => HashSet::from([category.category_token.clone()]),
-        Some(ref parent_category_token) => {
-          let mut tokens = recursively_find_category_ancestors(parent_category_token, token_to_category_map);
-          tokens.insert(category.category_token.clone());
-          tokens
-        }
-      }
-    }
+    Some(category) => match category.maybe_parent_category_token {
+      None => HashSet::from([category.category_token.clone()]),
+      Some(ref parent_category_token) => {
+        let mut tokens = recursively_find_category_ancestors(parent_category_token, token_to_category_map);
+        tokens.insert(category.category_token.clone());
+        tokens
+      },
+    },
   }
 }
 

@@ -1,13 +1,9 @@
-use seedance2pro_client::generate::image::generate_midjourney_v7_niji::{
-  generate_midjourney_v7_niji, GenerateMidjourneyV7NijiArgs, GenerateMidjourneyV7NijiRequest,
-};
+use seedance2pro_client::generate::image::generate_midjourney_v7_niji::{generate_midjourney_v7_niji, GenerateMidjourneyV7NijiArgs, GenerateMidjourneyV7NijiRequest};
 
 use crate::client::router_seedance2pro_client::RouterSeedance2ProClient;
 use crate::errors::artcraft_router_error::ArtcraftRouterError;
 use crate::errors::provider_error::ProviderError;
-use crate::generate::generate_image::generate_image_response::{
-  GenerateImageResponse, Seedance2proImageResponsePayload,
-};
+use crate::generate::generate_image::generate_image_response::{GenerateImageResponse, Seedance2proImageResponsePayload};
 
 #[derive(Debug, Clone)]
 pub struct KinoviMidjourney7NijiRequestState {
@@ -15,26 +11,12 @@ pub struct KinoviMidjourney7NijiRequestState {
 }
 
 impl KinoviMidjourney7NijiRequestState {
-  pub async fn send(
-    &self,
-    client: &RouterSeedance2ProClient,
-  ) -> Result<GenerateImageResponse, ArtcraftRouterError> {
-    let args = GenerateMidjourneyV7NijiArgs {
-      session: &client.session,
-      host_override: None,
-      request: self.request.clone(),
-    };
+  pub async fn send(&self, client: &RouterSeedance2ProClient) -> Result<GenerateImageResponse, ArtcraftRouterError> {
+    let args = GenerateMidjourneyV7NijiArgs { session: &client.session, host_override: None, request: self.request.clone() };
 
-    let response = generate_midjourney_v7_niji(args)
-      .await
-      .map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
+    let response = generate_midjourney_v7_niji(args).await.map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
 
-    Ok(GenerateImageResponse::Seedance2Pro(Seedance2proImageResponsePayload {
-      order_id: response.order_id,
-      task_id: response.task_id,
-      maybe_order_ids: response.order_ids,
-      maybe_task_ids: response.task_ids,
-    }))
+    Ok(GenerateImageResponse::Seedance2Pro(Seedance2proImageResponsePayload { order_id: response.order_id, task_id: response.task_id, maybe_order_ids: response.order_ids, maybe_task_ids: response.task_ids }))
   }
 }
 
@@ -60,27 +42,11 @@ mod tests {
   use test_data::web::image_urls::JUNO_AT_LAKE_IMAGE_URL;
 
   fn base_builder() -> GenerateImageRequestBuilder {
-    GenerateImageRequestBuilder {
-      model: RouterImageModel::Midjourney7Niji,
-      provider: RouterProvider::Seedance2Pro,
-      prompt: Some("a magical anime fox spirit in a moonlit bamboo forest".to_string()),
-      image_inputs: None,
-      resolution: None,
-      aspect_ratio: Some(RouterAspectRatio::WideSixteenByNine),
-      quality: None,
-      image_batch_count: Some(1),
-      horizontal_angle: None,
-      vertical_angle: None,
-      zoom: None,
-      request_mismatch_mitigation_strategy: RequestMismatchMitigationStrategy::ErrorOut,
-      generation_mode_mismatch_strategy: None,
-      idempotency_token: None,
-    }
+    GenerateImageRequestBuilder { model: RouterImageModel::Midjourney7Niji, provider: RouterProvider::Seedance2Pro, prompt: Some("a magical anime fox spirit in a moonlit bamboo forest".to_string()), image_inputs: None, resolution: None, aspect_ratio: Some(RouterAspectRatio::WideSixteenByNine), quality: None, image_batch_count: Some(1), horizontal_angle: None, vertical_angle: None, zoom: None, request_mismatch_mitigation_strategy: RequestMismatchMitigationStrategy::ErrorOut, generation_mode_mismatch_strategy: None, idempotency_token: None }
   }
 
   fn get_kinovi_client() -> RouterClient {
-    let cookies = std::fs::read_to_string("/Users/bt/Artcraft/credentials/seedance2pro_cookies.txt")
-      .expect("Failed to read seedance2pro cookies");
+    let cookies = std::fs::read_to_string("/Users/bt/Artcraft/credentials/seedance2pro_cookies.txt").expect("Failed to read seedance2pro cookies");
     let session = Seedance2ProSession::from_cookies_string(cookies.trim().to_string());
     RouterClient::Seedance2Pro(RouterSeedance2ProClient::new(session))
   }
@@ -96,8 +62,7 @@ mod tests {
       _ => panic!("expected direct Request for text-to-image"),
     };
 
-    let response = request.send(client.get_seedance2pro_client_ref().unwrap())
-      .await.expect("send should succeed");
+    let response = request.send(client.get_seedance2pro_client_ref().unwrap()).await.expect("send should succeed");
     let payload = response.get_seedance2pro_payload().expect("expected seedance2pro payload");
     println!("v7-niji t2i — task_id={}, order_id={}", payload.task_id, payload.order_id);
     assert!(!payload.task_id.is_empty());
@@ -112,11 +77,7 @@ mod tests {
     let mut map = HashMap::new();
     map.insert(token.clone(), JUNO_AT_LAKE_IMAGE_URL.to_string());
 
-    let builder = GenerateImageRequestBuilder {
-      prompt: Some("an anime corgi sorcerer inspired by @1".to_string()),
-      image_inputs: Some(ImageListRef::MediaFileTokens(vec![token])),
-      ..base_builder()
-    };
+    let builder = GenerateImageRequestBuilder { prompt: Some("an anime corgi sorcerer inspired by @1".to_string()), image_inputs: Some(ImageListRef::MediaFileTokens(vec![token])), ..base_builder() };
 
     let draft_or_request = builder.build2().expect("build2");
     let draft = match draft_or_request {
@@ -124,13 +85,9 @@ mod tests {
       _ => panic!("expected Draft for image-input flow"),
     };
 
-    let ctx = ImageGenerationDraftContext {
-      client: Some(&client),
-      media_file_to_artcraft_url_map: Some(&map),
-    };
+    let ctx = ImageGenerationDraftContext { client: Some(&client), media_file_to_artcraft_url_map: Some(&map) };
 
-    let request = ImageGenerationDraftRequest::KinoviMidjourney7Niji(draft)
-      .finalize(ctx).await.expect("finalize");
+    let request = ImageGenerationDraftRequest::KinoviMidjourney7Niji(draft).finalize(ctx).await.expect("finalize");
 
     let response = request.send_request(&client).await.expect("send_request");
     let payload = response.get_seedance2pro_payload().expect("expected seedance2pro payload");

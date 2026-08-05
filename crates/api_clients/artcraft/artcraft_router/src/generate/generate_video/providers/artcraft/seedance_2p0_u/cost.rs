@@ -19,33 +19,18 @@ pub struct ArtcraftSeedance2p0UltraCostState {
 
 impl ArtcraftSeedance2p0UltraCostState {
   pub fn from_request(request: &ArtcraftSeedance2p0UltraRequestState) -> Self {
-    let resolution = request.request.resolution
-      .unwrap_or(CommonResolution::SevenTwentyP);
+    let resolution = request.request.resolution.unwrap_or(CommonResolution::SevenTwentyP);
     let duration_seconds = request.request.duration_seconds.unwrap_or(5);
     let batch_count = request.request.video_batch_count.unwrap_or(1);
-    let has_video_reference = request.request.reference_video_media_tokens
-      .as_ref()
-      .is_some_and(|tokens| !tokens.is_empty());
+    let has_video_reference = request.request.reference_video_media_tokens.as_ref().is_some_and(|tokens| !tokens.is_empty());
 
     Self { resolution, duration_seconds, batch_count, has_video_reference }
   }
 
   pub fn estimate_cost(&self) -> VideoGenerationCostEstimate {
     if self.resolution == CommonResolution::FourK {
-      let usd_cents = seedance_2p0_four_k_usd_cents(
-        self.duration_seconds,
-        self.batch_count,
-        self.has_video_reference,
-      );
-      return VideoGenerationCostEstimate {
-        cost_in_credits: Some(usd_cents),
-        cost_in_usd_cents: Some(usd_cents),
-        is_free: false,
-        is_unlimited: false,
-        is_rate_limited: false,
-        has_watermark: false,
-        failures_are_refunded: None,
-      };
+      let usd_cents = seedance_2p0_four_k_usd_cents(self.duration_seconds, self.batch_count, self.has_video_reference);
+      return VideoGenerationCostEstimate { cost_in_credits: Some(usd_cents), cost_in_usd_cents: Some(usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None };
     }
 
     let cents_per_second = match self.resolution {
@@ -57,15 +42,7 @@ impl ArtcraftSeedance2p0UltraCostState {
     let cents_per_video = (cents_per_second * self.duration_seconds as f64).ceil() as u64;
     let usd_cents = cents_per_video * self.batch_count as u64;
 
-    VideoGenerationCostEstimate {
-      cost_in_credits: Some(usd_cents),
-      cost_in_usd_cents: Some(usd_cents),
-      is_free: false,
-      is_unlimited: false,
-      is_rate_limited: false,
-      has_watermark: false,
-      failures_are_refunded: None,
-    }
+    VideoGenerationCostEstimate { cost_in_credits: Some(usd_cents), cost_in_usd_cents: Some(usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None }
   }
 }
 
@@ -148,15 +125,7 @@ mod tests {
     use enums::common::generation::common_resolution::CommonResolution;
 
     fn artcraft_4k_cents(duration_seconds: u16, batch_count: u16, has_video_reference: bool) -> u64 {
-      super::super::ArtcraftSeedance2p0UltraCostState {
-        resolution: CommonResolution::FourK,
-        duration_seconds,
-        batch_count,
-        has_video_reference,
-      }
-      .estimate_cost()
-      .cost_in_usd_cents
-      .unwrap()
+      super::super::ArtcraftSeedance2p0UltraCostState { resolution: CommonResolution::FourK, duration_seconds, batch_count, has_video_reference }.estimate_cost().cost_in_usd_cents.unwrap()
     }
 
     #[test]
@@ -215,19 +184,8 @@ mod tests {
 
   // -- Helpers --
 
-  fn build_cost(
-    resolution: Option<RouterResolution>,
-    duration_seconds: u16,
-    video_batch_count: u16,
-  ) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
-    let builder = GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Seedance2p0Ultra,
-      provider: RouterProvider::Artcraft,
-      resolution,
-      duration_seconds: Some(duration_seconds),
-      video_batch_count: Some(video_batch_count),
-      ..Default::default()
-    };
+  fn build_cost(resolution: Option<RouterResolution>, duration_seconds: u16, video_batch_count: u16) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
+    let builder = GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0Ultra, provider: RouterProvider::Artcraft, resolution, duration_seconds: Some(duration_seconds), video_batch_count: Some(video_batch_count), ..Default::default() };
     builder.build2().expect("build2").estimate_cost().expect("estimate_cost")
   }
 

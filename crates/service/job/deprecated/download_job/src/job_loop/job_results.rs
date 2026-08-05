@@ -1,4 +1,3 @@
-
 pub struct JobResults {
   /// The token of the thing that got downloaded and saved.
   /// Can be a token corresponding to any of multiple different tables (vocoder_models, tts_models, etc.)

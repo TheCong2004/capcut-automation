@@ -10,31 +10,21 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Name of the window
-pub (super) const MIDJOURNEY_LOGIN_WINDOW_NAME: &str = "midjourney_login_window";
+pub(super) const MIDJOURNEY_LOGIN_WINDOW_NAME: &str = "midjourney_login_window";
 
-pub (super) const MIDJOURNEY_START_URL_STR: &str = "https://google.com";
+pub(super) const MIDJOURNEY_START_URL_STR: &str = "https://google.com";
 
-pub (super) static START_URL: Lazy<Url> = Lazy::new(|| {
-  Url::parse(MIDJOURNEY_START_URL_STR).expect("URL should parse")
-});
+pub(super) static START_URL: Lazy<Url> = Lazy::new(|| Url::parse(MIDJOURNEY_START_URL_STR).expect("URL should parse"));
 
-pub (super) const MIDJOURNEY_HOMEPAGE_URL_STR: &str = "https://www.midjourney.com/";
+pub(super) const MIDJOURNEY_HOMEPAGE_URL_STR: &str = "https://www.midjourney.com/";
 
-pub (super) static MIDJOURNEY_HOMEPAGE_URL: Lazy<Url> = Lazy::new(|| {
-  Url::parse(MIDJOURNEY_HOMEPAGE_URL_STR).expect("URL should parse")
-});
+pub(super) static MIDJOURNEY_HOMEPAGE_URL: Lazy<Url> = Lazy::new(|| Url::parse(MIDJOURNEY_HOMEPAGE_URL_STR).expect("URL should parse"));
 
-pub (super) const MIDJOURNEY_LOGIN_URL_STR: &str = "https://www.midjourney.com/auth/signin";
+pub(super) const MIDJOURNEY_LOGIN_URL_STR: &str = "https://www.midjourney.com/auth/signin";
 
-pub (super) static MIDJOURNEY_LOGIN_URL: Lazy<Url> = Lazy::new(|| {
-  Url::parse(MIDJOURNEY_LOGIN_URL_STR).expect("URL should parse")
-});
+pub(super) static MIDJOURNEY_LOGIN_URL: Lazy<Url> = Lazy::new(|| Url::parse(MIDJOURNEY_LOGIN_URL_STR).expect("URL should parse"));
 
-pub async fn open_midjourney_login_window(
-  app: &AppHandle,
-  app_data_root: &AppDataRoot,
-  mj_creds_manager: &MidjourneyCredentialManager,
-) -> AnyhowResult<()> {
+pub async fn open_midjourney_login_window(app: &AppHandle, app_data_root: &AppDataRoot, mj_creds_manager: &MidjourneyCredentialManager) -> AnyhowResult<()> {
   if app.get_window(MIDJOURNEY_LOGIN_WINDOW_NAME).is_some() {
     return Err(anyhow!("Login window already open"));
   }
@@ -54,8 +44,7 @@ pub async fn open_midjourney_login_window(
       .devtools(true)
       .build()?;
 
-  let webview = window.get_webview(MIDJOURNEY_LOGIN_WINDOW_NAME)
-      .ok_or_else(|| anyhow!("no webview found"))?;
+  let webview = window.get_webview(MIDJOURNEY_LOGIN_WINDOW_NAME).ok_or_else(|| anyhow!("no webview found"))?;
 
   clear_all_webview_cookies(&webview)?;
 
@@ -68,7 +57,7 @@ pub async fn open_midjourney_login_window(
 
   let app_handle = app.clone();
   let app_data_root = app_data_root.clone();
-  let mj_creds_manager= mj_creds_manager.clone();
+  let mj_creds_manager = mj_creds_manager.clone();
 
   let _ = tauri::async_runtime::spawn(async move {
     midjourney_login_window_thread(app_handle, app_data_root, mj_creds_manager).await;

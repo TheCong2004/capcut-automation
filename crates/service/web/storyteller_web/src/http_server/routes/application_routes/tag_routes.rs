@@ -20,13 +20,7 @@ use crate::http_server::endpoints::tags::set_media_file_tags_handler::set_media_
 pub fn add_tag_routes<T, B>(app: App<T>) -> App<T>
 where
   B: MessageBody,
-  T: ServiceFactory<
-    ServiceRequest,
-    Config = (),
-    Response = ServiceResponse<B>,
-    Error = Error,
-    InitError = (),
-  >,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
   app.service(
     web::scope("/v1/tags")

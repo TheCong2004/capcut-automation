@@ -45,23 +45,9 @@ use url::Url;
 
 /// This thread is responsible for picking up tasks that fell through the cracks of
 /// the faster websocket thread.
-pub async fn midjourney_long_polling_thread(
-  app_handle: AppHandle,
-  app_env_configs: AppEnvConfigs,
-  app_data_root: AppDataRoot,
-  task_database: TaskDatabase,
-  creds: MidjourneyCredentialManager,
-  storyteller_creds_manager: StorytellerCredentialManager,
-) -> ! {
+pub async fn midjourney_long_polling_thread(app_handle: AppHandle, app_env_configs: AppEnvConfigs, app_data_root: AppDataRoot, task_database: TaskDatabase, creds: MidjourneyCredentialManager, storyteller_creds_manager: StorytellerCredentialManager) -> ! {
   loop {
-    let res = polling_loop(
-      &app_handle,
-      &app_env_configs,
-      &app_data_root,
-      &task_database,
-      &creds,
-      &storyteller_creds_manager,
-    ).await;
+    let res = polling_loop(&app_handle, &app_env_configs, &app_data_root, &task_database, &creds, &storyteller_creds_manager).await;
     if let Err(err) = res {
       error!("An error occurred: {:?}", err);
     }
@@ -70,14 +56,7 @@ pub async fn midjourney_long_polling_thread(
   }
 }
 
-async fn polling_loop(
-  app_handle: &AppHandle,
-  app_env_configs: &AppEnvConfigs,
-  app_data_root: &AppDataRoot,
-  task_database: &TaskDatabase,
-  creds: &MidjourneyCredentialManager,
-  storyteller_creds_manager: &StorytellerCredentialManager,
-) -> AnyhowResult<()> {
+async fn polling_loop(app_handle: &AppHandle, app_env_configs: &AppEnvConfigs, app_data_root: &AppDataRoot, task_database: &TaskDatabase, creds: &MidjourneyCredentialManager, storyteller_creds_manager: &StorytellerCredentialManager) -> AnyhowResult<()> {
   loop {
     if !creds.session_appears_active()? {
       tokio::time::sleep(std::time::Duration::from_millis(30_000)).await;
@@ -91,7 +70,7 @@ async fn polling_loop(
         error!("No Storyteller credentials found. Cannot proceed with Midjourney polling.");
         tokio::time::sleep(std::time::Duration::from_millis(5_000)).await;
         continue;
-      }
+      },
     };
 
     let cookies = creds.maybe_copy_cookie_store()?;
@@ -101,79 +80,42 @@ async fn polling_loop(
       None => {
         tokio::time::sleep(std::time::Duration::from_millis(30_000)).await;
         continue;
-      }
+      },
     };
 
     let user_info = creds.maybe_copy_user_info()?;
 
-    let maybe_user_id = user_info
-        .map(|info| info.user_id)
-        .flatten();
+    let maybe_user_id = user_info.map(|info| info.user_id).flatten();
 
     let user_id = match maybe_user_id {
       Some(user_id) => user_id,
       None => {
         tokio::time::sleep(std::time::Duration::from_millis(30_000)).await;
         continue;
-      }
+      },
     };
 
-    let local_tasks = list_tasks_by_provider_and_status(ListTasksByProviderAndStatusArgs {
-      db: task_database.get_connection(),
-      provider: GenerationProvider::Midjourney,
-      task_statuses: &TASK_DATABASE_PENDING_STATUSES,
-    }).await?;
+    let local_tasks = list_tasks_by_provider_and_status(ListTasksByProviderAndStatusArgs { db: task_database.get_connection(), provider: GenerationProvider::Midjourney, task_statuses: &TASK_DATABASE_PENDING_STATUSES }).await?;
 
-    poll_midjourney_tasks(
-      app_handle,
-      app_env_configs,
-      app_data_root,
-      task_database,
-      &cookies,
-      &user_id,
-      &storyteller_creds,
-      local_tasks,
-    ).await?;
+    poll_midjourney_tasks(app_handle, app_env_configs, app_data_root, task_database, &cookies, &user_id, &storyteller_creds, local_tasks).await?;
 
     tokio::time::sleep(std::time::Duration::from_millis(2_000)).await;
   }
 }
 
-async fn poll_midjourney_tasks(
-  app_handle: &AppHandle,
-  app_env_configs: &AppEnvConfigs,
-  app_data_root: &AppDataRoot,
-  task_database: &TaskDatabase,
-  mj_cookies: &CookieStore,
-  mj_user_id: &MidjourneyUserId,
-  storyteller_creds: &StorytellerCredentialSet,
-  local_tasks: TaskList,
-) -> AnyhowResult<()> {
+async fn poll_midjourney_tasks(app_handle: &AppHandle, app_env_configs: &AppEnvConfigs, app_data_root: &AppDataRoot, task_database: &TaskDatabase, mj_cookies: &CookieStore, mj_user_id: &MidjourneyUserId, storyteller_creds: &StorytellerCredentialSet, local_tasks: TaskList) -> AnyhowResult<()> {
   let local_tasks = local_tasks.tasks;
 
   if local_tasks.is_empty() {
-    return Ok(())
+    return Ok(());
   }
 
   // Map of Midjourney Job ID to Local Task.
-  let local_tasks_by_midjourney_job_id = local_tasks.iter()
-      .filter_map(|task| {
-        if let Some(provider_job_id) = &task.provider_job_id {
-          Some((provider_job_id.clone(), task.clone()))
-        } else {
-          None
-        }
-      })
-      .collect::<HashMap<String, Task>>();
+  let local_tasks_by_midjourney_job_id = local_tasks.iter().filter_map(|task| if let Some(provider_job_id) = &task.provider_job_id { Some((provider_job_id.clone(), task.clone())) } else { None }).collect::<HashMap<String, Task>>();
 
   let cookie_header = mj_cookies.to_cookie_string();
 
-  let midjourney_result = imagine(ImagineRequest {
-    hostname: MidjourneyHostname::Standard,
-    cookie_header,
-    user_id: mj_user_id,
-    page_size: None,
-  }).await?;
+  let midjourney_result = imagine(ImagineRequest { hostname: MidjourneyHostname::Standard, cookie_header, user_id: mj_user_id, page_size: None }).await?;
 
   let midjourney_items = midjourney_result.items;
 
@@ -199,17 +141,7 @@ async fn poll_midjourney_tasks(
       None => continue,
     };
 
-    upload_midjourney_batch(
-      &app_handle,
-      &app_env_configs,
-      app_data_root,
-      task_database,
-      &storyteller_creds,
-      &image_downloader,
-      midjourney_job_id,
-      &local_task,
-      midjourney_item
-    ).await?;
+    upload_midjourney_batch(&app_handle, &app_env_configs, app_data_root, task_database, &storyteller_creds, &image_downloader, midjourney_job_id, &local_task, midjourney_item).await?;
 
     tokio::time::sleep(std::time::Duration::from_millis(2_000)).await;
   }
@@ -219,17 +151,7 @@ async fn poll_midjourney_tasks(
   Ok(())
 }
 
-async fn upload_midjourney_batch(
-  app_handle: &AppHandle,
-  app_env_configs: &AppEnvConfigs,
-  app_data_root: &AppDataRoot,
-  task_database: &TaskDatabase,
-  storyteller_creds: &StorytellerCredentialSet,
-  image_downloader: &ImageDownloaderClient,
-  midjourney_job_id: &String,
-  local_task: &Task,
-  midjourney_item: &ImagineItem
-) -> AnyhowResult<()> {
+async fn upload_midjourney_batch(app_handle: &AppHandle, app_env_configs: &AppEnvConfigs, app_data_root: &AppDataRoot, task_database: &TaskDatabase, storyteller_creds: &StorytellerCredentialSet, image_downloader: &ImageDownloaderClient, midjourney_job_id: &String, local_task: &Task, midjourney_item: &ImagineItem) -> AnyhowResult<()> {
   let model_type = match midjourney_item.job_type {
     Some(MidjourneyJobType::V6Diffusion) => CommonModelType::MidjourneyV6,
     Some(MidjourneyJobType::V6p1Diffusion) => CommonModelType::MidjourneyV6p1,
@@ -245,24 +167,9 @@ async fn upload_midjourney_batch(
     _ => CommonModelType::Midjourney,
   };
 
-  let request = CreatePromptRequest {
-    uuid_idempotency_token: generate_random_uuid(),
-    positive_prompt: midjourney_item.full_command.clone(),
-    negative_prompt: None,
-    model_type: Some(model_type),
-    generation_provider: Some(GenerationProvider::Midjourney),
-    maybe_generation_mode: None,
-    maybe_aspect_ratio: None,
-    maybe_resolution: None,
-    maybe_batch_count: None,
-    maybe_generate_audio: None,
-    maybe_duration_seconds: None,  };
+  let request = CreatePromptRequest { uuid_idempotency_token: generate_random_uuid(), positive_prompt: midjourney_item.full_command.clone(), negative_prompt: None, model_type: Some(model_type), generation_provider: Some(GenerationProvider::Midjourney), maybe_generation_mode: None, maybe_aspect_ratio: None, maybe_resolution: None, maybe_batch_count: None, maybe_generate_audio: None, maybe_duration_seconds: None };
 
-  let prompt_response = create_prompt(
-    &app_env_configs.storyteller_host,
-    Some(storyteller_creds),
-    request
-  ).await?;
+  let prompt_response = create_prompt(&app_env_configs.storyteller_host, Some(storyteller_creds), request).await?;
 
   info!("Created prompt: {:?}", &prompt_response.prompt_token);
 
@@ -277,12 +184,7 @@ async fn upload_midjourney_batch(
   for index in 0..4 {
     info!("Downloading generated Midjourney file...");
 
-    let download_path = download_midjourney_image(
-      &image_downloader,
-      midjourney_job_id,
-      index,
-      app_data_root
-    ).await?;
+    let download_path = download_midjourney_image(&image_downloader, midjourney_job_id, index, app_data_root).await?;
 
     let mut wait_delay = 0;
 
@@ -301,15 +203,7 @@ async fn upload_midjourney_batch(
       // TODO: batch_generations.entity_type
       // TODO: batch_generations.entity_token
 
-      let result = upload_image_media_file_from_file(UploadImageFromFileArgs {
-        api_host: &app_env_configs.storyteller_host,
-        maybe_creds: Some(&storyteller_creds),
-        path: &download_path,
-        is_intermediate_system_file: false,
-        maybe_prompt_token: Some(&prompt_response.prompt_token),
-        maybe_batch_token: Some(&batch_token),
-        maybe_generation_provider: Some(GenerationProvider::Midjourney),
-      }).await;
+      let result = upload_image_media_file_from_file(UploadImageFromFileArgs { api_host: &app_env_configs.storyteller_host, maybe_creds: Some(&storyteller_creds), path: &download_path, is_intermediate_system_file: false, maybe_prompt_token: Some(&prompt_response.prompt_token), maybe_batch_token: Some(&batch_token), maybe_generation_provider: Some(GenerationProvider::Midjourney) }).await;
 
       match result {
         Ok(result) => {
@@ -328,10 +222,10 @@ async fn upload_midjourney_batch(
           }
           tokio::time::sleep(std::time::Duration::from_secs(wait_delay)).await;
           continue; // Retry the upload.
-        }
+        },
         Err(err) => {
           error!("Failed to upload to backend: {:?}", err);
-          return Err(err.into())
+          return Err(err.into());
         },
       }
     } // End loop
@@ -345,31 +239,19 @@ async fn upload_midjourney_batch(
   if let Some(media_file_token) = maybe_primary_media_file_token.as_ref() {
     info!("Looking up file to grab CDN and thumbnail URLs: {:?} ...", media_file_token);
 
-    let lookup_result = get_media_file(
-      &app_env_configs.storyteller_host,
-      media_file_token,
-    ).await;
+    let lookup_result = get_media_file(&app_env_configs.storyteller_host, media_file_token).await;
     match lookup_result {
       Ok(response) => {
         maybe_cdn_url = Some(response.media_file.media_links.cdn_url.to_string());
-        maybe_thumbnail_url_template = media_links_to_thumbnail_template(&response.media_file.media_links)
-            .map(|s| s.to_string());
-      }
+        maybe_thumbnail_url_template = media_links_to_thumbnail_template(&response.media_file.media_links).map(|s| s.to_string());
+      },
       Err(err) => {
         error!("Failed to look up media file after upload: {:?} (failing open)", err);
-      }
+      },
     }
   }
 
-  let updated = update_successful_task_status_with_metadata(UpdateSuccessfulTaskArgs {
-    db: task_database.get_connection(),
-    task_id: &local_task.id,
-    maybe_batch_token: Some(&batch_token),
-    maybe_primary_media_file_token: maybe_primary_media_file_token.as_ref(),
-    maybe_primary_media_file_class: Some(TaskMediaFileClass::Image),
-    maybe_primary_media_file_thumbnail_url_template: maybe_thumbnail_url_template.as_deref(),
-    maybe_primary_media_file_cdn_url: maybe_cdn_url.as_deref(),
-  }).await?;
+  let updated = update_successful_task_status_with_metadata(UpdateSuccessfulTaskArgs { db: task_database.get_connection(), task_id: &local_task.id, maybe_batch_token: Some(&batch_token), maybe_primary_media_file_token: maybe_primary_media_file_token.as_ref(), maybe_primary_media_file_class: Some(TaskMediaFileClass::Image), maybe_primary_media_file_thumbnail_url_template: maybe_thumbnail_url_template.as_deref(), maybe_primary_media_file_cdn_url: maybe_cdn_url.as_deref() }).await?;
 
   if !updated {
     return Ok(()); // If anything breaks with queries, don't spam events.
@@ -386,13 +268,7 @@ async fn upload_midjourney_batch(
     error!("Failed to send GenerationCompleteEvent: {:?}", err); // Fail open
   }
 
-  let result = maybe_handle_text_to_image_complete_event(
-    app_handle,
-    app_env_configs,
-    Some(storyteller_creds),
-    local_task,
-    &batch_token,
-  ).await;
+  let result = maybe_handle_text_to_image_complete_event(app_handle, app_env_configs, Some(storyteller_creds), local_task, &batch_token).await;
 
   if let Err(err) = result {
     error!("Failed to send text-to-image complete event: {:?}", err);
@@ -400,4 +276,3 @@ async fn upload_midjourney_batch(
 
   Ok(())
 }
-

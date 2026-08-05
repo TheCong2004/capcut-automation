@@ -5,9 +5,9 @@ use anyhow::anyhow;
 use futures::{StreamExt, TryStreamExt};
 use log::warn;
 
-const MIN_BYTES : usize = 10;
+const MIN_BYTES: usize = 10;
 //const MAX_BYTES : usize = 1024 * 1024 * 20; // 20 Mb
-const MAX_BYTES : usize = 1024 * 1024 * 1024 * 10; // 10 GiB
+const MAX_BYTES: usize = 1024 * 1024 * 1024 * 10; // 10 GiB
 
 /// Read any field from a multipart form as bytes, but do some error checking.
 pub async fn checked_read_multipart_bytes(field: &mut Field) -> anyhow::Result<Option<BytesMut>> {

@@ -139,61 +139,36 @@ pub async fn create_video(args: CreateVideoArgs<'_>) -> Result<CreateVideoSucces
     form = form.text(field, value);
   }
   for image in &request.input_reference_images {
-    let mut part = Part::bytes(image.file_bytes.clone())
-      .file_name(image.filename.clone());
+    let mut part = Part::bytes(image.file_bytes.clone()).file_name(image.filename.clone());
     if let Some(content_type) = &image.maybe_content_type {
-      part = part.mime_str(content_type)
-        .map_err(|err| CometClientError::InvalidRequestField {
-          field: "input_reference_images.maybe_content_type",
-          raw_value: content_type.clone(),
-          reason: format!("invalid mime type: {err}"),
-        })?;
+      part = part.mime_str(content_type).map_err(|err| CometClientError::InvalidRequestField { field: "input_reference_images.maybe_content_type", raw_value: content_type.clone(), reason: format!("invalid mime type: {err}") })?;
     }
     form = form.part("input_reference", part);
   }
 
-  let client = reqwest::Client::builder()
-    .build()
-    .map_err(CometClientError::ReqwestClientError)?;
+  let client = reqwest::Client::builder().build().map_err(CometClientError::ReqwestClientError)?;
 
-  let response = client.post(&url)
-    .bearer_auth(args.api_key.as_str())
-    .multipart(form)
-    .send()
-    .await
-    .map_err(CometGenericApiError::ReqwestError)?;
+  let response = client.post(&url).bearer_auth(args.api_key.as_str()).multipart(form).send().await.map_err(CometGenericApiError::ReqwestError)?;
 
   let status_code = response.status();
-  let body = response.text()
-    .await
-    .map_err(CometGenericApiError::ReqwestError)?;
+  let body = response.text().await.map_err(CometGenericApiError::ReqwestError)?;
 
   if !status_code.is_success() {
     return Err(categorize_create_video_error(status_code, body));
   }
 
-  let raw: CreateVideoRawResponse = serde_json::from_str(&body)
-    .map_err(|err| CometGenericApiError::SerdeResponseParseErrorWithBody(err, body.clone()))?;
+  let raw: CreateVideoRawResponse = serde_json::from_str(&body).map_err(|err| CometGenericApiError::SerdeResponseParseErrorWithBody(err, body.clone()))?;
 
   info!("Comet video task enqueued: {} (status: {})", raw.id, raw.status);
 
-  Ok(CreateVideoSuccess {
-    task_id: raw.id,
-    status: raw.status,
-    maybe_model: raw.model,
-    maybe_progress: raw.progress,
-    maybe_created_at: raw.created_at,
-  })
+  Ok(CreateVideoSuccess { task_id: raw.id, status: raw.status, maybe_model: raw.model, maybe_progress: raw.progress, maybe_created_at: raw.created_at })
 }
 
 impl CreateVideoRequest {
   /// The text fields of the multipart form, in wire order. Split out from
   /// [`create_video`] so the form shape is testable without HTTP.
   pub fn text_form_fields(&self) -> Vec<(&'static str, String)> {
-    let mut fields = vec![
-      ("model", self.model.as_api_str().to_string()),
-      ("prompt", self.prompt.clone()),
-    ];
+    let mut fields = vec![("model", self.model.as_api_str().to_string()), ("prompt", self.prompt.clone())];
     if let Some(seconds) = self.maybe_seconds {
       fields.push(("seconds", seconds.to_string()));
     }
@@ -205,11 +180,7 @@ impl CreateVideoRequest {
 
   fn validate(&self) -> Result<(), CometClientError> {
     if self.prompt.trim().is_empty() {
-      return Err(CometClientError::InvalidRequestField {
-        field: "prompt",
-        raw_value: self.prompt.clone(),
-        reason: "prompt must not be empty".to_string(),
-      });
+      return Err(CometClientError::InvalidRequestField { field: "prompt", raw_value: self.prompt.clone(), reason: "prompt must not be empty".to_string() });
     }
 
     Ok(())
@@ -247,13 +218,7 @@ impl CometVideoSize {
 
 impl fmt::Debug for CreateVideoRequest {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.debug_struct("CreateVideoRequest")
-      .field("model", &self.model)
-      .field("prompt", &self.prompt)
-      .field("maybe_seconds", &self.maybe_seconds)
-      .field("maybe_size", &self.maybe_size)
-      .field("input_reference_images", &self.input_reference_images)
-      .finish()
+    f.debug_struct("CreateVideoRequest").field("model", &self.model).field("prompt", &self.prompt).field("maybe_seconds", &self.maybe_seconds).field("maybe_size", &self.maybe_size).field("input_reference_images", &self.input_reference_images).finish()
   }
 }
 
@@ -261,11 +226,7 @@ impl fmt::Debug for CometInputReferenceImage {
   // Print byte-length, not raw bytes — derived Debug on Vec<u8> would dump
   // the entire image into the log line.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.debug_struct("CometInputReferenceImage")
-      .field("file_bytes_len", &self.file_bytes.len())
-      .field("filename", &self.filename)
-      .field("maybe_content_type", &self.maybe_content_type)
-      .finish()
+    f.debug_struct("CometInputReferenceImage").field("file_bytes_len", &self.file_bytes.len()).field("filename", &self.filename).field("maybe_content_type", &self.maybe_content_type).finish()
   }
 }
 
@@ -301,36 +262,16 @@ mod tests {
 
     #[test]
     fn minimal_form_fields() {
-      let request = CreateVideoRequest {
-        model: CometVideoModelRaw::DoubaoSeedance2p0Fast,
-        prompt: "a corgi running through a field".to_string(),
-        maybe_seconds: None,
-        maybe_size: None,
-        input_reference_images: vec![],
-      };
+      let request = CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance2p0Fast, prompt: "a corgi running through a field".to_string(), maybe_seconds: None, maybe_size: None, input_reference_images: vec![] };
 
-      assert_eq!(request.text_form_fields(), vec![
-        ("model", "doubao-seedance-2-0-fast".to_string()),
-        ("prompt", "a corgi running through a field".to_string()),
-      ]);
+      assert_eq!(request.text_form_fields(), vec![("model", "doubao-seedance-2-0-fast".to_string()), ("prompt", "a corgi running through a field".to_string()),]);
     }
 
     #[test]
     fn full_form_fields() {
-      let request = CreateVideoRequest {
-        model: CometVideoModelRaw::DoubaoSeedance2p0,
-        prompt: "make [Image 1] come alive".to_string(),
-        maybe_seconds: Some(10),
-        maybe_size: Some(CometVideoSize::Portrait9x16),
-        input_reference_images: vec![],
-      };
+      let request = CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance2p0, prompt: "make [Image 1] come alive".to_string(), maybe_seconds: Some(10), maybe_size: Some(CometVideoSize::Portrait9x16), input_reference_images: vec![] };
 
-      assert_eq!(request.text_form_fields(), vec![
-        ("model", "doubao-seedance-2-0".to_string()),
-        ("prompt", "make [Image 1] come alive".to_string()),
-        ("seconds", "10".to_string()),
-        ("size", "9:16".to_string()),
-      ]);
+      assert_eq!(request.text_form_fields(), vec![("model", "doubao-seedance-2-0".to_string()), ("prompt", "make [Image 1] come alive".to_string()), ("seconds", "10".to_string()), ("size", "9:16".to_string()),]);
     }
   }
 
@@ -348,13 +289,7 @@ mod tests {
     // bindings in `generate::video`; the generic layer accepts any value.
 
     fn request_with_prompt_and_seconds(prompt: &str, maybe_seconds: Option<u8>) -> CreateVideoRequest {
-      CreateVideoRequest {
-        model: CometVideoModelRaw::DoubaoSeedance2p0,
-        prompt: prompt.to_string(),
-        maybe_seconds,
-        maybe_size: None,
-        input_reference_images: vec![],
-      }
+      CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance2p0, prompt: prompt.to_string(), maybe_seconds, maybe_size: None, input_reference_images: vec![] }
     }
   }
 
@@ -370,16 +305,7 @@ mod tests {
     async fn live_create_video() {
       let api_key = load_api_key();
 
-      let result = create_video(CreateVideoArgs {
-        api_key: &api_key,
-        request: CreateVideoRequest {
-          model: CometVideoModelRaw::DoubaoSeedance2p0Fast,
-          prompt: "a corgi running through a sunny meadow, cinematic".to_string(),
-          maybe_seconds: Some(4),
-          maybe_size: Some(CometVideoSize::Landscape16x9),
-          input_reference_images: vec![],
-        },
-      }).await.expect("create_video should succeed");
+      let result = create_video(CreateVideoArgs { api_key: &api_key, request: CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance2p0Fast, prompt: "a corgi running through a sunny meadow, cinematic".to_string(), maybe_seconds: Some(4), maybe_size: Some(CometVideoSize::Landscape16x9), input_reference_images: vec![] } }).await.expect("create_video should succeed");
 
       println!("Enqueued task: {} (status: {})", result.task_id, result.status);
       assert!(!result.task_id.is_empty());
@@ -402,26 +328,14 @@ mod tests {
 
       let api_key = load_api_key();
 
-      let created = create_video(CreateVideoArgs {
-        api_key: &api_key,
-        request: CreateVideoRequest {
-          model: CometVideoModelRaw::DoubaoSeedance2p0Fast,
-          prompt: "a corgi running through a sunny meadow, cinematic".to_string(),
-          maybe_seconds: Some(4),
-          maybe_size: Some(CometVideoSize::Landscape16x9),
-          input_reference_images: vec![],
-        },
-      }).await.expect("create_video should succeed");
+      let created = create_video(CreateVideoArgs { api_key: &api_key, request: CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance2p0Fast, prompt: "a corgi running through a sunny meadow, cinematic".to_string(), maybe_seconds: Some(4), maybe_size: Some(CometVideoSize::Landscape16x9), input_reference_images: vec![] } }).await.expect("create_video should succeed");
 
       println!("Enqueued task: {} (status: {})", created.task_id, created.status);
 
       for poll in 1..=MAX_POLLS {
         tokio::time::sleep(POLL_INTERVAL).await;
 
-        let task = get_video_task(GetVideoTaskArgs {
-          api_key: &api_key,
-          task_id: &created.task_id,
-        }).await.expect("get_video_task should succeed");
+        let task = get_video_task(GetVideoTaskArgs { api_key: &api_key, task_id: &created.task_id }).await.expect("get_video_task should succeed");
 
         println!("Poll {}: status {} (progress: {:?})", poll, task.status, task.maybe_progress);
 

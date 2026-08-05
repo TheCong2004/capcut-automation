@@ -16,7 +16,6 @@ pub struct QueryPair {
 }
 
 impl QueryPair {
-
   pub async fn run_migration(&self, mysql: &Pool<MySql>) -> AnyhowResult<()> {
     info!("Running count query: {}", self.count_query());
 
@@ -69,22 +68,16 @@ impl QueryPair {
   }
 
   fn single_line_query(query: &str) -> String {
-    query.split("\n")
-        .map(|s| s.trim())
-        .join(" ")
-        .trim()
-        .to_string()
+    query.split("\n").map(|s| s.trim()).join(" ").trim().to_string()
   }
 }
 
 pub struct CountRecord {
-  pub record_count: i64
+  pub record_count: i64,
 }
 
 impl FromRow<'_, MySqlRow> for CountRecord {
   fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
-    Ok(Self {
-      record_count: row.try_get("record_count")?,
-    })
+    Ok(Self { record_count: row.try_get("record_count")? })
   }
 }

@@ -11,22 +11,18 @@ use crate::job::job_types::workflow::video_style_transfer::extract_vst_workflow_
 use crate::job::job_types::workflow::video_style_transfer::process_video_style_transfer_job::process_video_style_transfer_job;
 use crate::state::job_dependencies::JobDependencies;
 
-pub async fn process_single_workflow_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
-
+pub async fn process_single_workflow_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
   // First try to dispatch with the newer "job type".
   match job.job_type {
     InferenceJobType::LivePortrait => {
       let job_success_result = process_live_portrait_job(job_dependencies, job).await?;
       return Ok(job_success_result);
-    }
+    },
     InferenceJobType::FaceFusion => {
       let job_success_result = process_face_fusion_job(job_dependencies, job).await?;
       return Ok(job_success_result);
-    }
-    _ => {} // Fall through
+    },
+    _ => {}, // Fall through
   }
 
   // If we couldn't dispatch with "job type", fall back to older heuristics.
@@ -38,11 +34,11 @@ pub async fn process_single_workflow_job(
       // process_upload_workflow_job(job_dependencies, job).await?
       // NB(bt,2024-09-04): Pretty sure these are dead. We're getting invalid models via this route.
       return Err(ProcessSingleJobError::InvalidJob(anyhow!("Upload Workflow Job is no longer supported")));
-    }
+    },
     None => {
       // This services both Storyteller Studio and "Video Style Transfer" products.
       process_video_style_transfer_job(job_dependencies, job).await?
-    }
+    },
   };
 
   Ok(job_success_result)

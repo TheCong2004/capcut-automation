@@ -14,16 +14,12 @@ use mysql_queries::queries::model_weights::list::list_model_weights_for_elastic_
 use primitives::numerics::u64_to_i32_saturating::u64_to_i32_saturating;
 use storyteller_root::get_storyteller_rust_root;
 
-pub async fn create_all_model_weight_documents(
-  mysql: &Pool<MySql>,
-  elasticsearch: &Elasticsearch
-) -> AnyhowResult<()> {
-
+pub async fn create_all_model_weight_documents(mysql: &Pool<MySql>, elasticsearch: &Elasticsearch) -> AnyhowResult<()> {
   info!("Create all model weight documents.");
 
   // TODO(bt, 2024-01-10): expose this as a CLI flag
-  const DELETE_EXISTING_INDEX : bool = true;
-  const PAGE_SIZE : u64 = 1000;
+  const DELETE_EXISTING_INDEX: bool = true;
+  const PAGE_SIZE: u64 = 1000;
 
   create_model_weight_model_index(&elasticsearch, DELETE_EXISTING_INDEX).await?;
 
@@ -44,7 +40,7 @@ pub async fn create_all_model_weight_documents(
       None => {
         warn!("No final ID at cursor {cursor}");
         break;
-      }
+      },
     }
 
     for result in results {
@@ -60,23 +56,25 @@ async fn create_document_from_record(elasticsearch: &Elasticsearch, record: Mode
 
   let is_deleted = record.user_deleted_at.is_some() || record.mod_deleted_at.is_some();
 
-  let maybe_ietf_language_tag = record.maybe_ietf_language_tag
-      .as_deref()
-      .or_else(|| match record.weights_category {
-        WeightsCategory::TextToSpeech => record.maybe_tts_ietf_language_tag.as_deref(),
-        WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_language_tag.as_deref(),
-        _ => None,
-      })
-      .map(|t| t.to_string());
+  let maybe_ietf_language_tag = record
+    .maybe_ietf_language_tag
+    .as_deref()
+    .or_else(|| match record.weights_category {
+      WeightsCategory::TextToSpeech => record.maybe_tts_ietf_language_tag.as_deref(),
+      WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_language_tag.as_deref(),
+      _ => None,
+    })
+    .map(|t| t.to_string());
 
-  let maybe_ietf_primary_language_subtag = record.maybe_ietf_primary_language_subtag
-      .as_deref()
-      .or_else(|| match &record.weights_category {
-        WeightsCategory::TextToSpeech => record.maybe_tts_ietf_primary_language_subtag.as_deref(),
-        WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_primary_language_subtag.as_deref(),
-        _ => None,
-      })
-      .map(|t| t.to_string());
+  let maybe_ietf_primary_language_subtag = record
+    .maybe_ietf_primary_language_subtag
+    .as_deref()
+    .or_else(|| match &record.weights_category {
+      WeightsCategory::TextToSpeech => record.maybe_tts_ietf_primary_language_subtag.as_deref(),
+      WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_primary_language_subtag.as_deref(),
+      _ => None,
+    })
+    .map(|t| t.to_string());
 
   let document = ModelWeightDocument {
     token: record.token,
@@ -119,26 +117,15 @@ async fn create_document_from_record(elasticsearch: &Elasticsearch, record: Mode
     is_deleted,
   };
 
-  let op : BulkOperation<_> = BulkOperation::index(&document)
-      .id(document.get_document_id())
-      .into();
+  let op: BulkOperation<_> = BulkOperation::index(&document).id(document.get_document_id()).into();
 
-  let response = elasticsearch
-      .bulk(BulkParts::Index(MODEL_WEIGHT_INDEX))
-      .body(vec![op])
-      .send()
-      .await?;
+  let response = elasticsearch.bulk(BulkParts::Index(MODEL_WEIGHT_INDEX)).body(vec![op]).send().await?;
 
   let json: Value = response.json().await?;
 
   let had_errors = json["errors"].as_bool().unwrap_or(false);
   if had_errors {
-    let failed: Vec<&Value> = json["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|v| !v["error"].is_null())
-        .collect();
+    let failed: Vec<&Value> = json["items"].as_array().unwrap().iter().filter(|v| !v["error"].is_null()).collect();
 
     // TODO: retry failures
     error!("Errors during indexing. Failures: {}", failed.len());
@@ -149,22 +136,15 @@ async fn create_document_from_record(elasticsearch: &Elasticsearch, record: Mode
 
 // NB: Adapted from elasticsearch crate examples source
 async fn create_model_weight_model_index(client: &Elasticsearch, delete_existing: bool) -> AnyhowResult<()> {
-
   info!("Creating model weight model index...");
 
-  let index_path = get_storyteller_rust_root()
-      .join("_database/elasticsearch/index_definitions/model_weights_v1.json");
+  let index_path = get_storyteller_rust_root().join("_database/elasticsearch/index_definitions/model_weights_v1.json");
 
   info!("Reading index file: {:?}", index_path);
 
   let index_definition = read_to_string(index_path)?;
 
-  create_index_if_not_exists(CreateIndexArgs {
-    client,
-    index_name: MODEL_WEIGHT_INDEX,
-    index_definition: &index_definition,
-    delete_existing,
-  }).await?;
+  create_index_if_not_exists(CreateIndexArgs { client, index_name: MODEL_WEIGHT_INDEX, index_definition: &index_definition, delete_existing }).await?;
 
   Ok(())
 }

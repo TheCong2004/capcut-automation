@@ -7,14 +7,12 @@ use crate::middleware::banned_ip_filter::ip_ban_list::ip_set::IpSet;
 
 #[derive(Clone)]
 pub struct IpBanList {
-  ip_sets: Arc<RwLock<HashMap<String, IpSet>>>
+  ip_sets: Arc<RwLock<HashMap<String, IpSet>>>,
 }
 
 impl IpBanList {
   pub fn new() -> Self {
-    Self {
-      ip_sets: Arc::new(RwLock::new(HashMap::new()))
-    }
+    Self { ip_sets: Arc::new(RwLock::new(HashMap::new())) }
   }
 
   pub fn contains_ip_address<S: AsRef<str>>(&self, ip_address: S) -> AnyhowResult<bool> {
@@ -23,7 +21,7 @@ impl IpBanList {
       Ok(sets) => {
         for set in sets.values() {
           if set.contains_ip_address(ip_address.as_ref()) {
-            return Ok(true)
+            return Ok(true);
           }
         }
         Ok(false)
@@ -34,38 +32,28 @@ impl IpBanList {
   pub fn add_set(&self, set_name: String, ip_set: IpSet) -> AnyhowResult<Option<IpSet>> {
     match self.ip_sets.write() {
       Err(_) => Err(anyhow!("Can't read lock")),
-      Ok(mut sets) => {
-        Ok(sets.insert(set_name, ip_set))
-      },
+      Ok(mut sets) => Ok(sets.insert(set_name, ip_set)),
     }
   }
 
   pub fn remove_set(&self, set_name: &str) -> AnyhowResult<Option<IpSet>> {
     match self.ip_sets.write() {
       Err(_) => Err(anyhow!("Can't read lock")),
-      Ok(mut sets) => {
-        Ok(sets.remove(set_name))
-      },
+      Ok(mut sets) => Ok(sets.remove(set_name)),
     }
   }
 
   pub fn total_ip_address_count(&self) -> AnyhowResult<usize> {
     match self.ip_sets.read() {
       Err(_) => Err(anyhow!("Can't read lock")),
-      Ok(sets) => {
-        Ok(sets.values()
-            .map(|set| set.len())
-            .sum())
-      },
+      Ok(sets) => Ok(sets.values().map(|set| set.len()).sum()),
     }
   }
 
   pub fn set_count(&self) -> AnyhowResult<usize> {
     match self.ip_sets.read() {
       Err(_) => Err(anyhow!("Can't read lock")),
-      Ok(sets) => {
-        Ok(sets.len())
-      },
+      Ok(sets) => Ok(sets.len()),
     }
   }
 }

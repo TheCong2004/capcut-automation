@@ -17,10 +17,7 @@ struct RawRow {
 }
 
 /// Look up a non-deleted referral code by its lowercased code value.
-pub async fn lookup_referral_code_by_code<'e, 'c: 'e, E>(
-  code_lowercase: &str,
-  mysql_executor: E,
-) -> Result<Option<ReferralCodeLookupResult>, sqlx::Error>
+pub async fn lookup_referral_code_by_code<'e, 'c: 'e, E>(code_lowercase: &str, mysql_executor: E) -> Result<Option<ReferralCodeLookupResult>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -39,16 +36,11 @@ LIMIT 1
     "#,
     code_lowercase,
   )
-    .fetch_one(mysql_executor)
-    .await;
+  .fetch_one(mysql_executor)
+  .await;
 
   match result {
-    Ok(row) => Ok(Some(ReferralCodeLookupResult {
-      token: row.token,
-      owner_user_token: row.owner_user_token,
-      code: row.code,
-      code_lowercase: row.code_lowercase,
-    })),
+    Ok(row) => Ok(Some(ReferralCodeLookupResult { token: row.token, owner_user_token: row.owner_user_token, code: row.code, code_lowercase: row.code_lowercase })),
     Err(sqlx::Error::RowNotFound) => Ok(None),
     Err(err) => Err(err),
   }

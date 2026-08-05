@@ -21,9 +21,8 @@ pub struct SessionUserRecord {
 
   pub email_address: String,
   pub email_gravatar_hash: String,
-  
-  // ===== ONBOARDING STATE ===== //
 
+  // ===== ONBOARDING STATE ===== //
   pub email_confirmed: bool,
   pub email_confirmed_by_google: bool,
   pub email_is_synthetic: bool,
@@ -31,12 +30,10 @@ pub struct SessionUserRecord {
   pub username_is_not_customized: bool,
 
   // ===== PREMIUM FEATURES ===== //
-
   pub maybe_stripe_customer_id: Option<String>,
   pub maybe_loyalty_program_key: Option<String>,
 
   // ===== PREFERENCES ===== //
-
   pub disable_gravatar: bool,
   pub auto_play_audio_preference: Option<bool>,
   pub preferred_tts_result_visibility: Visibility,
@@ -51,7 +48,6 @@ pub struct SessionUserRecord {
   pub can_access_studio: bool,
 
   // ===== ROLE ===== //
-
   pub user_role_slug: String,
   pub is_banned: bool,
 
@@ -93,24 +89,18 @@ impl SessionUserRecord {
   }
 }
 
-pub async fn get_user_session_by_token_pooled_connection(
-  mysql_connection: &mut PoolConnection<MySql>,
-  session_token: &str,
-) -> Result<Option<SessionUserRecord>, sqlx::Error> {
+pub async fn get_user_session_by_token_pooled_connection(mysql_connection: &mut PoolConnection<MySql>, session_token: &str) -> Result<Option<SessionUserRecord>, sqlx::Error> {
   get_user_session_by_token(&mut **mysql_connection, session_token).await
 }
 
-
-pub async fn get_user_session_by_token<'e, 'c : 'e, E>(
-  mysql_executor: E,
-  session_token: &str,
-) -> Result<Option<SessionUserRecord>, sqlx::Error>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn get_user_session_by_token<'e, 'c: 'e, E>(mysql_executor: E, session_token: &str) -> Result<Option<SessionUserRecord>, sqlx::Error>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   // NB: Lookup failure is Err(RowNotFound).
   let maybe_user_record = sqlx::query_as!(
-      SessionUserRawDbRecord,
-        r#"
+    SessionUserRawDbRecord,
+    r#"
 SELECT
     users.token as user_token,
     users.username,
@@ -172,10 +162,10 @@ WHERE user_sessions.token = ?
     AND users.user_deleted_at IS NULL
     AND users.mod_deleted_at IS NULL
         "#,
-        session_token,
-    )
-      .fetch_one(mysql_executor)
-      .await; // TODO: This will return error if it doesn't exist
+    session_token,
+  )
+  .fetch_one(mysql_executor)
+  .await; // TODO: This will return error if it doesn't exist
 
   match maybe_user_record {
     Ok(raw_user_record) => {
@@ -228,7 +218,7 @@ WHERE user_sessions.token = ?
         can_delete_other_users_w2l_templates: nullable_i8_to_bool_default_false(raw_user_record.can_delete_other_users_w2l_templates),
         can_delete_other_users_w2l_results: nullable_i8_to_bool_default_false(raw_user_record.can_delete_other_users_w2l_results),
         can_ban_users: nullable_i8_to_bool_default_false(raw_user_record.can_ban_users),
-        can_delete_users: nullable_i8_to_bool_default_false(raw_user_record.can_delete_users) ,
+        can_delete_users: nullable_i8_to_bool_default_false(raw_user_record.can_delete_users),
       };
 
       Ok(Some(result_user_record))
@@ -240,9 +230,8 @@ WHERE user_sessions.token = ?
     Err(err) => {
       warn!("Session query error: {:?}", err);
       Err(err)
-    }
+    },
   }
-
 }
 
 struct SessionUserRawDbRecord {

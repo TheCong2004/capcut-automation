@@ -36,8 +36,7 @@ fn read_ebml_sizes<R: ReadBytes>(mut reader: R, frames: usize) -> Result<Vec<u64
         if let Some(last_size) = sizes.last().copied() {
             let delta = read_signed_vint(&mut reader)?;
             sizes.push((last_size as i64 + delta) as u64)
-        }
-        else {
+        } else {
             let size = read_unsigned_vint(&mut reader)?;
             sizes.push(size);
         }
@@ -53,8 +52,7 @@ pub(crate) fn read_xiph_sizes<R: ReadBytes>(mut reader: R, frames: usize) -> Res
         let byte = reader.read_byte()? as u64;
         if byte == 255 {
             prefixes += 1;
-        }
-        else {
+        } else {
             let size = prefixes * 255 + byte;
             prefixes = 0;
             sizes.push(size);
@@ -75,8 +73,7 @@ pub(crate) struct Frame {
 pub(crate) fn calc_abs_block_timestamp(cluster_ts: u64, rel_block_ts: i16) -> u64 {
     if rel_block_ts < 0 {
         cluster_ts - (-rel_block_ts) as u64
-    }
-    else {
+    } else {
         cluster_ts + rel_block_ts as u64
     }
 }

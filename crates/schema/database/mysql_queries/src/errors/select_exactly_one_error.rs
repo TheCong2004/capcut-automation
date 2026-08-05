@@ -22,7 +22,7 @@ impl From<sqlx::Error> for SelectExactlyOneError {
   fn from(e: sqlx::Error) -> Self {
     match e {
       sqlx::Error::RowNotFound => return SelectExactlyOneError::NotFound,
-      _ => {} // Fall-through
+      _ => {}, // Fall-through
     }
     SelectExactlyOneError::DatabaseError(e)
   }

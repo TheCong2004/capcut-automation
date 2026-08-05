@@ -12,8 +12,9 @@ use tokens::tokens::anonymous_visitor_tracking::AnonymousVisitorTrackingToken;
 use tokens::tokens::audit_logs::AuditLogToken;
 use tokens::tokens::users::UserToken;
 
-pub struct InsertAuditLogArgs<'a, 'c : 'a, E>
-  where E: 'a + Executor<'c, Database = MySql>
+pub struct InsertAuditLogArgs<'a, 'c: 'a, E>
+where
+  E: 'a + Executor<'c, Database = MySql>,
 {
   pub entity: &'a AuditLogEntity,
   pub entity_action: AuditLogEntityAction,
@@ -30,17 +31,15 @@ pub struct InsertAuditLogArgs<'a, 'c : 'a, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn insert_audit_log<'a, 'c, E>(
-  args: InsertAuditLogArgs<'a, 'c, E>,
-) -> AnyhowResult<AuditLogToken>
-  where E: 'a + Executor<'c, Database = MySql>
+pub async fn insert_audit_log<'a, 'c, E>(args: InsertAuditLogArgs<'a, 'c, E>) -> AnyhowResult<AuditLogToken>
+where
+  E: 'a + Executor<'c, Database = MySql>,
 {
-
   let audit_log_token = AuditLogToken::generate();
   let (entity_type, entity_token) = args.entity.get_composite_keys();
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO audit_logs
 SET
   token = ?,
@@ -52,17 +51,17 @@ SET
   is_actor_moderator = ?,
   actor_ip_address = ?
         "#,
-      &audit_log_token,
-      entity_type.to_str(),
-      entity_token,
-      args.entity_action.to_str(),
-      args.maybe_actor_user_token.map(|t| t.as_str()),
-      args.maybe_actor_anonymous_visitor_token.map(|t| t.as_str()),
-      args.is_actor_moderator,
-      args.actor_ip_address,
-    )
-      .execute(args.mysql_executor)
-      .await;
+    &audit_log_token,
+    entity_type.to_str(),
+    entity_token,
+    args.entity_action.to_str(),
+    args.maybe_actor_user_token.map(|t| t.as_str()),
+    args.maybe_actor_anonymous_visitor_token.map(|t| t.as_str()),
+    args.is_actor_moderator,
+    args.actor_ip_address,
+  )
+  .execute(args.mysql_executor)
+  .await;
 
   let _record_id = match query_result {
     Ok(res) => res.last_insert_id(),

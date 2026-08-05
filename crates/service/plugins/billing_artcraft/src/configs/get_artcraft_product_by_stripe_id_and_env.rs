@@ -7,9 +7,9 @@ use once_cell::sync::Lazy;
 use server_environment::ServerEnvironment;
 use std::collections::HashMap;
 
-static PRODUCTION_PRODUCTS_BY_STRIPE_ID : Lazy<HashMap<String, StripeArtcraftGenericProductInfo>> = Lazy::new(|| {
+static PRODUCTION_PRODUCTS_BY_STRIPE_ID: Lazy<HashMap<String, StripeArtcraftGenericProductInfo>> = Lazy::new(|| {
   let mut plans = HashMap::new();
- 
+
   // Subscriptions
   add_plan(&mut plans, &ARTCRAFT_BASIC_PRODUCTION);
   add_plan(&mut plans, &ARTCRAFT_PRO_PRODUCTION);
@@ -26,7 +26,7 @@ static PRODUCTION_PRODUCTS_BY_STRIPE_ID : Lazy<HashMap<String, StripeArtcraftGen
   plans
 });
 
-static SANDBOX_PRODUCTS_BY_STRIPE_ID : Lazy<HashMap<String, StripeArtcraftGenericProductInfo>> = Lazy::new(|| {
+static SANDBOX_PRODUCTS_BY_STRIPE_ID: Lazy<HashMap<String, StripeArtcraftGenericProductInfo>> = Lazy::new(|| {
   let mut plans = HashMap::new();
 
   // Subscriptions
@@ -55,4 +55,3 @@ fn add_plan(plans: &mut HashMap<String, StripeArtcraftGenericProductInfo>, produ
 fn add_credits(plans: &mut HashMap<String, StripeArtcraftGenericProductInfo>, product: &StripeArtcraftCreditsPackInfo) {
   plans.insert(product.product_id.to_string(), StripeArtcraftGenericProductInfo::CreditsPack(product.clone()));
 }
-  

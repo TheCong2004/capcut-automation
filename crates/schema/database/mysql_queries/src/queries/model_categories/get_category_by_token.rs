@@ -13,7 +13,6 @@ pub struct ModelCategory {
   //pub id: i64,
   //pub uuid_idempotency_token: String,
   //pub version: i64,
-
   pub category_token: String,
   pub model_type: String, // TODO: enum
   pub maybe_super_category_token: Option<String>,
@@ -43,13 +42,10 @@ pub struct ModelCategory {
   pub deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn get_category_by_token(
-  category_token: &str,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<ModelCategory>> {
+pub async fn get_category_by_token(category_token: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<ModelCategory>> {
   let maybe_category_record = sqlx::query_as!(
-      RawModelCategory,
-        r#"
+    RawModelCategory,
+    r#"
 SELECT
     category.token as category_token,
     category.model_type,
@@ -77,24 +73,22 @@ ON category.creator_user_token = users.token
 WHERE
     category.token = ?
         "#,
-        category_token,
-    )
-      .fetch_one(mysql_pool)
-      .await;
+    category_token,
+  )
+  .fetch_one(mysql_pool)
+  .await;
 
-  let category : RawModelCategory = match maybe_category_record {
+  let category: RawModelCategory = match maybe_category_record {
     Ok(category) => category,
     Err(err) => {
       return match err {
-        sqlx::Error::RowNotFound => {
-          Ok(None)
-        },
+        sqlx::Error::RowNotFound => Ok(None),
         _ => {
           warn!("User profile query error: {:?}", err);
           Err(anyhow!("query error"))
-        }
+        },
       }
-    }
+    },
   };
 
   let category = ModelCategory {
@@ -129,7 +123,6 @@ pub struct RawModelCategory {
   //pub id: i64,
   //pub uuid_idempotency_token: String,
   //pub version: i64,
-
   pub category_token: String,
   pub model_type: String, // TODO: enum
   pub maybe_super_category_token: Option<String>,

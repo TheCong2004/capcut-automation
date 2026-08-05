@@ -33,19 +33,13 @@ pub struct Args<'a, P: AsRef<Path>> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn insert_vocoder_model<P: AsRef<Path>>(
-  args: Args<'_, P>,
-) -> AnyhowResult<(u64, String)> {
-
+pub async fn insert_vocoder_model<P: AsRef<Path>>(args: Args<'_, P>) -> AnyhowResult<(u64, String)> {
   let model_token = VocoderModelToken::generate().to_string();
 
-  let private_bucket_object_name = &args.private_bucket_object_name
-      .as_ref()
-      .display()
-      .to_string();
+  let private_bucket_object_name = &args.private_bucket_object_name.as_ref().display().to_string();
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO vocoder_models
 SET
   token = ?,
@@ -63,29 +57,27 @@ SET
   private_bucket_hash = ?,
   private_bucket_object_name = ?
         "#,
-      &model_token,
-      args.vocoder_type.to_str(),
-      &args.title,
-      &args.original_download_url,
-      &args.original_filename,
-      args.file_size_bytes,
-      &args.creator_user_token,
-      &args.creator_ip_address,
-      &args.creator_ip_address,
-      args.creator_set_visibility.to_str(),
-      args.private_bucket_hash,
-      private_bucket_object_name,
-    )
-      .execute(args.mysql_pool)
-      .await;
+    &model_token,
+    args.vocoder_type.to_str(),
+    &args.title,
+    &args.original_download_url,
+    &args.original_filename,
+    args.file_size_bytes,
+    &args.creator_user_token,
+    &args.creator_ip_address,
+    &args.creator_ip_address,
+    args.creator_set_visibility.to_str(),
+    args.private_bucket_hash,
+    private_bucket_object_name,
+  )
+  .execute(args.mysql_pool)
+  .await;
 
   let record_id = match query_result {
-    Ok(res) => {
-      res.last_insert_id()
-    },
+    Ok(res) => res.last_insert_id(),
     Err(err) => {
       return Err(anyhow!("Mysql error: {:?}", err));
-    }
+    },
   };
 
   Ok((record_id, model_token))

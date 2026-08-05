@@ -19,9 +19,7 @@ where
 /// Rename a folder. Scoped to owner so callers can't rename a folder they
 /// don't own. Returns the number of rows updated (0 if no live folder
 /// matched).
-pub async fn update_folder_name<'e, 'c: 'e, E>(
-  args: UpdateFolderNameArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn update_folder_name<'e, 'c: 'e, E>(args: UpdateFolderNameArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -38,7 +36,7 @@ LIMIT 1
     args.folder_token.as_str(),
     args.owner_user_token.as_str(),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
   Ok(result.rows_affected())
 }

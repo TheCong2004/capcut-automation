@@ -10,4 +10,3 @@ pub struct StripeArtcraftCreditsPackInfo {
   /// are added for "quantity=1"
   pub purchase_credits_amount: u64,
 }
-

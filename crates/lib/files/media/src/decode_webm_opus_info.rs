@@ -6,19 +6,13 @@ use errors::{anyhow, AnyhowResult};
 
 use crate::decode_basic_audio_info::BasicAudioInfo;
 
-pub fn decode_mkv_or_webm(
-  media_source_stream: MediaSourceStream
-) -> AnyhowResult<BasicAudioInfo> {
-
+pub fn decode_mkv_or_webm(media_source_stream: MediaSourceStream) -> AnyhowResult<BasicAudioInfo> {
   let options = FormatOptions::default();
   let mut reader = MkvReader::try_new(media_source_stream, &options)?;
 
   // The `matroska-demuxer` crate (ver "0.4.0") (as an alternative) exposes this as
   // mkv.info().timestamp_scale()
-  let time_base = reader.default_track()
-      .map(|track| track.codec_params.time_base)
-      .flatten()
-      .ok_or_else(|| anyhow!("file did not have a default track!"))?;
+  let time_base = reader.default_track().map(|track| track.codec_params.time_base).flatten().ok_or_else(|| anyhow!("file did not have a default track!"))?;
 
   let mut last_timestamp = 0;
 

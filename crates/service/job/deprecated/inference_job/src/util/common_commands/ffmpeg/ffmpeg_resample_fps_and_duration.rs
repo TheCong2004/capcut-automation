@@ -7,7 +7,7 @@ use ffmpeg_utils::ffmpeg::ffmpeg_timestamp_from_duration::ffmpeg_timestamp_from_
 
 /// Resample a video's frame rate
 /// See: https://trac.ffmpeg.org/wiki/ChangingFrameRate
-/// 
+///
 /// Trim a video's duration
 /// See: https://shotstack.io/learn/use-ffmpeg-to-trim-video/
 pub struct FfmpegResampleFpsAndDurationArgs<'a> {

@@ -11,8 +11,8 @@ pub enum ProcessSingleJobError {
   /// This is any other kind of error.
   /// It might be important, we just haven't special cased it yet.
   Other(anyhow::Error),
- 
+
   /// We hit a feature or a path for this job that has not yet been implemented.
   /// Permanently fail the job.
-  NotYetImplemented
+  NotYetImplemented,
 }

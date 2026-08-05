@@ -22,9 +22,7 @@ use enums::by_table::debug_logs::debug_log_level::DebugLogLevel;
 use mysql_queries::queries::debug_logs::insert_debug_log::{insert_debug_log, InsertDebugLogArgs};
 use mysql_queries::queries::generic_inference::api_providers::seedance2pro::insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token::KinoviVersion;
 use mysql_queries::queries::idepotency_tokens::insert_idempotency_token::insert_idempotency_token;
-use mysql_queries::queries::prompt_context_items::insert_batch_prompt_context_items::{
-  insert_batch_prompt_context_items, InsertBatchArgs, PromptContextItem,
-};
+use mysql_queries::queries::prompt_context_items::insert_batch_prompt_context_items::{insert_batch_prompt_context_items, InsertBatchArgs, PromptContextItem};
 use mysql_queries::queries::prompts::insert_prompt::{insert_prompt, InsertPromptArgs};
 use tokens::tokens::characters::CharacterToken;
 use tokens::tokens::generic_inference_jobs::InferenceJobToken;
@@ -66,12 +64,7 @@ use crate::util::lookup::lookup_media_files_as_cdn_url_list_and_map::lookup_medi
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn omni_api_video_generate_handler(
-  http_request: HttpRequest,
-  mut request: Json<OmniApiVideoGenerateRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<OmniGenVideoGenerateResponse>, CommonWebError> {
-
+pub async fn omni_api_video_generate_handler(http_request: HttpRequest, mut request: Json<OmniApiVideoGenerateRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<OmniGenVideoGenerateResponse>, CommonWebError> {
   info!("request: {:?}", request);
 
   // Validate URL/media-token preconditions before any billable or DB-mutating work.
@@ -85,9 +78,7 @@ pub async fn omni_api_video_generate_handler(
 
   let debug_log_event_token = DebugLogEventToken::generate();
 
-  let maybe_prompt_model_type: Option<CommonModelType> = request.model
-    .as_ref()
-    .map(|m| m.to_common_model_type());
+  let maybe_prompt_model_type: Option<CommonModelType> = request.model.as_ref().map(|m| m.to_common_model_type());
 
   // ==================== API KEY USER ==================== //
 
@@ -105,20 +96,16 @@ pub async fn omni_api_video_generate_handler(
 
   // ==================== IDEMPOTENCY ==================== //
 
-  let idempotency_token = request.idempotency_token.as_deref()
-    .unwrap_or("")
-    .to_string();
+  let idempotency_token = request.idempotency_token.as_deref().unwrap_or("").to_string();
 
   if let Err(reason) = validate_idempotency_token_format(&idempotency_token) {
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(&idempotency_token, &mut *mysql_connection)
-    .await
-    .map_err(|err| {
-      error!("Error inserting idempotency token: {:?}", err);
-      CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
-    })?;
+  insert_idempotency_token(&idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
+  })?;
 
   let ip_address = get_request_ip(&http_request);
   let request_url = http_request.uri().to_string();
@@ -128,11 +115,7 @@ pub async fn omni_api_video_generate_handler(
   // Download any URL media inputs into media files owned by this user, then
   // treat them as media tokens. Release the pooled connection first so we don't
   // hold a pool slot during the (network) downloads.
-  let has_url_inputs = request.start_frame_image_url.is_some()
-    || request.end_frame_image_url.is_some()
-    || request.reference_image_urls.is_some()
-    || request.reference_video_urls.is_some()
-    || request.reference_audio_urls.is_some();
+  let has_url_inputs = request.start_frame_image_url.is_some() || request.end_frame_image_url.is_some() || request.reference_image_urls.is_some() || request.reference_video_urls.is_some() || request.reference_audio_urls.is_some();
 
   if has_url_inputs {
     drop(mysql_connection);
@@ -164,22 +147,13 @@ pub async fn omni_api_video_generate_handler(
     None
   } else {
     info!("Resolving {} media file tokens to CDN URLs", all_tokens.len());
-    let resolved = lookup_media_files_as_cdn_url_list_and_map(
-      &http_request,
-      &mut mysql_connection,
-      server_state.server_environment,
-      &all_tokens,
-    ).await?;
+    let resolved = lookup_media_files_as_cdn_url_list_and_map(&http_request, &mut mysql_connection, server_state.server_environment, &all_tokens).await?;
     Some(resolved.token_to_url_map)
   };
 
   // ==================== RESOLVE CHARACTERS ==================== //
 
-  let kinovi_character_id_map: Option<HashMap<CharacterToken, String>> =
-    resolve_kinovi_character_ids(
-      request.reference_character_tokens.as_deref(),
-      &mut mysql_connection,
-    ).await?;
+  let kinovi_character_id_map: Option<HashMap<CharacterToken, String>> = resolve_kinovi_character_ids(request.reference_character_tokens.as_deref(), &mut mysql_connection).await?;
 
   // ==================== HYDRATE ROUTER REQUEST ==================== //
 
@@ -204,17 +178,7 @@ pub async fn omni_api_video_generate_handler(
 
   // ==================== DEBUG LOG: HTTP REQUEST ==================== //
 
-  if let Err(err) = insert_debug_log(InsertDebugLogArgs {
-    apriori_debug_log_event_token: Some(&debug_log_event_token),
-    maybe_creator_user_token: Some(user_token),
-    debug_log_type: DebugLogType::HttpRequest,
-    maybe_log_level: Some(DebugLogLevel::Info),
-    maybe_ip_address: Some(&ip_address),
-    maybe_url: Some(&request_url),
-    message: &serde_json::to_string(&*request).unwrap_or_default(),
-    mysql_executor: &mut *mysql_connection,
-    phantom: Default::default(),
-  }).await {
+  if let Err(err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(&debug_log_event_token), maybe_creator_user_token: Some(user_token), debug_log_type: DebugLogType::HttpRequest, maybe_log_level: Some(DebugLogLevel::Info), maybe_ip_address: Some(&ip_address), maybe_url: Some(&request_url), message: &serde_json::to_string(&*request).unwrap_or_default(), mysql_executor: &mut *mysql_connection, phantom: Default::default() }).await {
     warn!("Failed to insert HTTP request debug log: {:?}", err);
   }
 
@@ -223,23 +187,9 @@ pub async fn omni_api_video_generate_handler(
   // call — holding a pool slot across that call is what starves the pool and causes PoolTimedOut
   // on unrelated endpoints. We re-acquire below to write the result.
 
-  let debug_log_context = GenerationDebugLogContext {
-    event_token: &debug_log_event_token,
-    user_token,
-    ip_address: &ip_address,
-    request_url: &request_url,
-  };
+  let debug_log_context = GenerationDebugLogContext { event_token: &debug_log_event_token, user_token, ip_address: &ip_address, request_url: &request_url };
 
-  let pipeline_result = run_pipeline_v2(RunPipelineV2Args {
-    router_builder: &router_builder,
-    server_state: &server_state,
-    user_token,
-    media_file_to_url_map: &media_file_to_url_map,
-    kinovi_character_id_map: &kinovi_character_id_map,
-    kinovi_account,
-    debug_log_context: &debug_log_context,
-    mysql_connection,
-  }).await;
+  let pipeline_result = run_pipeline_v2(RunPipelineV2Args { router_builder: &router_builder, server_state: &server_state, user_token, media_file_to_url_map: &media_file_to_url_map, kinovi_character_id_map: &kinovi_character_id_map, kinovi_account, debug_log_context: &debug_log_context, mysql_connection }).await;
 
   // ==================== DEBUG LOG: PIPELINE ERROR ==================== //
 
@@ -248,22 +198,12 @@ pub async fn omni_api_video_generate_handler(
     Err(err) => {
       // Best-effort error log; never mask the original error.
       if let Ok(mut error_log_connection) = server_state.mysql_pool.acquire().await {
-        if let Err(log_err) = insert_debug_log(InsertDebugLogArgs {
-          apriori_debug_log_event_token: Some(&debug_log_event_token),
-          maybe_creator_user_token: Some(user_token),
-          debug_log_type: DebugLogType::BackendFailure,
-          maybe_log_level: Some(DebugLogLevel::Error),
-          maybe_ip_address: Some(&ip_address),
-          maybe_url: Some(&request_url),
-          message: &format!("Video generation pipeline failed: {:?}", err),
-          mysql_executor: &mut *error_log_connection,
-          phantom: Default::default(),
-        }).await {
+        if let Err(log_err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(&debug_log_event_token), maybe_creator_user_token: Some(user_token), debug_log_type: DebugLogType::BackendFailure, maybe_log_level: Some(DebugLogLevel::Error), maybe_ip_address: Some(&ip_address), maybe_url: Some(&request_url), message: &format!("Video generation pipeline failed: {:?}", err), mysql_executor: &mut *error_log_connection, phantom: Default::default() }).await {
           warn!("Failed to insert pipeline error debug log: {:?}", log_err);
         }
       }
       return Err(err);
-    }
+    },
   };
 
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
@@ -283,31 +223,12 @@ pub async fn omni_api_video_generate_handler(
 
   // -- Prompt --
 
-  let prompt_token = match insert_prompt(InsertPromptArgs {
-    maybe_apriori_prompt_token: None,
-    prompt_type: PromptType::ArtcraftApp,
-    maybe_creator_user_token: Some(user_token),
-    maybe_model_type: maybe_prompt_model_type,
-    maybe_generation_provider: Some(GenerationProvider::Artcraft),
-    maybe_positive_prompt: request.prompt.as_deref(),
-    maybe_negative_prompt: request.negative_prompt.as_deref(),
-    maybe_other_args: None,
-    maybe_generation_mode: Some(determine_generation_mode(&request)),
-    maybe_aspect_ratio: request.aspect_ratio,
-    maybe_resolution: request.resolution,
-    maybe_bitrate: request.bitrate,
-    maybe_batch_count: request.video_batch_count.map(|c| c as u8),
-    maybe_generate_audio: request.generate_audio,
-    maybe_duration_seconds: request.duration_seconds.map(|d| d as u32),
-    creator_ip_address: &ip_address,
-    mysql_executor: &mut *transaction,
-    phantom: Default::default(),
-  }).await {
+  let prompt_token = match insert_prompt(InsertPromptArgs { maybe_apriori_prompt_token: None, prompt_type: PromptType::ArtcraftApp, maybe_creator_user_token: Some(user_token), maybe_model_type: maybe_prompt_model_type, maybe_generation_provider: Some(GenerationProvider::Artcraft), maybe_positive_prompt: request.prompt.as_deref(), maybe_negative_prompt: request.negative_prompt.as_deref(), maybe_other_args: None, maybe_generation_mode: Some(determine_generation_mode(&request)), maybe_aspect_ratio: request.aspect_ratio, maybe_resolution: request.resolution, maybe_bitrate: request.bitrate, maybe_batch_count: request.video_batch_count.map(|c| c as u8), maybe_generate_audio: request.generate_audio, maybe_duration_seconds: request.duration_seconds.map(|d| d as u32), creator_ip_address: &ip_address, mysql_executor: &mut *transaction, phantom: Default::default() }).await {
     Ok(token) => Some(token),
     Err(err) => {
       warn!("Error inserting prompt: {:?}", err);
       None
-    }
+    },
   };
 
   // -- Prompt context items --
@@ -316,40 +237,24 @@ pub async fn omni_api_video_generate_handler(
     let mut context_items = Vec::new();
 
     if let Some(media_token) = &request.start_frame_image_media_token {
-      context_items.push(PromptContextItem {
-        media_token: media_token.clone(),
-        context_semantic_type: PromptContextSemanticType::VidStartFrame,
-      });
+      context_items.push(PromptContextItem { media_token: media_token.clone(), context_semantic_type: PromptContextSemanticType::VidStartFrame });
     }
     if let Some(media_token) = &request.end_frame_image_media_token {
-      context_items.push(PromptContextItem {
-        media_token: media_token.clone(),
-        context_semantic_type: PromptContextSemanticType::VidEndFrame,
-      });
+      context_items.push(PromptContextItem { media_token: media_token.clone(), context_semantic_type: PromptContextSemanticType::VidEndFrame });
     }
     if let Some(ref_tokens) = &request.reference_image_media_tokens {
       for media_token in ref_tokens {
-        context_items.push(PromptContextItem {
-          media_token: media_token.clone(),
-          context_semantic_type: PromptContextSemanticType::Imgref,
-        });
+        context_items.push(PromptContextItem { media_token: media_token.clone(), context_semantic_type: PromptContextSemanticType::Imgref });
       }
     }
     if let Some(ref_tokens) = &request.reference_video_media_tokens {
       for media_token in ref_tokens {
-        context_items.push(PromptContextItem {
-          media_token: media_token.clone(),
-          context_semantic_type: PromptContextSemanticType::VidRef,
-        });
+        context_items.push(PromptContextItem { media_token: media_token.clone(), context_semantic_type: PromptContextSemanticType::VidRef });
       }
     }
 
     if !context_items.is_empty() {
-      if let Err(err) = insert_batch_prompt_context_items(InsertBatchArgs {
-        prompt_token: token.clone(),
-        items: context_items,
-        transaction: &mut transaction,
-      }).await {
+      if let Err(err) = insert_batch_prompt_context_items(InsertBatchArgs { prompt_token: token.clone(), items: context_items, transaction: &mut transaction }).await {
         warn!("Error inserting batch prompt context items: {:?}", err);
       }
     }
@@ -385,9 +290,10 @@ pub async fn omni_api_video_generate_handler(
           ip_address: &ip_address,
           transaction: &mut transaction,
         },
-      }).await?;
+      })
+      .await?;
       (result.primary_job_token, result.all_job_tokens)
-    }
+    },
     GenerateVideoResponse::Fal(payload) => {
       let external_id = payload.request_id.as_deref().ok_or_else(|| {
         error!("Fal generation response missing request_id");
@@ -409,19 +315,12 @@ pub async fn omni_api_video_generate_handler(
           ip_address: &ip_address,
           transaction: &mut transaction,
         },
-      }).await?;
+      })
+      .await?;
 
-      (
-        token.clone(), 
-        vec![token],
-      )
-    }
-    GenerateVideoResponse::Artcraft(payload) => {
-      (
-        payload.inference_job_token.clone(),
-        vec![payload.inference_job_token.clone()],
-      )
-    }
+      (token.clone(), vec![token])
+    },
+    GenerateVideoResponse::Artcraft(payload) => (payload.inference_job_token.clone(), vec![payload.inference_job_token.clone()]),
     GenerateVideoResponse::GmiCloud(payload) => {
       info!("Inserting GmiCloud job with token: {:?}", pipeline_result.billing.apriori_job_token);
       let token = insert_gmicloud_job(InsertGmiCloudJobArgs {
@@ -439,13 +338,11 @@ pub async fn omni_api_video_generate_handler(
           ip_address: &ip_address,
           transaction: &mut transaction,
         },
-      }).await?;
+      })
+      .await?;
 
-      (
-        token.clone(),
-        vec![token],
-      )
-    }
+      (token.clone(), vec![token])
+    },
     GenerateVideoResponse::Grok(payload) => {
       info!("Inserting Grok (xAI) API job with token: {:?}", pipeline_result.billing.apriori_job_token);
       let token = insert_grok_api_job(InsertGrokApiJobArgs {
@@ -463,17 +360,15 @@ pub async fn omni_api_video_generate_handler(
           ip_address: &ip_address,
           transaction: &mut transaction,
         },
-      }).await?;
+      })
+      .await?;
 
-      (
-        token.clone(),
-        vec![token],
-      )
-    }
+      (token.clone(), vec![token])
+    },
     other => {
       error!("Unexpected generation response variant: {:?}", other);
       return Err(CommonWebError::server_error_with_message("Unexpected generation response"));
-    }
+    },
   };
 
   transaction.commit().await.map_err(|err| {
@@ -481,25 +376,17 @@ pub async fn omni_api_video_generate_handler(
     CommonWebError::from_error(err)
   })?;
 
-  Ok(Json(OmniGenVideoGenerateResponse {
-    success: true,
-    inference_job_token: primary_job_token,
-    all_job_tokens,
-  }))
+  Ok(Json(OmniGenVideoGenerateResponse { success: true, inference_job_token: primary_job_token, all_job_tokens }))
 }
 
 fn determine_generation_mode(request: &OmniApiVideoGenerateRequest) -> CommonGenerationMode {
-  let has_keyframe = request.start_frame_image_media_token.is_some()
-    || request.end_frame_image_media_token.is_some();
+  let has_keyframe = request.start_frame_image_media_token.is_some() || request.end_frame_image_media_token.is_some();
 
   if has_keyframe {
     return CommonGenerationMode::Keyframe;
   }
 
-  let has_reference = request.reference_image_media_tokens.as_ref().is_some_and(|t| !t.is_empty())
-    || request.reference_video_media_tokens.as_ref().is_some_and(|t| !t.is_empty())
-    || request.reference_audio_media_tokens.as_ref().is_some_and(|t| !t.is_empty())
-    || request.reference_character_tokens.as_ref().is_some_and(|t| !t.is_empty());
+  let has_reference = request.reference_image_media_tokens.as_ref().is_some_and(|t| !t.is_empty()) || request.reference_video_media_tokens.as_ref().is_some_and(|t| !t.is_empty()) || request.reference_audio_media_tokens.as_ref().is_some_and(|t| !t.is_empty()) || request.reference_character_tokens.as_ref().is_some_and(|t| !t.is_empty());
 
   if has_reference {
     return CommonGenerationMode::Reference;

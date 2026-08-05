@@ -1,7 +1,7 @@
 use rand::Rng;
 
-const SYNTHETIC_EMAIL_PREFIX : &str = "synthetic.email";
-const SYNTHETIC_EMAIL_DOMAIN : &str = "getartcraft.com";
+const SYNTHETIC_EMAIL_PREFIX: &str = "synthetic.email";
+const SYNTHETIC_EMAIL_DOMAIN: &str = "getartcraft.com";
 
 pub fn generate_random_synthetic_email() -> String {
   let random_digit = rand::thread_rng().gen_range(u32::MIN..u32::MAX);

@@ -5,7 +5,7 @@ use crockford::crockford_entropy_lower;
 use crate::legacy::typified_paths::public::public_path::PublicPath;
 use crate::legacy::typified_paths::public::weight_uploads::bucket_directory::WeightUploadDirectory;
 
-const ORIGINAL_FILE_BASENAME : &str = "original_upload.bin";
+const ORIGINAL_FILE_BASENAME: &str = "original_upload.bin";
 
 #[derive(Clone)]
 pub struct WeightUploadOriginalFilePath {
@@ -16,7 +16,6 @@ pub struct WeightUploadOriginalFilePath {
 impl PublicPath for WeightUploadOriginalFilePath {}
 
 impl WeightUploadOriginalFilePath {
-
   pub fn generate_new() -> Self {
     let entropy = crockford_entropy_lower(32);
     Self::from_object_hash(&entropy)
@@ -26,10 +25,7 @@ impl WeightUploadOriginalFilePath {
     // TODO: Path construction could be cleaner.
     let directory = WeightUploadDirectory::from_object_hash(hash);
     let full_object_path = format!("{}/{}", directory.get_directory_path_str(), ORIGINAL_FILE_BASENAME);
-    Self {
-      directory,
-      full_object_path,
-    }
+    Self { directory, full_object_path }
   }
 
   pub fn get_full_object_path_str(&self) -> &str {

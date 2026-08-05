@@ -10,11 +10,7 @@ pub fn ffmpeg_timestamp_from_duration(duration: Duration) -> String {
   let minutes = (seconds % 3600) / 60;
   let seconds = seconds % 60;
 
-  if millis > 0 {
-    format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis)
-  } else {
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
-  }
+  if millis > 0 { format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis) } else { format!("{:02}:{:02}:{:02}", hours, minutes, seconds) }
 }
 
 #[cfg(test)]

@@ -19,10 +19,7 @@ pub struct WalletForModerationResult {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn get_wallet_for_moderation(
-  wallet_token: &WalletToken,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Option<WalletForModerationResult>> {
+pub async fn get_wallet_for_moderation(wallet_token: &WalletToken, mysql_pool: &MySqlPool) -> AnyhowResult<Option<WalletForModerationResult>> {
   let result = sqlx::query_as!(
     WalletForModerationResult,
     r#"
@@ -41,8 +38,8 @@ LIMIT 1
     "#,
     wallet_token,
   )
-    .fetch_one(mysql_pool)
-    .await;
+  .fetch_one(mysql_pool)
+  .await;
 
   match result {
     Ok(record) => Ok(Some(record)),
@@ -50,6 +47,6 @@ LIMIT 1
     Err(err) => {
       warn!("get_wallet_for_moderation query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }

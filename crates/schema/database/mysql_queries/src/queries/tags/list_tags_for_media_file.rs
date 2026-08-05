@@ -19,9 +19,7 @@ where
 /// All (live) tags on a media file, sorted by tag value. Not paginated —
 /// tag counts per file are small. Not scoped to any user: per-file tags
 /// are publicly visible.
-pub async fn list_tags_for_media_file<'e, 'c: 'e, E>(
-  args: ListTagsForMediaFileArgs<'e, 'c, E>,
-) -> Result<Vec<TagRow>, sqlx::Error>
+pub async fn list_tags_for_media_file<'e, 'c: 'e, E>(args: ListTagsForMediaFileArgs<'e, 'c, E>) -> Result<Vec<TagRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -42,16 +40,8 @@ ORDER BY t.tag_value_lowercase ASC
     "#,
     args.media_file_token.as_str(),
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
-  Ok(rows.into_iter()
-    .map(|r| TagRow {
-      id: r.id,
-      token: r.token,
-      tag_value: r.tag_value,
-      tag_value_lowercase: r.tag_value_lowercase,
-      use_count: r.use_count,
-    })
-    .collect())
+  Ok(rows.into_iter().map(|r| TagRow { id: r.id, token: r.token, tag_value: r.tag_value, tag_value_lowercase: r.tag_value_lowercase, use_count: r.use_count }).collect())
 }

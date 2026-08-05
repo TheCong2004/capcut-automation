@@ -129,47 +129,30 @@ pub struct GoogleCreateAccountSuccessResponse {
     ("request" = GoogleCreateAccountRequest, description = "Payload for Request"),
   )
 )]
-pub async fn google_sso_handler(
-  http_request: HttpRequest,
-  request: Json<GoogleCreateAccountRequest>,
-  mysql_pool: Data<MySqlPool>,
-  session_cookie_manager: Data<HttpUserSessionManager>,
-  google_sign_in_cert: Data<GoogleSignInCert>,
-) -> Result<HttpResponse, CommonWebError>
-{
+pub async fn google_sso_handler(http_request: HttpRequest, request: Json<GoogleCreateAccountRequest>, mysql_pool: Data<MySqlPool>, session_cookie_manager: Data<HttpUserSessionManager>, google_sign_in_cert: Data<GoogleSignInCert>) -> Result<HttpResponse, CommonWebError> {
   let claims = check_claims(&request, &google_sign_in_cert).await?;
 
-  info!("Google JWT credential claims: email {:?}, verified: {}",
-    claims.email(),
-    claims.email_verified());
+  info!("Google JWT credential claims: email {:?}, verified: {}", claims.email(), claims.email_verified());
 
-  let claims_subject = claims.subject()
-      .map(|s| s.to_string())
-      .ok_or_else(|| {
-        warn!("no subject in google claims");
-        CommonWebError::BadInputWithSimpleMessage("no subject in google claims".to_string())
-      })?;
+  let claims_subject = claims.subject().map(|s| s.to_string()).ok_or_else(|| {
+    warn!("no subject in google claims");
+    CommonWebError::BadInputWithSimpleMessage("no subject in google claims".to_string())
+  })?;
 
-  let claims_email_address = claims.email()
-      .map(|email| email.to_string())
-      .ok_or_else(|| {
-        warn!("no email address in google claims");
-        CommonWebError::BadInputWithSimpleMessage("no email address in google claims".to_string())
-      })?;
+  let claims_email_address = claims.email().map(|email| email.to_string()).ok_or_else(|| {
+    warn!("no email address in google claims");
+    CommonWebError::BadInputWithSimpleMessage("no email address in google claims".to_string())
+  })?;
 
-  let mut mysql_connection = mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        warn!("Could not acquire DB pool: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut mysql_connection = mysql_pool.acquire().await.map_err(|e| {
+    warn!("Could not acquire DB pool: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let maybe_sso_account = get_google_sign_in_account(&claims_subject, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        warn!("error getting google sign in account: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let maybe_sso_account = get_google_sign_in_account(&claims_subject, &mut *mysql_connection).await.map_err(|err| {
+    warn!("error getting google sign in account: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
   let user_token;
   let maybe_user_display_name;
@@ -177,60 +160,26 @@ pub async fn google_sso_handler(
 
   match maybe_sso_account {
     Some(sso_account) => {
-      let existing_user_token = handle_existing_sso_account(ExistingAccountArgs {
-        http_request: &http_request,
-        sso_account: &sso_account,
-        claims,
-        claims_email_address: &claims_email_address,
-        mysql_connection: &mut mysql_connection,
-      }).await?;
+      let existing_user_token = handle_existing_sso_account(ExistingAccountArgs { http_request: &http_request, sso_account: &sso_account, claims, claims_email_address: &claims_email_address, mysql_connection: &mut mysql_connection }).await?;
 
       user_token = existing_user_token;
       maybe_user_display_name = sso_account.maybe_user_display_name.clone();
       username_not_yet_customized = false;
     },
     None => {
-      let maybe_referral_url = request.maybe_referral_url.clone()
-        .or_else(|| {
-          http_request.headers().get("referer")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string())
-        });
+      let maybe_referral_url = request.maybe_referral_url.clone().or_else(|| http_request.headers().get("referer").and_then(|v| v.to_str().ok()).map(|s| s.to_string()));
 
       let maybe_landing_url = request.maybe_landing_url.clone();
 
       // Resolve referral info from code (preferred) or username (fallback).
-      let referral_info = resolve_referral_info(
-        request.maybe_referral_code.as_deref(),
-        request.maybe_referral_username.as_deref(),
-        &mut mysql_connection,
-      ).await;
+      let referral_info = resolve_referral_info(request.maybe_referral_code.as_deref(), request.maybe_referral_username.as_deref(), &mut mysql_connection).await;
 
-      let result = handle_new_sso_account(NewSsoArgs {
-        http_request: &http_request,
-        claims,
-        claims_subject: &claims_subject,
-        claims_email_address: &claims_email_address,
-        mysql_connection: &mut mysql_connection,
-        maybe_referral_url: maybe_referral_url.clone(),
-        maybe_landing_url: maybe_landing_url.clone(),
-        maybe_referral_partner: referral_info.maybe_referral_partner,
-        maybe_referral_user_token: referral_info.maybe_referral_user_token.clone(),
-      }).await?;
+      let result = handle_new_sso_account(NewSsoArgs { http_request: &http_request, claims, claims_subject: &claims_subject, claims_email_address: &claims_email_address, mysql_connection: &mut mysql_connection, maybe_referral_url: maybe_referral_url.clone(), maybe_landing_url: maybe_landing_url.clone(), maybe_referral_partner: referral_info.maybe_referral_partner, maybe_referral_user_token: referral_info.maybe_referral_user_token.clone() }).await?;
 
       // Record the referral relationship if this is a genuinely new account.
       if result.is_new_account {
         if let Some(referrer_user_token) = &referral_info.maybe_referral_user_token {
-          if let Err(err) = insert_user_referral(
-            InsertUserReferralArgs {
-              invited_user_token: &result.user_token,
-              referrer_user_token,
-              maybe_referral_code_token: referral_info.maybe_referral_code_token.as_ref(),
-              maybe_referral_url: maybe_referral_url.as_deref(),
-              maybe_landing_url: maybe_landing_url.as_deref(),
-            },
-            &mut *mysql_connection,
-          ).await {
+          if let Err(err) = insert_user_referral(InsertUserReferralArgs { invited_user_token: &result.user_token, referrer_user_token, maybe_referral_code_token: referral_info.maybe_referral_code_token.as_ref(), maybe_referral_url: maybe_referral_url.as_deref(), maybe_landing_url: maybe_landing_url.as_deref() }, &mut *mysql_connection).await {
             warn!("Failed to insert user_referral record (continuing): {:?}", err);
           }
         }
@@ -244,15 +193,10 @@ pub async fn google_sso_handler(
 
   let ip_address = get_request_ip(&http_request);
 
-  let session_token = create_user_session_with_transactor(
-    &user_token,
-    &ip_address,
-    Transactor::for_connection(&mut mysql_connection))
-      .await
-      .map_err(|e| {
-        warn!("error creating user session: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  let session_token = create_user_session_with_transactor(&user_token, &ip_address, Transactor::for_connection(&mut mysql_connection)).await.map_err(|e| {
+    warn!("error creating user session: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
   info!("new user session created");
 
@@ -263,23 +207,10 @@ pub async fn google_sso_handler(
   //      CreateAccountErrorResponse::server_error()
   //    })?;
 
-  construct_http_response(
-    &session_cookie_manager,
-    &session_token,
-    &user_token,
-    maybe_user_display_name,
-    username_not_yet_customized,
-  )
+  construct_http_response(&session_cookie_manager, &session_token, &user_token, maybe_user_display_name, username_not_yet_customized)
 }
 
-pub fn construct_http_response(
-  session_cookie_manager: &HttpUserSessionManager,
-  session_token: &UserSessionToken,
-  user_token: &UserToken,
-  maybe_user_display_name: Option<String>,
-  username_not_yet_customized: bool,
-) -> Result<HttpResponse, CommonWebError> {
-
+pub fn construct_http_response(session_cookie_manager: &HttpUserSessionManager, session_token: &UserSessionToken, user_token: &UserToken, maybe_user_display_name: Option<String>, username_not_yet_customized: bool) -> Result<HttpResponse, CommonWebError> {
   let session_cookie = match session_cookie_manager.create_cookie(&session_token, &user_token) {
     Ok(cookie) => cookie,
     Err(err) => return Err(CommonWebError::from_error(err)),
@@ -290,17 +221,9 @@ pub fn construct_http_response(
     Err(err) => return Err(CommonWebError::from_error(err)),
   };
 
-  let response = GoogleCreateAccountSuccessResponse {
-    success: true,
-    signed_session,
-    username_not_yet_customized,
-    maybe_user_display_name,
-  };
+  let response = GoogleCreateAccountSuccessResponse { success: true, signed_session, username_not_yet_customized, maybe_user_display_name };
 
   let body = serde_json::to_string(&response)?;
 
-  Ok(HttpResponse::Ok()
-      .cookie(session_cookie)
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().cookie(session_cookie).content_type("application/json").body(body))
 }

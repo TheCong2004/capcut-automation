@@ -12,7 +12,6 @@ pub enum FeaturedItemEntity {
 
 // TODO(bt, 2024-01-16): Codegen? Make traits for these? Maybe overkill.
 impl FeaturedItemEntity {
-
   pub fn from_entity_type_and_token(entity_type: FeaturedItemEntityType, token: &str) -> Self {
     match entity_type {
       FeaturedItemEntityType::ModelWeight => Self::ModelWeight(ModelWeightToken::new_from_str(token)),

@@ -17,8 +17,8 @@ pub async fn get_pending_tts_inference_job_detailed_stats(mysql_pool: &MySqlPool
   // NB(2022-03-05): The "seconds_since_first" result might return null if no pending, so IFNULL
   //  means we won't fail the full query.
   let maybe_result = sqlx::query_as!(
-      PendingCountResult,
-        r#"
+    PendingCountResult,
+    r#"
 SELECT
   IFNULL((
     SELECT
@@ -60,9 +60,9 @@ FROM
     WHERE t5.status = "attempt_failed"
   ) as sub5
         "#,
-    )
-      .fetch_one(mysql_pool)
-      .await;
+  )
+  .fetch_one(mysql_pool)
+  .await;
 
   match maybe_result {
     Ok(result) => Ok(Some(result)),
@@ -71,9 +71,7 @@ FROM
         // NB: Not Found for null results means nothing is pending in the queue (not an error!)
         Ok(None)
       },
-      _ => {
-        Err(anyhow!("error querying tts stats: {:?}", err))
-      }
-    }
+      _ => Err(anyhow!("error querying tts stats: {:?}", err)),
+    },
   }
 }

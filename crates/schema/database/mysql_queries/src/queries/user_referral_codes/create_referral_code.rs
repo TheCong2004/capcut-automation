@@ -9,10 +9,7 @@ pub struct CreateReferralCodeArgs<'a> {
   pub code_lowercase: &'a str,
 }
 
-pub async fn create_referral_code<'e, 'c: 'e, E>(
-  args: CreateReferralCodeArgs<'_>,
-  mysql_executor: E,
-) -> Result<UserReferralCodeToken, DatabaseInsertError>
+pub async fn create_referral_code<'e, 'c: 'e, E>(args: CreateReferralCodeArgs<'_>, mysql_executor: E) -> Result<UserReferralCodeToken, DatabaseInsertError>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -33,9 +30,9 @@ VALUES (?, ?, ?, ?)
     args.code_lowercase,
     args.owner_user_token.as_str(),
   )
-    .execute(mysql_executor)
-    .await
-    .map_err(DatabaseInsertError::from)?;
+  .execute(mysql_executor)
+  .await
+  .map_err(DatabaseInsertError::from)?;
 
   Ok(token)
 }

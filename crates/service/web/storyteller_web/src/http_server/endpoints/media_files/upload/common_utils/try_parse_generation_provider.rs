@@ -14,7 +14,7 @@ pub fn try_parse_generation_provider(value: &str) -> Option<GenerationProvider> 
     Err(_) => {
       warn!("Could not parse generation provider: {:?}", trimmed);
       None
-    }
+    },
   }
 }
 

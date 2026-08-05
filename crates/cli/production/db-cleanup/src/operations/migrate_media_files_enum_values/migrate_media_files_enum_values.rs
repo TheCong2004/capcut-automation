@@ -21,14 +21,16 @@ pub async fn migrate_media_files_enum_values(_args: &Args, mysql: &Pool<MySql>) 
       from media_files
       where media_class = "unknown"
       and maybe_origin_model_type = "so_vits_svc"
-    "#.to_string(),
+    "#
+    .to_string(),
     migrate_query: r#"
       update media_files
       set media_class = "audio"
       where media_class = "unknown"
       and maybe_origin_model_type = "so_vits_svc"
       limit 50000
-    "#.to_string(),
+    "#
+    .to_string(),
   };
 
   let _query_pair = QueryPair {
@@ -37,14 +39,16 @@ pub async fn migrate_media_files_enum_values(_args: &Args, mysql: &Pool<MySql>) 
       from media_files
       where media_class = "unknown"
       and maybe_origin_model_type = "rvc_v2"
-    "#.to_string(),
+    "#
+    .to_string(),
     migrate_query: r#"
       update media_files
       set media_class = "audio"
       where media_class = "unknown"
       and maybe_origin_model_type = "rvc_v2"
       limit 50000
-    "#.to_string(),
+    "#
+    .to_string(),
   };
 
   //  +--------------+
@@ -59,14 +63,16 @@ pub async fn migrate_media_files_enum_values(_args: &Args, mysql: &Pool<MySql>) 
       from media_files
       where media_class = "unknown"
       and media_type = "audio"
-    "#.to_string(),
+    "#
+    .to_string(),
     migrate_query: r#"
       update media_files
       set media_class = "audio"
       where media_class = "unknown"
       and media_type = "audio"
       limit 100000
-    "#.to_string(),
+    "#
+    .to_string(),
   };
 
   let query_pair = QueryPair {
@@ -75,14 +81,16 @@ pub async fn migrate_media_files_enum_values(_args: &Args, mysql: &Pool<MySql>) 
       from media_files
       where media_class = "unknown"
       and media_type = "video"
-    "#.to_string(),
+    "#
+    .to_string(),
     migrate_query: r#"
       update media_files
       set media_class = "video"
       where media_class = "unknown"
       and media_type = "video"
       limit 100000
-    "#.to_string(),
+    "#
+    .to_string(),
   };
 
   query_pair.run_migration(mysql).await?;

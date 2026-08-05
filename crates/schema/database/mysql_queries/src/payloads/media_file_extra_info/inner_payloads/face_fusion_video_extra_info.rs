@@ -23,10 +23,7 @@ mod tests {
 
   #[test]
   fn base_case() {
-    let payload = MediaFileExtraInfo::F(FaceFusionVideoExtraInfo {
-      maybe_audio_media_token: Some(MediaFileToken::new_from_str("audio")),
-      image_or_video_media_token: Some(MediaFileToken::new_from_str("image")),
-    });
+    let payload = MediaFileExtraInfo::F(FaceFusionVideoExtraInfo { maybe_audio_media_token: Some(MediaFileToken::new_from_str("audio")), image_or_video_media_token: Some(MediaFileToken::new_from_str("image")) });
 
     let json = r#"{"F":{"a":"audio","i":"image"}}"#;
 

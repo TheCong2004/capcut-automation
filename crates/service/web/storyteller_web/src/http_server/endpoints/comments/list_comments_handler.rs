@@ -50,27 +50,26 @@ pub struct Comment {
   pub comment_rendered_html: String,
 
   //pub mod_fields: CommentForListModFields,
-
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
   pub maybe_edited_at: Option<DateTime<Utc>>,
 
-  #[deprecated(note="switch to UserDetailsLight")]
+  #[deprecated(note = "switch to UserDetailsLight")]
   pub user_token: UserToken,
 
-  #[deprecated(note="switch to UserDetailsLight")]
+  #[deprecated(note = "switch to UserDetailsLight")]
   pub username: String,
 
-  #[deprecated(note="switch to UserDetailsLight")]
+  #[deprecated(note = "switch to UserDetailsLight")]
   pub user_display_name: String,
 
-  #[deprecated(note="switch to UserDetailsLight")]
+  #[deprecated(note = "switch to UserDetailsLight")]
   pub user_gravatar_hash: String,
 
-  #[deprecated(note="switch to UserDetailsLight")]
+  #[deprecated(note = "switch to UserDetailsLight")]
   pub default_avatar_index: u8,
 
-  #[deprecated(note="switch to UserDetailsLight")]
+  #[deprecated(note = "switch to UserDetailsLight")]
   pub default_avatar_color_index: u8,
 }
 
@@ -91,7 +90,7 @@ pub enum ListCommentsError {
 impl ResponseError for ListCommentsError {
   fn status_code(&self) -> StatusCode {
     match *self {
-      ListCommentsError::ServerError=> StatusCode::INTERNAL_SERVER_ERROR,
+      ListCommentsError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
     }
   }
 
@@ -126,53 +125,45 @@ impl fmt::Display for ListCommentsError {
     (status = 500, description = "Server error", body = ListCommentsError),
   ),
 )]
-pub async fn list_comments_handler(
-  _http_request: HttpRequest,
-  path: Path<ListCommentsPathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListCommentsSuccessResponse>, ListCommentsError>
-{
-  let entity_token = CommentEntityToken::from_entity_type_and_token(
-    path.entity_type, &path.entity_token);
-  
-  let query_results = list_comments_for_entity(
-    entity_token,
-    &server_state.mysql_pool,
-  ).await;
+pub async fn list_comments_handler(_http_request: HttpRequest, path: Path<ListCommentsPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListCommentsSuccessResponse>, ListCommentsError> {
+  let entity_token = CommentEntityToken::from_entity_type_and_token(path.entity_type, &path.entity_token);
+
+  let query_results = list_comments_for_entity(entity_token, &server_state.mysql_pool).await;
 
   let comments = match query_results {
     Ok(results) => results,
     Err(e) => {
       warn!("Query error: {:?}", e);
       return Err(ListCommentsError::ServerError);
-    }
+    },
   };
 
   let response = ListCommentsSuccessResponse {
     success: true,
-    comments: comments.into_iter()
-        .map(|comment| Comment {
-          token: comment.token,
-          user: UserDetailsLight {
-            user_token: comment.user_token.clone(),
-            username: comment.username.to_string(), // NB: Cloned because of ref use for avatar below
-            display_name: comment.user_display_name.clone(),
-            gravatar_hash: comment.user_gravatar_hash.clone(),
-            default_avatar: UserDefaultAvatarInfo::from_username(&comment.username),
-          },
-          user_token: comment.user_token,
+    comments: comments
+      .into_iter()
+      .map(|comment| Comment {
+        token: comment.token,
+        user: UserDetailsLight {
+          user_token: comment.user_token.clone(),
           username: comment.username.to_string(), // NB: Cloned because of ref use for avatar below
-          user_display_name: comment.user_display_name,
-          user_gravatar_hash: comment.user_gravatar_hash,
-          default_avatar_index: default_avatar_from_username(&comment.username),
-          default_avatar_color_index: default_avatar_color_from_username(&comment.username),
-          comment_markdown: comment.comment_markdown,
-          comment_rendered_html: comment.comment_rendered_html,
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          maybe_edited_at: comment.maybe_edited_at,
-        })
-        .collect(),
+          display_name: comment.user_display_name.clone(),
+          gravatar_hash: comment.user_gravatar_hash.clone(),
+          default_avatar: UserDefaultAvatarInfo::from_username(&comment.username),
+        },
+        user_token: comment.user_token,
+        username: comment.username.to_string(), // NB: Cloned because of ref use for avatar below
+        user_display_name: comment.user_display_name,
+        user_gravatar_hash: comment.user_gravatar_hash,
+        default_avatar_index: default_avatar_from_username(&comment.username),
+        default_avatar_color_index: default_avatar_color_from_username(&comment.username),
+        comment_markdown: comment.comment_markdown,
+        comment_rendered_html: comment.comment_rendered_html,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        maybe_edited_at: comment.maybe_edited_at,
+      })
+      .collect(),
   };
 
   Ok(Json(response))

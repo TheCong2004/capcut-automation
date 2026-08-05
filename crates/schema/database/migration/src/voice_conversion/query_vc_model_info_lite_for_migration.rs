@@ -21,27 +21,20 @@ pub async fn query_vc_model_info_lite_for_migration(model_token: &str, mysql_poo
 
 /// Query "light info" for models.
 /// This is typically used for in-memory token-to-type caches.
-pub async fn query_vc_model_info_lite_for_migration_with_connection(
-  model_token: &str,
-  mysql_connection: &mut PoolConnection<MySql>
-) -> AnyhowResult<Option<VcModelLite>> {
+pub async fn query_vc_model_info_lite_for_migration_with_connection(model_token: &str, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<VcModelLite>> {
   // NB: This is temporary migration code as we switch from the `voice_conversion_models` table to the `model_weights` table.
   if model_token.starts_with(ModelWeightToken::token_prefix()) {
     let model_weights_token = ModelWeightToken::new_from_str(model_token);
 
-    let maybe_model = get_model_weight_info_lite_with_connection(
-      &model_weights_token, mysql_connection).await?;
+    let maybe_model = get_model_weight_info_lite_with_connection(&model_weights_token, mysql_connection).await?;
 
     Ok(maybe_model.map(|model| VcModelLite::ModelWeight(model)))
-
   } else {
-    let maybe_vc_model = get_voice_conversion_model_info_lite_with_connection(
-      model_token, mysql_connection).await?;
+    let maybe_vc_model = get_voice_conversion_model_info_lite_with_connection(model_token, mysql_connection).await?;
 
     Ok(maybe_vc_model.map(|model| VcModelLite::LegacyVoiceConversion(model)))
   }
 }
-
 
 /// Union over the legacy table and the new table to support an easier migration.
 /// This enum can hold a record of either type and present a unified accessor interface.
@@ -67,19 +60,19 @@ impl VcModelLite {
         VoiceConversionModelType::RvcV2 => Some(InferenceCategory::VoiceConversion),
         VoiceConversionModelType::SoftVc => Some(InferenceCategory::VoiceConversion),
         VoiceConversionModelType::SoVitsSvc => Some(InferenceCategory::VoiceConversion),
-      }
+      },
       VcModelLite::ModelWeight(ref model) => match model.weights_type {
         WeightsType::SoVitsSvc => Some(InferenceCategory::VoiceConversion),
         WeightsType::RvcV2 => Some(InferenceCategory::VoiceConversion),
         WeightsType::Tacotron2 => Some(InferenceCategory::TextToSpeech),
         WeightsType::StableDiffusion15 => None, // TODO(bt,2023-12-18): New category for image generation
         WeightsType::StableDiffusionXL => None, // TODO(bt,2023-12-18): New category for image generation
-        WeightsType::HifiganTacotron2 => None, // NB: Not used directly in inference. Included by other models.
-        WeightsType::LoRA => None, // NB: not used directly in inference. Included in other models.
-        WeightsType::VallE => None, // TODO(bt,2023-12-18): Does this mean speaker weights?
-        WeightsType::ComfyUi => None, // NB: not used directly in inference. Included in other models.
-        WeightsType::GptSoVits => None, // TODO: Fixme
-      }
+        WeightsType::HifiganTacotron2 => None,  // NB: Not used directly in inference. Included by other models.
+        WeightsType::LoRA => None,              // NB: not used directly in inference. Included in other models.
+        WeightsType::VallE => None,             // TODO(bt,2023-12-18): Does this mean speaker weights?
+        WeightsType::ComfyUi => None,           // NB: not used directly in inference. Included in other models.
+        WeightsType::GptSoVits => None,         // TODO: Fixme
+      },
     }
   }
 
@@ -89,23 +82,22 @@ impl VcModelLite {
         VoiceConversionModelType::RvcV2 => Some(InferenceModelType::RvcV2),
         VoiceConversionModelType::SoftVc => None, // NB: Not supported.
         VoiceConversionModelType::SoVitsSvc => Some(InferenceModelType::SoVitsSvc),
-      }
+      },
       VcModelLite::ModelWeight(ref model) => match model.weights_type {
         WeightsType::SoVitsSvc => Some(InferenceModelType::SoVitsSvc),
         WeightsType::RvcV2 => Some(InferenceModelType::RvcV2),
         WeightsType::Tacotron2 => Some(InferenceModelType::Tacotron2),
         WeightsType::StableDiffusion15 => None, // TODO(bt, 2023-12-18): New model type for image generation
         WeightsType::StableDiffusionXL => None, // TODO(bt, 2023-12-18): New model type for image generation
-        WeightsType::HifiganTacotron2 => None, // NB: Not used directly in inference. Included by other models.
-        WeightsType::LoRA => None, // NB: not used directly in inference. Included in other models.
-        WeightsType::VallE => None, // TODO(bt,2023-12-18): Does this mean speaker weights?
-        WeightsType::ComfyUi => None, // NB: not used directly in inference. Included in other models.
-        WeightsType::GptSoVits => None, // TODO: Fixme
-      }
+        WeightsType::HifiganTacotron2 => None,  // NB: Not used directly in inference. Included by other models.
+        WeightsType::LoRA => None,              // NB: not used directly in inference. Included in other models.
+        WeightsType::VallE => None,             // TODO(bt,2023-12-18): Does this mean speaker weights?
+        WeightsType::ComfyUi => None,           // NB: not used directly in inference. Included in other models.
+        WeightsType::GptSoVits => None,         // TODO: Fixme
+      },
     }
   }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -121,10 +113,7 @@ mod tests {
 
     fn default_model() -> VoiceConversionModelInfoLite {
       // NB: We could implement/derive the default trait, but this works just as well for now.
-      VoiceConversionModelInfoLite {
-        token: VoiceConversionModelToken::new_from_str("vcm_entropy"),
-        model_type: VoiceConversionModelType::RvcV2,
-      }
+      VoiceConversionModelInfoLite { token: VoiceConversionModelToken::new_from_str("vcm_entropy"), model_type: VoiceConversionModelType::RvcV2 }
     }
 
     #[test]
@@ -175,10 +164,7 @@ mod tests {
 
     fn default_model() -> ModelWeightInfoLite {
       // NB: We could implement/derive the default trait, but this works just as well for now.
-      ModelWeightInfoLite {
-        token: ModelWeightToken::new_from_str("weight_entropy"),
-        weights_type: WeightsType::RvcV2,
-      }
+      ModelWeightInfoLite { token: ModelWeightToken::new_from_str("weight_entropy"), weights_type: WeightsType::RvcV2 }
     }
 
     #[test]

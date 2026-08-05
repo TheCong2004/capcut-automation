@@ -12,11 +12,7 @@ use crate::decode_webm_opus_info::decode_mkv_or_webm;
 use crate::open_media_source_stream::{open_bytes_media_source_stream, open_file_media_source_stream};
 
 // Returned if nothing could be decoded
-const NO_AUDIO_INFO : BasicAudioInfo = BasicAudioInfo {
-  duration_millis: None,
-  codec_name: None,
-  required_full_decode: false
-};
+const NO_AUDIO_INFO: BasicAudioInfo = BasicAudioInfo { duration_millis: None, codec_name: None, required_full_decode: false };
 
 #[derive(Clone)]
 pub struct BasicAudioInfo {
@@ -32,12 +28,7 @@ enum OriginalMediaSource<'a> {
 
 /// Decode audio info from an audio or video file containing audio streams.
 /// This handles multiple formats and codecs.
-pub fn decode_basic_audio_bytes_info(
-  audio_bytes: &[u8],
-  maybe_mimetype: Option<&str>,
-  maybe_extension: Option<&str>,
-) -> AnyhowResult<BasicAudioInfo>
-{
+pub fn decode_basic_audio_bytes_info(audio_bytes: &[u8], maybe_mimetype: Option<&str>, maybe_extension: Option<&str>) -> AnyhowResult<BasicAudioInfo> {
   let media_source_stream = open_bytes_media_source_stream(audio_bytes)?;
   let original_media_source = OriginalMediaSource::FileBytes(audio_bytes);
   decode_basic_audio_info_inner(media_source_stream, maybe_mimetype, maybe_extension, original_media_source)
@@ -45,25 +36,14 @@ pub fn decode_basic_audio_bytes_info(
 
 /// Decode audio info from an audio or video file containing audio streams.
 /// This handles multiple formats and codecs.
-pub fn decode_basic_audio_file_info<P: AsRef<Path>>(
-  file_path: P,
-  maybe_mimetype: Option<&str>,
-  maybe_extension: Option<&str>,
-) -> AnyhowResult<BasicAudioInfo>
-{
+pub fn decode_basic_audio_file_info<P: AsRef<Path>>(file_path: P, maybe_mimetype: Option<&str>, maybe_extension: Option<&str>) -> AnyhowResult<BasicAudioInfo> {
   let media_source_stream = open_file_media_source_stream(&file_path)?;
   let original_media_source = OriginalMediaSource::FilePath(file_path.as_ref().to_path_buf());
 
   decode_basic_audio_info_inner(media_source_stream, maybe_mimetype, maybe_extension, original_media_source)
 }
 
-fn decode_basic_audio_info_inner(
-  media_source_stream: MediaSourceStream,
-  maybe_mimetype: Option<&str>,
-  maybe_extension: Option<&str>,
-  original_media_source: OriginalMediaSource<'_>,
-) -> AnyhowResult<BasicAudioInfo> {
-
+fn decode_basic_audio_info_inner(media_source_stream: MediaSourceStream, maybe_mimetype: Option<&str>, maybe_extension: Option<&str>, original_media_source: OriginalMediaSource<'_>) -> AnyhowResult<BasicAudioInfo> {
   let mut hint = Hint::new();
 
   if let Some(extension) = maybe_extension {
@@ -78,8 +58,7 @@ fn decode_basic_audio_info_inner(
   let fmt_opts: FormatOptions = Default::default();
 
   // Probe the media source.
-  let probed = symphonia::default::get_probe()
-      .format(&hint, media_source_stream, &fmt_opts, &meta_opts)?;
+  let probed = symphonia::default::get_probe().format(&hint, media_source_stream, &fmt_opts, &meta_opts)?;
 
   let mut format = probed.format;
 
@@ -88,17 +67,19 @@ fn decode_basic_audio_info_inner(
     Some(default_track) => default_track,
   };
 
-  let mut maybe_track_duration = audio_track.codec_params.time_base
-      .zip(audio_track.codec_params.n_frames)
-      .map(|(time_base, n_frames)| {
-        // NB: This yields the duration of the track
-        time_base.calc_time(n_frames)
-      })
-      .map(|time| {
-        let duration_millis = time.seconds * 1000;
-        let frac_millis = (time.frac * 1000.0).trunc() as u64;
-        duration_millis + frac_millis
-      });
+  let mut maybe_track_duration = audio_track
+    .codec_params
+    .time_base
+    .zip(audio_track.codec_params.n_frames)
+    .map(|(time_base, n_frames)| {
+      // NB: This yields the duration of the track
+      time_base.calc_time(n_frames)
+    })
+    .map(|time| {
+      let duration_millis = time.seconds * 1000;
+      let frac_millis = (time.frac * 1000.0).trunc() as u64;
+      duration_millis + frac_millis
+    });
 
   let maybe_codec_name = get_codec_short_name(&audio_track);
 
@@ -127,11 +108,7 @@ fn decode_basic_audio_info_inner(
     required_full_decode = true;
   }
 
-  Ok(BasicAudioInfo {
-    duration_millis: maybe_track_duration,
-    codec_name: maybe_codec_name,
-    required_full_decode,
-  })
+  Ok(BasicAudioInfo { duration_millis: maybe_track_duration, codec_name: maybe_codec_name, required_full_decode })
 }
 
 fn find_audio_track(format: &Box<dyn FormatReader>) -> Option<&Track> {
@@ -174,8 +151,7 @@ fn read_duration(format: &mut Box<dyn FormatReader>) -> AnyhowResult<Option<u64>
   let decoder_opts = Default::default();
 
   // Create a decoder for the track.
-  let mut decoder = symphonia::default::get_codecs()
-      .make(&audio_track.codec_params, &decoder_opts)?;
+  let mut decoder = symphonia::default::get_codecs().make(&audio_track.codec_params, &decoder_opts)?;
 
   let channel_count = match audio_track.codec_params.channels {
     None => return Ok(None),
@@ -236,7 +212,7 @@ fn read_duration(format: &mut Box<dyn FormatReader>) -> AnyhowResult<Option<u64>
           // The samples may now be access via the `samples()` function.
           sample_count += buf.samples().len();
         }
-      }
+      },
       Err(symphonia::core::errors::Error::DecodeError(_)) => (),
       Err(_) => break,
     }

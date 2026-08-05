@@ -6,8 +6,5 @@ use actix_web::middleware::DefaultHeaders;
 //  - https://stackoverflow.com/questions/73275184/enable-shared-array-buffer-in-cross-domain
 //  - https://blog.logrocket.com/understanding-sharedarraybuffer-and-cross-origin-isolation/
 pub fn shared_array_buffer_cors() -> DefaultHeaders {
-  DefaultHeaders::new()
-      .add(("Cross-Origin-Embedder-Policy", "require-corp"))
-      .add(("Cross-Origin-Opener-Policy", "same-origin"))
-      .add(("Cross-Origin-Resource-Policy", "cross-origin"))
+  DefaultHeaders::new().add(("Cross-Origin-Embedder-Policy", "require-corp")).add(("Cross-Origin-Opener-Policy", "same-origin")).add(("Cross-Origin-Resource-Policy", "cross-origin"))
 }

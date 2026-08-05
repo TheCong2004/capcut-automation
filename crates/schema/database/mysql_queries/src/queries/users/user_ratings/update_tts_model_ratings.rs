@@ -4,13 +4,10 @@ use sqlx::pool::PoolConnection;
 use errors::AnyhowResult;
 use tokens::tokens::tts_models::TtsModelToken;
 
-pub async fn update_tts_model_ratings(
-  tts_model_token: &TtsModelToken,
-  mysql_connection: &mut PoolConnection<MySql>
-) -> AnyhowResult<()> {
+pub async fn update_tts_model_ratings(tts_model_token: &TtsModelToken, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<()> {
   let token = tts_model_token.as_str();
   let query = sqlx::query!(
-        r#"
+    r#"
 UPDATE tts_models
 SET
   user_ratings_total_count = (
@@ -40,13 +37,13 @@ WHERE
   token = ?
 LIMIT 1
         "#,
-      // Args
-      token,
-      token,
-      token,
-      token
-    );
+    // Args
+    token,
+    token,
+    token,
+    token
+  );
 
-  let _r = query.execute(&mut** mysql_connection).await?;
+  let _r = query.execute(&mut **mysql_connection).await?;
   Ok(())
 }

@@ -22,12 +22,9 @@ use enums::common::payments_namespace::PaymentsNamespace;
 use crate::http_server::common_responses::common_web_error::CommonWebError;
 
 /// Resolve the optional `payments_namespace` query param, defaulting to `artcraft`.
-pub(crate) fn resolve_payments_namespace(
-  maybe_namespace: Option<&str>,
-) -> Result<PaymentsNamespace, CommonWebError> {
+pub(crate) fn resolve_payments_namespace(maybe_namespace: Option<&str>) -> Result<PaymentsNamespace, CommonWebError> {
   match maybe_namespace {
     None => Ok(PaymentsNamespace::Artcraft),
-    Some(value) => PaymentsNamespace::from_str(value)
-      .map_err(|_| CommonWebError::BadInputWithSimpleMessage("invalid payments_namespace".to_string())),
+    Some(value) => PaymentsNamespace::from_str(value).map_err(|_| CommonWebError::BadInputWithSimpleMessage("invalid payments_namespace".to_string())),
   }
 }

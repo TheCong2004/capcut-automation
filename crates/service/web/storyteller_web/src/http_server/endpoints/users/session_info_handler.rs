@@ -25,46 +25,26 @@ use crate::http_server::user_lookup::user_session::session_utils::session_checke
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn session_info_handler(
-  http_request: HttpRequest,
-  mysql_pool: web::Data<MySqlPool>,
-  session_checker: web::Data<SessionChecker>,
-  avt_manager: web::Data<AvtCookieManager>,
-) -> Result<HttpResponse, CommonWebError>
-{
+pub async fn session_info_handler(http_request: HttpRequest, mysql_pool: web::Data<MySqlPool>, session_checker: web::Data<SessionChecker>, avt_manager: web::Data<AvtCookieManager>) -> Result<HttpResponse, CommonWebError> {
   let mut mysql_connection = mysql_pool.acquire().await?;
 
-  let maybe_user_session = session_checker
-    .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-    .await
-    .map_err(|err| {
-      warn!("Error checking session: {:?}", err);
-      err
-    })?;
+  let maybe_user_session = session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|err| {
+    warn!("Error checking session: {:?}", err);
+    err
+  })?;
 
   let mut logged_in = false;
   let mut user_info = None;
 
   if let Some(session_data) = maybe_user_session {
-    let feature_flags =
-        UserSessionFeatureFlags::new(session_data.maybe_feature_flags.as_deref());
+    let feature_flags = UserSessionFeatureFlags::new(session_data.maybe_feature_flags.as_deref());
 
     if !session_data.is_banned {
       // NB: Banned users can't be logged in
       logged_in = true;
       user_info = Some(SessionUserInfo {
-        core_info: UserDetailsLightBuilder::from_db_fields(
-          &session_data.user_token,
-          &session_data.username,
-          &session_data.display_name,
-          &session_data.email_gravatar_hash,
-        ),
-        onboarding: SessionOnboardingState {
-          email_not_set: session_data.email_is_synthetic,
-          email_not_confirmed: !(session_data.email_confirmed || session_data.email_confirmed_by_google),
-          password_not_set: session_data.is_without_password,
-          username_not_customized: session_data.username_is_not_customized,
-        },
+        core_info: UserDetailsLightBuilder::from_db_fields(&session_data.user_token, &session_data.username, &session_data.display_name, &session_data.email_gravatar_hash),
+        onboarding: SessionOnboardingState { email_not_set: session_data.email_is_synthetic, email_not_confirmed: !(session_data.email_confirmed || session_data.email_confirmed_by_google), password_not_set: session_data.is_without_password, username_not_customized: session_data.username_is_not_customized },
         user_token: session_data.user_token,
         username: session_data.username.to_string(),
         display_name: session_data.display_name.to_string(),
@@ -111,11 +91,7 @@ pub async fn session_info_handler(
     _ => Some(avt_manager.make_new_cookie()?),
   };
 
-  let response = SessionInfoSuccessResponse {
-    success: true,
-    logged_in,
-    user: user_info,
-  };
+  let response = SessionInfoSuccessResponse { success: true, logged_in, user: user_info };
 
   let body = serde_json::to_string(&response)?;
 
@@ -125,7 +101,5 @@ pub async fn session_info_handler(
     response_builder.cookie(cookie);
   }
 
-  Ok(response_builder
-    .content_type("application/json")
-    .body(body))
+  Ok(response_builder.content_type("application/json").body(body))
 }

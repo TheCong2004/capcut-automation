@@ -1,4 +1,4 @@
-//! actix_artcraft - for actix helpers that need to be shared between crates, 
+//! actix_artcraft - for actix helpers that need to be shared between crates,
 //! but are too application-specific to be in general actix helper crates
 //!
 
@@ -12,7 +12,6 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]

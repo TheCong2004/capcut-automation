@@ -6,17 +6,10 @@ use once_cell::sync::Lazy;
 
 // These environment vars are not copied over to the subprocess
 // TODO/FIXME(bt, 2023-05-28): This is horrific security!
-static IGNORED_ENVIRONMENT_VARS : Lazy<HashSet<String>> = Lazy::new(|| {
-  let env_var_names= [
-    "MYSQL_URL",
-    "ACCESS_KEY",
-    "SECRET_KEY",
-    "NEWRELIC_API_KEY",
-  ];
+static IGNORED_ENVIRONMENT_VARS: Lazy<HashSet<String>> = Lazy::new(|| {
+  let env_var_names = ["MYSQL_URL", "ACCESS_KEY", "SECRET_KEY", "NEWRELIC_API_KEY"];
 
-  env_var_names.iter()
-      .map(|value| value.to_string())
-      .collect::<HashSet<String>>()
+  env_var_names.iter().map(|value| value.to_string()).collect::<HashSet<String>>()
 });
 
 pub fn get_filtered_env_vars() -> Vec<(OsString, OsString)> {
@@ -28,10 +21,7 @@ pub fn get_filtered_env_vars() -> Vec<(OsString, OsString)> {
     if IGNORED_ENVIRONMENT_VARS.contains(&env_key) {
       continue;
     }
-    env_vars.push((
-      OsString::from(env_key),
-      OsString::from(env_value),
-    ));
+    env_vars.push((OsString::from(env_key), OsString::from(env_value)));
   }
 
   env_vars

@@ -20,24 +20,14 @@ pub struct OpaqueCursorEncoderV2 {
 
 impl OpaqueCursorEncoderV2 {
   pub fn new(secret: &str) -> Self {
-    let base64_config = GeneralPurposeConfig::new()
-        .with_encode_padding(false)
-        .with_decode_allow_trailing_bits(true)
-        .with_decode_padding_mode(DecodePaddingMode::Indifferent);
+    let base64_config = GeneralPurposeConfig::new().with_encode_padding(false).with_decode_allow_trailing_bits(true).with_decode_padding_mode(DecodePaddingMode::Indifferent);
 
-    Self {
-      crypt: new_magic_crypt!(secret, 256),
-      alphabet: URL_SAFE,
-      base64_config,
-    }
+    Self { crypt: new_magic_crypt!(secret, 256), alphabet: URL_SAFE, base64_config }
   }
 
   /// Encode a last-id cursor into an opaque string.
   pub fn encode_last_id_cursor(&self, name: &str, id: u64) -> Result<String, OpaqueCursorErrorV2> {
-    let cursor = OpaqueCursorV2 {
-      name: Some(name.to_string()),
-      last_id: Some(id),
-    };
+    let cursor = OpaqueCursorV2 { name: Some(name.to_string()), last_id: Some(id) };
     self.encode_cursor(&cursor)
   }
 
@@ -56,21 +46,12 @@ impl OpaqueCursorEncoderV2 {
   }
 
   /// Decode an opaque cursor string and verify the name matches `expected_name`.
-  pub fn decode_cursor_expecting_name(
-    &self,
-    expected_name: &str,
-    cursor: &str,
-  ) -> Result<OpaqueCursorV2, OpaqueCursorErrorV2> {
+  pub fn decode_cursor_expecting_name(&self, expected_name: &str, cursor: &str) -> Result<OpaqueCursorV2, OpaqueCursorErrorV2> {
     let decoded = self.decode_cursor(cursor)?;
 
     match &decoded.name {
       None => Err(OpaqueCursorErrorV2::DecodedNameNotPresent),
-      Some(actual) if actual != expected_name => {
-        Err(OpaqueCursorErrorV2::DecodedNameMismatch {
-          expected: expected_name.to_string(),
-          actual: actual.clone(),
-        })
-      }
+      Some(actual) if actual != expected_name => Err(OpaqueCursorErrorV2::DecodedNameMismatch { expected: expected_name.to_string(), actual: actual.clone() }),
       _ => Ok(decoded),
     }
   }
@@ -199,11 +180,7 @@ mod tests {
     let encoder = OpaqueCursorEncoderV2::new(SECRET);
     for id in [0, 1, 42, 999_999_999] {
       let encoded = encoder.encode_last_id_cursor("safe", id).unwrap();
-      assert!(
-        encoded.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
-        "non-URL-safe character in cursor: {:?}",
-        encoded,
-      );
+      assert!(encoded.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'), "non-URL-safe character in cursor: {:?}", encoded,);
     }
   }
 

@@ -1,7 +1,6 @@
 use sqlx::mysql::MySqlArguments;
 use sqlx::MySql;
 
-
 /// Hopefully this doesn't become a migration-blocking chore. It's meant to be a modest
 /// shortcut from:
 ///
@@ -20,4 +19,4 @@ use sqlx::MySql;
 /// - https://doc.rust-lang.org/beta/unstable-book/language-features/trait-alias.html
 /// - https://github.com/rust-lang/rust/issues/63063
 /// - https://github.com/rust-lang/rust/issues/41517
-pub type QueryMap<T> = sqlx::query::Map<'static, MySql, T, MySqlArguments> ;
+pub type QueryMap<T> = sqlx::query::Map<'static, MySql, T, MySqlArguments>;

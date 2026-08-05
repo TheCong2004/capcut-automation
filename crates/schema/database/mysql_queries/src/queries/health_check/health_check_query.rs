@@ -10,18 +10,15 @@ pub struct HealthCheckResult {
 }
 
 /// Query the DB for time as a proxy for DB health
-pub async fn health_check_db(
-  pool: &MySqlPool,
-) -> AnyhowResult<HealthCheckResult> {
-
+pub async fn health_check_db(pool: &MySqlPool) -> AnyhowResult<HealthCheckResult> {
   let maybe_record = sqlx::query_as!(
-      HealthCheckResult,
-        r#"
+    HealthCheckResult,
+    r#"
 SELECT NOW() as present_time
         "#,
-    )
-      .fetch_one(pool)
-      .await;
+  )
+  .fetch_one(pool)
+  .await;
 
   match maybe_record {
     Ok(record) => Ok(record),

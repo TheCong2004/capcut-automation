@@ -8,14 +8,12 @@ use filesys::create_dir_all_if_missing::create_dir_all_if_missing;
 /// Utilities for directories serving as file caches
 #[derive(Clone)]
 pub struct FileCacheDir {
-  directory: PathBuf
+  directory: PathBuf,
 }
 
 impl FileCacheDir {
   pub fn from_env<P: AsRef<Path>>(env_var_name: &str, default_path: P) -> AnyhowResult<Self> {
-    Ok(Self {
-      directory: easyenv::get_env_pathbuf_or_default(env_var_name, default_path),
-    })
+    Ok(Self { directory: easyenv::get_env_pathbuf_or_default(env_var_name, default_path) })
   }
 
   pub fn create_dir_all_if_missing(&self) -> std::io::Result<()> {

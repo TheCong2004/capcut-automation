@@ -11,13 +11,7 @@ pub enum IpBanToggleState {
   DeleteIpBan,
 }
 
-pub async fn toggle_ip_ban(
-  ip_address: &str,
-  mod_user_token: &str,
-  ban_state: IpBanToggleState,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<()> {
-
+pub async fn toggle_ip_ban(ip_address: &str, mod_user_token: &str, ban_state: IpBanToggleState, mysql_pool: &MySqlPool) -> AnyhowResult<()> {
   let query_result = match ban_state {
     IpBanToggleState::DeleteIpBan => {
       sqlx::query!(
@@ -34,8 +28,8 @@ LIMIT 1
         &mod_user_token,
         &ip_address,
       )
-          .execute(mysql_pool)
-          .await
+      .execute(mysql_pool)
+      .await
     },
     IpBanToggleState::CreateIpBan => {
       sqlx::query!(
@@ -52,9 +46,9 @@ LIMIT 1
         &mod_user_token,
         &ip_address,
       )
-          .execute(mysql_pool)
-          .await
-    }
+      .execute(mysql_pool)
+      .await
+    },
   };
 
   match query_result {

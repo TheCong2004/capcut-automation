@@ -74,7 +74,7 @@ pub struct FeaturedModelWeightForList {
 
   /// Cover images are small descriptive images that can be set for any model.
   /// If a cover image is set, this is the path to the asset.
-  #[deprecated(note="switch to CoverImageDetails")]
+  #[deprecated(note = "switch to CoverImageDetails")]
   pub maybe_cover_image_public_bucket_path: Option<String>,
 
   /// Statistics about the weights
@@ -124,11 +124,6 @@ impl ResponseError for ListFeaturedWeightsError {
     (status = 500, description = "Server error", body = ListFeaturedWeightsError),
   ),
 )]
-pub async fn list_featured_weights_handler(
-  _query: Query<ListFeaturedWeightsQueryParams>,
-) -> Result<Json<ListFeaturedWeightsSuccessResponse>, ListFeaturedWeightsError> {
-  Ok(Json(ListFeaturedWeightsSuccessResponse {
-    success: true,
-    results: Vec::new(),
-  }))
+pub async fn list_featured_weights_handler(_query: Query<ListFeaturedWeightsQueryParams>) -> Result<Json<ListFeaturedWeightsSuccessResponse>, ListFeaturedWeightsError> {
+  Ok(Json(ListFeaturedWeightsSuccessResponse { success: true, results: Vec::new() }))
 }

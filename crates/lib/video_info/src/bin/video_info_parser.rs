@@ -34,7 +34,7 @@ fn main() -> ExitCode {
       eprintln!("usage: video-info-parser <FILE|DIR> [--truncate]");
       eprintln!("       video-info-parser --filename <PATH>");
       return ExitCode::from(2);
-    }
+    },
   };
 
   match fs::metadata(&args.path) {
@@ -43,7 +43,7 @@ fn main() -> ExitCode {
     Err(err) => {
       eprintln!("error: cannot read {:?}: {err}", args.path);
       ExitCode::FAILURE
-    }
+    },
   }
 }
 
@@ -59,11 +59,11 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, String> {
       "--filename" | "-f" => {
         let value = args.next().ok_or_else(|| "error: --filename requires a value".to_string())?;
         path = Some(value);
-      }
+      },
       "--truncate" | "--truncate-names" => truncate_names = true,
       "--help" | "-h" => {
         return Err("video-info-parser: print AI-generation provenance for a file or directory".to_string());
-      }
+      },
       _ => {
         if let Some(value) = arg.strip_prefix("--filename=") {
           path = Some(value.to_string());
@@ -74,7 +74,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, String> {
         } else {
           return Err(format!("error: unexpected extra argument {arg:?}"));
         }
-      }
+      },
     }
   }
   match path {
@@ -91,7 +91,7 @@ fn run_single_file(filename: &str) -> ExitCode {
     Err(err) => {
       eprintln!("error: cannot read {filename:?}: {err}");
       return ExitCode::FAILURE;
-    }
+    },
   };
   match VideoInfo::from_bytes(&bytes) {
     Ok(VideoInfo::Seedance(info)) => print_seedance(filename, &info),
@@ -104,15 +104,15 @@ fn run_single_file(filename: &str) -> ExitCode {
       match video_info::encoder_tag(&bytes) {
         Some(enc) if enc.starts_with("Lavf") => {
           println!(" — re-encoded through ffmpeg (encoder: {enc}), which strips provenance");
-        }
+        },
         Some(enc) => println!(" — encoder: {enc}"),
         None => println!(),
       }
-    }
+    },
     Err(err) => {
       eprintln!("error: {err}");
       return ExitCode::FAILURE;
-    }
+    },
   }
   ExitCode::SUCCESS
 }
@@ -127,7 +127,7 @@ fn run_directory(dir: &str, truncate_names: bool) -> ExitCode {
     Err(err) => {
       eprintln!("error: cannot list {dir:?}: {err}");
       return ExitCode::FAILURE;
-    }
+    },
   };
   if files.is_empty() {
     println!("no .mp4 files found in {dir}");
@@ -142,7 +142,7 @@ fn run_directory(dir: &str, truncate_names: bool) -> ExitCode {
       Ok(bytes) => {
         let encoder = video_info::encoder_tag(&bytes);
         summary_row(&name, &VideoInfo::from_bytes(&bytes), encoder.as_deref(), truncate_names)
-      }
+      },
       Err(err) => summary_row(&name, &Err(VideoInfoError::Io(err)), None, truncate_names),
     };
     *tally.entry(row[1].clone()).or_default() += 1;
@@ -152,8 +152,7 @@ fn run_directory(dir: &str, truncate_names: bool) -> ExitCode {
   render_table(&TABLE_HEADERS, &rows);
   println!();
   let total = files.len();
-  let breakdown =
-    tally.iter().map(|(kind, n)| format!("{kind}: {n}")).collect::<Vec<_>>().join(", ");
+  let breakdown = tally.iter().map(|(kind, n)| format!("{kind}: {n}")).collect::<Vec<_>>().join(", ");
   println!("{total} file(s) — {breakdown}");
   ExitCode::SUCCESS
 }
@@ -163,10 +162,7 @@ fn collect_mp4s(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
   let mut out = Vec::new();
   for entry in fs::read_dir(dir)? {
     let path = entry?.path();
-    let is_mp4 = path
-      .extension()
-      .and_then(|e| e.to_str())
-      .is_some_and(|e| e.eq_ignore_ascii_case("mp4"));
+    let is_mp4 = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("mp4"));
     if path.is_file() && is_mp4 {
       out.push(path);
     }
@@ -178,12 +174,7 @@ fn collect_mp4s(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
 /// Reduce a parse result to one table row: `[file, kind, model, detail, generated, signer]`.
 /// Filenames are shown in full unless `truncate_names` is set. `encoder` is the
 /// `©too` tag, shown in DETAIL for unrecognized files to explain the absence.
-fn summary_row(
-  name: &str,
-  result: &Result<VideoInfo, VideoInfoError>,
-  encoder: Option<&str>,
-  truncate_names: bool,
-) -> [String; 6] {
+fn summary_row(name: &str, result: &Result<VideoInfo, VideoInfoError>, encoder: Option<&str>, truncate_names: bool) -> [String; 6] {
   let file = if truncate_names { truncate(name, MAX_CELL) } else { name.to_string() };
   let (kind, model, detail, generated, signer) = match result {
     Ok(VideoInfo::Seedance(i)) => {
@@ -196,36 +187,24 @@ fn summary_row(
       };
       let detail = format!("{}{variant}", i.platform.as_str());
       ("Seedance", i.model_name.clone(), detail, i.generated_at.clone(), signer_line(&i.signer_country, &i.cert_serial))
-    }
+    },
     Ok(VideoInfo::Veo(i)) => {
-      let detail = if i.has_c2pa_manifest {
-        if i.has_synthid_watermark { "c2pa + synthid".to_string() } else { "c2pa".to_string() }
-      } else {
-        format!("encoder={}", i.encoder.as_deref().unwrap_or("?"))
-      };
+      let detail = if i.has_c2pa_manifest { if i.has_synthid_watermark { "c2pa + synthid".to_string() } else { "c2pa".to_string() } } else { format!("encoder={}", i.encoder.as_deref().unwrap_or("?")) };
       ("Veo", "Google Veo".to_string(), detail, String::new(), short_opt(&i.cert_serial))
-    }
-    Ok(VideoInfo::Sora(i)) => (
-      "Sora",
-      "OpenAI Sora".to_string(),
-      i.model_name.clone().unwrap_or_default(),
-      String::new(),
-      short_opt(&i.cert_serial),
-    ),
+    },
+    Ok(VideoInfo::Sora(i)) => ("Sora", "OpenAI Sora".to_string(), i.model_name.clone().unwrap_or_default(), String::new(), short_opt(&i.cert_serial)),
     Ok(VideoInfo::Dreamina(i)) => {
       let signer = if i.has_c2pa { signer_line(&i.signer_country, &i.cert_serial) } else { String::new() };
       ("Dreamina", i.product.clone(), i.video_id.clone().unwrap_or_default(), String::new(), signer)
-    }
+    },
     Ok(VideoInfo::Kling(i)) => {
       let model = match &i.model_version {
         Some(v) => format!("Kling {v}"),
         None => "Kling".to_string(),
       };
-      let detail = i.produce_id.clone().unwrap_or_else(|| {
-        if i.has_stream_watermark { "watermark-only".to_string() } else { String::new() }
-      });
+      let detail = i.produce_id.clone().unwrap_or_else(|| if i.has_stream_watermark { "watermark-only".to_string() } else { String::new() });
       ("Kling", model, detail, String::new(), i.content_producer.clone().unwrap_or_default())
-    }
+    },
     Err(VideoInfoError::Unrecognized) => {
       let detail = match encoder {
         Some(enc) if enc.starts_with("Lavf") => format!("re-encoded: {enc}"),
@@ -233,17 +212,10 @@ fn summary_row(
         None => "no provenance".to_string(),
       };
       ("—", String::new(), detail, String::new(), String::new())
-    }
+    },
     Err(err) => ("error", err.to_string(), String::new(), String::new(), String::new()),
   };
-  [
-    file,
-    kind.to_string(),
-    truncate(&model, MAX_CELL),
-    truncate(&detail, MAX_CELL),
-    generated,
-    truncate(&signer, MAX_CELL),
-  ]
+  [file, kind.to_string(), truncate(&model, MAX_CELL), truncate(&detail, MAX_CELL), generated, truncate(&signer, MAX_CELL)]
 }
 
 /// `"<country> <short-cert>"`, omitting whichever parts are absent.
@@ -281,14 +253,7 @@ fn render_table(headers: &[&str], rows: &[[String; 6]]) {
       widths[i] = widths[i].max(cell.chars().count());
     }
   }
-  let render = |cells: &[String]| {
-    cells
-      .iter()
-      .enumerate()
-      .map(|(i, c)| format!("{:<width$}", c, width = widths[i]))
-      .collect::<Vec<_>>()
-      .join("  ")
-  };
+  let render = |cells: &[String]| cells.iter().enumerate().map(|(i, c)| format!("{:<width$}", c, width = widths[i])).collect::<Vec<_>>().join("  ");
   let header_cells: Vec<String> = headers.iter().map(|h| h.to_string()).collect();
   println!("{}", render(&header_cells).trim_end());
   let separators: Vec<String> = widths.iter().map(|w| "-".repeat(*w)).collect();
@@ -325,10 +290,7 @@ fn print_seedance(filename: &str, info: &SeedanceInfo) {
   row("fast variant", if info.is_fast { "yes" } else { "no" });
   row("lite variant", if info.is_lite { "yes" } else { "no" });
   row("generated at", &info.generated_at);
-  row(
-    "generated at (parsed)",
-    &info.generated_at_utc.map(|t| t.to_rfc3339()).unwrap_or_else(|| "(unparseable)".to_string()),
-  );
+  row("generated at (parsed)", &info.generated_at_utc.map(|t| t.to_rfc3339()).unwrap_or_else(|| "(unparseable)".to_string()));
   opt("log id", &info.log_id);
   opt("log id (decoded hex)", &info.log_id_decoded_hex);
   opt("digital source type", &info.digital_source_type);
@@ -380,10 +342,7 @@ fn print_dreamina(filename: &str, info: &DreaminaInfo) {
   opt("export type", &info.export_type);
   opt("os", &info.os);
   opt("source info", &info.source_info);
-  row(
-    "aigc label type",
-    &info.aigc_label_type.map(|n| n.to_string()).unwrap_or_else(|| "(none)".to_string()),
-  );
+  row("aigc label type", &info.aigc_label_type.map(|n| n.to_string()).unwrap_or_else(|| "(none)".to_string()));
   opt("video id", &info.video_id);
   row("has c2pa", if info.has_c2pa { "yes" } else { "no" });
   opt("signer org id", &info.signer_org_id);

@@ -94,12 +94,7 @@ impl fmt::Display for CreateCommentError {
     ("request" = CreateCommentRequest, description = "Payload for Request"),
   )
 )]
-pub async fn create_comment_handler(
-  http_request: HttpRequest,
-  request: Json<CreateCommentRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<CreateCommentSuccessResponse>, CreateCommentError>
-{
+pub async fn create_comment_handler(http_request: HttpRequest, request: Json<CreateCommentRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<CreateCommentSuccessResponse>, CreateCommentError> {
   // NB(bt,2023-12-14): Kasisnu found that we're getting entity type mismatches in production. Apart from
   // querying the database for entity existence, this is the next best way to prevent incorrect comment
   // attachment. This is a bit of a bad process, though, since the token types are supposed to be opaque.
@@ -120,35 +115,27 @@ pub async fn create_comment_handler(
     return Err(CreateCommentError::BadInput("invalid token prefix".to_string()));
   }
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        CreateCommentError::ServerError
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CreateCommentError::ServerError
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CreateCommentError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CreateCommentError::ServerError
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CreateCommentError::NotAuthorized);
-    }
+    },
   };
 
   let ip_address = get_request_ip(&http_request);
 
-  let entity_token = CommentEntityToken::from_entity_type_and_token(
-    request.entity_type, &request.entity_token);
+  let entity_token = CommentEntityToken::from_entity_type_and_token(request.entity_type, &request.entity_token);
 
   if contains_slurs(&request.comment_markdown) {
     return Err(CreateCommentError::BadInput("comment contains slurs".to_string()));
@@ -157,37 +144,22 @@ pub async fn create_comment_handler(
   let markdown = request.comment_markdown.trim().to_string();
   let html = simple_markdown_to_html(&markdown);
 
-  let query_result = insert_comment(InsertCommentArgs {
-    entity_token: &entity_token,
-    uuid_idempotency_token: &request.uuid_idempotency_token,
-    user_token: &user_session.user_token,
-    comment_markdown: &markdown,
-    comment_rendered_html: &html,
-    creator_ip_address: &ip_address,
-    mysql_executor: &mut *mysql_connection,
-    phantom: Default::default(),
-  }).await;
+  let query_result = insert_comment(InsertCommentArgs { entity_token: &entity_token, uuid_idempotency_token: &request.uuid_idempotency_token, user_token: &user_session.user_token, comment_markdown: &markdown, comment_rendered_html: &html, creator_ip_address: &ip_address, mysql_executor: &mut *mysql_connection, phantom: Default::default() }).await;
 
   let comment_token = match query_result {
     Ok(token) => token,
     Err(err) => {
       warn!("error inserting comment: {:?}", err);
       return Err(CreateCommentError::ServerError);
-    }
+    },
   };
 
-  server_state.firehose_publisher.publish_comment_created(
-    &user_session.user_token, &comment_token)
-      .await
-      .map_err(|e| {
-        warn!("error publishing event: {:?}", e);
-        CreateCommentError::ServerError
-      })?;
+  server_state.firehose_publisher.publish_comment_created(&user_session.user_token, &comment_token).await.map_err(|e| {
+    warn!("error publishing event: {:?}", e);
+    CreateCommentError::ServerError
+  })?;
 
-  let response = CreateCommentSuccessResponse {
-    success: true,
-    comment_token,
-  };
+  let response = CreateCommentSuccessResponse { success: true, comment_token };
 
   Ok(Json(response))
 }

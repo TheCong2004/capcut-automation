@@ -1,4 +1,3 @@
-
 #[derive(Clone, Debug, Deserialize)]
 struct RawUploadResponse {
   #[serde(rename = "imageUrl")]
@@ -23,30 +22,18 @@ use tokio::io::AsyncReadExt;
 
 /// Try to prevent buffer reallocations.
 /// There's a better way to implement this.
-const INITIAL_BUFFER_SIZE : usize = 1024*1024;
+const INITIAL_BUFFER_SIZE: usize = 1024 * 1024;
 
 const UPLOAD_URL: &str = "https://openart.ai/api/media/upload_raw_image";
 
-pub async fn upload_image_from_file_request<P: AsRef<Path>>(
-  file_path: P, 
-  creds: &OpenArtCredentials,
-  maybe_timeout: Option<Duration>,
-) -> Result<(), OpenArtError> {
-  
-  let filename = file_path.as_ref().file_name()
-      .ok_or_else(|| OpenArtError::Client(ClientError::Other("Could not determine filename from path".to_string())))?
-      .to_string_lossy()
-      .to_string();
+pub async fn upload_image_from_file_request<P: AsRef<Path>>(file_path: P, creds: &OpenArtCredentials, maybe_timeout: Option<Duration>) -> Result<(), OpenArtError> {
+  let filename = file_path.as_ref().file_name().ok_or_else(|| OpenArtError::Client(ClientError::Other("Could not determine filename from path".to_string())))?.to_string_lossy().to_string();
 
-  let mut file = File::open(&file_path)
-      .await
-      .map_err(|err| OpenArtError::Client(ClientError::IoError(err)))?;
-  
+  let mut file = File::open(&file_path).await.map_err(|err| OpenArtError::Client(ClientError::IoError(err)))?;
+
   let mut file_bytes = Vec::with_capacity(INITIAL_BUFFER_SIZE);
-  
-  file.read_to_end(&mut file_bytes)
-      .await
-      .map_err(|err| OpenArtError::Client(ClientError::IoError(err)))?;
+
+  file.read_to_end(&mut file_bytes).await.map_err(|err| OpenArtError::Client(ClientError::IoError(err)))?;
 
   // TODO: Read file magic bytes first, then fall back to this.
   let mime_type = match file_path.as_ref().extension().and_then(|e| e.to_str()) {
@@ -68,30 +55,19 @@ pub async fn upload_image_from_file_request<P: AsRef<Path>>(
 
   let form = Form::new().part("file", part);
 
-  let cookie = creds.cookies.as_ref()
-      .map(|cookies| cookies.to_string())
-      .ok_or_else(|| OpenArtError::Client(ClientError::NoCookiesInCredentials))?;
-  
-  let session_id = creds.session_info.as_ref()
-      .map(|info| info.sub.clone())
-      .flatten()
-      .ok_or_else(|| OpenArtError::Client(ClientError::NoSessionInfoInCredentials))?;
+  let cookie = creds.cookies.as_ref().map(|cookies| cookies.to_string()).ok_or_else(|| OpenArtError::Client(ClientError::NoCookiesInCredentials))?;
+
+  let session_id = creds.session_info.as_ref().map(|info| info.sub.clone()).flatten().ok_or_else(|| OpenArtError::Client(ClientError::NoSessionInfoInCredentials))?;
 
   // Make API request
   let client = Client::new();
-  let mut request_builder = client.post(UPLOAD_URL)
-      .multipart(form)
-      .header("X-USER-ID", session_id)
-      .header("Cookie", &cookie);
+  let mut request_builder = client.post(UPLOAD_URL).multipart(form).header("X-USER-ID", session_id).header("Cookie", &cookie);
 
   if let Some(timeout) = maybe_timeout {
     request_builder = request_builder.timeout(timeout);
   }
 
-  let response = request_builder
-      .send()
-      .await
-      .map_err(|err| OpenArtError::Api(ApiError::ReqwestError(err)))?;
+  let response = request_builder.send().await.map_err(|err| OpenArtError::Api(ApiError::ReqwestError(err)))?;
 
   // Check response status
   if !response.status().is_success() {
@@ -101,12 +77,10 @@ pub async fn upload_image_from_file_request<P: AsRef<Path>>(
   }
 
   // Parse response
-  let upload_response = response.json::<RawUploadResponse>()
-      .await
-      .map_err(|err| OpenArtError::Api(ApiError::ReqwestError(err)))?;
-  
+  let upload_response = response.json::<RawUploadResponse>().await.map_err(|err| OpenArtError::Api(ApiError::ReqwestError(err)))?;
+
   println!("Uploaded data: {:?}", upload_response);
-  
+
   Ok(())
 }
 
@@ -124,25 +98,17 @@ mod tests {
   #[ignore] // Do not run in CI. Run manually to test session retrieval.
   async fn test() -> AnyhowResult<()> {
     let cookie = "";
-    
-    let mut creds = OpenArtCredentials {
-      cookies: Some(OpenArtCookies::new(cookie.to_string())),
-      session_info: None,
-    };
+
+    let mut creds = OpenArtCredentials { cookies: Some(OpenArtCookies::new(cookie.to_string())), session_info: None };
 
     let session_details = get_session_request(&creds).await.unwrap();
-    
-    creds.session_info = Some(OpenArtSessionInfo {
-      sub: session_details.sub.clone(),
-      email: None,
-      name: None,
-      image: None,
-    });
-    
+
+    creds.session_info = Some(OpenArtSessionInfo { sub: session_details.sub.clone(), email: None, name: None, image: None });
+
     let image_path = test_file_path("test_data/image/juno.jpg")?; // media_01jqyqgqpwf40tkcapq5bmaz5d
-    
+
     let result = upload_image_from_file_request(image_path, &creds, None).await;
-    
+
     assert!(result.is_ok());
     Ok(())
   }

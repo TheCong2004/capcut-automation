@@ -3,10 +3,10 @@ use std::hash::{Hash, Hasher};
 
 /// There are currently 25 avatars numbered 0 to 24 (0-indexed).
 /// The original dataset was numbered 1 - 25, but I renamed 25 to 0.
-const NUMBER_OF_AVATARS : u64 = 25;
+const NUMBER_OF_AVATARS: u64 = 25;
 
 /// Not that it matters, but this perturbs the hash.
-const SALT_LIKE_OFFSET : u8 = 21;
+const SALT_LIKE_OFFSET: u8 = 21;
 
 /// We return an index instead of a filename, that way the frontend can drive.
 /// The hash should be stable with respect to username.
@@ -22,7 +22,7 @@ pub fn default_avatar_from_username(username: &str) -> u8 {
 
   let hash = hasher.finish();
 
-  let avatar_index= hash % NUMBER_OF_AVATARS;
+  let avatar_index = hash % NUMBER_OF_AVATARS;
   avatar_index as u8
 }
 

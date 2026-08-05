@@ -3,14 +3,9 @@ use sqlx::MySqlPool;
 
 use errors::AnyhowResult;
 
-pub async fn delete_twitch_event_rule(
-  event_rule_token: &str,
-  ip_address_delete: &str,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<bool> {
-
+pub async fn delete_twitch_event_rule(event_rule_token: &str, ip_address_delete: &str, mysql_pool: &MySqlPool) -> AnyhowResult<bool> {
   let query = sqlx::query!(
-        r#"
+    r#"
 UPDATE twitch_event_rules
 SET
     deleted_at = CURRENT_TIMESTAMP,
@@ -19,9 +14,9 @@ WHERE
     token = ?
 LIMIT 1
         "#,
-      ip_address_delete,
-      event_rule_token,
-    );
+    ip_address_delete,
+    event_rule_token,
+  );
 
   let result = query.execute(mysql_pool).await;
 

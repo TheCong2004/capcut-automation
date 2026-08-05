@@ -10,17 +10,17 @@ pub async fn get_user_token_by_username(username: &str, pool: &MySqlPool) -> Any
   // NB: Lookup failure is Err(RowNotFound).
   let result = sqlx::query_as!(
     UsernameRecord,
-        r#"
+    r#"
 SELECT
   token as `token: tokens::tokens::users::UserToken`
 FROM users
   WHERE username = ?
 LIMIT 1
         "#,
-        username
-    )
-      .fetch_one(pool)
-      .await;
+    username
+  )
+  .fetch_one(pool)
+  .await;
 
   match result {
     Ok(record) => Ok(Some(record.token)),

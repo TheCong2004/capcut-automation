@@ -1,4 +1,3 @@
-
 /// Tacotron operates on decoder steps. 1000 steps is the default and correlates to
 /// roughly 12 seconds max. Here we map seconds to decoder steps.
 ///

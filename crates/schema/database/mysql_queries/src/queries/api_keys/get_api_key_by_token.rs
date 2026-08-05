@@ -20,9 +20,7 @@ where
 /// `maybe_deleted_at`, so soft-deleted keys are still visible here) except the
 /// internal `id` and the full secret `api_key` (only its first 20 characters
 /// are returned). `Ok(None)` if no row matches the token.
-pub async fn get_api_key_by_token<'e, 'c: 'e, E>(
-  args: GetApiKeyByTokenArgs<'e, 'c, E>,
-) -> Result<Option<ApiKeyRow>, sqlx::Error>
+pub async fn get_api_key_by_token<'e, 'c: 'e, E>(args: GetApiKeyByTokenArgs<'e, 'c, E>) -> Result<Option<ApiKeyRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -45,19 +43,8 @@ LIMIT 1
     "#,
     args.token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|r| ApiKeyRow {
-    token: r.token,
-    api_key_prefix: r.api_key_prefix,
-    name: r.name,
-    maybe_description: r.maybe_description,
-    owner_user_token: r.owner_user_token,
-    ip_address_creation: r.ip_address_creation,
-    ip_address_update: r.ip_address_update,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-    maybe_deleted_at: r.maybe_deleted_at,
-  }))
+  Ok(result.map(|r| ApiKeyRow { token: r.token, api_key_prefix: r.api_key_prefix, name: r.name, maybe_description: r.maybe_description, owner_user_token: r.owner_user_token, ip_address_creation: r.ip_address_creation, ip_address_update: r.ip_address_update, created_at: r.created_at, updated_at: r.updated_at, maybe_deleted_at: r.maybe_deleted_at }))
 }

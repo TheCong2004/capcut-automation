@@ -6,31 +6,23 @@ use std::path::Path;
 use errors::AnyhowResult;
 
 pub struct ExactMatchDisabledEndpoints {
-  endpoints: HashSet<String>
+  endpoints: HashSet<String>,
 }
 
 impl ExactMatchDisabledEndpoints {
   pub fn new() -> Self {
-    Self {
-      endpoints: HashSet::new()
-    }
+    Self { endpoints: HashSet::new() }
   }
 
   pub fn from_set(endpoints: HashSet<String>) -> Self {
-    Self {
-      endpoints,
-    }
+    Self { endpoints }
   }
 
   pub fn load_from_file<P: AsRef<Path>>(path: P) -> AnyhowResult<Self> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
-    let lines = reader.lines()
-        .filter_map(|line| line.ok())
-        .map(|line| line.trim().to_string())
-        .filter(|line| !(line.starts_with("#") || line.is_empty()))
-        .collect::<HashSet<String>>();
+    let lines = reader.lines().filter_map(|line| line.ok()).map(|line| line.trim().to_string()).filter(|line| !(line.starts_with("#") || line.is_empty())).collect::<HashSet<String>>();
 
     Ok(Self::from_set(lines))
   }

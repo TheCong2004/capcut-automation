@@ -15,11 +15,11 @@ use crate::job::job_loop::process_single_job_success_case::ProcessSingleJobSucce
 use crate::job_dependencies::JobDependencies;
 
 // Job runner timeouts (guards MySQL)
-const START_TIMEOUT_MILLIS : u64 = 500;
-const INCREASE_TIMEOUT_MILLIS : u64 = 1000;
+const START_TIMEOUT_MILLIS: u64 = 500;
+const INCREASE_TIMEOUT_MILLIS: u64 = 1000;
 
 /// Pause file millis
-const PAUSE_FILE_EXISTS_WAIT_MILLIS : u64 = 1000 * 30;
+const PAUSE_FILE_EXISTS_WAIT_MILLIS: u64 = 1000 * 30;
 
 pub async fn main_loop(job_dependencies: JobDependencies) {
   let mut noop_logger = NoOpLogger::new(job_dependencies.no_op_logger_millis as i64);
@@ -47,7 +47,8 @@ pub async fn main_loop(job_dependencies: JobDependencies) {
       is_debug_worker: false, // TODO
       sort_by_priority,
       mysql_pool: &job_dependencies.mysql_pool,
-    }).await;
+    })
+    .await;
 
     sort_by_priority = true;
     sort_by_priority_count += 1;
@@ -59,7 +60,7 @@ pub async fn main_loop(job_dependencies: JobDependencies) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     };
 
     if jobs.is_empty() {
@@ -81,7 +82,7 @@ pub async fn main_loop(job_dependencies: JobDependencies) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     }
 
     error_timeout_millis = START_TIMEOUT_MILLIS; // reset
@@ -116,14 +117,14 @@ async fn process_job_batch(job_dependencies: &JobDependencies, jobs: Vec<Availab
       Err(err) => {
         warn!("Failure to process job: {:?}", err);
         let _r = handle_error(&job_dependencies, &job, err).await?;
-      }
+      },
     }
   }
 
   Ok(())
 }
 
-#[derive(Eq,PartialEq)]
+#[derive(Eq, PartialEq)]
 enum JobFailureClass {
   // Jobs that can be retried
   TransientFailure,
@@ -131,7 +132,7 @@ enum JobFailureClass {
   PermanentFailure,
 }
 
-#[derive(Eq,PartialEq)]
+#[derive(Eq, PartialEq)]
 enum ContainerHealth {
   // No impact to container health
   Ignore,
@@ -140,38 +141,14 @@ enum ContainerHealth {
 }
 
 async fn handle_error(job_dependencies: &&JobDependencies, job: &AvailableEmailSenderJob, error: ProcessSingleJobError) -> AnyhowResult<()> {
-  let (
-    job_failure_class,
-    container_health_report,
-    internal_failure_reason,
-  ) = match error {
+  let (job_failure_class, container_health_report, internal_failure_reason) = match error {
     // Permanent failures
-    ProcessSingleJobError::KeepAliveElapsed =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        "keepalive elapsed".to_string(),
-      ),
-    ProcessSingleJobError::InvalidJob(ref err) =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        format!("InvalidJob: {:?}", err),
-      ),
-    ProcessSingleJobError::NotYetImplemented =>
-      (
-        JobFailureClass::PermanentFailure,
-        ContainerHealth::Ignore,
-        "not yet implemented".to_string(),
-      ),
+    ProcessSingleJobError::KeepAliveElapsed => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, "keepalive elapsed".to_string()),
+    ProcessSingleJobError::InvalidJob(ref err) => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, format!("InvalidJob: {:?}", err)),
+    ProcessSingleJobError::NotYetImplemented => (JobFailureClass::PermanentFailure, ContainerHealth::Ignore, "not yet implemented".to_string()),
 
     // Non-permanent failures
-    ProcessSingleJobError::Other(ref err) =>
-      (
-        JobFailureClass::TransientFailure,
-        ContainerHealth::IncrementContainerFailCount,
-        format!("OtherErr: {:?}", err),
-      ),
+    ProcessSingleJobError::Other(ref err) => (JobFailureClass::TransientFailure, ContainerHealth::IncrementContainerFailCount, format!("OtherErr: {:?}", err)),
   };
 
   if container_health_report == ContainerHealth::IncrementContainerFailCount {
@@ -182,30 +159,21 @@ async fn handle_error(job_dependencies: &&JobDependencies, job: &AvailableEmailS
 
   match job_failure_class {
     JobFailureClass::PermanentFailure => {
-      let _r = mark_email_sender_job_completely_failed(
-        &job_dependencies.mysql_pool,
-        &job,
-        Some(&internal_failure_reason),
-      ).await;
-    }
+      let _r = mark_email_sender_job_completely_failed(&job_dependencies.mysql_pool, &job, Some(&internal_failure_reason)).await;
+    },
     JobFailureClass::TransientFailure => {
-      let _r = mark_email_sender_job_failure(
-        &job_dependencies.mysql_pool,
-        &job,
-        &internal_failure_reason,
-        job_dependencies.job_max_attempts
-      ).await;
-    }
+      let _r = mark_email_sender_job_failure(&job_dependencies.mysql_pool, &job, &internal_failure_reason, job_dependencies.job_max_attempts).await;
+    },
   }
 
   match error {
     // Post failure handling
     //   (none)
     // No-op
-    ProcessSingleJobError::Other(_) => {}
-    ProcessSingleJobError::InvalidJob(_) => {}
-    ProcessSingleJobError::KeepAliveElapsed => {}
-    ProcessSingleJobError::NotYetImplemented => {}
+    ProcessSingleJobError::Other(_) => {},
+    ProcessSingleJobError::InvalidJob(_) => {},
+    ProcessSingleJobError::KeepAliveElapsed => {},
+    ProcessSingleJobError::NotYetImplemented => {},
   }
 
   Ok(())

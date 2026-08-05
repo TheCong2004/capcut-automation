@@ -10,14 +10,12 @@ use errors::{anyhow, AnyhowResult};
 
 #[derive(Clone)]
 pub struct BannedCidrSet {
-  cidr_set: Arc<RwLock<HashSet<IpCidr>>>
+  cidr_set: Arc<RwLock<HashSet<IpCidr>>>,
 }
 
 impl BannedCidrSet {
   pub fn new() -> Self {
-    Self {
-      cidr_set: Arc::new(RwLock::new(HashSet::new()))
-    }
+    Self { cidr_set: Arc::new(RwLock::new(HashSet::new())) }
   }
 
   pub fn ip_is_banned(&self, ip_address: IpAddr) -> AnyhowResult<bool> {
@@ -26,7 +24,7 @@ impl BannedCidrSet {
       Ok(cidr_set) => {
         for cidr in cidr_set.iter() {
           if cidr.contains(ip_address) {
-            return Ok(true)
+            return Ok(true);
           }
         }
         Ok(false)
@@ -37,9 +35,7 @@ impl BannedCidrSet {
   pub fn add_cidr(&self, ip_cidr: IpCidr) -> AnyhowResult<bool> {
     match self.cidr_set.write() {
       Err(_) => Err(anyhow!("Can't read lock")),
-      Ok(mut cidr_set) => {
-        Ok(cidr_set.insert(ip_cidr))
-      },
+      Ok(mut cidr_set) => Ok(cidr_set.insert(ip_cidr)),
     }
   }
 
@@ -55,13 +51,9 @@ impl BannedCidrSet {
     match self.cidr_set.read() {
       Err(_) => Err(anyhow!("Can't read lock")),
       Ok(cidr_set) => {
-        let sum : BigUint = cidr_set.iter()
-            .map(|cidr| cidr.size())
-            .sum();
+        let sum: BigUint = cidr_set.iter().map(|cidr| cidr.size()).sum();
         let mask = BigUint::from(u128::MAX);
-        let truncated = (sum & mask)
-            .to_u128()
-            .ok_or_else(|| anyhow!("could not truncate number"))?;
+        let truncated = (sum & mask).to_u128().ok_or_else(|| anyhow!("could not truncate number"))?;
         Ok(truncated)
       },
     }

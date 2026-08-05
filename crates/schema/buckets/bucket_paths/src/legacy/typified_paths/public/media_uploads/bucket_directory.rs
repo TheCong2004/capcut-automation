@@ -6,7 +6,7 @@ use crate::util::hashed_directory_path_long_string::hashed_directory_path_long_s
 // TODO: Generate these from a macro.
 
 // TODO: Use a central path registry for quick reference
-const MEDIA_UPLOAD_DIRECTORY : &str = "/media_upload";
+const MEDIA_UPLOAD_DIRECTORY: &str = "/media_upload";
 
 /// Directory for user media uploads.
 /// Each uploaded file gets its own directory so that we can store the original
@@ -20,7 +20,6 @@ pub struct MediaUploadDirectory {
 impl PublicPath for MediaUploadDirectory {}
 
 impl MediaUploadDirectory {
-
   pub fn generate_new() -> Self {
     let entropy = crockford_entropy_lower(32);
     Self::from_object_hash(&entropy)
@@ -30,10 +29,7 @@ impl MediaUploadDirectory {
     // TODO: Path construction could be cleaner.
     let middle = hashed_directory_path_long_string(object_hash);
     let directory = format!("{}/{}{}", MEDIA_UPLOAD_DIRECTORY, middle, object_hash);
-    Self {
-      object_hash: object_hash.to_string(),
-      directory,
-    }
+    Self { object_hash: object_hash.to_string(), directory }
   }
 
   pub fn get_directory_path_str(&self) -> &str {

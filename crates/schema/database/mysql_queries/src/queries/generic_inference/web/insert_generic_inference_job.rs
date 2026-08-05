@@ -16,10 +16,7 @@ use tokens::tokens::users::UserToken;
 
 use crate::errors::database_query_error::DatabaseQueryError;
 use crate::payloads::generic_inference_args::generic_inference_args::GenericInferenceArgs;
-use crate::queries::generic_inference::common::insert_full_generic_inference_job_record::{
-  insert_full_generic_inference_job_record,
-  InsertFullGenericInferenceJobRecordArgs,
-};
+use crate::queries::generic_inference::common::insert_full_generic_inference_job_record::{insert_full_generic_inference_job_record, InsertFullGenericInferenceJobRecordArgs};
 
 pub struct InsertGenericInferenceArgs<'a> {
   pub uuid_idempotency_token: &'a str,
@@ -69,9 +66,7 @@ pub struct InsertGenericInferenceArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn insert_generic_inference_job(args: InsertGenericInferenceArgs<'_>)
-  -> Result<(InferenceJobToken, u64), DatabaseQueryError>
-{
+pub async fn insert_generic_inference_job(args: InsertGenericInferenceArgs<'_>) -> Result<(InferenceJobToken, u64), DatabaseQueryError> {
   let job_token = InferenceJobToken::generate();
 
   // This only applies to certain types of inference.

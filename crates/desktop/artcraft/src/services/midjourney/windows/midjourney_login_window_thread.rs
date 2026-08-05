@@ -25,11 +25,7 @@ use openai_sora_client::recipes::maybe_upgrade_or_renew_session::maybe_upgrade_o
 use openai_sora_client::utils::has_session_cookie::{has_session_cookie, SessionCookiePresence};
 use tauri::{AppHandle, Manager, WebviewWindow};
 
-pub async fn midjourney_login_window_thread(
-  app: AppHandle,
-  app_data_root: AppDataRoot,
-  mj_creds_manager: MidjourneyCredentialManager,
-) {
+pub async fn midjourney_login_window_thread(app: AppHandle, app_data_root: AppDataRoot, mj_creds_manager: MidjourneyCredentialManager) {
   let mut visited_login = false;
 
   loop {
@@ -38,29 +34,23 @@ pub async fn midjourney_login_window_thread(
       None => {
         info!("Exit midjourney login thread.");
         return; // NB: Only exit if we don't have the webview.
-      }
+      },
     };
 
-    let result = check_login_window(
-      &app,
-      &login_webview_window,
-      &app_data_root,
-      &mj_creds_manager,
-      &mut visited_login,
-    ).await;
+    let result = check_login_window(&app, &login_webview_window, &app_data_root, &mj_creds_manager, &mut visited_login).await;
 
     match result {
       Err(err) => {
         error!("Error checking login window: {:?}", err);
-      }
-      Ok(false) => {} // Continue iteration and try again...
+      },
+      Ok(false) => {}, // Continue iteration and try again...
       Ok(true) => {
         info!("Successfully saved cookies from login window. Closing.");
         if let Err(err) = login_webview_window.close() {
           error!("Error closing login window: {:?}", err);
         }
         return;
-      }
+      },
     }
 
     tokio::time::sleep(std::time::Duration::from_millis(2_000)).await;
@@ -68,14 +58,7 @@ pub async fn midjourney_login_window_thread(
 }
 
 /// Returns true if we can exit.
-async fn check_login_window(
-  app_handle: &AppHandle,
-  webview_window: &WebviewWindow,
-  app_data_root: &AppDataRoot,
-  mj_creds_manager: &MidjourneyCredentialManager,
-  visited_login: &mut bool,
-) -> AnyhowResult<bool> {
-
+async fn check_login_window(app_handle: &AppHandle, webview_window: &WebviewWindow, app_data_root: &AppDataRoot, mj_creds_manager: &MidjourneyCredentialManager, visited_login: &mut bool) -> AnyhowResult<bool> {
   /* Login flow looks like this:
 
   1. Start: https://www.midjourney.com/auth/signin
@@ -88,23 +71,16 @@ async fn check_login_window(
   let mut maybe_at_destination = false;
 
   match hostname.as_str() {
-    "www.midjourney.com" |
-    "midjourney.com"
-    => {
+    "www.midjourney.com" | "midjourney.com" => {
       maybe_at_destination = true;
-    }
+    },
     // chatgpt.com/auth is also an auth domain
-    "auth.openai.com" |
-    "accounts.google.com" |
-    "accounts.youtube.com" |
-    "login.live.com" |
-    "appleid.apple.com"
-    => {
+    "auth.openai.com" | "accounts.google.com" | "accounts.youtube.com" | "login.live.com" | "appleid.apple.com" => {
       // NB: We're in auth flow.
       info!("Midjourney webview is in auth flow; hostname `{}`.", hostname);
       *visited_login = true;
-      return Ok(false)
-    }
+      return Ok(false);
+    },
     _ => {}, // We just don't know...
   }
 
@@ -142,25 +118,22 @@ async fn check_login_window(
 
   info!("Current cookies (len {}): {:?}", cookie_store.len(), cookie_store.to_cookie_string());
 
-  let response = get_user_info(GetUserInfoRequest {
-    hostname: MidjourneyHostname::Standard,
-    cookie_header: cookie_store.to_cookie_string(),
-  }).await;
-  
+  let response = get_user_info(GetUserInfoRequest { hostname: MidjourneyHostname::Standard, cookie_header: cookie_store.to_cookie_string() }).await;
+
   match response {
     Err(err) => {
       error!("Error getting midjourney user info: {:?}", err);
       // NB: Fall through. Allow us to update the cookies.
-    }
+    },
     Ok(user_info) => {
       info!("Got midjourney user info: {:?}", user_info);
       let user_info = MidjourneyUserInfo::from_api_response(user_info);
-      
+
       if let Err(err) = mj_creds_manager.replace_user_info(user_info) {
         error!("Error saving midjourney user info: {:?}", err);
         // NB: Fall through. Allow us to update the cookies.
       }
-    }
+    },
   }
 
   mj_creds_manager.replace_cookie_store(cookie_store)?;
@@ -172,9 +145,7 @@ async fn check_login_window(
     return Ok(false);
   }
 
-  let event = RefreshAccountStateEvent {
-    provider: Some(GenerationProvider::Midjourney),
-  };
+  let event = RefreshAccountStateEvent { provider: Some(GenerationProvider::Midjourney) };
 
   if let Err(err) = event.send(&app_handle) {
     error!("Failed to send RefreshAccountStateEvent: {:?}", err); // Fail open
@@ -182,4 +153,3 @@ async fn check_login_window(
 
   Ok(true)
 }
-

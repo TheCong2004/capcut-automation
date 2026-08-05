@@ -12,7 +12,7 @@ use tokens::tokens::users::UserToken;
 
 /// SSO accounts do not have passwords at account creation
 /// The password hash field is nullable, so we can't leave it null/empty.
-const SSO_PASSWORD : &str = "*";
+const SSO_PASSWORD: &str = "*";
 
 pub struct CreateAccountFromGoogleSsoArgs<'a> {
   pub username: &'a str,
@@ -38,14 +38,11 @@ pub struct CreateAccountFromGoogleSsoArgs<'a> {
   pub maybe_referral_user_token: Option<&'a UserToken>,
 }
 
-pub async fn create_account_from_google_sso<'e, 'c: 'e, E>(
-  args: CreateAccountFromGoogleSsoArgs<'_>,
-  mysql_executor: E,
-) -> Result<UserToken, CreateAccountError>
+pub async fn create_account_from_google_sso<'e, 'c: 'e, E>(args: CreateAccountFromGoogleSsoArgs<'_>, mysql_executor: E) -> Result<UserToken, CreateAccountError>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
-  let result= create_account_generic(
+  let result = create_account_generic(
     GenericCreateAccountArgs {
       maybe_signup_method: Some(UserSignupMethod::GoogleSignIn),
 
@@ -82,7 +79,8 @@ where
       was_eagerly_provisioned: false,
     },
     mysql_executor,
-  ).await?;
+  )
+  .await?;
 
   Ok(result.user_token)
 }

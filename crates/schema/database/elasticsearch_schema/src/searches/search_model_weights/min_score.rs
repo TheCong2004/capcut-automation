@@ -1,17 +1,9 @@
 use serde_json::{Number, Value};
 
-pub fn add_min_score(
-  mut query: Value,
-  search_term: &str,
-  maybe_user_defined_minimum_score: Option<u64>,
-) -> Value {
-
+pub fn add_min_score(mut query: Value, search_term: &str, maybe_user_defined_minimum_score: Option<u64>) -> Value {
   if let Some(mimimum_score) = maybe_user_defined_minimum_score {
     if let Some(mut object) = query.as_object_mut() {
-      object.insert(
-        "min_score".to_string(),
-        Value::Number(Number::from(mimimum_score))
-      );
+      object.insert("min_score".to_string(), Value::Number(Number::from(mimimum_score)));
     }
     return query;
   }
@@ -30,10 +22,7 @@ pub fn add_min_score(
   };
 
   if let Some(mut object) = query.as_object_mut() {
-    object.insert(
-      "min_score".to_string(),
-      Value::Number(Number::from(minimum_score))
-    );
+    object.insert("min_score".to_string(), Value::Number(Number::from(minimum_score)));
   }
 
   query

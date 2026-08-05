@@ -35,9 +35,8 @@ pub enum MelMultiplyFactor {
   CustomMultiplyFactor(f64),
 }
 
-pub struct InferenceArgs <'a, P: AsRef<Path>> {
+pub struct InferenceArgs<'a, P: AsRef<Path>> {
   // Model parameters
-
   /// Arg: --synthesizer_checkpoint_path
   pub synthesizer_checkpoint_path: P,
 
@@ -52,17 +51,14 @@ pub struct InferenceArgs <'a, P: AsRef<Path>> {
   pub maybe_mel_multiply_factor: Option<MelMultiplyFactor>,
 
   // Premium features
-
   /// Arg: --max_decoder_steps, determines inference length
   pub max_decoder_steps: u32,
 
   // User input
-
   /// Arg: input_text_filename, path to file containing text to run inference on
   pub input_text_filename: P,
 
   // Output files
-
   /// Arg: --output_audio_filename, where to save audio result
   pub output_audio_filename: P,
 
@@ -74,61 +70,25 @@ pub struct InferenceArgs <'a, P: AsRef<Path>> {
 }
 
 impl Tacotron2InferenceCommand {
-  pub fn new<P: AsRef<Path>>(
-    tacotron_code_root_directory: P,
-    maybe_override_python_interpreter: Option<&str>,
-    maybe_virtual_env_activation_command: Option<&str>,
-    inference_script_name: P,
-    maybe_docker_options: Option<DockerOptions>,
-  ) -> Self {
-    Self {
-      tacotron_code_root_directory: tacotron_code_root_directory.as_ref().to_path_buf(),
-      maybe_override_python_interpreter: maybe_override_python_interpreter.map(|s| s.to_string()),
-      maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()),
-      inference_script_name: inference_script_name.as_ref().to_path_buf(),
-      maybe_docker_options,
-    }
+  pub fn new<P: AsRef<Path>>(tacotron_code_root_directory: P, maybe_override_python_interpreter: Option<&str>, maybe_virtual_env_activation_command: Option<&str>, inference_script_name: P, maybe_docker_options: Option<DockerOptions>) -> Self {
+    Self { tacotron_code_root_directory: tacotron_code_root_directory.as_ref().to_path_buf(), maybe_override_python_interpreter: maybe_override_python_interpreter.map(|s| s.to_string()), maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()), inference_script_name: inference_script_name.as_ref().to_path_buf(), maybe_docker_options }
   }
 
   pub fn from_env() -> AnyhowResult<Self> {
-    let root_code_directory = easyenv::get_env_pathbuf_required(
-      "TT2_LEGACY_ROOT_DIRECTORY")?;
+    let root_code_directory = easyenv::get_env_pathbuf_required("TT2_LEGACY_ROOT_DIRECTORY")?;
 
-    let inference_script_name = easyenv::get_env_pathbuf_or_default(
-      "TT2_LEGACY_INFERENCE_SCRIPT",
-      "vocodes_inference_updated.py");
+    let inference_script_name = easyenv::get_env_pathbuf_or_default("TT2_LEGACY_INFERENCE_SCRIPT", "vocodes_inference_updated.py");
 
-    let maybe_virtual_env_activation_command = easyenv::get_env_string_optional(
-      "TT2_LEGACY_MAYBE_VENV_ACTIVATION_COMMAND");
+    let maybe_virtual_env_activation_command = easyenv::get_env_string_optional("TT2_LEGACY_MAYBE_VENV_ACTIVATION_COMMAND");
 
-    let maybe_override_python_interpreter = easyenv::get_env_string_optional(
-      "TT2_LEGACY_MAYBE_PYTHON_INTERPRETER");
+    let maybe_override_python_interpreter = easyenv::get_env_string_optional("TT2_LEGACY_MAYBE_PYTHON_INTERPRETER");
 
-    let maybe_docker_options = easyenv::get_env_string_optional(
-      "TT2_LEGACY_MAYBE_DOCKER_IMAGE_SHA")
-        .map(|image_name| {
-          DockerOptions {
-            image_name,
-            maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()),
-            maybe_environment_variables: None,
-            maybe_gpu: Some(DockerGpu::All),
-          }
-        });
+    let maybe_docker_options = easyenv::get_env_string_optional("TT2_LEGACY_MAYBE_DOCKER_IMAGE_SHA").map(|image_name| DockerOptions { image_name, maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()), maybe_environment_variables: None, maybe_gpu: Some(DockerGpu::All) });
 
-    Ok(Self {
-      tacotron_code_root_directory: root_code_directory,
-      inference_script_name,
-      maybe_virtual_env_activation_command,
-      maybe_override_python_interpreter,
-      maybe_docker_options,
-    })
+    Ok(Self { tacotron_code_root_directory: root_code_directory, inference_script_name, maybe_virtual_env_activation_command, maybe_override_python_interpreter, maybe_docker_options })
   }
 
-  pub fn execute_inference<P: AsRef<Path>>(
-    &self,
-    args: InferenceArgs<'_, P>,
-  ) -> AnyhowResult<()> {
-
+  pub fn execute_inference<P: AsRef<Path>>(&self, args: InferenceArgs<'_, P>) -> AnyhowResult<()> {
     let mut command = String::new();
     command.push_str(&format!("cd {}", path_to_string(&self.tacotron_code_root_directory)));
 
@@ -138,9 +98,7 @@ impl Tacotron2InferenceCommand {
       command.push_str(" ");
     }
 
-    let python_binary = self.maybe_override_python_interpreter
-        .as_deref()
-        .unwrap_or("python");
+    let python_binary = self.maybe_override_python_interpreter.as_deref().unwrap_or("python");
 
     command.push_str(" && ");
     command.push_str(python_binary);
@@ -162,11 +120,8 @@ impl Tacotron2InferenceCommand {
 
         command.push_str(" --waveglow_vocoder_checkpoint_path ");
         command.push_str(&path_to_string(waveglow_vocoder_checkpoint_path));
-      }
-      VocoderForInferenceOption::HifiganSuperres {
-        hifigan_vocoder_checkpoint_path,
-        hifigan_superres_vocoder_checkpoint_path
-      } => {
+      },
+      VocoderForInferenceOption::HifiganSuperres { hifigan_vocoder_checkpoint_path, hifigan_superres_vocoder_checkpoint_path } => {
         command.push_str(" --vocoder_type ");
         command.push_str("hifigan-superres");
 
@@ -175,19 +130,19 @@ impl Tacotron2InferenceCommand {
 
         command.push_str(" --hifigan_superres_vocoder_checkpoint_path ");
         command.push_str(&path_to_string(hifigan_superres_vocoder_checkpoint_path));
-      }
+      },
     }
 
     match args.maybe_mel_multiply_factor {
-      None => {}
+      None => {},
       Some(MelMultiplyFactor::DefaultMultiplyFactor) => {
         command.push_str(" --maybe_custom_mel_multiply_factor ");
         //command.push_str("True");
-      }
+      },
       Some(MelMultiplyFactor::CustomMultiplyFactor(factor)) => {
         command.push_str(" --custom_mel_multiply_factor ");
         command.push_str(&factor.to_string());
-      }
+      },
     }
 
     command.push_str(" --input_text_filename ");
@@ -210,15 +165,9 @@ impl Tacotron2InferenceCommand {
 
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
-    let mut p = Popen::create(&command_parts, PopenConfig {
-      ..Default::default()
-    })?;
+    let mut p = Popen::create(&command_parts, PopenConfig { ..Default::default() })?;
 
     info!("Subprocess PID: {:?}", p.pid());
 

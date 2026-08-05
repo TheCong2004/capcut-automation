@@ -71,26 +71,13 @@ impl BucketClientBuilder {
     let region_name = require(self.region_name, "region_name")?;
     let bucket_name = require(self.bucket_name, "bucket_name")?;
 
-    let credentials = Credentials {
-      access_key: Some(access_key),
-      secret_key: Some(secret_key),
-      security_token: None,
-      session_token: None,
-      expiration: None,
-    };
+    let credentials = Credentials { access_key: Some(access_key), secret_key: Some(secret_key), security_token: None, session_token: None, expiration: None };
 
     // A custom endpoint targets an S3-compatible host via `Region::Custom`;
     // otherwise the region name is parsed as a standard AWS region.
     let region = match self.endpoint.as_deref() {
-      Some(endpoint) => Region::Custom {
-        region: region_name.clone(),
-        endpoint: endpoint.to_string(),
-      },
-      None => region_name.parse().map_err(|err| {
-        BucketClientError::ClientBuilderSetupError(format!(
-          "invalid region {region_name:?}: {err:?}"
-        ))
-      })?,
+      Some(endpoint) => Region::Custom { region: region_name.clone(), endpoint: endpoint.to_string() },
+      None => region_name.parse().map_err(|err| BucketClientError::ClientBuilderSetupError(format!("invalid region {region_name:?}: {err:?}")))?,
     };
 
     let mut bucket = Bucket::new(&bucket_name, region, credentials)?;
@@ -113,7 +100,5 @@ impl BucketClientBuilder {
 
 /// Resolve a required builder field, or report which one was missing.
 fn require(value: Option<String>, field: &str) -> Result<String, BucketClientError> {
-  value.ok_or_else(|| {
-    BucketClientError::ClientBuilderSetupError(format!("{field} is required"))
-  })
+  value.ok_or_else(|| BucketClientError::ClientBuilderSetupError(format!("{field} is required")))
 }

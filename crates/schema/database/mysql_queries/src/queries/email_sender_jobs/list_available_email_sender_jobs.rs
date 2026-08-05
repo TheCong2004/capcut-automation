@@ -58,20 +58,12 @@ pub struct ListAvailableEmailSenderJobArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn list_available_email_sender_jobs(
-  args: ListAvailableEmailSenderJobArgs<'_>,
-)
-  -> AnyhowResult<Vec<AvailableEmailSenderJob>>
-{
-  let query = if args.sort_by_priority {
-    list_sorted_by_priority(args).await
-  } else {
-    list_sorted_by_id(args).await
-  };
+pub async fn list_available_email_sender_jobs(args: ListAvailableEmailSenderJobArgs<'_>) -> AnyhowResult<Vec<AvailableEmailSenderJob>> {
+  let query = if args.sort_by_priority { list_sorted_by_priority(args).await } else { list_sorted_by_id(args).await };
 
   let job_records = query?;
 
-  let job_records : Vec<AvailableEmailSenderJob> = job_records.into_iter()
+  let job_records: Vec<AvailableEmailSenderJob> = job_records.into_iter()
       .map(|record : AvailableEmailSenderJobRawInternal| {
         let record = AvailableEmailSenderJob {
           id: EmailSenderJobId(record.id),
@@ -146,9 +138,11 @@ SELECT
   updated_at,
   retry_at
 
-FROM email_sender_jobs"#.to_string();
+FROM email_sender_jobs"#
+    .to_string();
 
-  query.push_str(r#"
+  query.push_str(
+    r#"
   WHERE
   (
     status IN ("pending", "attempt_failed")
@@ -165,14 +159,12 @@ FROM email_sender_jobs"#.to_string();
   )
   ORDER BY id ASC
   LIMIT ?
-        "#);
+        "#,
+  );
 
-  let query = sqlx::query_as::<_, AvailableEmailSenderJobRawInternal>(&query)
-      .bind(args.is_debug_worker)
-      .bind(args.num_records);
+  let query = sqlx::query_as::<_, AvailableEmailSenderJobRawInternal>(&query).bind(args.is_debug_worker).bind(args.num_records);
 
-  query.fetch_all(args.mysql_pool)
-      .await
+  query.fetch_all(args.mysql_pool).await
 }
 
 async fn list_sorted_by_priority(args: ListAvailableEmailSenderJobArgs<'_>) -> Result<Vec<AvailableEmailSenderJobRawInternal>, sqlx::Error> {
@@ -209,9 +201,11 @@ SELECT
   updated_at,
   retry_at
 
-FROM email_sender_jobs"#.to_string();
+FROM email_sender_jobs"#
+    .to_string();
 
-  query.push_str(r#"
+  query.push_str(
+    r#"
   WHERE
   (
     status IN ("pending", "attempt_failed")
@@ -228,14 +222,12 @@ FROM email_sender_jobs"#.to_string();
   )
   ORDER BY priority_level DESC, id ASC
   LIMIT ?
-        "#);
+        "#,
+  );
 
-  let query = sqlx::query_as::<_, AvailableEmailSenderJobRawInternal>(&query)
-      .bind(args.is_debug_worker)
-      .bind(args.num_records);
+  let query = sqlx::query_as::<_, AvailableEmailSenderJobRawInternal>(&query).bind(args.is_debug_worker).bind(args.num_records);
 
-  query.fetch_all(args.mysql_pool)
-      .await
+  query.fetch_all(args.mysql_pool).await
 }
 
 #[derive(Debug)]

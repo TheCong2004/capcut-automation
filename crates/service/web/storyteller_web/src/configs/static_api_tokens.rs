@@ -10,7 +10,7 @@ use crate::util::read_toml_file_to_struct::read_toml_file_to_struct;
 /// Config to pass to handlers
 pub struct StaticApiTokenSet {
   /// Token -> Token config
-  api_tokens: HashMap<String, StaticApiTokenConfig>
+  api_tokens: HashMap<String, StaticApiTokenConfig>,
 }
 
 impl StaticApiTokenSet {
@@ -29,9 +29,7 @@ impl StaticApiTokenSet {
       map.insert(item.api_token.clone(), item);
     }
 
-    Self {
-      api_tokens: map,
-    }
+    Self { api_tokens: map }
   }
   pub fn get_api_token(&self, api_token: &str) -> Option<StaticApiTokenConfig> {
     self.api_tokens.get(api_token).map(|token| token.clone())
@@ -41,7 +39,7 @@ impl StaticApiTokenSet {
 /// Struct deserialization of TOML config file
 #[derive(Clone, Deserialize, Debug, Default)]
 pub struct StaticApiTokens {
-  pub api_tokens: Vec<StaticApiTokenConfig>
+  pub api_tokens: Vec<StaticApiTokenConfig>,
 }
 
 #[derive(Clone, Deserialize, Debug)]

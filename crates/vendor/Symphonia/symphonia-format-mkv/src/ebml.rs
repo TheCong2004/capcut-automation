@@ -172,8 +172,7 @@ impl ElementHeader {
     pub(crate) fn end(&self) -> Option<u64> {
         if self.data_len == 0 {
             None
-        }
-        else {
+        } else {
             Some(self.data_pos + self.data_len)
         }
     }

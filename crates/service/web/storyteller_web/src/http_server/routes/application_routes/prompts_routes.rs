@@ -8,16 +8,10 @@ use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::Error;
 use actix_web::App;
 
-pub fn add_prompts_routes<T, B> (app: App<T>) -> App<T>
+pub fn add_prompts_routes<T, B>(app: App<T>) -> App<T>
 where
-    B: MessageBody,
-    T: ServiceFactory<
-      ServiceRequest,
-      Config = (),
-      Response = ServiceResponse<B>,
-      Error = Error,
-      InitError = (),
-    >,
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
   RouteBuilder::from_app(app)
       // NB: This poor RouteBuilder utility requires that POST comes first, otherwise the GET glob

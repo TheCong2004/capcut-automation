@@ -15,9 +15,7 @@ where
 
 /// Return only the input tokens that currently exist and aren't
 /// soft-deleted (no user_deleted_at or mod_deleted_at).
-pub async fn filter_existing_media_file_tokens<'e, 'c: 'e, E>(
-  args: FilterExistingMediaFileTokensArgs<'e, 'c, E>,
-) -> Result<Vec<MediaFileToken>, sqlx::Error>
+pub async fn filter_existing_media_file_tokens<'e, 'c: 'e, E>(args: FilterExistingMediaFileTokensArgs<'e, 'c, E>) -> Result<Vec<MediaFileToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -38,7 +36,5 @@ where
 
   let rows = builder.build().fetch_all(args.mysql_executor).await?;
 
-  Ok(rows.into_iter()
-    .map(|row| MediaFileToken::new(row.get::<String, _>(0)))
-    .collect())
+  Ok(rows.into_iter().map(|row| MediaFileToken::new(row.get::<String, _>(0))).collect())
 }

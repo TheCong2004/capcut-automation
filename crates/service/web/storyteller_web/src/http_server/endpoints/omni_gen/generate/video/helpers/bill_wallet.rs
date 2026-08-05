@@ -16,29 +16,17 @@ pub struct BillWalletResult {
 /// Generate an apriori job token and bill the user's wallet for the given cost.
 ///
 /// If cost is 0, no wallet deduction is made but the apriori token is still generated.
-pub async fn bill_wallet(
-  user_token: &UserToken,
-  cost: u64,
-  mysql_connection: &mut sqlx::pool::PoolConnection<sqlx::MySql>,
-) -> Result<BillWalletResult, CommonWebError> {
+pub async fn bill_wallet(user_token: &UserToken, cost: u64, mysql_connection: &mut sqlx::pool::PoolConnection<sqlx::MySql>) -> Result<BillWalletResult, CommonWebError> {
   let apriori_job_token = InferenceJobToken::generate();
 
   info!("Charging wallet: {} credits", cost);
 
   let maybe_wallet_ledger_entry_token = if cost > 0 {
-    let deduction_result = attempt_wallet_deduction_else_common_web_error(
-      user_token,
-      Some(apriori_job_token.as_str()),
-      cost,
-      mysql_connection,
-    ).await?;
+    let deduction_result = attempt_wallet_deduction_else_common_web_error(user_token, Some(apriori_job_token.as_str()), cost, mysql_connection).await?;
     Some(deduction_result.ledger_entry_token)
   } else {
     None
   };
 
-  Ok(BillWalletResult {
-    apriori_job_token,
-    maybe_wallet_ledger_entry_token,
-  })
+  Ok(BillWalletResult { apriori_job_token, maybe_wallet_ledger_entry_token })
 }

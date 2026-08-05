@@ -21,15 +21,9 @@ use pager::notification::notification_urgency::NotificationUrgency;
 use tokens::tokens::batch_generations::BatchGenerationToken;
 use tokens::tokens::media_files::MediaFileToken;
 
-const PREFIX : Option<&str> = Some("artcraft_");
+const PREFIX: Option<&str> = Some("artcraft_");
 
-pub async fn process_images_payload(
-  images_data: &[ImagesData],
-  job: &FalJobDetails,
-  server_state: &ServerState,
-  pager: &Pager,
-) -> Result<(Option<MediaFileToken>, Option<BatchGenerationToken>), CommonWebError> {
-
+pub async fn process_images_payload(images_data: &[ImagesData], job: &FalJobDetails, server_state: &ServerState, pager: &Pager) -> Result<(Option<MediaFileToken>, Option<BatchGenerationToken>), CommonWebError> {
   let mut maybe_media_token = None;
 
   // NB: We are not going to create `batch_generations` table records. We don't need them.
@@ -55,7 +49,7 @@ pub async fn process_images_payload(
       Err(err) => {
         maybe_error = Some(err);
         continue;
-      }
+      },
     };
 
     if maybe_media_token.is_none() {
@@ -77,16 +71,17 @@ pub async fn process_images_payload(
   if let Some(err) = maybe_error {
     // Even if some images were downloaded, let's still page about any failures.
     let notification = NotificationDetailsBuilder::from_boxed_error(err.into())
-        .set_title(format!("Failure to download all images from FAL webhook: {} out of {} succeeded", success_count, images_data.len()))
-        .set_description(Some(format!(
-          "We uploaded all of the images we could and marked the job as a success, \
+      .set_title(format!("Failure to download all images from FAL webhook: {} out of {} succeeded", success_count, images_data.len()))
+      .set_description(Some(format!(
+        "We uploaded all of the images we could and marked the job as a success, \
           but the user may need assistance with the remaining images and/or reimbursement.\n\
           **Internal Job Token**: {}\n\
           **Fal ID**: {}\n",
-          job.job_token.as_str(),
-          job.external_third_party_id)))
-        .set_urgency(Some(NotificationUrgency::Medium))
-        .build();
+        job.job_token.as_str(),
+        job.external_third_party_id
+      )))
+      .set_urgency(Some(NotificationUrgency::Medium))
+      .build();
 
     if let Err(pager_err) = pager.enqueue_page(notification) {
       error!("Failed to enqueue FAL webhook parse error alert: {:?}", pager_err);
@@ -96,178 +91,97 @@ pub async fn process_images_payload(
   Ok((maybe_media_token, maybe_batch_token))
 }
 
-async fn upload_image(
-  job: &FalJobDetails,
-  server_state: &ServerState,
-  image: &ImagesData,
-  maybe_batch_token: Option<&BatchGenerationToken>,
-) -> Result<MediaFileToken, CommonWebError> {
-  let image_url = image.url
-      .as_deref()
-      .ok_or_else(|| {
-        warn!("No `url` in image payload");
-        CommonWebError::server_error_with_message("no `url` in image payload")
-      })?;
+async fn upload_image(job: &FalJobDetails, server_state: &ServerState, image: &ImagesData, maybe_batch_token: Option<&BatchGenerationToken>) -> Result<MediaFileToken, CommonWebError> {
+  let image_url = image.url.as_deref().ok_or_else(|| {
+    warn!("No `url` in image payload");
+    CommonWebError::server_error_with_message("no `url` in image payload")
+  })?;
 
   // Download with a retry if the first attempt returns suspiciously few bytes.
-  let mut file_bytes = http_download_url_to_bytes(image_url)
-      .await
-      .map_err(|e| {
-        warn!("Failed to download image from {}: {:?}", image_url, e);
-        CommonWebError::server_error_with_message(
-          &format!("Failed to download image: {:?}", e))
-      })?;
+  let mut file_bytes = http_download_url_to_bytes(image_url).await.map_err(|e| {
+    warn!("Failed to download image from {}: {:?}", image_url, e);
+    CommonWebError::server_error_with_message(&format!("Failed to download image: {:?}", e))
+  })?;
 
   if file_bytes.len() <= 10 {
-    warn!(
-      "Downloaded only {} bytes from {} — retrying once",
-      file_bytes.len(),
-      image_url,
-    );
-    file_bytes = http_download_url_to_bytes(image_url)
-        .await
-        .map_err(|e| {
-          warn!("Failed to download image on retry from {}: {:?}", image_url, e);
-          CommonWebError::server_error_with_message(
-            &format!("Failed to download image on retry: {:?}", e))
-        })?;
+    warn!("Downloaded only {} bytes from {} — retrying once", file_bytes.len(), image_url,);
+    file_bytes = http_download_url_to_bytes(image_url).await.map_err(|e| {
+      warn!("Failed to download image on retry from {}: {:?}", image_url, e);
+      CommonWebError::server_error_with_message(&format!("Failed to download image on retry: {:?}", e))
+    })?;
   }
 
   // Resolve mime type: magic bytes first, fal content_type as fallback.
-  let metadata = resolve_file_metadata(&file_bytes, image.content_type.as_deref())
-      .ok_or_else(|| {
-        warn!(
-          "Could not determine file type for image (bytes: {}, fal content_type: {:?})",
-          file_bytes.len(),
-          image.content_type,
-        );
-        CommonWebError::server_error_with_message(
-          &format!("Could not determine file type for image (bytes: {}, fal content_type: {:?})",
-            file_bytes.len(), image.content_type))
-      })?;
+  let metadata = resolve_file_metadata(&file_bytes, image.content_type.as_deref()).ok_or_else(|| {
+    warn!("Could not determine file type for image (bytes: {}, fal content_type: {:?})", file_bytes.len(), image.content_type,);
+    CommonWebError::server_error_with_message(&format!("Could not determine file type for image (bytes: {}, fal content_type: {:?})", file_bytes.len(), image.content_type))
+  })?;
 
-  info!("File type: {}, extension: {:?}, source: {:?}",
-    metadata.mime_type, metadata.file_extension, metadata.source);
+  info!("File type: {}, extension: {:?}, source: {:?}", metadata.mime_type, metadata.file_extension, metadata.source);
 
   match metadata.file_extension {
     FileExtension::Webp => {
       info!("Artcraft can't handle WebP images yet; converting to PNG...");
 
-      let converted = webp_bytes_to_png_bytes(&file_bytes)
-          .map_err(|e| {
-            warn!("Failed to convert WebP to PNG: {:?}", e);
-            CommonWebError::from_error(e)
-          })?;
+      let converted = webp_bytes_to_png_bytes(&file_bytes).map_err(|e| {
+        warn!("Failed to convert WebP to PNG: {:?}", e);
+        CommonWebError::from_error(e)
+      })?;
 
-      let converted_metadata = resolve_file_metadata(&converted, Some("image/png"))
-          .ok_or_else(|| {
-            warn!("Failed to determine file type after WebP→PNG conversion");
-            CommonWebError::server_error_with_message(
-              "Failed to determine file type after WebP→PNG conversion")
-          })?;
+      let converted_metadata = resolve_file_metadata(&converted, Some("image/png")).ok_or_else(|| {
+        warn!("Failed to determine file type after WebP→PNG conversion");
+        CommonWebError::server_error_with_message("Failed to determine file type after WebP→PNG conversion")
+      })?;
 
-      info!("Converted file type: {}, extension: {:?}",
-        converted_metadata.mime_type, converted_metadata.file_extension);
+      info!("Converted file type: {}, extension: {:?}", converted_metadata.mime_type, converted_metadata.file_extension);
 
-      upload_image_bytes(
-        job,
-        server_state,
-        &converted,
-        &converted_metadata.mime_type,
-        converted_metadata.file_extension,
-        maybe_batch_token,
-      ).await
-    }
-    _ => {
-      upload_image_bytes(
-        job,
-        server_state,
-        &file_bytes,
-        &metadata.mime_type,
-        metadata.file_extension,
-        maybe_batch_token,
-      ).await
-    }
+      upload_image_bytes(job, server_state, &converted, &converted_metadata.mime_type, converted_metadata.file_extension, maybe_batch_token).await
+    },
+    _ => upload_image_bytes(job, server_state, &file_bytes, &metadata.mime_type, metadata.file_extension, maybe_batch_token).await,
   }
 }
 
-async fn upload_image_bytes(
-  job: &FalJobDetails,
-  server_state: &ServerState,
-  file_bytes: &[u8],
-  mime_type: &str,
-  file_extension: FileExtension,
-  maybe_batch_token: Option<&BatchGenerationToken>,
-) -> Result<MediaFileToken, CommonWebError> {
-
-  let media_file_type = MediaFileType::try_from_mime_type(mime_type)
-      .ok_or_else(|| {
-        warn!("Unsupported media file type: {}", mime_type);
-        CommonWebError::server_error_with_message(
-          &format!("Unsupported media file type: {}", mime_type))
-      })?;
+async fn upload_image_bytes(job: &FalJobDetails, server_state: &ServerState, file_bytes: &[u8], mime_type: &str, file_extension: FileExtension, maybe_batch_token: Option<&BatchGenerationToken>) -> Result<MediaFileToken, CommonWebError> {
+  let media_file_type = MediaFileType::try_from_mime_type(mime_type).ok_or_else(|| {
+    warn!("Unsupported media file type: {}", mime_type);
+    CommonWebError::server_error_with_message(&format!("Unsupported media file type: {}", mime_type))
+  })?;
 
   info!("MediaFileType: {:?}", media_file_type);
 
   let extension_with_period = file_extension.extension_with_period();
 
   let file_size_bytes = file_bytes.len();
-  let file_hash = sha256_hash_bytes(&file_bytes)
-      .map_err(|e| {
-        warn!("Failed to hash image bytes: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
-  let image_info = ImageInfo::decode_image_from_bytes(&file_bytes)
-      .map_err(|e| {
-        warn!("Failed to decode image info: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let file_hash = sha256_hash_bytes(&file_bytes).map_err(|e| {
+    warn!("Failed to hash image bytes: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
+  let image_info = ImageInfo::decode_image_from_bytes(&file_bytes).map_err(|e| {
+    warn!("Failed to decode image info: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let public_upload_path = MediaFileBucketPath::generate_new(PREFIX, Some(&extension_with_period));
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type_process(
-    public_upload_path.get_full_object_path_str(),
-    file_bytes.as_ref(),
-    mime_type)
-      .await
-      .map_err(|e| {
-        warn!("Failed to upload image to bucket: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type_process(public_upload_path.get_full_object_path_str(), file_bytes.as_ref(), mime_type).await.map_err(|e| {
+    warn!("Failed to upload image to bucket: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
-  let mut query_builder = MediaFileInsertBuilder::new()
-      .checksum_sha2(&file_hash)
-      .creator_ip_address(&job.creator_ip_address)
-      .file_size_bytes(file_size_bytes as u64)
-      .frame_height(image_info.height())
-      .frame_width(image_info.width())
-      .maybe_creator_anonymous_visitor(job.maybe_creator_anonymous_visitor_token.as_ref())
-      .maybe_creator_user(job.maybe_creator_user_token.as_ref())
-      .maybe_generation_provider(Some(GenerationProvider::Artcraft))
-      .maybe_prompt_token(job.maybe_prompt_token.as_ref())
-      .maybe_platform_type(job.maybe_platform_type)
-      .media_file_class(MediaFileClass::Image)
-      .media_file_origin_category(MediaFileOriginCategory::Inference)
-      .media_file_type(media_file_type)
-      .mime_type(mime_type)
-      .public_bucket_directory_hash(&public_upload_path);
+  let mut query_builder = MediaFileInsertBuilder::new().checksum_sha2(&file_hash).creator_ip_address(&job.creator_ip_address).file_size_bytes(file_size_bytes as u64).frame_height(image_info.height()).frame_width(image_info.width()).maybe_creator_anonymous_visitor(job.maybe_creator_anonymous_visitor_token.as_ref()).maybe_creator_user(job.maybe_creator_user_token.as_ref()).maybe_generation_provider(Some(GenerationProvider::Artcraft)).maybe_prompt_token(job.maybe_prompt_token.as_ref()).maybe_platform_type(job.maybe_platform_type).media_file_class(MediaFileClass::Image).media_file_origin_category(MediaFileOriginCategory::Inference).media_file_type(media_file_type).mime_type(mime_type).public_bucket_directory_hash(&public_upload_path);
 
   if let Some(batch_token) = maybe_batch_token {
     query_builder = query_builder.maybe_batch_generation_token(Some(batch_token));
   }
 
-  let media_token = query_builder
-      .insert_pool(&server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Failed to insert image media file record: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let media_token = query_builder.insert_pool(&server_state.mysql_pool).await.map_err(|e| {
+    warn!("Failed to insert image media file record: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  info!("Image media file uploaded with token: {} ; possible batch token: {:?}",
-    media_token, maybe_batch_token);
+  info!("Image media file uploaded with token: {} ; possible batch token: {:?}", media_token, maybe_batch_token);
 
   Ok(media_token)
 }
@@ -283,17 +197,11 @@ mod tests {
   #[tokio::test]
   #[ignore]
   async fn diagnose_fal_image_mimetype_detection() {
-    let urls = [
-      "https://v3b.fal.media/files/b/[REDACT].png",
-      "https://v3b.fal.media/files/b/[REDACT].png",
-      "https://v3b.fal.media/files/b/[REDACT].png",
-      "https://v3b.fal.media/files/b/[REDACT].png",
-    ];
+    let urls = ["https://v3b.fal.media/files/b/[REDACT].png", "https://v3b.fal.media/files/b/[REDACT].png", "https://v3b.fal.media/files/b/[REDACT].png", "https://v3b.fal.media/files/b/[REDACT].png"];
 
     for url in urls {
       println!("\n--- Downloading: {} ---", url);
-      let bytes = http_download_url_to_bytes(url).await
-        .unwrap_or_else(|e| panic!("Failed to download {}: {:?}", url, e));
+      let bytes = http_download_url_to_bytes(url).await.unwrap_or_else(|e| panic!("Failed to download {}: {:?}", url, e));
 
       println!("  Downloaded {} bytes", bytes.len());
 
@@ -307,11 +215,11 @@ mod tests {
         Some(info) => {
           println!("  Detected mime type: {}", info.mime_type());
           println!("  Detected extension: {:?}", info.file_extension());
-        }
+        },
         None => {
           println!("  ERROR: MimetypeInfo::get_for_bytes returned None!");
           println!("  This is the bug — infer could not detect the file type.");
-        }
+        },
       }
     }
   }
@@ -323,8 +231,7 @@ mod tests {
     let url = "https://v3b.fal.media/files/b/[REDACT].mp4";
 
     println!("\n--- Downloading: {} ---", url);
-    let bytes = http_download_url_to_bytes(url).await
-      .unwrap_or_else(|e| panic!("Failed to download {}: {:?}", url, e));
+    let bytes = http_download_url_to_bytes(url).await.unwrap_or_else(|e| panic!("Failed to download {}: {:?}", url, e));
 
     println!("  Downloaded {} bytes", bytes.len());
 
@@ -337,11 +244,11 @@ mod tests {
       Some(info) => {
         println!("  Detected mime type: {}", info.mime_type());
         println!("  Detected extension: {:?}", info.file_extension());
-      }
+      },
       None => {
         println!("  ERROR: MimetypeInfo::get_for_bytes returned None!");
         println!("  This is the bug — infer could not detect the file type.");
-      }
+      },
     }
   }
 }

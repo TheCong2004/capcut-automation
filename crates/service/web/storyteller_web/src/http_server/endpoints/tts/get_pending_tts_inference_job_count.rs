@@ -23,20 +23,12 @@ pub struct Response {
 /// The TTS queue no longer exists, so this returns a hardcoded zero without
 /// touching the cache or the database.
 pub async fn get_pending_tts_inference_job_count_handler() -> Result<HttpResponse, CommonWebError> {
-  let response = Response {
-    success: true,
-    pending_job_count: 0,
-    cache_time: Utc::now().naive_utc(),
-    refresh_interval_millis: REFRESH_INTERVAL_MILLIS,
-  };
+  let response = Response { success: true, pending_job_count: 0, cache_time: Utc::now().naive_utc(), refresh_interval_millis: REFRESH_INTERVAL_MILLIS };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|e| {
-        error!("error returning response: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let body = serde_json::to_string(&response).map_err(|e| {
+    error!("error returning response: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

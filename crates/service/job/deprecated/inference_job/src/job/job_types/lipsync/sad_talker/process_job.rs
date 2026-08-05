@@ -30,7 +30,7 @@ use crate::state::job_dependencies::JobDependencies;
 use crate::util::common_commands::ffmpeg::old::ffmpeg_logo_watermark_command::WatermarkArgs;
 
 /// The maximum that either width or height can be
-const MAX_DIMENSION : u32 = 1500;
+const MAX_DIMENSION: u32 = 1500;
 
 const BUCKET_FILE_PREFIX: &str = "fakeyou_";
 const BUCKET_FILE_EXTENSION: &str = ".mp4";
@@ -44,19 +44,9 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
   let job = args.job;
   let deps = args.job_dependencies;
 
-  let mut job_progress_reporter = args.job_dependencies
-      .clients
-      .job_progress_reporter
-      .new_generic_inference(job.inference_job_token.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
+  let mut job_progress_reporter = args.job_dependencies.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let model_dependencies = args
-      .job_dependencies
-      .job
-      .job_specific_dependencies
-      .maybe_sad_talker_dependencies
-      .as_ref()
-      .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing SadTalker dependencies".to_string())))?;
+  let model_dependencies = args.job_dependencies.job.job_specific_dependencies.maybe_sad_talker_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing SadTalker dependencies".to_string())))?;
 
   // ==================== UNPACK + VALIDATE INFERENCE ARGS ==================== //
 
@@ -66,18 +56,14 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
 
   info!("Download models (if not present)...");
 
-  let mut i : usize = 0;
+  let mut i: usize = 0;
 
   for downloader in model_dependencies.downloaders.all_downloaders() {
-
     // Temporary debugging
     info!("Downloader {}", i);
     i = i + 1;
 
-    let result = downloader.download_if_not_on_filesystem(
-      &args.job_dependencies.buckets.private_bucket_client,
-      &args.job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads,
-    ).await;
+    let result = downloader.download_if_not_on_filesystem(&args.job_dependencies.buckets.private_bucket_client, &args.job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads).await;
 
     if let Err(err) = result {
       error!("could not download: {:?}", err);
@@ -90,36 +76,15 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
   let work_temp_dir = format!("temp_sad_talker_inference_{}", job.id.0);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let work_temp_dir = args.job_dependencies
-      .fs
-      .scoped_temp_dir_creator_for_work
-      .new_tempdir(&work_temp_dir)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let work_temp_dir = args.job_dependencies.fs.scoped_temp_dir_creator_for_work.new_tempdir(&work_temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
- 
   // ==================== QUERY AND DOWNLOAD FILES ==================== //
 
-  let audio_path = download_audio_file(DownloadAudioFileArgs {
-    audio_source: &job_args.audio_source,
-    public_bucket_client: &args.job_dependencies.buckets.public_bucket_client,
-    job_progress_reporter: &mut job_progress_reporter,
-    job,
-    temp_dir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work,
-    work_temp_dir: &work_temp_dir,
-    mysql_pool: &deps.db.mysql_pool
-  }).await?;
+  let audio_path = download_audio_file(DownloadAudioFileArgs { audio_source: &job_args.audio_source, public_bucket_client: &args.job_dependencies.buckets.public_bucket_client, job_progress_reporter: &mut job_progress_reporter, job, temp_dir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work, work_temp_dir: &work_temp_dir, mysql_pool: &deps.db.mysql_pool }).await?;
 
   info!("Downloaded audio file: {:?}", audio_path.filesystem_path);
 
-  let image_path = download_image_file(DownloadImageFileArgs {
-    image_source: &job_args.image_source,
-    public_bucket_client: &args.job_dependencies.buckets.public_bucket_client,
-    job_progress_reporter: &mut job_progress_reporter,
-    job,
-    temp_dir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work,
-    work_temp_dir: &work_temp_dir,
-    mysql_pool: &deps.db.mysql_pool
-  }).await?;
+  let image_path = download_image_file(DownloadImageFileArgs { image_source: &job_args.image_source, public_bucket_client: &args.job_dependencies.buckets.public_bucket_client, job_progress_reporter: &mut job_progress_reporter, job, temp_dir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_work, work_temp_dir: &work_temp_dir, mysql_pool: &deps.db.mysql_pool }).await?;
 
   info!("Downloaded image file: {:?}", image_path.filesystem_path);
 
@@ -143,12 +108,7 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
 
     info!("Resizing image to {}x{} ...", width, height);
 
-    let result = resize_image(
-      &image_path.filesystem_path,
-      &work_temp_dir,
-      width,
-      height
-    );
+    let result = resize_image(&image_path.filesystem_path, &work_temp_dir, width, height);
 
     match result {
       Err(err) => {
@@ -157,10 +117,10 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
         safe_delete_file(&image_path.filesystem_path);
         safe_delete_directory(&work_temp_dir);
         return Err(ProcessSingleJobError::Other(anyhow!("image resize failure: {:?}", err)));
-      }
+      },
       Ok(resized_image_path) => {
         usable_image_path = resized_image_path;
-      }
+      },
     }
   }
 
@@ -170,8 +130,7 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
 
   info!("Ready for SadTalker inference...");
 
-  job_progress_reporter.log_status("running inference")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("running inference").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   let output_video_fs_path = work_temp_dir.path().join("output.mp4");
   let output_video_fs_path_watermark = work_temp_dir.path().join("output_watermark.mp4");
@@ -182,10 +141,7 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
 
   // TODO: Limit output length for non-premium (???)
 
-  let _maybe_args = job.maybe_inference_args
-      .as_ref()
-      .map(|args| args.args.as_ref())
-      .flatten();
+  let _maybe_args = job.maybe_inference_args.as_ref().map(|args| args.args.as_ref()).flatten();
 
   // ==================== RUN INFERENCE SCRIPT ==================== //
 
@@ -193,18 +149,7 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
   let stderr_output_file = work_temp_dir.path().join("stderr.txt");
   let inference_start_time = Instant::now();
 
-  let command_exit_status = model_dependencies
-      .inference_command
-      .execute_inference(InferenceArgs {
-        input_audio: &audio_path.filesystem_path,
-        input_image: &usable_image_path,
-        work_dir: &workdir,
-        output_file: &output_video_fs_path,
-        stderr_output_file: &stderr_output_file,
-        make_still: job_args.make_still,
-        maybe_enhancer: job_args.enhancer.as_deref(),
-        maybe_preprocess: job_args.preprocess.as_deref(),
-      });
+  let command_exit_status = model_dependencies.inference_command.execute_inference(InferenceArgs { input_audio: &audio_path.filesystem_path, input_image: &usable_image_path, work_dir: &workdir, output_file: &output_video_fs_path, stderr_output_file: &stderr_output_file, make_still: job_args.make_still, maybe_enhancer: job_args.enhancer.as_deref(), maybe_preprocess: job_args.preprocess.as_deref() });
 
   let inference_duration = Instant::now().duration_since(inference_start_time);
 
@@ -218,12 +163,12 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
     if let Ok(contents) = read_to_string(&stderr_output_file) {
       warn!("Captured stderr output: {}", contents);
 
-      match categorize_error(&contents)  {
+      match categorize_error(&contents) {
         Some(ProcessSingleJobError::FaceDetectionFailure) => {
           warn!("Face not detected in source image");
           error = ProcessSingleJobError::FaceDetectionFailure;
-        }
-        _ => {}
+        },
+        _ => {},
       }
     }
 
@@ -252,15 +197,13 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
 
     finished_file = output_video_fs_path_watermark.clone();
 
-    let command_exit_status = model_dependencies
-        .ffmpeg_watermark_command
-        .execute(WatermarkArgs {
-          video_path: &output_video_fs_path,
-          maybe_override_logo_path: None,
-          alpha: 0.6,
-          scale: 0.1, // NB: 0.1 is good for the Storyteller logo @ 2653x512 placed on 1024x576 output.
-          output_path: &output_video_fs_path_watermark,
-        });
+    let command_exit_status = model_dependencies.ffmpeg_watermark_command.execute(WatermarkArgs {
+      video_path: &output_video_fs_path,
+      maybe_override_logo_path: None,
+      alpha: 0.6,
+      scale: 0.1, // NB: 0.1 is good for the Storyteller logo @ 2653x512 placed on 1024x576 output.
+      output_path: &output_video_fs_path_watermark,
+    });
 
     if !command_exit_status.is_success() {
       error!("Watermark failed: {:?}", command_exit_status);
@@ -281,31 +224,21 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
 
   info!("Interrogating result file size ...");
 
-  let file_size_bytes = file_size(&finished_file)
-      .map_err(|err| ProcessSingleJobError::Other(err))?;
+  let file_size_bytes = file_size(&finished_file).map_err(|err| ProcessSingleJobError::Other(err))?;
 
   info!("Interrogating result mimetype ...");
 
-  let mimetype = get_mimetype_for_file(&finished_file)
-      .map_err(|err| ProcessSingleJobError::from_io_error(err))?
-      .map(|mime| mime.to_string())
-      .ok_or(ProcessSingleJobError::Other(anyhow!("Mimetype could not be determined")))?;
+  let mimetype = get_mimetype_for_file(&finished_file).map_err(|err| ProcessSingleJobError::from_io_error(err))?.map(|mime| mime.to_string()).ok_or(ProcessSingleJobError::Other(anyhow!("Mimetype could not be determined")))?;
 
   info!("Calculating sha256...");
 
-  let file_checksum = sha256_hash_file(&finished_file)
-      .map_err(|err| {
-        ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-      })?;
+  let file_checksum = sha256_hash_file(&finished_file).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
   // ==================== UPLOAD AUDIO TO BUCKET ==================== //
 
-  job_progress_reporter.log_status("uploading result")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("uploading result").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let result_bucket_location = MediaFileBucketPath::generate_new(
-    Some(BUCKET_FILE_PREFIX),
-    Some(BUCKET_FILE_EXTENSION));
+  let result_bucket_location = MediaFileBucketPath::generate_new(Some(BUCKET_FILE_PREFIX), Some(BUCKET_FILE_EXTENSION));
 
   let result_bucket_object_pathbuf = result_bucket_location.to_full_object_pathbuf();
 
@@ -320,14 +253,7 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
       .await
       .map_err(|e| ProcessSingleJobError::Other(e))?;
 
-
-  let thumbnail_task_result = ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4)
-      .with_bucket(&*args.job_dependencies.buckets.public_bucket_client.bucket_name())
-      .with_path(&*path_to_string(result_bucket_object_pathbuf.clone()))
-      .with_output_suffix("thumb")
-      .with_event_id(&job.id.0.to_string())
-      .send_all()
-      .await;
+  let thumbnail_task_result = ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4).with_bucket(&*args.job_dependencies.buckets.public_bucket_client.bucket_name()).with_path(&*path_to_string(result_bucket_object_pathbuf.clone())).with_output_suffix("thumb").with_event_id(&job.id.0.to_string()).send_all().await;
 
   match thumbnail_task_result {
     Ok(thumbnail_task) => {
@@ -335,7 +261,7 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
     },
     Err(e) => {
       error!("Failed to create some/all thumbnail tasks: {:?}", e);
-    }
+    },
   }
   // ==================== DELETE TEMP FILES ==================== //
 
@@ -350,51 +276,23 @@ pub async fn process_job(args: SadTalkerProcessJobArgs<'_>) -> Result<JobSuccess
 
   info!("Saving SadTalker result (media_files table record) ...");
 
-  let (media_file_token, id) = insert_media_file_from_face_animation(InsertArgs {
-    pool: &args.job_dependencies.db.mysql_pool,
-    job: &job,
-    maybe_mime_type: Some(&mimetype),
-    file_size_bytes,
-    sha256_checksum: &file_checksum,
-    public_bucket_directory_hash: result_bucket_location.get_object_hash(),
-    maybe_public_bucket_prefix: Some(BUCKET_FILE_PREFIX),
-    maybe_public_bucket_extension: Some(BUCKET_FILE_EXTENSION),
-    is_on_prem: args.job_dependencies.job.info.container.is_on_prem,
-    worker_hostname: &args.job_dependencies.job.info.container.hostname,
-    worker_cluster: &args.job_dependencies.job.info.container.cluster_name,
-  })
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  let (media_file_token, id) = insert_media_file_from_face_animation(InsertArgs { pool: &args.job_dependencies.db.mysql_pool, job: &job, maybe_mime_type: Some(&mimetype), file_size_bytes, sha256_checksum: &file_checksum, public_bucket_directory_hash: result_bucket_location.get_object_hash(), maybe_public_bucket_prefix: Some(BUCKET_FILE_PREFIX), maybe_public_bucket_extension: Some(BUCKET_FILE_EXTENSION), is_on_prem: args.job_dependencies.job.info.container.is_on_prem, worker_hostname: &args.job_dependencies.job.info.container.hostname, worker_cluster: &args.job_dependencies.job.info.container.cluster_name }).await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
   info!("SadTalker Done.");
 
   // TODO: Update upstream to be strongly typed
-  let maybe_user_token = job.maybe_creator_user_token.as_deref()
-      .map(|token| UserToken::new_from_str(token));
+  let maybe_user_token = job.maybe_creator_user_token.as_deref().map(|token| UserToken::new_from_str(token));
 
-  args.job_dependencies.clients.firehose_publisher.lipsync_animation_finished(
-    maybe_user_token.as_ref(),
-    &job.inference_job_token,
-    media_file_token.as_str())
-      .await
-      .map_err(|e| {
-        error!("error publishing event: {:?}", e);
-        ProcessSingleJobError::Other(anyhow!("error publishing event"))
-      })?;
+  args.job_dependencies.clients.firehose_publisher.lipsync_animation_finished(maybe_user_token.as_ref(), &job.inference_job_token, media_file_token.as_str()).await.map_err(|e| {
+    error!("error publishing event: {:?}", e);
+    ProcessSingleJobError::Other(anyhow!("error publishing event"))
+  })?;
 
-  job_progress_reporter.log_status("done")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  info!("Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model record: {}, Result Token: {}",
-        job.id, id, &media_file_token);
+  info!("Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model record: {}, Result Token: {}", job.id, id, &media_file_token);
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::MediaFile,
-      entity_token: media_file_token.to_string(),
-    }),
-    inference_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::MediaFile, entity_token: media_file_token.to_string() }), inference_duration })
 }
 
 fn get_output_file_extension_from_mimetype(mimetype: &str) -> anyhow::Result<&'static str> {

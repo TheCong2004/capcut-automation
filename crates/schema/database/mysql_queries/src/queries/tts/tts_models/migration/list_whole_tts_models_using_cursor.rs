@@ -92,35 +92,28 @@ pub struct WholeTtsModelRecord {
   pub mod_deleted_at: Option<DateTime<Utc>>, // 48 fields total
 }
 
-pub async fn list_whole_tts_models_using_cursor(
-  mysql_pool: &MySqlPool,
-  page_size: u64,
-  cursor: u64,
-) -> AnyhowResult<Vec<WholeTtsModelRecord>> {
+pub async fn list_whole_tts_models_using_cursor(mysql_pool: &MySqlPool, page_size: u64, cursor: u64) -> AnyhowResult<Vec<WholeTtsModelRecord>> {
   let mut connection = mysql_pool.acquire().await?;
 
-  let maybe_models
-      = list_whole_voice_conversion_models(&mut connection, page_size, cursor)
-        .await;
+  let maybe_models = list_whole_voice_conversion_models(&mut connection, page_size, cursor).await;
 
-  let models : Vec<RawRecord> = match maybe_models {
+  let models: Vec<RawRecord> = match maybe_models {
     Ok(models) => models,
     Err(err) => {
       return match err {
-        Error::RowNotFound => {
-          Ok(Vec::new())
-        },
+        Error::RowNotFound => Ok(Vec::new()),
         _ => {
           warn!("vc model list query error: {:?}", err);
           Err(anyhow!("vc model list query error"))
-        }
+        },
       }
-    }
+    },
   };
 
-  Ok(models.into_iter()
-    .map(|model| {
-      WholeTtsModelRecord {
+  Ok(
+    models
+      .into_iter()
+      .map(|model| WholeTtsModelRecord {
         id: model.id,
         token: model.token,
         tts_model_type: model.tts_model_type,
@@ -168,20 +161,17 @@ pub async fn list_whole_tts_models_using_cursor(
         user_deleted_at: model.user_deleted_at,
         mod_deleted_at: model.mod_deleted_at,
         maybe_custom_vocoder_token: model.maybe_custom_vocoder_token,
-        version_string: model.version_string
-      }
-    })
-    .collect::<Vec<WholeTtsModelRecord>>())
+        version_string: model.version_string,
+      })
+      .collect::<Vec<WholeTtsModelRecord>>(),
+  )
 }
 
-async fn list_whole_voice_conversion_models(
-  mysql_connection: &mut PoolConnection<MySql>,
-  page_size: u64,
-  cursor: u64,
-) -> Result<Vec<RawRecord>, Error> {
-  Ok(sqlx::query_as!(
+async fn list_whole_voice_conversion_models(mysql_connection: &mut PoolConnection<MySql>, page_size: u64, cursor: u64) -> Result<Vec<RawRecord>, Error> {
+  Ok(
+    sqlx::query_as!(
       RawRecord,
-        r#"
+      r#"
 SELECT
     id,
     token as `token: tokens::tokens::tts_models::TtsModelToken`,
@@ -261,9 +251,10 @@ LIMIT ?
         "#,
       cursor,
       page_size
+    )
+    .fetch_all(&mut **mysql_connection)
+    .await?,
   )
-      .fetch_all(&mut **mysql_connection)
-      .await?)
 }
 
 struct RawRecord {
@@ -273,9 +264,9 @@ struct RawRecord {
   pub tts_model_type: TtsModelType,
   pub text_pipeline_type: Option<String>,
 
-  pub has_self_contained_vocoder: i8, // bool
+  pub has_self_contained_vocoder: i8,        // bool
   pub has_self_contained_duration_model: i8, // bool
-  pub has_self_contained_pitch_model: i8, // bool
+  pub has_self_contained_pitch_model: i8,    // bool
 
   pub text_preprocessing_algorithm: Option<String>,
 
@@ -298,7 +289,7 @@ struct RawRecord {
   pub version_string: Option<String>,
 
   pub is_front_page_featured: i8, // bool
-  pub is_twitch_featured: i8, // bool
+  pub is_twitch_featured: i8,     // bool
 
   pub maybe_suggested_unique_bot_command: Option<String>,
 
@@ -323,8 +314,8 @@ struct RawRecord {
   pub user_ratings_negative_count: u32,
 
   pub is_public_listing_approved: Option<i8>, // bool
-  pub is_locked_from_user_modification: i8, // bool
-  pub is_locked_from_use: i8, // bool
+  pub is_locked_from_user_modification: i8,   // bool
+  pub is_locked_from_use: i8,                 // bool
 
   pub maybe_mod_comments: Option<String>,
   pub maybe_mod_user_token: Option<UserToken>,

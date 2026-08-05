@@ -19,14 +19,10 @@ pub struct TwitchEventRule {
 }
 
 /// Query non-deleted Twitch event rules for a user
-pub async fn list_twitch_event_rules_for_user(
-  user_token: &str,
-  pool: &MySqlPool,
-) -> AnyhowResult<Vec<TwitchEventRule>> {
-
-  let records : Vec<TwitchEventRuleInternal> = sqlx::query_as!(
-      TwitchEventRuleInternal,
-        r#"
+pub async fn list_twitch_event_rules_for_user(user_token: &str, pool: &MySqlPool) -> AnyhowResult<Vec<TwitchEventRule>> {
+  let records: Vec<TwitchEventRuleInternal> = sqlx::query_as!(
+    TwitchEventRuleInternal,
+    r#"
 SELECT
   token,
   event_category as `event_category: crate::column_types::twitch_event_category::TwitchEventCategory`,
@@ -41,25 +37,12 @@ WHERE
   user_token = ?
   AND deleted_at IS NULL
         "#,
-      user_token,
-    )
-      .fetch_all(pool)
-      .await?;
+    user_token,
+  )
+  .fetch_all(pool)
+  .await?;
 
-  let mut records = records.into_iter()
-      .map(|record : TwitchEventRuleInternal | {
-        TwitchEventRule {
-          token: record.token,
-          event_category: record.event_category,
-          event_match_predicate: record.event_match_predicate,
-          event_response: record.event_response,
-          user_specified_rule_order: record.user_specified_rule_order,
-          rule_is_disabled: i8_to_bool(record.rule_is_disabled),
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-        }
-      })
-      .collect::<Vec<TwitchEventRule>>();
+  let mut records = records.into_iter().map(|record: TwitchEventRuleInternal| TwitchEventRule { token: record.token, event_category: record.event_category, event_match_predicate: record.event_match_predicate, event_response: record.event_response, user_specified_rule_order: record.user_specified_rule_order, rule_is_disabled: i8_to_bool(record.rule_is_disabled), created_at: record.created_at, updated_at: record.updated_at }).collect::<Vec<TwitchEventRule>>();
 
   // Queried in DESC order, but sort returned results ordered ASC.
   records.sort_by_key(|r| r.user_specified_rule_order);

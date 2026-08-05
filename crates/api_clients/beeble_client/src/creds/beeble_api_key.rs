@@ -15,10 +15,6 @@ impl BeebleApiKey {
 
 impl fmt::Debug for BeebleApiKey {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    if self.api_key.len() > 0 {
-      write!(f, "BeebleApiKey(***)")
-    } else {
-      write!(f, "BeebleApiKey(EMPTY)")
-    }
+    if self.api_key.len() > 0 { write!(f, "BeebleApiKey(***)") } else { write!(f, "BeebleApiKey(EMPTY)") }
   }
 }

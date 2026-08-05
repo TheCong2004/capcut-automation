@@ -88,7 +88,7 @@ pub enum InferenceCategoryAbbreviated {
 
   #[serde(rename = "sv")] // NB: DO NOT CHANGE. It could break live jobs. Renamed to be fewer bytes.
   #[serde(alias = "seed_vc")]
-  SeedVc
+  SeedVc,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -107,13 +107,12 @@ pub enum FundamentalFrequencyMethodForJob {
 pub enum PolymorphicInferenceArgs {
   /// Lipsync Animation (Short name to save  space when serializing)
   /// This is SadTalker, not Wav2Lip.
-  La (LipsyncArgs),
+  La(LipsyncArgs),
 
   /// Text to speech. (Short name to save space when serializing.)
   Tts(TTSArgs),
-    // No arguments yet.
-    // It might be best to just not include this when not used.
-
+  // No arguments yet.
+  // It might be best to just not include this when not used.
   /// Voice conversion. (Short name to save space when serializing.)
   Vc {
     /// Argument for so-vits-svc
@@ -145,7 +144,6 @@ pub enum PolymorphicInferenceArgs {
   /// Image generation. (Short name to save space when serializing.)
   Ig(StableDiffusionArgs),
 
-
   /// Sora Image Generation. (Short name to save space when serializing.)
   Sg(SoraImageGenArgs),
 
@@ -176,7 +174,6 @@ pub enum PolymorphicInferenceArgs {
 }
 
 impl GenericInferenceArgs {
-
   pub fn from_json(json: &str) -> AnyhowResult<Self> {
     Ok(serde_json::from_str(json)?)
   }
@@ -210,20 +207,7 @@ mod tests {
 
   #[test]
   fn typical_lipsync_animation_args_serialize() {
-    let args = GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::LipsyncAnimation),
-      args: Some(PolymorphicInferenceArgs::La(LipsyncArgs {
-        maybe_audio_source: Some(LipsyncAnimationAudioSource::U("foo".to_string())),
-        maybe_image_source: Some(LipsyncAnimationImageSource::F("bar".to_string())),
-        maybe_face_enhancer: None,
-        maybe_pose_style: None,
-        maybe_preprocess: None,
-        maybe_make_still: None,
-        maybe_remove_watermark: None,
-        maybe_resize_width: None,
-        maybe_resize_height: None,
-      })),
-    };
+    let args = GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::LipsyncAnimation), args: Some(PolymorphicInferenceArgs::La(LipsyncArgs { maybe_audio_source: Some(LipsyncAnimationAudioSource::U("foo".to_string())), maybe_image_source: Some(LipsyncAnimationImageSource::F("bar".to_string())), maybe_face_enhancer: None, maybe_pose_style: None, maybe_preprocess: None, maybe_make_still: None, maybe_remove_watermark: None, maybe_resize_width: None, maybe_resize_height: None })) };
 
     let json = serde_json::ser::to_string(&args).unwrap();
 
@@ -236,13 +220,7 @@ mod tests {
 
   #[test]
   fn typical_tts_args_serialize() {
-    let args = GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::TextToSpeech),
-      args: Some(PolymorphicInferenceArgs::Tts(TTSArgs {
-        voice_token: Some("token".to_string()),
-        dataset_token: None,
-      })),
-    };
+    let args = GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::TextToSpeech), args: Some(PolymorphicInferenceArgs::Tts(TTSArgs { voice_token: Some("token".to_string()), dataset_token: None })) };
 
     let json = serde_json::ser::to_string(&args).unwrap();
 
@@ -255,7 +233,6 @@ mod tests {
 
   #[test]
   fn typical_image_gen_args_serialize() {
-
     let video_media_token = MediaFileToken("video_media_token".to_string());
     let image_media_token = MediaFileToken("image_media_token".to_string());
     let sd_model_token = ModelWeightToken("sd_model_token".to_string());
@@ -271,28 +248,7 @@ mod tests {
     let type_of_inference = "type_of_inference".to_string();
     let version: u32 = 0;
 
-    let args = GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::ImageGeneration),
-      args: Some(PolymorphicInferenceArgs::Ig(StableDiffusionArgs {
-        maybe_sd_model_token: Some(sd_model_token),
-        maybe_lora_model_token: Some(lora_model_token),
-        maybe_sampler: Some("sampler".to_string()),
-        maybe_height: Some(512),
-        maybe_width: Some(512),
-        maybe_cfg_scale: Some(7),
-        maybe_prompt: Some(prompt),
-        maybe_n_prompt: Some(n_prompt),
-        maybe_batch_count: Some(1),
-        maybe_number_of_samples: Some(25),
-        maybe_seed: Some(seed),
-        maybe_upload_path: Some(upload_path),
-        maybe_lora_upload_path: Some(lora_upload_path),
-        type_of_inference,
-        maybe_description: Some("Option".to_string()),
-        maybe_name: Some("Model Name".to_string()),
-        maybe_version: Some(version),
-      })),
-    };
+    let args = GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::ImageGeneration), args: Some(PolymorphicInferenceArgs::Ig(StableDiffusionArgs { maybe_sd_model_token: Some(sd_model_token), maybe_lora_model_token: Some(lora_model_token), maybe_sampler: Some("sampler".to_string()), maybe_height: Some(512), maybe_width: Some(512), maybe_cfg_scale: Some(7), maybe_prompt: Some(prompt), maybe_n_prompt: Some(n_prompt), maybe_batch_count: Some(1), maybe_number_of_samples: Some(25), maybe_seed: Some(seed), maybe_upload_path: Some(upload_path), maybe_lora_upload_path: Some(lora_upload_path), type_of_inference, maybe_description: Some("Option".to_string()), maybe_name: Some("Model Name".to_string()), maybe_version: Some(version) })) };
 
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"cat":"ig","args":{"Ig":{"sd":"sd_model_token","lm":"lora_model_token","w":512,"h":512,"s":"sampler","p":"prompt","np":"n_prompt","se":1,"mu":"upload_path","cf":7,"lu":"lora_upload_path","sa":25,"bc":1,"t":"type_of_inference","de":"Option","na":"Model Name","ve":0}}}"#.to_string());
@@ -300,20 +256,12 @@ mod tests {
 
   #[test]
   fn typical_voice_conversion_args_serialize() {
-    let args = GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion),
-      args: Some(PolymorphicInferenceArgs::Vc {
-        auto_predict_f0: Some(false),
-        override_f0_method: None,
-        transpose: None,
-      }),
-    };
+    let args = GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion), args: Some(PolymorphicInferenceArgs::Vc { auto_predict_f0: Some(false), override_f0_method: None, transpose: None }) };
 
     let json = serde_json::ser::to_string(&args).unwrap();
 
     // NB: Assert the serialized form. If this changes and the test breaks, be careful about migrating.
-    assert_eq!(json,
-      r#"{"cat":"vc","args":{"Vc":{"a":false}}}"#.to_string());
+    assert_eq!(json, r#"{"cat":"vc","args":{"Vc":{"a":false}}}"#.to_string());
 
     // NB: Make sure we don't overflow the DB field capacity (TEXT column).
     assert!(json.len() < 1000);
@@ -321,20 +269,12 @@ mod tests {
 
   #[test]
   fn many_voice_conversion_args_serialize() {
-    let args = GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion),
-      args: Some(PolymorphicInferenceArgs::Vc {
-        auto_predict_f0: Some(false),
-        override_f0_method: Some(FundamentalFrequencyMethodForJob::Dio),
-        transpose: Some(-1),
-      }),
-    };
+    let args = GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion), args: Some(PolymorphicInferenceArgs::Vc { auto_predict_f0: Some(false), override_f0_method: Some(FundamentalFrequencyMethodForJob::Dio), transpose: Some(-1) }) };
 
     let json = serde_json::ser::to_string(&args).unwrap();
 
     // NB: Assert the serialized form. If this changes and the test breaks, be careful about migrating.
-    assert_eq!(json,
-               r#"{"cat":"vc","args":{"Vc":{"a":false,"fm":"d","t":-1}}}"#.to_string());
+    assert_eq!(json, r#"{"cat":"vc","args":{"Vc":{"a":false,"fm":"d","t":-1}}}"#.to_string());
 
     // NB: Make sure we don't overflow the DB field capacity (TEXT column).
     assert!(json.len() < 1000);
@@ -354,8 +294,7 @@ mod tests {
     let json = serde_json::ser::to_string(&args).unwrap();
 
     // NB: Assert the serialized form. If this changes and the test breaks, be careful about migrating.
-    assert_eq!(json,
-               r#"{"cat":"vc","args":{"Vc":{}}}"#.to_string());
+    assert_eq!(json, r#"{"cat":"vc","args":{"Vc":{}}}"#.to_string());
 
     // NB: Make sure we don't overflow the DB field capacity (TEXT column).
     assert!(json.len() < 1000);
@@ -363,26 +302,18 @@ mod tests {
 
   #[test]
   fn serialize_nullable_form() {
-    let mut args : Option<GenericInferenceArgs> = None;
+    let mut args: Option<GenericInferenceArgs> = None;
     let json = serde_json::ser::to_string(&args).unwrap();
 
     // NB: Assert the serialized form. If this changes and the test breaks, be careful about migrating.
     assert_eq!(json, "null");
 
-    args = Some(GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion),
-      args: Some(PolymorphicInferenceArgs::Vc {
-        auto_predict_f0: Some(true),
-        override_f0_method: None,
-        transpose: None,
-      }),
-    });
+    args = Some(GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion), args: Some(PolymorphicInferenceArgs::Vc { auto_predict_f0: Some(true), override_f0_method: None, transpose: None }) });
 
     let json = serde_json::ser::to_string(&args).unwrap();
 
     // NB: Assert the serialized form. If this changes and the test breaks, be careful about migrating.
-    assert_eq!(json,
-               r#"{"cat":"vc","args":{"Vc":{"a":true}}}"#.to_string());
+    assert_eq!(json, r#"{"cat":"vc","args":{"Vc":{"a":true}}}"#.to_string());
 
     // NB: Make sure we don't overflow the DB field capacity (TEXT column).
     assert!(json.len() < 1000);
@@ -390,20 +321,12 @@ mod tests {
 
   #[test]
   fn rmvpe() {
-    let args = GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion),
-      args: Some(PolymorphicInferenceArgs::Vc {
-        auto_predict_f0: None,
-        override_f0_method: Some(FundamentalFrequencyMethodForJob::Rmvpe),
-        transpose: None,
-      }),
-    };
+    let args = GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::VoiceConversion), args: Some(PolymorphicInferenceArgs::Vc { auto_predict_f0: None, override_f0_method: Some(FundamentalFrequencyMethodForJob::Rmvpe), transpose: None }) };
 
     let json = serde_json::ser::to_string(&args).unwrap();
 
     // NB: Assert the serialized form. If this changes and the test breaks, be careful about migrating.
-    assert_eq!(json,
-               r#"{"cat":"vc","args":{"Vc":{"fm":"r"}}}"#.to_string());
+    assert_eq!(json, r#"{"cat":"vc","args":{"Vc":{"fm":"r"}}}"#.to_string());
 
     // NB: Make sure we don't overflow the DB field capacity (TEXT column).
     assert!(json.len() < 1000);

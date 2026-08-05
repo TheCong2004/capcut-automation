@@ -36,10 +36,10 @@ pub fn add_fakeyou(cors: Cors, is_production: bool) -> Cors {
           }
         })
 
-        // NB(bt,2024-04-07): We shouldn't allow HTTP from non-dev hosts
-        //.allowed_origin("http://api.fakeyou.com")
-        //.allowed_origin("http://fakeyou.com")
-        //.allowed_origin("http://staging.fakeyou.com")
+    // NB(bt,2024-04-07): We shouldn't allow HTTP from non-dev hosts
+    //.allowed_origin("http://api.fakeyou.com")
+    //.allowed_origin("http://fakeyou.com")
+    //.allowed_origin("http://staging.fakeyou.com")
   } else {
     cors
         // FakeYou (Development)

@@ -35,83 +35,53 @@ pub struct DownloadImageFileArgs<'a> {
 }
 
 pub async fn download_image_file(args: DownloadImageFileArgs<'_>) -> Result<ImageFile, ProcessSingleJobError> {
-
-  let bucket_object_path =
-      match args.image_source {
-        LipsyncAnimationImageSource::F(media_file_token) => {
-          from_media_file(media_file_token, &args).await?
-        }
-        LipsyncAnimationImageSource::U(media_upload_token) => {
-          from_media_upload(media_upload_token, &args).await?
-        }
-      };
+  let bucket_object_path = match args.image_source {
+    LipsyncAnimationImageSource::F(media_file_token) => from_media_file(media_file_token, &args).await?,
+    LipsyncAnimationImageSource::U(media_upload_token) => from_media_upload(media_upload_token, &args).await?,
+  };
 
   let downloaded_filesystem_path = args.work_temp_dir.path().join("image.bin");
 
-  maybe_download_file_from_bucket(MaybeDownloadArgs {
-    name_or_description_of_file: "image file",
-    final_filesystem_file_path: &downloaded_filesystem_path,
-    bucket_object_path: &bucket_object_path,
-    bucket_client: args.public_bucket_client,
-    job_progress_reporter: args.job_progress_reporter,
-    job_progress_update_description: "downloading",
-    job_id: args.job.id.0,
-    scoped_tempdir_creator: &args.temp_dir_creator,
-    maybe_existing_file_minimum_size_required: None,
-  }).await?;
+  maybe_download_file_from_bucket(MaybeDownloadArgs { name_or_description_of_file: "image file", final_filesystem_file_path: &downloaded_filesystem_path, bucket_object_path: &bucket_object_path, bucket_client: args.public_bucket_client, job_progress_reporter: args.job_progress_reporter, job_progress_update_description: "downloading", job_id: args.job.id.0, scoped_tempdir_creator: &args.temp_dir_creator, maybe_existing_file_minimum_size_required: None }).await?;
 
-  Ok(ImageFile {
-    filesystem_path: downloaded_filesystem_path,
-  })
+  Ok(ImageFile { filesystem_path: downloaded_filesystem_path })
 }
 
 async fn from_media_file(media_file_token: &str, args: &DownloadImageFileArgs<'_>) -> Result<PathBuf, ProcessSingleJobError> {
   let media_file_token = MediaFileToken::new_from_str(media_file_token);
-  let media_file_result = get_media_file(
-    &media_file_token,
-    true,
-    args.mysql_pool
-  ).await;
+  let media_file_result = get_media_file(&media_file_token, true, args.mysql_pool).await;
 
   let media_file_result = match media_file_result {
     Ok(Some(result)) => result,
     Ok(None) => {
       warn!("could not find media file : {:?}", media_file_token);
-      return Err(ProcessSingleJobError::from_anyhow_error(
-        anyhow!("could not find media file : {:?}", media_file_token)))
-    }
+      return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("could not find media file : {:?}", media_file_token)));
+    },
     Err(e) => {
       error!("could not query media file : {:?}", e);
-      return Err(ProcessSingleJobError::from_anyhow_error(e))
-    }
+      return Err(ProcessSingleJobError::from_anyhow_error(e));
+    },
   };
 
-  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-    &media_file_result.public_bucket_directory_hash,
-    media_file_result.maybe_public_bucket_prefix.as_deref(),
-    media_file_result.maybe_public_bucket_extension.as_deref());
+  let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&media_file_result.public_bucket_directory_hash, media_file_result.maybe_public_bucket_prefix.as_deref(), media_file_result.maybe_public_bucket_extension.as_deref());
 
   Ok(media_file_bucket_path.to_full_object_pathbuf())
 }
 
 async fn from_media_upload(media_upload_token: &str, args: &DownloadImageFileArgs<'_>) -> Result<PathBuf, ProcessSingleJobError> {
   let media_upload_token = MediaUploadToken::new_from_str(media_upload_token);
-  let media_upload_result = get_media_upload_for_inference(
-    &media_upload_token,
-    args.mysql_pool
-  ).await;
+  let media_upload_result = get_media_upload_for_inference(&media_upload_token, args.mysql_pool).await;
 
   let media_upload_result = match media_upload_result {
     Ok(Some(result)) => result,
     Ok(None) => {
       warn!("could not find media upload: {:?}", media_upload_token);
-      return Err(ProcessSingleJobError::from_anyhow_error(
-        anyhow!("could not find media upload: {:?}", media_upload_token)))
-    }
+      return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("could not find media upload: {:?}", media_upload_token)));
+    },
     Err(e) => {
       error!("could not query media upload: {:?}", e);
-      return Err(ProcessSingleJobError::from_anyhow_error(e))
-    }
+      return Err(ProcessSingleJobError::from_anyhow_error(e));
+    },
   };
 
   let media_upload_bucket_path = MediaUploadOriginalFilePath::from_object_hash(&media_upload_result.public_bucket_directory_hash);

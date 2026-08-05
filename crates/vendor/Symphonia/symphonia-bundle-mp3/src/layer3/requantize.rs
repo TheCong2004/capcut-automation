@@ -132,8 +132,7 @@ pub(super) fn read_huffman_samples<B: ReadBitsLtr>(
                 // power.
                 buf[i] = if bs.read_bool()? { -pow43_table[x] } else { pow43_table[x] };
                 bits_read += 1;
-            }
-            else {
+            } else {
                 buf[i] = 0.0;
             }
 
@@ -148,8 +147,7 @@ pub(super) fn read_huffman_samples<B: ReadBitsLtr>(
 
                 buf[i] = if bs.read_bool()? { -pow43_table[y] } else { pow43_table[y] };
                 bits_read += 1;
-            }
-            else {
+            } else {
                 buf[i] = 0.0;
             }
 
@@ -174,8 +172,7 @@ pub(super) fn read_huffman_samples<B: ReadBitsLtr>(
         if value & 0x8 != 0 {
             buf[i] = if bs.read_bool()? { -1.0 } else { 1.0 };
             bits_read += 1;
-        }
-        else {
+        } else {
             buf[i] = 0.0;
         }
 
@@ -184,8 +181,7 @@ pub(super) fn read_huffman_samples<B: ReadBitsLtr>(
         if value & 0x4 != 0 {
             buf[i] = if bs.read_bool()? { -1.0 } else { 1.0 };
             bits_read += 1;
-        }
-        else {
+        } else {
             buf[i] = 0.0;
         }
 
@@ -194,8 +190,7 @@ pub(super) fn read_huffman_samples<B: ReadBitsLtr>(
         if value & 0x2 != 0 {
             buf[i] = if bs.read_bool()? { -1.0 } else { 1.0 };
             bits_read += 1;
-        }
-        else {
+        } else {
             buf[i] = 0.0;
         }
 
@@ -204,8 +199,7 @@ pub(super) fn read_huffman_samples<B: ReadBitsLtr>(
         if value & 0x1 != 0 {
             buf[i] = if bs.read_bool()? { -1.0 } else { 1.0 };
             bits_read += 1;
-        }
-        else {
+        } else {
             buf[i] = 0.0;
         }
 
@@ -224,8 +218,7 @@ pub(super) fn read_huffman_samples<B: ReadBitsLtr>(
     else if bits_read > part3_bits && i > big_values_len {
         info!("count1 overrun, malformed bitstream");
         i -= 4;
-    }
-    else if bits_read > part3_bits {
+    } else if bits_read > part3_bits {
         // It seems that most other decoders don't undo overruns of the big values. We'll just print
         // a message for now.
         info!("big_values overrun, malformed bitstream");

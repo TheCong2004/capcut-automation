@@ -12,7 +12,7 @@ use crate::traits::document::Document;
 /// The current name for the TTS model index.
 /// We may need to perform migrations in the future, so this may grow to keeping
 /// tabs of multiple indices in the future.
-pub const TTS_MODEL_INDEX : &str = "tts_model_v1";
+pub const TTS_MODEL_INDEX: &str = "tts_model_v1";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TtsModelDocument {

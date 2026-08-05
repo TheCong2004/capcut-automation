@@ -17,22 +17,16 @@ impl StudioGen2Dirs {
     let output_dir = deps.output_directory.join("output");
     let output_dir = create_dir(output_dir)?;
 
-    Ok(Self {
-      input_dir,
-      output_dir,
-    })
+    Ok(Self { input_dir, output_dir })
   }
 }
 
-
 fn create_dir(path: PathBuf) -> Result<TempDir, ProcessSingleJobError> {
   if !path.exists() {
-    std::fs::create_dir_all(&path)
-        .map_err(|err| ProcessSingleJobError::IoError(err))?;
+    std::fs::create_dir_all(&path).map_err(|err| ProcessSingleJobError::IoError(err))?;
   }
 
-  let tempdir = TempDir::new_in(&path, "studio_gen2_")
-      .map_err(|err| ProcessSingleJobError::IoError(err))?;
+  let tempdir = TempDir::new_in(&path, "studio_gen2_").map_err(|err| ProcessSingleJobError::IoError(err))?;
 
   Ok(tempdir)
 }

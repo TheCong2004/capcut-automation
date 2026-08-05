@@ -14,7 +14,6 @@ use tokens::tokens::non_unique::debug_logs_event_token::DebugLogEventToken;
 use tokens::tokens::prompts::PromptToken;
 use tokens::tokens::users::UserToken;
 
-
 #[derive(Debug, Default)]
 pub struct BeebleJobDetails {
   pub job_token: InferenceJobToken,
@@ -63,20 +62,16 @@ struct RawJobRecord {
 }
 
 /// Returns Ok(None) when the record cannot be found.
-pub async fn get_inference_job_by_beeble_id(beeble_id: &str, mysql_pool: &MySqlPool)
-  -> AnyhowResult<Option<BeebleJobDetails>>
-{
+pub async fn get_inference_job_by_beeble_id(beeble_id: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<BeebleJobDetails>> {
   let mut connection = mysql_pool.acquire().await?;
   get_inference_job_by_beeble_id_from_connection(beeble_id, &mut connection).await
 }
 
 /// Returns Ok(None) when the record cannot be found.
-pub async fn get_inference_job_by_beeble_id_from_connection(beeble_id: &str, mysql_connection: &mut PoolConnection<MySql>)
-  -> AnyhowResult<Option<BeebleJobDetails>>
-{
+pub async fn get_inference_job_by_beeble_id_from_connection(beeble_id: &str, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<BeebleJobDetails>> {
   let maybe_status = sqlx::query_as!(
-      RawJobRecord,
-        r#"
+    RawJobRecord,
+    r#"
 SELECT
     jobs.token as `job_token: tokens::tokens::generic_inference_jobs::InferenceJobToken`,
 
@@ -102,11 +97,11 @@ FROM generic_inference_jobs as jobs
 WHERE jobs.maybe_external_third_party = ?
 AND jobs.maybe_external_third_party_id = ?
         "#,
-      InferenceJobExternalThirdParty::Beeble.to_str(),
-      beeble_id
-    )
-      .fetch_one(&mut **mysql_connection)
-      .await;
+    InferenceJobExternalThirdParty::Beeble.to_str(),
+    beeble_id
+  )
+  .fetch_one(&mut **mysql_connection)
+  .await;
 
   let record = match maybe_status {
     Ok(record) => record,
@@ -115,8 +110,8 @@ AND jobs.maybe_external_third_party_id = ?
       _ => {
         warn!("error querying job record: {:?}", err);
         return Err(anyhow!("error querying job record: {:?}", err));
-      }
-    }
+      },
+    },
   };
 
   let record = raw_record_to_public_result(record)?;
@@ -125,18 +120,5 @@ AND jobs.maybe_external_third_party_id = ?
 }
 
 fn raw_record_to_public_result(record: RawJobRecord) -> AnyhowResult<BeebleJobDetails> {
-  Ok(BeebleJobDetails {
-    job_token: record.job_token,
-    status: record.status,
-    external_third_party: record.external_third_party.ok_or_else(|| anyhow!("missing external_third_party"))?,
-    external_third_party_id: record.external_third_party_id.ok_or_else(|| anyhow!("missing external_third_party_id"))?,
-    maybe_creator_user_token: record.maybe_creator_user_token,
-    maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-    creator_ip_address: record.creator_ip_address,
-    maybe_prompt_token: record.maybe_prompt_token,
-    maybe_debug_log_event_token: record.maybe_debug_log_event_token,
-    maybe_platform_type: record.maybe_platform_type,
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-  })
+  Ok(BeebleJobDetails { job_token: record.job_token, status: record.status, external_third_party: record.external_third_party.ok_or_else(|| anyhow!("missing external_third_party"))?, external_third_party_id: record.external_third_party_id.ok_or_else(|| anyhow!("missing external_third_party_id"))?, maybe_creator_user_token: record.maybe_creator_user_token, maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token, creator_ip_address: record.creator_ip_address, maybe_prompt_token: record.maybe_prompt_token, maybe_debug_log_event_token: record.maybe_debug_log_event_token, maybe_platform_type: record.maybe_platform_type, created_at: record.created_at, updated_at: record.updated_at })
 }

@@ -31,9 +31,7 @@ pub struct ApiKeyUserRecord {
 /// Returns `Ok(None)` when no row matches, when the matching API key is soft-deleted
 /// (`maybe_deleted_at IS NOT NULL`), or when the owning user row does not exist (the `INNER JOIN`
 /// requires both records to be present). The full secret is never echoed back.
-pub async fn get_api_key_user_by_value<'e, 'c: 'e, E>(
-  args: GetApiKeyUserByValueArgs<'e, 'c, E>,
-) -> Result<Option<ApiKeyUserRecord>, sqlx::Error>
+pub async fn get_api_key_user_by_value<'e, 'c: 'e, E>(args: GetApiKeyUserByValueArgs<'e, 'c, E>) -> Result<Option<ApiKeyUserRecord>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -52,12 +50,8 @@ LIMIT 1
     "#,
     args.api_key.as_str_be_careful(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|r| ApiKeyUserRecord {
-    api_key_token: r.api_key_token,
-    user_token: r.user_token,
-    is_banned: i8_to_bool(r.is_banned),
-  }))
+  Ok(result.map(|r| ApiKeyUserRecord { api_key_token: r.api_key_token, user_token: r.user_token, is_banned: i8_to_bool(r.is_banned) }))
 }

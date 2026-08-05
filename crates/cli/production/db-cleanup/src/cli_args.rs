@@ -4,15 +4,15 @@ use serde_derive::Deserialize;
 use errors::AnyhowResult;
 
 #[derive(Parser, Debug, Deserialize)]
-#[command(name="db-cleanup")]
+#[command(name = "db-cleanup")]
 #[serde(rename_all = "snake_case")]
 pub struct Args {
   // The primary action to take
-  #[arg(name="action", long="action", help="the primary action to take", required=true)]
+  #[arg(name = "action", long = "action", help = "the primary action to take", required = true)]
   pub action: Action,
 
   // Optional username for some actions
-  #[arg(name="username", long="username", help="optional username", required=false)]
+  #[arg(name = "username", long = "username", help = "optional username", required = false)]
   pub username: Option<String>,
 }
 

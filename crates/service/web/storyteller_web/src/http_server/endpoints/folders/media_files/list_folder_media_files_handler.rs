@@ -9,19 +9,13 @@ use serde_derive::Serialize;
 use utoipa::ToSchema;
 
 use artcraft_api_defs::common::responses::media_links::MediaLinks;
-use artcraft_api_defs::folders::media_files::{
-  FolderMediaFilesPathInfo, ListFolderMediaFilesQueryParams,
-};
+use artcraft_api_defs::folders::media_files::{FolderMediaFilesPathInfo, ListFolderMediaFilesQueryParams};
 use bucket_paths::legacy::typified_paths::public::media_files::bucket_file_path::MediaFileBucketPath;
 use enums::by_table::media_files::media_file_class::MediaFileClass;
 use enums::by_table::media_files::media_file_type::MediaFileType;
 use enums::common::visibility::Visibility;
-use mysql_queries::queries::folders::folder::get_folder_for_owner::{
-  get_folder_for_owner, GetFolderForOwnerArgs,
-};
-use mysql_queries::queries::folders::media_files::list_folder_media_files::{
-  list_folder_media_files, FolderMediaFileRow, ListFolderMediaFilesArgs,
-};
+use mysql_queries::queries::folders::folder::get_folder_for_owner::{get_folder_for_owner, GetFolderForOwnerArgs};
+use mysql_queries::queries::folders::media_files::list_folder_media_files::{list_folder_media_files, FolderMediaFileRow, ListFolderMediaFilesArgs};
 use tokens::tokens::batch_generations::BatchGenerationToken;
 use tokens::tokens::folders::FolderToken;
 use tokens::tokens::media_files::MediaFileToken;
@@ -116,12 +110,7 @@ pub struct FolderMediaFileListItem {
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn list_folder_media_files_handler(
-  http_request: HttpRequest,
-  path: Path<FolderMediaFilesPathInfo>,
-  query: Query<ListFolderMediaFilesQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListFolderMediaFilesSuccessResponse>, CommonWebError> {
+pub async fn list_folder_media_files_handler(http_request: HttpRequest, path: Path<FolderMediaFilesPathInfo>, query: Query<ListFolderMediaFilesQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListFolderMediaFilesSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -129,12 +118,7 @@ pub async fn list_folder_media_files_handler(
 
   let user_session = require_user_session(&http_request, &server_state.session_checker, &mut *conn).await?;
 
-  let folder = get_folder_for_owner(GetFolderForOwnerArgs {
-    folder_token: &path.folder_token,
-    owner_user_token: &user_session.user_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let folder = get_folder_for_owner(GetFolderForOwnerArgs { folder_token: &path.folder_token, owner_user_token: &user_session.user_token, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("Folder lookup failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -147,18 +131,10 @@ pub async fn list_folder_media_files_handler(
 
   let maybe_cursor_id = match &query.cursor {
     None => None,
-    Some(cursor_str) => {
-      Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?)
-    }
+    Some(cursor_str) => Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?),
   };
 
-  let rows = list_folder_media_files(ListFolderMediaFilesArgs {
-    folder_token: &path.folder_token,
-    maybe_cursor_id,
-    limit,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let rows = list_folder_media_files(ListFolderMediaFilesArgs { folder_token: &path.folder_token, maybe_cursor_id, limit, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("list_folder_media_files failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -166,53 +142,22 @@ pub async fn list_folder_media_files_handler(
   // Only hand out a next-page cursor when this page was full. A short page
   // means the list is exhausted, and emitting a cursor anyway would make
   // clients fetch one guaranteed-empty trailing page.
-  let maybe_cursor = if rows.len() == limit as usize {
-    rows.last()
-        .map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.media_file_id))
-        .transpose()?
-  } else {
-    None
-  };
+  let maybe_cursor = if rows.len() == limit as usize { rows.last().map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.media_file_id)).transpose()? } else { None };
 
   let media_domain = get_media_domain(&http_request);
   let server_environment = server_state.server_environment;
 
-  let media_files = rows.into_iter()
-    .map(|row| folder_media_file_row_to_list_item(row, media_domain, server_environment))
-    .collect();
+  let media_files = rows.into_iter().map(|row| folder_media_file_row_to_list_item(row, media_domain, server_environment)).collect();
 
-  Ok(Json(ListFolderMediaFilesSuccessResponse {
-    success: true,
-    media_files,
-    maybe_cursor,
-  }))
+  Ok(Json(ListFolderMediaFilesSuccessResponse { success: true, media_files, maybe_cursor }))
 }
 
-fn folder_media_file_row_to_list_item(
-  row: FolderMediaFileRow,
-  media_domain: MediaDomain,
-  server_environment: server_environment::ServerEnvironment,
-) -> FolderMediaFileListItem {
-  let bucket_path = MediaFileBucketPath::from_object_hash(
-    &row.public_bucket_directory_hash,
-    row.maybe_public_bucket_prefix.as_deref(),
-    row.maybe_public_bucket_extension.as_deref(),
-  );
+fn folder_media_file_row_to_list_item(row: FolderMediaFileRow, media_domain: MediaDomain, server_environment: server_environment::ServerEnvironment) -> FolderMediaFileListItem {
+  let bucket_path = MediaFileBucketPath::from_object_hash(&row.public_bucket_directory_hash, row.maybe_public_bucket_prefix.as_deref(), row.maybe_public_bucket_extension.as_deref());
 
-  let media_links = MediaLinksBuilder::from_media_path_and_env(
-    media_domain,
-    server_environment,
-    &bucket_path,
-  );
+  let media_links = MediaLinksBuilder::from_media_path_and_env(media_domain, server_environment, &bucket_path);
 
-  let cover_image = MediaFileCoverImageDetails::from_optional_db_fields(
-    &row.media_file_token,
-    media_domain,
-    server_environment,
-    row.maybe_cover_public_bucket_directory_hash.as_deref(),
-    row.maybe_cover_public_bucket_prefix.as_deref(),
-    row.maybe_cover_public_bucket_extension.as_deref(),
-  );
+  let cover_image = MediaFileCoverImageDetails::from_optional_db_fields(&row.media_file_token, media_domain, server_environment, row.maybe_cover_public_bucket_directory_hash.as_deref(), row.maybe_cover_public_bucket_prefix.as_deref(), row.maybe_cover_public_bucket_extension.as_deref());
 
   FolderMediaFileListItem {
     token: row.media_file_token,

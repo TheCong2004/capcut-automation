@@ -15,10 +15,7 @@ pub struct UserByStripeCustomerIdResult {
   pub display_name: String,
 }
 
-pub async fn lookup_users_by_stripe_customer_id(
-  stripe_customer_id: &str,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Vec<UserByStripeCustomerIdResult>> {
+pub async fn lookup_users_by_stripe_customer_id(stripe_customer_id: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<UserByStripeCustomerIdResult>> {
   let results = sqlx::query_as!(
     UserByStripeCustomerIdResult,
     r#"
@@ -40,14 +37,14 @@ ORDER BY user_subscriptions.created_at DESC
     "#,
     stripe_customer_id,
   )
-    .fetch_all(mysql_pool)
-    .await;
+  .fetch_all(mysql_pool)
+  .await;
 
   match results {
     Ok(records) => Ok(records),
     Err(err) => {
       warn!("lookup_users_by_stripe_customer_id query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }

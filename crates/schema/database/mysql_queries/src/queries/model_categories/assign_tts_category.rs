@@ -22,11 +22,11 @@ pub struct AssignTtsCategoryArgs<'a> {
 }
 
 pub async fn assign_tts_category(args: AssignTtsCategoryArgs<'_>) -> AnyhowResult<()> {
-
   let query_builder = match args.action {
     AssignOrDeleteAction::CreateAssignment => {
       // NB: deleted_at = NULL
-      sqlx::query!(r#"
+      sqlx::query!(
+        r#"
       INSERT INTO tts_category_assignments
       SET
         model_token = ?,
@@ -57,7 +57,8 @@ pub async fn assign_tts_category(args: AssignTtsCategoryArgs<'_>) -> AnyhowResul
     },
     AssignOrDeleteAction::DeleteAssignment => {
       // NB: deleted_at = CURRENT_TIMESTAMP
-      sqlx::query!(r#"
+      sqlx::query!(
+        r#"
       INSERT INTO tts_category_assignments
       SET
         model_token = ?,
@@ -85,7 +86,7 @@ pub async fn assign_tts_category(args: AssignTtsCategoryArgs<'_>) -> AnyhowResul
         args.editor_user_token,
         args.editor_ip_address,
       )
-    }
+    },
   };
 
   // NB: We're soft deleting so we don't delete the associations.

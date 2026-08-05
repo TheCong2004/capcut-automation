@@ -13,30 +13,10 @@ pub struct ProjectUploadConfig {
   pub bucket_suffix: &'static str,
 }
 
-pub const MOOD_BOARD_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig {
-  project_type: MediaFileProjectType::MoodBoard,
-  media_file_type: MediaFileType::MoodJson,
-  bucket_prefix: "artcraft_",
-  bucket_suffix: ".mood.json",
-};
+pub const MOOD_BOARD_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig { project_type: MediaFileProjectType::MoodBoard, media_file_type: MediaFileType::MoodJson, bucket_prefix: "artcraft_", bucket_suffix: ".mood.json" };
 
-pub const VIDEO_TIMELINE_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig {
-  project_type: MediaFileProjectType::VideoTimeline,
-  media_file_type: MediaFileType::TimelineJson,
-  bucket_prefix: "artcraft_",
-  bucket_suffix: ".timeline.json",
-};
+pub const VIDEO_TIMELINE_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig { project_type: MediaFileProjectType::VideoTimeline, media_file_type: MediaFileType::TimelineJson, bucket_prefix: "artcraft_", bucket_suffix: ".timeline.json" };
 
-pub const EDITOR_2D_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig {
-  project_type: MediaFileProjectType::Editor2d,
-  media_file_type: MediaFileType::EditorJson,
-  bucket_prefix: "artcraft_",
-  bucket_suffix: ".editor.json",
-};
+pub const EDITOR_2D_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig { project_type: MediaFileProjectType::Editor2d, media_file_type: MediaFileType::EditorJson, bucket_prefix: "artcraft_", bucket_suffix: ".editor.json" };
 
-pub const SCENE_3D_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig {
-  project_type: MediaFileProjectType::Scene3d,
-  media_file_type: MediaFileType::SceneJson,
-  bucket_prefix: "scene_",
-  bucket_suffix: ".scn.json",
-};
+pub const SCENE_3D_PROJECT_CONFIG: ProjectUploadConfig = ProjectUploadConfig { project_type: MediaFileProjectType::Scene3d, media_file_type: MediaFileType::SceneJson, bucket_prefix: "scene_", bucket_suffix: ".scn.json" };

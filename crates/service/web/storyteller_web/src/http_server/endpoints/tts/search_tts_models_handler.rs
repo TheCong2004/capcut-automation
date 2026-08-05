@@ -38,7 +38,6 @@ pub struct TtsModel {
   //pub is_front_page_featured: bool,
   //pub is_twitch_featured: bool,
   //pub maybe_suggested_unique_bot_command: Option<String>,
-
   pub creator_set_visibility: Visibility,
 
   //pub user_ratings: UserRatingsStats,
@@ -46,7 +45,6 @@ pub struct TtsModel {
   ///// Category assignments
   ///// From non-deleted, mod-approved categories only
   //pub category_tokens: HashSet<String>,
-
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
@@ -65,35 +63,13 @@ pub struct SearchTtsModelsSuccessResponse {
   pub models: Vec<TtsModel>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn search_tts_models_handler(
-  _http_request: HttpRequest,
-  request: Json<SearchTtsModelsRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<SearchTtsModelsSuccessResponse>, CommonWebError>
-{
-  let results = search_tts_models(
-    &server_state.elasticsearch,
-    &request.search_term,
-    None)
-      .await
-      .map_err(|err| {
-        error!("Searching error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+pub async fn search_tts_models_handler(_http_request: HttpRequest, request: Json<SearchTtsModelsRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SearchTtsModelsSuccessResponse>, CommonWebError> {
+  let results = search_tts_models(&server_state.elasticsearch, &request.search_term, None).await.map_err(|err| {
+    error!("Searching error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let results = results.into_iter()
-      .map(|result| TtsModel {
-        model_token: result.token,
-        creator_user_token: result.creator_user_token,
-        creator_username: result.creator_username,
-        creator_display_name: result.creator_display_name,
-        title: result.title,
-        ietf_language_tag: result.ietf_language_tag,
-        ietf_primary_language_subtag: result.ietf_primary_language_subtag,
-        creator_set_visibility: result.creator_set_visibility,
-        created_at: result.created_at,
-        updated_at: result.updated_at,
-      })
-      .collect::<Vec<_>>();
+  let results = results.into_iter().map(|result| TtsModel { model_token: result.token, creator_user_token: result.creator_user_token, creator_username: result.creator_username, creator_display_name: result.creator_display_name, title: result.title, ietf_language_tag: result.ietf_language_tag, ietf_primary_language_subtag: result.ietf_primary_language_subtag, creator_set_visibility: result.creator_set_visibility, created_at: result.created_at, updated_at: result.updated_at }).collect::<Vec<_>>();
 
   // TODO(bt,2023-10-27): For some reason Elasticsearch returns duplicates. Maybe we populated the
   //  DB twice? Need to filter them out, or React chokes and gets stuck on duplicates. (Effectively
@@ -110,9 +86,5 @@ pub async fn search_tts_models_handler(
     new_results.push(result);
   }
 
-  Ok(Json(SearchTtsModelsSuccessResponse {
-    success: true,
-    models: new_results,
-  }))
+  Ok(Json(SearchTtsModelsSuccessResponse { success: true, models: new_results }))
 }
-

@@ -20,14 +20,7 @@ use crate::job_loop::job_results::JobResults;
 use crate::JobState;
 
 /// Returns the token of the entity.
-pub async fn process_hifigan_softvc_vocoder<'a, 'b>(
-  job_state: &JobState,
-  job: &AvailableDownloadJob,
-  temp_dir: &TempDir,
-  download_filename: &str,
-  redis_logger: &'a mut RedisJobStatusLogger<'b>,
-) -> AnyhowResult<JobResults> {
-
+pub async fn process_hifigan_softvc_vocoder<'a, 'b>(job_state: &JobState, job: &AvailableDownloadJob, temp_dir: &TempDir, download_filename: &str, redis_logger: &'a mut RedisJobStatusLogger<'b>) -> AnyhowResult<JobResults> {
   // ==================== RUN MODEL CHECK ==================== //
 
   info!("Checking that model is valid...");
@@ -38,10 +31,7 @@ pub async fn process_hifigan_softvc_vocoder<'a, 'b>(
 
   let output_metadata_fs_path = temp_dir.path().join("metadata.json");
 
-  let model_check_result = job_state.sidecar_configs.hifigan_softvc_model_check_command.execute(
-    &file_path,
-    &output_metadata_fs_path
-  );
+  let model_check_result = job_state.sidecar_configs.hifigan_softvc_model_check_command.execute(&file_path, &output_metadata_fs_path);
 
   if let Err(e) = model_check_result {
     safe_delete_file(&file_path);
@@ -62,7 +52,7 @@ pub async fn process_hifigan_softvc_vocoder<'a, 'b>(
       safe_delete_file(&output_metadata_fs_path);
       safe_delete_directory(&temp_dir);
       return Err(e);
-    }
+    },
   };
 
   // ==================== UPLOAD MODEL FILE ==================== //
@@ -107,15 +97,14 @@ pub async fn process_hifigan_softvc_vocoder<'a, 'b>(
     creator_set_visibility: job.creator_set_visibility,
     private_bucket_hash: &private_bucket_hash,
     private_bucket_object_name: &model_bucket_path,
-    mysql_pool: &job_state.mysql_pool
-  }).await?;
+    mysql_pool: &job_state.mysql_pool,
+  })
+  .await?;
 
-  job_state.badge_granter.maybe_grant_softvc_vocoder_model_uploads_badge(&job.creator_user_token)
-      .await
-      .map_err(|e| {
-        warn!("error maybe awarding badge: {:?}", e);
-        anyhow!("error maybe awarding badge")
-      })?;
+  job_state.badge_granter.maybe_grant_softvc_vocoder_model_uploads_badge(&job.creator_user_token).await.map_err(|e| {
+    warn!("error maybe awarding badge: {:?}", e);
+    anyhow!("error maybe awarding badge")
+  })?;
 
   Ok(JobResults {
     entity_token: Some(model_token),
@@ -134,4 +123,3 @@ fn read_metadata_file(filename: &PathBuf) -> AnyhowResult<FileMetadata> {
   file.read_to_string(&mut buffer)?;
   Ok(serde_json::from_str(&buffer)?)
 }
-

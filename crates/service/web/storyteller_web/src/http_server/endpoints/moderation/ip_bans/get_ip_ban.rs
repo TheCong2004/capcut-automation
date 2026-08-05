@@ -39,27 +39,18 @@ pub struct IpBanRecord {
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
-pub async fn get_ip_ban_handler(
-  http_request: HttpRequest,
-  path: Path<GetIpBanPathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<GetIpBanResponse>, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn get_ip_ban_handler(http_request: HttpRequest, path: Path<GetIpBanPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetIpBanResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if !user_session.can_ban_users {
@@ -69,34 +60,19 @@ pub async fn get_ip_ban_handler(
 
   let ip_address = path.ip_address.trim();
 
-  let maybe_result = get_ip_ban(ip_address, &server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        error!("get ip ban db error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let maybe_result = get_ip_ban(ip_address, &server_state.mysql_pool).await.map_err(|err| {
+    error!("get ip ban db error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let result : IpBanRecord = match maybe_result {
+  let result: IpBanRecord = match maybe_result {
     None => {
       return Err(CommonWebError::NotFound);
     },
-    Some(ban) => IpBanRecord {
-      ip_address: ban.ip_address,
-      maybe_target_user_token: ban.maybe_target_user_token,
-      maybe_target_username: ban.maybe_target_username,
-      mod_user_token: ban.mod_user_token,
-      mod_username: ban.mod_username,
-      mod_display_name: ban.mod_display_name,
-      mod_notes: ban.mod_notes,
-      created_at: ban.created_at,
-      updated_at: ban.updated_at,
-    },
+    Some(ban) => IpBanRecord { ip_address: ban.ip_address, maybe_target_user_token: ban.maybe_target_user_token, maybe_target_username: ban.maybe_target_username, mod_user_token: ban.mod_user_token, mod_username: ban.mod_username, mod_display_name: ban.mod_display_name, mod_notes: ban.mod_notes, created_at: ban.created_at, updated_at: ban.updated_at },
   };
 
-  let response = GetIpBanResponse {
-    success: true,
-    ip_address_ban: result,
-  };
+  let response = GetIpBanResponse { success: true, ip_address_ban: result };
 
   Ok(Json(response))
 }

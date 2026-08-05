@@ -1,4 +1,3 @@
-
 /// We used to write stable diffusion outputs with these values in
 /// the `extra_file_modification_info` field.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -43,10 +42,7 @@ mod tests {
 
   #[test]
   fn wrapped_enum() {
-    let payload = MediaFileExtraInfo::S(StableDiffusionExtraInfo {
-      prompt: Some("foo bar baz".to_string()),
-      ..Default::default()
-    });
+    let payload = MediaFileExtraInfo::S(StableDiffusionExtraInfo { prompt: Some("foo bar baz".to_string()), ..Default::default() });
 
     let json = r#"{"S":{"prompt":"foo bar baz"}}"#;
 
@@ -62,10 +58,7 @@ mod tests {
     let json = r#"{"prompt":"foo bar baz"}"#;
     let deserialized = MediaFileExtraInfo::from_json_str(&json).unwrap();
 
-    let expected = MediaFileExtraInfo::S(StableDiffusionExtraInfo {
-      prompt: Some("foo bar baz".to_string()),
-      ..Default::default()
-    });
+    let expected = MediaFileExtraInfo::S(StableDiffusionExtraInfo { prompt: Some("foo bar baz".to_string()), ..Default::default() });
 
     assert_eq!(deserialized, expected);
   }

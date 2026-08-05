@@ -9,19 +9,13 @@ const STORYTELLER_CDN_STR: &str = "https://cdn-2.fakeyou.com";
 const FAKEYOU_DEVELOPMENT_CDN_STR: &str = "https://pub-c8a4a5bdbdb048f286b77bdf9f786ff2.r2.dev";
 const STORYTELLER_DEVELOPMENT_CDN_STR: &str = "https://pub-c8a4a5bdbdb048f286b77bdf9f786ff2.r2.dev";
 
+const FAKEYOU_CDN: Lazy<Url> = Lazy::new(|| Url::parse(FAKEYOU_CDN_STR).expect("should never fail"));
 
-const FAKEYOU_CDN: Lazy<Url> = Lazy::new(|| Url::parse(FAKEYOU_CDN_STR)
-    .expect("should never fail"));
+const STORYTELLER_CDN: Lazy<Url> = Lazy::new(|| Url::parse(STORYTELLER_CDN_STR).expect("should never fail"));
 
-const STORYTELLER_CDN: Lazy<Url> = Lazy::new(|| Url::parse(STORYTELLER_CDN_STR)
-    .expect("should never fail"));
+const FAKEYOU_DEVELOPMENT_CDN: Lazy<Url> = Lazy::new(|| Url::parse(FAKEYOU_DEVELOPMENT_CDN_STR).expect("should never fail"));
 
-const FAKEYOU_DEVELOPMENT_CDN: Lazy<Url> = Lazy::new(|| Url::parse(FAKEYOU_DEVELOPMENT_CDN_STR)
-    .expect("should never fail"));
-
-const STORYTELLER_DEVELOPMENT_CDN: Lazy<Url> = Lazy::new(|| Url::parse(STORYTELLER_DEVELOPMENT_CDN_STR)
-    .expect("should never fail"));
-
+const STORYTELLER_DEVELOPMENT_CDN: Lazy<Url> = Lazy::new(|| Url::parse(STORYTELLER_DEVELOPMENT_CDN_STR).expect("should never fail"));
 
 // TODO(bt,2025-01-31): Perhaps this should be config driven and configurable at runtime instead of hardcoded.
 pub fn get_cdn_host(media_domain: MediaDomain, server_environment: ServerEnvironment) -> &'static str {

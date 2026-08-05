@@ -3,9 +3,7 @@ use tokens::tokens::media_files::MediaFileToken;
 
 // NB: Frontend is mistakenly sending empty string tokens - ignore those
 pub fn empty_media_file_token_to_null(maybe_token: Option<&MediaFileToken>) -> Option<MediaFileToken> {
-  maybe_token
-      .filter(|t| t.as_str().trim_or_empty().is_some())
-      .map(|t| t.clone())
+  maybe_token.filter(|t| t.as_str().trim_or_empty().is_some()).map(|t| t.clone())
 }
 
 #[cfg(test)]

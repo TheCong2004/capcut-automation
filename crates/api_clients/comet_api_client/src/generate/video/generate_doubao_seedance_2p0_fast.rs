@@ -1,10 +1,7 @@
 use crate::creds::comet_api_key::CometApiKey;
 use crate::error::comet_client_error::CometClientError;
 use crate::error::comet_error::CometError;
-use crate::requests::create_video::create_video::{
-  create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize,
-  CreateVideoArgs, CreateVideoRequest,
-};
+use crate::requests::create_video::create_video::{create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize, CreateVideoArgs, CreateVideoRequest};
 use crate::requests::video_task_status::CometVideoTaskStatus;
 
 /// Seedance 2.0 Fast supports 4-15 second durations.
@@ -95,20 +92,12 @@ pub struct GenerateDoubaoSeedance2p0FastResponse {
 
 // ── Entry point ──
 
-pub async fn generate_doubao_seedance_2p0_fast(
-  args: GenerateDoubaoSeedance2p0FastArgs<'_>,
-) -> Result<GenerateDoubaoSeedance2p0FastResponse, CometError> {
+pub async fn generate_doubao_seedance_2p0_fast(args: GenerateDoubaoSeedance2p0FastArgs<'_>) -> Result<GenerateDoubaoSeedance2p0FastResponse, CometError> {
   let raw_request = args.request.to_create_video_request()?;
 
-  let result = create_video(CreateVideoArgs {
-    api_key: args.api_key,
-    request: raw_request,
-  }).await?;
+  let result = create_video(CreateVideoArgs { api_key: args.api_key, request: raw_request }).await?;
 
-  Ok(GenerateDoubaoSeedance2p0FastResponse {
-    task_id: result.task_id,
-    status: result.status,
-  })
+  Ok(GenerateDoubaoSeedance2p0FastResponse { task_id: result.task_id, status: result.status })
 }
 
 impl GenerateDoubaoSeedance2p0FastRequest {
@@ -116,21 +105,11 @@ impl GenerateDoubaoSeedance2p0FastRequest {
   pub fn to_create_video_request(&self) -> Result<CreateVideoRequest, CometClientError> {
     if let Some(seconds) = self.duration_seconds {
       if !(MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&seconds) {
-        return Err(CometClientError::InvalidRequestField {
-          field: "duration_seconds",
-          raw_value: seconds.to_string(),
-          reason: format!("Seedance 2.0 Fast supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations"),
-        });
+        return Err(CometClientError::InvalidRequestField { field: "duration_seconds", raw_value: seconds.to_string(), reason: format!("Seedance 2.0 Fast supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations") });
       }
     }
 
-    Ok(CreateVideoRequest {
-      model: CometVideoModelRaw::DoubaoSeedance2p0Fast,
-      prompt: self.prompt.clone(),
-      maybe_seconds: self.duration_seconds,
-      maybe_size: self.resolve_size(),
-      input_reference_images: self.input_reference_images.clone(),
-    })
+    Ok(CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance2p0Fast, prompt: self.prompt.clone(), maybe_seconds: self.duration_seconds, maybe_size: self.resolve_size(), input_reference_images: self.input_reference_images.clone() })
   }
 
   /// The wire `size` is a single exact-dimensions field determined by the
@@ -177,21 +156,10 @@ mod tests {
 
   #[test]
   fn maps_to_wire_request() {
-    let request = GenerateDoubaoSeedance2p0FastRequest {
-      prompt: "a corgi surfing".to_string(),
-      duration_seconds: Some(4),
-      aspect_ratio: Some(Ratio::Landscape16x9),
-      resolution: Some(Res::FourEightyP),
-      input_reference_images: vec![],
-    };
+    let request = GenerateDoubaoSeedance2p0FastRequest { prompt: "a corgi surfing".to_string(), duration_seconds: Some(4), aspect_ratio: Some(Ratio::Landscape16x9), resolution: Some(Res::FourEightyP), input_reference_images: vec![] };
 
     let raw = request.to_create_video_request().expect("should validate");
-    assert_eq!(raw.text_form_fields(), vec![
-      ("model", "doubao-seedance-2-0-fast".to_string()),
-      ("prompt", "a corgi surfing".to_string()),
-      ("seconds", "4".to_string()),
-      ("size", "864x496".to_string()),
-    ]);
+    assert_eq!(raw.text_form_fields(), vec![("model", "doubao-seedance-2-0-fast".to_string()), ("prompt", "a corgi surfing".to_string()), ("seconds", "4".to_string()), ("size", "864x496".to_string()),]);
   }
 
   #[test]
@@ -199,26 +167,12 @@ mod tests {
     // (resolution, ratio) -> exact size, as offered by CometAPI's own
     // playground dropdown for the Seedance 2.0 family. No 1080p row: Fast
     // doesn't support it (enforced by the resolution enum).
-    let cases = [
-      (Res::FourEightyP, Ratio::Landscape16x9, "864x496"),
-      (Res::FourEightyP, Ratio::Standard4x3, "752x560"),
-      (Res::FourEightyP, Ratio::Square1x1, "640x640"),
-      (Res::FourEightyP, Ratio::Portrait3x4, "560x752"),
-      (Res::FourEightyP, Ratio::Portrait9x16, "496x864"),
-      (Res::FourEightyP, Ratio::UltraWide21x9, "992x432"),
-      (Res::SevenTwentyP, Ratio::Landscape16x9, "1280x720"),
-      (Res::SevenTwentyP, Ratio::Standard4x3, "1112x834"),
-      (Res::SevenTwentyP, Ratio::Square1x1, "960x960"),
-      (Res::SevenTwentyP, Ratio::Portrait3x4, "834x1112"),
-      (Res::SevenTwentyP, Ratio::Portrait9x16, "720x1280"),
-      (Res::SevenTwentyP, Ratio::UltraWide21x9, "1470x630"),
-    ];
+    let cases = [(Res::FourEightyP, Ratio::Landscape16x9, "864x496"), (Res::FourEightyP, Ratio::Standard4x3, "752x560"), (Res::FourEightyP, Ratio::Square1x1, "640x640"), (Res::FourEightyP, Ratio::Portrait3x4, "560x752"), (Res::FourEightyP, Ratio::Portrait9x16, "496x864"), (Res::FourEightyP, Ratio::UltraWide21x9, "992x432"), (Res::SevenTwentyP, Ratio::Landscape16x9, "1280x720"), (Res::SevenTwentyP, Ratio::Standard4x3, "1112x834"), (Res::SevenTwentyP, Ratio::Square1x1, "960x960"), (Res::SevenTwentyP, Ratio::Portrait3x4, "834x1112"), (Res::SevenTwentyP, Ratio::Portrait9x16, "720x1280"), (Res::SevenTwentyP, Ratio::UltraWide21x9, "1470x630")];
 
     for (resolution, aspect_ratio, expected) in cases {
       let request = base_request(Some(aspect_ratio), Some(resolution));
       let size = request.resolve_size().expect("should resolve");
-      assert_eq!(size.as_api_string(), expected,
-        "({resolution:?}, {aspect_ratio:?}) should map to {expected}");
+      assert_eq!(size.as_api_string(), expected, "({resolution:?}, {aspect_ratio:?}) should map to {expected}");
     }
   }
 
@@ -263,16 +217,7 @@ mod tests {
     assert_eq!(request.estimate_cost_in_usd_cents(), 54);
   }
 
-  fn base_request(
-    aspect_ratio: Option<DoubaoSeedance2p0FastAspectRatio>,
-    resolution: Option<DoubaoSeedance2p0FastResolution>,
-  ) -> GenerateDoubaoSeedance2p0FastRequest {
-    GenerateDoubaoSeedance2p0FastRequest {
-      prompt: "ok".to_string(),
-      duration_seconds: None,
-      aspect_ratio,
-      resolution,
-      input_reference_images: vec![],
-    }
+  fn base_request(aspect_ratio: Option<DoubaoSeedance2p0FastAspectRatio>, resolution: Option<DoubaoSeedance2p0FastResolution>) -> GenerateDoubaoSeedance2p0FastRequest {
+    GenerateDoubaoSeedance2p0FastRequest { prompt: "ok".to_string(), duration_seconds: None, aspect_ratio, resolution, input_reference_images: vec![] }
   }
 }

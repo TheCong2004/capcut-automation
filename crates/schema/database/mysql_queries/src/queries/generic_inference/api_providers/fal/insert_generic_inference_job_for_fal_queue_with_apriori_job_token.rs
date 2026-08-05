@@ -20,15 +20,12 @@ use tokens::tokens::users::UserToken;
 use crate::errors::database_query_error::DatabaseQueryError;
 use crate::queries::generic_inference::common::job_cost_estimates::JobCostEstimates;
 use crate::payloads::generic_inference_args::generic_inference_args::GenericInferenceArgs;
-use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{
-  insert_generic_inference_job_for_provider,
-  InsertGenericInferenceJobForProviderArgs,
-};
+use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{insert_generic_inference_job_for_provider, InsertGenericInferenceJobForProviderArgs};
 use crate::queries::generic_inference::api_providers::fal::insert_generic_inference_job_for_fal_queue::FalCategory;
 
-
 pub struct InsertGenericInferenceForFalWithAprioriJobTokenArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub uuid_idempotency_token: &'e str,
 
@@ -73,33 +70,17 @@ pub struct InsertGenericInferenceForFalWithAprioriJobTokenArgs<'e, 'c, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn insert_generic_inference_job_for_fal_queue_with_apriori_job_token<'e, 'c : 'e, E>(args: InsertGenericInferenceForFalWithAprioriJobTokenArgs<'e, 'c, E>)
-  -> Result<InferenceJobToken, DatabaseQueryError>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn insert_generic_inference_job_for_fal_queue_with_apriori_job_token<'e, 'c: 'e, E>(args: InsertGenericInferenceForFalWithAprioriJobTokenArgs<'e, 'c, E>) -> Result<InferenceJobToken, DatabaseQueryError>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-  let (inference_category, product_category) =
-      match args.fal_category {
-        FalCategory::ImageGeneration => (
-          InferenceCategory::ImageGeneration,
-          InferenceJobProductCategory::FalImage
-        ),
-        FalCategory::VideoGeneration => (
-          InferenceCategory::VideoGeneration,
-          InferenceJobProductCategory::FalVideo
-        ),
-        FalCategory::AudioGeneration => (
-          InferenceCategory::AudioGeneration,
-          InferenceJobProductCategory::FalAudio
-        ),
-        FalCategory::BackgroundRemoval => (
-          InferenceCategory::BackgroundRemoval,
-          InferenceJobProductCategory::FalBgRemoval
-        ),
-        FalCategory::ObjectGeneration => (
-          InferenceCategory::ObjectGeneration,
-          InferenceJobProductCategory::FalObject,
-        ),
-      };
+  let (inference_category, product_category) = match args.fal_category {
+    FalCategory::ImageGeneration => (InferenceCategory::ImageGeneration, InferenceJobProductCategory::FalImage),
+    FalCategory::VideoGeneration => (InferenceCategory::VideoGeneration, InferenceJobProductCategory::FalVideo),
+    FalCategory::AudioGeneration => (InferenceCategory::AudioGeneration, InferenceJobProductCategory::FalAudio),
+    FalCategory::BackgroundRemoval => (InferenceCategory::BackgroundRemoval, InferenceJobProductCategory::FalBgRemoval),
+    FalCategory::ObjectGeneration => (InferenceCategory::ObjectGeneration, InferenceJobProductCategory::FalObject),
+  };
 
   let record_id = insert_generic_inference_job_for_provider(InsertGenericInferenceJobForProviderArgs {
     apriori_job_token: args.apriori_job_token,
@@ -125,7 +106,8 @@ pub async fn insert_generic_inference_job_for_fal_queue_with_apriori_job_token<'
     status: args.starting_job_status_override.unwrap_or(JobStatusPlus::Pending),
     mysql_executor: args.mysql_executor,
     phantom: args.phantom,
-  }).await?;
+  })
+  .await?;
 
   info!("Insert generic inference job for FAL queue: {} with record ID {}", args.apriori_job_token, record_id);
 

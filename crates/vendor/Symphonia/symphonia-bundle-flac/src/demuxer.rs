@@ -70,8 +70,7 @@ impl FlacReader {
                         let mut new_index = SeekIndex::new();
                         read_seek_table_block(&mut block_stream, header.block_len, &mut new_index)?;
                         index = Some(new_index);
-                    }
-                    else {
+                    } else {
                         return decode_error("flac: found more than one seek table block");
                     }
                 }
@@ -204,8 +203,7 @@ impl FormatReader for FlacReader {
                 // known, the seek cannot be completed.
                 if let Some(sample_rate) = params.sample_rate {
                     TimeBase::new(1, sample_rate).calc_timestamp(time)
-                }
-                else {
+                } else {
                     return seek_error(SeekErrorKind::Unseekable);
                 }
             }
@@ -265,8 +263,7 @@ impl FormatReader for FlacReader {
 
                 if ts < packet.packet_ts {
                     end_byte_offset = mid_byte_offset;
-                }
-                else if ts > packet.packet_ts
+                } else if ts > packet.packet_ts
                     && ts < (packet.packet_ts + u64::from(packet.n_frames))
                 {
                     // Rewind the stream back to the beginning of the frame.
@@ -283,8 +280,7 @@ impl FormatReader for FlacReader {
                         actual_ts: packet.packet_ts,
                         required_ts: ts,
                     });
-                }
-                else {
+                } else {
                     start_byte_offset = mid_byte_offset;
                 }
             }
@@ -392,8 +388,7 @@ fn read_stream_info_block<B: ReadBytes + FiniteStream>(
 
         // Add the track.
         tracks.push(Track::new(0, codec_params));
-    }
-    else {
+    } else {
         return decode_error("flac: found more than one stream info block");
     }
 

@@ -10,11 +10,8 @@ pub struct UserSessionFeatureFlags {
 }
 
 impl UserSessionFeatureFlags {
-
   pub fn empty() -> Self {
-    Self {
-      feature_flags: BTreeSet::new(),
-    }
+    Self { feature_flags: BTreeSet::new() }
   }
 
   pub fn new(maybe_feature_flags: Option<&str>) -> Self {
@@ -26,14 +23,8 @@ impl UserSessionFeatureFlags {
     Self {
       feature_flags: match maybe_feature_flags.as_deref() {
         None => BTreeSet::new(),
-        Some(feature_flags) => {
-          feature_flags
-              .split(",")
-              .map(|flag| flag.trim())
-              .filter_map(|flag| UserFeatureFlag::from_str(flag).ok())
-              .collect()
-        }
-      }
+        Some(feature_flags) => feature_flags.split(",").map(|flag| flag.trim()).filter_map(|flag| UserFeatureFlag::from_str(flag).ok()).collect(),
+      },
     }
   }
 
@@ -41,9 +32,7 @@ impl UserSessionFeatureFlags {
     if self.feature_flags.is_empty() {
       None
     } else {
-      Some(self.feature_flags.iter()
-          .map(|flag| flag.to_str())
-          .collect::<Vec<&str>>().join(","))
+      Some(self.feature_flags.iter().map(|flag| flag.to_str()).collect::<Vec<&str>>().join(","))
     }
   }
 
@@ -62,30 +51,23 @@ impl UserSessionFeatureFlags {
   }
 
   pub fn remove_flags(&mut self, permissions: &BTreeSet<UserFeatureFlag>) {
-    self.feature_flags = self.feature_flags
-        .difference(permissions)
-        .cloned()
-        .collect::<BTreeSet<UserFeatureFlag>>();
+    self.feature_flags = self.feature_flags.difference(permissions).cloned().collect::<BTreeSet<UserFeatureFlag>>();
   }
 
   pub fn keep_flags(&mut self, permissions: &BTreeSet<UserFeatureFlag>) {
-    self.feature_flags = self.feature_flags
-        .intersection(permissions)
-        .cloned()
-        .collect();
+    self.feature_flags = self.feature_flags.intersection(permissions).cloned().collect();
   }
 
   pub fn set_flags<Iter: IntoIterator<Item = UserFeatureFlag>>(&mut self, permissions: Iter) {
-    self.feature_flags = permissions.into_iter()
-        .collect();
+    self.feature_flags = permissions.into_iter().collect();
   }
 
   pub fn clear_flags(&mut self) {
     self.feature_flags = BTreeSet::new();
   }
-  
+
   // ----------- Specific Flags ---------- //
-  
+
   pub fn has_seedance_whitelist(&self) -> bool {
     self.feature_flags.contains(&UserFeatureFlag::SeedanceWhitelist)
   }
@@ -145,8 +127,7 @@ mod tests {
 
     #[test]
     fn all_features() {
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer,explore_media"));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer,explore_media"));
 
       assert_eq!(flags.clone_flags().len(), 3);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), true);
@@ -156,8 +137,7 @@ mod tests {
 
     #[test]
     fn duplication() {
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio,studio,studio,studio"));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("studio,studio,studio,studio"));
 
       assert_eq!(flags.clone_flags().len(), 1);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), true);
@@ -167,8 +147,7 @@ mod tests {
 
     #[test]
     fn spacing() {
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("  studio,  video_style_transfer , , , "));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("  studio,  video_style_transfer , , , "));
 
       assert_eq!(flags.clone_flags().len(), 2);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), true);
@@ -178,8 +157,7 @@ mod tests {
 
     #[test]
     fn invalid_features_and_typos() {
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("invalid,,typo,stdo,STUDIO"));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("invalid,,typo,stdo,STUDIO"));
 
       assert_eq!(flags.clone_flags().len(), 0);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), false);
@@ -209,14 +187,12 @@ mod tests {
 
     #[test]
     fn two_features() {
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer"));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer"));
 
       assert_eq!(flags.clone_flags().len(), 2);
       assert_eq!(flags.maybe_serialize_string(), Some("studio,video_style_transfer".to_string()));
 
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("explore_media,studio"));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("explore_media,studio"));
 
       assert_eq!(flags.clone_flags().len(), 2);
       assert_eq!(flags.maybe_serialize_string(), Some("explore_media,studio".to_string()));
@@ -224,15 +200,13 @@ mod tests {
 
     #[test]
     fn three_features() {
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer,explore_media"));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer,explore_media"));
 
       assert_eq!(flags.clone_flags().len(), 3);
       assert_eq!(flags.maybe_serialize_string(), Some("explore_media,studio,video_style_transfer".to_string()));
 
       // NB: Different order
-      let flags =
-          UserSessionFeatureFlags::from_optional_str(Some("explore_media,video_style_transfer,studio"));
+      let flags = UserSessionFeatureFlags::from_optional_str(Some("explore_media,video_style_transfer,studio"));
 
       assert_eq!(flags.clone_flags().len(), 3);
       assert_eq!(flags.maybe_serialize_string(), Some("explore_media,studio,video_style_transfer".to_string()));
@@ -253,8 +227,7 @@ mod tests {
 
     #[test]
     fn remove_non_existing() {
-      let mut flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer"));
+      let mut flags = UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer"));
 
       assert_eq!(flags.clone_flags().len(), 2);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), true);
@@ -269,8 +242,7 @@ mod tests {
 
     #[test]
     fn remove_existing() {
-      let mut flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer,explore_media"));
+      let mut flags = UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer,explore_media"));
 
       assert_eq!(flags.clone_flags().len(), 3);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), true);
@@ -298,8 +270,7 @@ mod tests {
 
     #[test]
     fn add_one() {
-      let mut flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer"));
+      let mut flags = UserSessionFeatureFlags::from_optional_str(Some("studio,video_style_transfer"));
 
       assert_eq!(flags.clone_flags().len(), 2);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), true);
@@ -321,8 +292,7 @@ mod tests {
 
     #[test]
     fn add_multiple() {
-      let mut flags =
-          UserSessionFeatureFlags::from_optional_str(Some("studio"));
+      let mut flags = UserSessionFeatureFlags::from_optional_str(Some("studio"));
 
       assert_eq!(flags.clone_flags().len(), 1);
       assert_eq!(flags.has_flag(UserFeatureFlag::Studio), true);

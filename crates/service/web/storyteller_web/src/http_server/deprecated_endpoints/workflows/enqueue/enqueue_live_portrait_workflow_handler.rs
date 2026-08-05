@@ -101,30 +101,19 @@ pub struct EnqueueLivePortraitWorkflowSuccessResponse {
   ),
   params(("request" = EnqueueLivePortraitWorkflowRequest, description = "Payload for request"))
 )]
-pub async fn enqueue_live_portrait_workflow_handler(
-  http_request: HttpRequest,
-  request: Json<EnqueueLivePortraitWorkflowRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<EnqueueLivePortraitWorkflowSuccessResponse>, CommonWebError>
-{
+pub async fn enqueue_live_portrait_workflow_handler(http_request: HttpRequest, request: Json<EnqueueLivePortraitWorkflowRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<EnqueueLivePortraitWorkflowSuccessResponse>, CommonWebError> {
   // ==================== DB ==================== //
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // ==================== USER SESSION ==================== //
 
-  let maybe_avt_token = server_state.avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
-  let user_session = require_user_session_extended(
-    &http_request,
-    &server_state.session_checker,
-    &mut *mysql_connection).await?;
+  let user_session = require_user_session_extended(&http_request, &server_state.session_checker, &mut *mysql_connection).await?;
 
   // ==================== PAID PLAN + PRIORITY ==================== //
 
@@ -140,7 +129,7 @@ pub async fn enqueue_live_portrait_workflow_handler(
 
   let is_debug_request = has_debug_header(&http_request);
 
-  let maybe_routing_tag= get_routing_tag_header(&http_request);
+  let maybe_routing_tag = get_routing_tag_header(&http_request);
 
   // ==================== RATE LIMIT ==================== //
 
@@ -154,12 +143,10 @@ pub async fn enqueue_live_portrait_workflow_handler(
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("invalid idempotency token".to_string())
+  })?;
 
   // ==================== HANDLE REQUEST ==================== //
 
@@ -167,23 +154,14 @@ pub async fn enqueue_live_portrait_workflow_handler(
 
   let ip_address = get_request_ip(&http_request);
 
-  let set_visibility = request.creator_set_visibility
-      .unwrap_or(user_session.preferences.preferred_tts_result_visibility);
+  let set_visibility = request.creator_set_visibility.unwrap_or(user_session.preferences.preferred_tts_result_visibility);
 
   let has_paid_plan = plan.plan_slug() == "fakeyou_contributor" || plan.plan_category() == PlanCategory::Paid;
 
   let _is_allowed_expensive_generation = is_staff || has_paid_plan;
   let is_allowed_no_watermark = is_staff || has_paid_plan;
 
-  let maybe_crop = request.maybe_crop.as_ref()
-      .map(|crop| {
-        CropDimensions {
-          x: crop.x,
-          y: crop.y,
-          width: crop.width,
-          height: crop.height,
-        }
-      });
+  let maybe_crop = request.maybe_crop.as_ref().map(|crop| CropDimensions { x: crop.x, y: crop.y, width: crop.width, height: crop.height });
 
   let branding = get_request_domain_branding(&http_request);
 
@@ -200,21 +178,9 @@ pub async fn enqueue_live_portrait_workflow_handler(
 
   let used_webcam = request.used_webcam.unwrap_or(false);
 
-  let product_category = if used_webcam {
-    InferenceJobProductCategory::VidLivePortraitWebcam
-  } else {
-    InferenceJobProductCategory::VidLivePortrait
-  };
+  let product_category = if used_webcam { InferenceJobProductCategory::VidLivePortraitWebcam } else { InferenceJobProductCategory::VidLivePortrait };
 
-  let payload = LivePortraitPayload {
-    portrait_media_file_token: empty_media_file_token_to_null(Some(&request.source_media_file_token)),
-    driver_media_file_token: empty_media_file_token_to_null(Some(&request.face_driver_media_file_token)),
-    crop: maybe_crop,
-    watermark_type,
-    remove_watermark: None,
-    sleep_millis: None,
-    used_webcam: optional_false_to_none(request.used_webcam),
-  };
+  let payload = LivePortraitPayload { portrait_media_file_token: empty_media_file_token_to_null(Some(&request.source_media_file_token)), driver_media_file_token: empty_media_file_token_to_null(Some(&request.face_driver_media_file_token)), crop: maybe_crop, watermark_type, remove_watermark: None, sleep_millis: None, used_webcam: optional_false_to_none(request.used_webcam) };
 
   info!("Creating ComfyUI job record...");
 
@@ -231,10 +197,7 @@ pub async fn enqueue_live_portrait_workflow_handler(
     maybe_cover_image_media_file_token: None,
     maybe_raw_inference_text: None,
     maybe_max_duration_seconds: None,
-    maybe_inference_args: Some(GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::LivePortrait),
-      args: Some(PolymorphicInferenceArgs::Lp(payload)),
-    }),
+    maybe_inference_args: Some(GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::LivePortrait), args: Some(PolymorphicInferenceArgs::Lp(payload)) }),
     maybe_creator_user_token: Some(&user_session.user_token_typed),
     maybe_avt_token: maybe_avt_token.as_ref(),
     creator_ip_address: &ip_address,
@@ -244,7 +207,8 @@ pub async fn enqueue_live_portrait_workflow_handler(
     is_debug_request,
     maybe_routing_tag: maybe_routing_tag.as_deref(),
     mysql_pool: &server_state.mysql_pool,
-  }).await;
+  })
+  .await;
 
   let job_token = match query_result {
     Ok((job_token, _id)) => job_token,
@@ -254,11 +218,8 @@ pub async fn enqueue_live_portrait_workflow_handler(
         return Err(CommonWebError::BadInputWithSimpleMessage("Duplicate idempotency token".to_string()));
       }
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
-  Ok(Json(EnqueueLivePortraitWorkflowSuccessResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  Ok(Json(EnqueueLivePortraitWorkflowSuccessResponse { success: true, inference_job_token: job_token }))
 }

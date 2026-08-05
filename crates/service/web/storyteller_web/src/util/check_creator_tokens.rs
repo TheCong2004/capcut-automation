@@ -11,7 +11,7 @@ pub struct CheckCreatorTokenArgs<'a> {
   pub maybe_current_request_anonymous_visitor_token: Option<&'a AnonymousVisitorTrackingToken>,
 }
 
-#[derive(Clone,Copy,Debug,Eq,PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CheckCreatorTokenResult {
   UserTokenMatch,
   UserTokenMismatch,
@@ -21,10 +21,7 @@ pub enum CheckCreatorTokenResult {
 }
 
 pub fn check_creator_tokens(args: CheckCreatorTokenArgs<'_>) -> CheckCreatorTokenResult {
-  let maybe_user_tokens = (
-    args.maybe_creator_user_token,
-    args.maybe_current_request_user_token,
-  );
+  let maybe_user_tokens = (args.maybe_creator_user_token, args.maybe_current_request_user_token);
 
   match maybe_user_tokens {
     (None, None) => {}, // Anonymous file and user; fall through
@@ -40,10 +37,7 @@ pub fn check_creator_tokens(args: CheckCreatorTokenArgs<'_>) -> CheckCreatorToke
     },
   }
 
-  let maybe_anonymous_tokens = (
-    args.maybe_creator_anonymous_visitor_token,
-    args.maybe_current_request_anonymous_visitor_token,
-  );
+  let maybe_anonymous_tokens = (args.maybe_creator_anonymous_visitor_token, args.maybe_current_request_anonymous_visitor_token);
 
   match maybe_anonymous_tokens {
     (Some(token_a), Some(token_b)) => {
@@ -66,12 +60,7 @@ mod tests {
 
   #[test]
   fn test_fully_anonymous() {
-    let result = check_creator_tokens(CheckCreatorTokenArgs {
-      maybe_creator_user_token: None,
-      maybe_current_request_user_token: None,
-      maybe_creator_anonymous_visitor_token: None,
-      maybe_current_request_anonymous_visitor_token: None,
-    });
+    let result = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: None, maybe_current_request_user_token: None, maybe_creator_anonymous_visitor_token: None, maybe_current_request_anonymous_visitor_token: None });
 
     assert_eq!(result, CheckCreatorTokenResult::InsufficientInformation);
   }
@@ -86,12 +75,7 @@ mod tests {
       let user_1 = UserToken::new_from_str("bob");
       let user_2 = UserToken::new_from_str("bob");
 
-      let result = check_creator_tokens(CheckCreatorTokenArgs {
-        maybe_creator_user_token: Some(&user_1),
-        maybe_current_request_user_token: Some(&user_2),
-        maybe_creator_anonymous_visitor_token: None,
-        maybe_current_request_anonymous_visitor_token: None,
-      });
+      let result = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: Some(&user_1), maybe_current_request_user_token: Some(&user_2), maybe_creator_anonymous_visitor_token: None, maybe_current_request_anonymous_visitor_token: None });
 
       assert_eq!(result, CheckCreatorTokenResult::UserTokenMatch);
     }
@@ -101,12 +85,7 @@ mod tests {
       let user_1 = UserToken::new_from_str("bob");
       let user_2 = UserToken::new_from_str("jane");
 
-      let result = check_creator_tokens(CheckCreatorTokenArgs {
-        maybe_creator_user_token: Some(&user_1),
-        maybe_current_request_user_token: Some(&user_2),
-        maybe_creator_anonymous_visitor_token: None,
-        maybe_current_request_anonymous_visitor_token: None,
-      });
+      let result = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: Some(&user_1), maybe_current_request_user_token: Some(&user_2), maybe_creator_anonymous_visitor_token: None, maybe_current_request_anonymous_visitor_token: None });
 
       assert_eq!(result, CheckCreatorTokenResult::UserTokenMismatch);
     }
@@ -150,12 +129,7 @@ mod tests {
       let anonymous_1 = AnonymousVisitorTrackingToken::new_from_str("anonymous_1");
       let anonymous_2 = AnonymousVisitorTrackingToken::new_from_str("anonymous_1");
 
-      let result = check_creator_tokens(CheckCreatorTokenArgs {
-        maybe_creator_user_token: None,
-        maybe_current_request_user_token: None,
-        maybe_creator_anonymous_visitor_token: Some(&anonymous_1),
-        maybe_current_request_anonymous_visitor_token: Some(&anonymous_2),
-      });
+      let result = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: None, maybe_current_request_user_token: None, maybe_creator_anonymous_visitor_token: Some(&anonymous_1), maybe_current_request_anonymous_visitor_token: Some(&anonymous_2) });
 
       assert_eq!(result, CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMatch);
     }
@@ -165,12 +139,7 @@ mod tests {
       let anonymous_1 = AnonymousVisitorTrackingToken::new_from_str("anonymous_1");
       let anonymous_2 = AnonymousVisitorTrackingToken::new_from_str("anonymous_2");
 
-      let result = check_creator_tokens(CheckCreatorTokenArgs {
-        maybe_creator_user_token: None,
-        maybe_current_request_user_token: None,
-        maybe_creator_anonymous_visitor_token: Some(&anonymous_1),
-        maybe_current_request_anonymous_visitor_token: Some(&anonymous_2),
-      });
+      let result = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: None, maybe_current_request_user_token: None, maybe_creator_anonymous_visitor_token: Some(&anonymous_1), maybe_current_request_anonymous_visitor_token: Some(&anonymous_2) });
 
       assert_eq!(result, CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMismatch);
     }
@@ -193,12 +162,7 @@ mod tests {
     fn test_no_creator_anonymous_session_user() {
       let anonymous = Some(AnonymousVisitorTrackingToken::new_from_str("anonymous"));
 
-      let result = check_creator_tokens(CheckCreatorTokenArgs {
-        maybe_creator_user_token: None,
-        maybe_current_request_user_token: None,
-        maybe_creator_anonymous_visitor_token: None,
-        maybe_current_request_anonymous_visitor_token: anonymous.as_ref(),
-      });
+      let result = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: None, maybe_current_request_user_token: None, maybe_creator_anonymous_visitor_token: None, maybe_current_request_anonymous_visitor_token: anonymous.as_ref() });
 
       assert_eq!(result, CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMismatch);
     }

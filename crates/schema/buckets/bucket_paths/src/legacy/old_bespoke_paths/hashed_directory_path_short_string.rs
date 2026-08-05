@@ -1,4 +1,3 @@
-
 /// Create a cloud object store directory structure that can be easily traversed without
 /// too many items living in a single directory.
 ///

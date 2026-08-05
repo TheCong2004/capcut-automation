@@ -40,39 +40,23 @@ pub struct GetSessionSubscriptionPathInfo {
     ("path" = GetSessionSubscriptionPathInfo, description = "Path for Request")
   )
 )]
-pub async fn get_session_subscription_handler(
-  http_request: HttpRequest,
-  path: Path<GetSessionSubscriptionPathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<GetSessionSubscriptionResponse>, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("Error acquiring MySQL connection: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+pub async fn get_session_subscription_handler(http_request: HttpRequest, path: Path<GetSessionSubscriptionPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetSessionSubscriptionResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("Error acquiring MySQL connection: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_token = match maybe_user_session {
     Some(session) => session.user_token,
     None => return Err(CommonWebError::NotAuthorized),
   };
 
-  let maybe_subscription = find_subscription_for_owner_user_using_connection(
-    &user_token,
-    path.namespace,
-    &mut mysql_connection
-  ).await.map_err(|err| {
+  let maybe_subscription = find_subscription_for_owner_user_using_connection(&user_token, path.namespace, &mut mysql_connection).await.map_err(|err| {
     error!("Error looking up user's ({}) existing subscription: {:?}", &user_token, err);
     CommonWebError::from_error(err) // NB: This was probably *our* fault.
   })?;
@@ -110,13 +94,7 @@ pub async fn get_session_subscription_handler(
       //  next_bill_date = Some(sub.current_billing_period_end_at);
       //}
 
-      SubscriptionInfo {
-        namespace: sub.subscription_namespace,
-        product_slug: sub.subscription_product_slug,
-        subscription_token: sub.token,
-        next_bill_at: next_bill_date,
-        subscription_end_at: subscription_end_date,
-      }
+      SubscriptionInfo { namespace: sub.subscription_namespace, product_slug: sub.subscription_product_slug, subscription_token: sub.token, next_bill_at: next_bill_date, subscription_end_at: subscription_end_date }
     }),
   }))
 }

@@ -51,30 +51,17 @@ pub struct EditBetaKeyNoteSuccessResponse {
     ("path" = EditBetaKeyNotePathInfo, description = "Path for Request")
   )
 )]
-pub async fn edit_beta_key_note_handler(
-  http_request: HttpRequest,
-  request: Json<EditBetaKeyNoteRequest>,
-  path: Path<EditBetaKeyNotePathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<EditBetaKeyNoteSuccessResponse>, CommonWebError>
-{
+pub async fn edit_beta_key_note_handler(http_request: HttpRequest, request: Json<EditBetaKeyNoteRequest>, path: Path<EditBetaKeyNotePathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<EditBetaKeyNoteSuccessResponse>, CommonWebError> {
   let user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
-  let maybe_note = request.note.as_deref()
-      .map(|note| note.trim())
-      .filter(|note| !note.is_empty())
-      .map(|note| note.to_string());
+  let maybe_note = request.note.as_deref().map(|note| note.trim()).filter(|note| !note.is_empty()).map(|note| note.to_string());
 
-  edit_beta_key_note(&path.token, maybe_note.as_deref(), &server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        warn!("Error editing beta key note: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  edit_beta_key_note(&path.token, maybe_note.as_deref(), &server_state.mysql_pool).await.map_err(|err| {
+    warn!("Error editing beta key note: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let response = EditBetaKeyNoteSuccessResponse {
-    success: true,
-  };
+  let response = EditBetaKeyNoteSuccessResponse { success: true };
 
   Ok(Json(response))
 }

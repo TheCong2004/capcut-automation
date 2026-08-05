@@ -22,9 +22,7 @@ where
 /// Only links to LIVE media files count: media-file deletion is a soft
 /// delete that leaves the link rows in place (so undelete restores the
 /// user's tags), and those parked links must not inflate the rollup.
-pub async fn recount_tag_use_counts<'e, 'c: 'e, E>(
-  args: RecountTagUseCountsArgs<'e, 'c, E>,
-) -> Result<(), sqlx::Error>
+pub async fn recount_tag_use_counts<'e, 'c: 'e, E>(args: RecountTagUseCountsArgs<'e, 'c, E>) -> Result<(), sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {

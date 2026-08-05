@@ -35,7 +35,7 @@ impl MediaFileExtraInfo {
     };
     // NB: Some older stable diffusion payloads were raw equivalents of `StableDiffusionExtraInfo`.
     if value.contains("prompt") {
-      let stable_diffusion_info : StableDiffusionExtraInfo = serde_json::from_str(value)?;
+      let stable_diffusion_info: StableDiffusionExtraInfo = serde_json::from_str(value)?;
       return Ok(Self::S(stable_diffusion_info));
     } else {
       return bail!(err);

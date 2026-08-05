@@ -28,7 +28,6 @@ use crate::util::downloaders::maybe_download_file_from_bucket::{maybe_download_f
 /// This allows the request to bypass the model cache and query the latest TTS model.
 const TEST_REQUEST_TEXT: &str = "This is a test request.";
 
-
 pub struct VitsProcessJobArgs<'a> {
   pub job_dependencies: &'a JobDependencies,
   pub job: &'a AvailableInferenceJob,
@@ -41,19 +40,9 @@ pub async fn process_job(args: VitsProcessJobArgs<'_>) -> Result<JobSuccessResul
   let tts_model = args.tts_model;
   let raw_inference_text = args.raw_inference_text;
 
-  let mut job_progress_reporter = args.job_dependencies
-      .clients
-      .job_progress_reporter
-      .new_generic_inference(job.inference_job_token.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
+  let mut job_progress_reporter = args.job_dependencies.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let model_dependencies = args
-      .job_dependencies
-      .job
-      .job_specific_dependencies
-      .maybe_vits_dependencies
-      .as_ref()
-      .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing VITS dependencies".to_string())))?;
+  let model_dependencies = args.job_dependencies.job.job_specific_dependencies.maybe_vits_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("missing VITS dependencies".to_string())))?;
 
   // ==================== CONFIRM OR DOWNLOAD VITS DEPENDENCIES ==================== //
 
@@ -68,19 +57,9 @@ pub async fn process_job(args: VitsProcessJobArgs<'_>) -> Result<JobSuccessResul
     // NB: We're using traced models, not the original model files.
     // We generate these at time of upload from the original model files.
     // In the future we may need to "repair" broken models.
-    let vits_traced_synthesizer_object_path  = tts_model.vits_traced_synthesizer_object_path(&args.job_dependencies.buckets.bucket_path_unifier);
+    let vits_traced_synthesizer_object_path = tts_model.vits_traced_synthesizer_object_path(&args.job_dependencies.buckets.bucket_path_unifier);
 
-    maybe_download_file_from_bucket(MaybeDownloadArgs {
-      name_or_description_of_file: "vits traced tts model",
-      final_filesystem_file_path: &vits_traced_synthesizer_fs_path,
-      bucket_object_path: &vits_traced_synthesizer_object_path,
-      bucket_client: &args.job_dependencies.buckets.private_bucket_client,
-      job_progress_reporter: &mut job_progress_reporter,
-      job_progress_update_description: "downloading synthesizer",
-      job_id: job.id.0,
-      scoped_tempdir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads,
-      maybe_existing_file_minimum_size_required: None,
-    }).await?;
+    maybe_download_file_from_bucket(MaybeDownloadArgs { name_or_description_of_file: "vits traced tts model", final_filesystem_file_path: &vits_traced_synthesizer_fs_path, bucket_object_path: &vits_traced_synthesizer_object_path, bucket_client: &args.job_dependencies.buckets.private_bucket_client, job_progress_reporter: &mut job_progress_reporter, job_progress_update_description: "downloading synthesizer", job_id: job.id.0, scoped_tempdir_creator: &args.job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads, maybe_existing_file_minimum_size_required: None }).await?;
 
     vits_traced_synthesizer_fs_path
   };
@@ -98,18 +77,15 @@ pub async fn process_job(args: VitsProcessJobArgs<'_>) -> Result<JobSuccessResul
   let temp_dir = format!("temp_vits_tts_inference_{}", job.id.0);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let temp_dir = TempDir::new(&temp_dir)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let temp_dir = TempDir::new(&temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   let text_input_fs_path = temp_dir.path().join("inference_input.txt");
 
-  std::fs::write(&text_input_fs_path, &cleaned_inference_text)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  std::fs::write(&text_input_fs_path, &cleaned_inference_text).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   // ==================== SETUP FOR INFERENCE ==================== //
 
-  job_progress_reporter.log_status("running inference")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("running inference").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   let output_audio_fs_path = temp_dir.path().join("output.wav");
   let output_metadata_fs_path = temp_dir.path().join("metadata.json");
@@ -126,21 +102,13 @@ pub async fn process_job(args: VitsProcessJobArgs<'_>) -> Result<JobSuccessResul
   //  roughly 12 seconds max. Here we map seconds to decoder steps.
   //let max_decoder_steps = seconds_to_decoder_steps(job.max_duration_seconds);
 
-
   // ==================== RUN INFERENCE SCRIPT ==================== //
 
   let config_path = PathBuf::from("configs/ljs_li44_tmbert_nmp_s1_arpa.json"); // TODO: This could be variable.
 
   let inference_start_time = Instant::now();
 
-  let _r = model_dependencies.inference_command.execute_inference(VitsInferenceArgs {
-    model_checkpoint_path: &vits_traced_synthesizer_fs_path,
-    config_path: &config_path,
-    device: Device::Cuda,
-    input_text_filename: &text_input_fs_path,
-    output_audio_filename: &output_audio_fs_path,
-    output_metadata_filename: &output_metadata_fs_path,
-  });
+  let _r = model_dependencies.inference_command.execute_inference(VitsInferenceArgs { model_checkpoint_path: &vits_traced_synthesizer_fs_path, config_path: &config_path, device: Device::Cuda, input_text_filename: &text_input_fs_path, output_audio_filename: &output_audio_fs_path, output_metadata_filename: &output_metadata_fs_path });
 
   let inference_duration = Instant::now().duration_since(inference_start_time);
 
@@ -154,49 +122,41 @@ pub async fn process_job(args: VitsProcessJobArgs<'_>) -> Result<JobSuccessResul
   check_file_exists(&output_metadata_fs_path).map_err(|e| ProcessSingleJobError::Other(e))?;
   //check_file_exists(&output_spectrogram_fs_path).map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let file_metadata = read_metadata_file(&output_metadata_fs_path)
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  let file_metadata = read_metadata_file(&output_metadata_fs_path).map_err(|e| ProcessSingleJobError::Other(e))?;
 
   safe_delete_file(&output_metadata_fs_path);
 
   // ==================== UPLOAD AUDIO TO BUCKET ==================== //
 
-  job_progress_reporter.log_status("uploading result")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("uploading result").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let audio_result_object_path = args.job_dependencies.buckets.bucket_path_unifier.tts_inference_wav_audio_output_path(
-    &job.uuid_idempotency_token); // TODO: Don't use this!
+  let audio_result_object_path = args.job_dependencies.buckets.bucket_path_unifier.tts_inference_wav_audio_output_path(&job.uuid_idempotency_token); // TODO: Don't use this!
 
   info!("Audio destination bucket path: {:?}", &audio_result_object_path);
 
   info!("Uploading audio...");
 
-  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(
-    &audio_result_object_path,
-    &output_audio_fs_path,
-    "audio/wav")
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&audio_result_object_path, &output_audio_fs_path, "audio/wav").await.map_err(|e| ProcessSingleJobError::Other(e))?;
 
   safe_delete_file(&output_audio_fs_path);
 
-//  // ==================== UPLOAD SPECTROGRAM TO BUCKETS ==================== //
-//
-//  let spectrogram_result_object_path = args.job_dependencies.bucket_path_unifier.tts_inference_spectrogram_output_path(
-//    &job.uuid_idempotency_token); // TODO: Don't use this!
-//
-//  info!("Spectrogram destination bucket path: {:?}", &spectrogram_result_object_path);
-//
-//  info!("Uploading spectrogram...");
-//
-//  args.job_dependencies.public_bucket_client.upload_filename_with_content_type(
-//    &spectrogram_result_object_path,
-//    &output_spectrogram_fs_path,
-//    "application/json")
-//      .await
-//      .map_err(|e| ProcessSingleJobError::Other(e))?;
-//
-//  safe_delete_file(&output_spectrogram_fs_path);
+  //  // ==================== UPLOAD SPECTROGRAM TO BUCKETS ==================== //
+  //
+  //  let spectrogram_result_object_path = args.job_dependencies.bucket_path_unifier.tts_inference_spectrogram_output_path(
+  //    &job.uuid_idempotency_token); // TODO: Don't use this!
+  //
+  //  info!("Spectrogram destination bucket path: {:?}", &spectrogram_result_object_path);
+  //
+  //  info!("Uploading spectrogram...");
+  //
+  //  args.job_dependencies.public_bucket_client.upload_filename_with_content_type(
+  //    &spectrogram_result_object_path,
+  //    &output_spectrogram_fs_path,
+  //    "application/json")
+  //      .await
+  //      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  //
+  //  safe_delete_file(&output_spectrogram_fs_path);
 
   // ==================== DELETE DOWNLOADED FILE ==================== //
 
@@ -205,14 +165,13 @@ pub async fn process_job(args: VitsProcessJobArgs<'_>) -> Result<JobSuccessResul
 
   // ==================== SAVE RECORDS ==================== //
 
-  let text_hash = sha256_hash_string(&cleaned_inference_text)
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  let text_hash = sha256_hash_string(&cleaned_inference_text).map_err(|e| ProcessSingleJobError::Other(e))?;
 
   info!("Saving tts inference record...");
 
   // NB: The stupid DB field for spectrograms is not nullable, so we'll just set empty string.
   let fake_spectrogram_path = PathBuf::from("");
-  const NO_PRETRAINED_VOCODER : Option<VocoderType> = None;
+  const NO_PRETRAINED_VOCODER: Option<VocoderType> = None;
 
   let (id, inference_result_token) = insert_tts_result(
     &args.job_dependencies.db.mysql_pool,
@@ -225,35 +184,23 @@ pub async fn process_job(args: VitsProcessJobArgs<'_>) -> Result<JobSuccessResul
     file_metadata.duration_millis.unwrap_or(0),
     args.job_dependencies.job.info.container.is_on_prem,
     &args.job_dependencies.job.info.container.hostname,
-    args.job_dependencies.job.system.is_debug_worker)
-      .await
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+    args.job_dependencies.job.system.is_debug_worker,
+  )
+  .await
+  .map_err(|e| ProcessSingleJobError::Other(e))?;
 
   info!("TTS Done. Original text was: {:?}", &job.maybe_raw_inference_text);
 
-  args.job_dependencies.clients.firehose_publisher.tts_inference_finished(
-    job.maybe_creator_user_token.as_deref(),
-    tts_model.token(),
-    &inference_result_token)
-      .await
-      .map_err(|e| {
-        error!("error publishing event: {:?}", e);
-        ProcessSingleJobError::Other(anyhow!("error publishing event"))
-      })?;
+  args.job_dependencies.clients.firehose_publisher.tts_inference_finished(job.maybe_creator_user_token.as_deref(), tts_model.token(), &inference_result_token).await.map_err(|e| {
+    error!("error publishing event: {:?}", e);
+    ProcessSingleJobError::Other(anyhow!("error publishing event"))
+  })?;
 
-  job_progress_reporter.log_status("done")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  info!("Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model record: {}, Result Token: {}",
-        job.id, id, &inference_result_token);
+  info!("Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model record: {}, Result Token: {}", job.id, id, &inference_result_token);
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::TextToSpeech,
-      entity_token: inference_result_token
-    }),
-    inference_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::TextToSpeech, entity_token: inference_result_token }), inference_duration })
 }
 
 #[derive(Deserialize, Default)]

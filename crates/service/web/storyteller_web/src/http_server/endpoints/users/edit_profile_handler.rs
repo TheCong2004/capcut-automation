@@ -3,7 +3,6 @@
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
 
-
 use actix_web::web::Path;
 use actix_web::web::Json;
 use actix_web::{web, HttpRequest};
@@ -59,29 +58,18 @@ pub struct EditProfileSuccessResponse {
   pub success: bool,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn edit_profile_handler(
-  http_request: HttpRequest,
-  path: Path<EditProfilePathInfo>,
-  request: Json<EditProfileRequest>,
-  mysql_pool: web::Data<MySqlPool>,
-  redis_ttl_cache: web::Data<RedisTtlCache>,
-  session_checker: web::Data<SessionChecker>,
-) -> Result<Json<EditProfileSuccessResponse>, CommonWebError>
-{
-  let maybe_user_session = session_checker
-      .maybe_get_user_session(&http_request, &mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn edit_profile_handler(http_request: HttpRequest, path: Path<EditProfilePathInfo>, request: Json<EditProfileRequest>, mysql_pool: web::Data<MySqlPool>, redis_ttl_cache: web::Data<RedisTtlCache>, session_checker: web::Data<SessionChecker>) -> Result<Json<EditProfileSuccessResponse>, CommonWebError> {
+  let maybe_user_session = session_checker.maybe_get_user_session(&http_request, &mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if user_session.is_banned {
@@ -89,9 +77,7 @@ pub async fn edit_profile_handler(
     return Err(CommonWebError::NotAuthorized);
   }
 
-  let user_lookup_result =
-      get_user_profile_by_username(&path.username, &mysql_pool)
-      .await;
+  let user_lookup_result = get_user_profile_by_username(&path.username, &mysql_pool).await;
 
   let user_record = match user_lookup_result {
     Ok(Some(result)) => result,
@@ -99,7 +85,7 @@ pub async fn edit_profile_handler(
     Err(err) => {
       warn!("lookup error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   let mut editor_is_original_user = false;
@@ -215,47 +201,16 @@ pub async fn edit_profile_handler(
 
   let ip_address = get_request_ip(&http_request);
 
-  let preferred_tts_result_visibility = request.preferred_tts_result_visibility
-      .unwrap_or(Visibility::Hidden);
+  let preferred_tts_result_visibility = request.preferred_tts_result_visibility.unwrap_or(Visibility::Hidden);
 
-  let preferred_w2l_result_visibility = request.preferred_w2l_result_visibility
-      .unwrap_or(Visibility::Hidden);
+  let preferred_w2l_result_visibility = request.preferred_w2l_result_visibility.unwrap_or(Visibility::Hidden);
 
   let query_result = if editor_is_original_user {
-    edit_user_profile_as_account_holder(
-      &mysql_pool,
-      edit_user_profile_as_account_holder::Args {
-        user_token: &user_record.user_token.0,
-        profile_markdown: profile_markdown.as_deref(),
-        profile_html: profile_html.as_deref(),
-        discord_username: discord_username.as_deref(),
-        twitter_username: twitter_username.as_deref(),
-        cashapp_username: cashapp_username.as_deref(),
-        github_username: github_username.as_deref(),
-        twitch_username: twitch_username.as_deref(),
-        website_url: website_url.as_deref(),
-        preferred_tts_result_visibility: preferred_tts_result_visibility.to_str(),
-        preferred_w2l_result_visibility: preferred_w2l_result_visibility.to_str(),
-        ip_address: &ip_address,
-      }
-    ).await
+    edit_user_profile_as_account_holder(&mysql_pool, edit_user_profile_as_account_holder::Args { user_token: &user_record.user_token.0, profile_markdown: profile_markdown.as_deref(), profile_html: profile_html.as_deref(), discord_username: discord_username.as_deref(), twitter_username: twitter_username.as_deref(), cashapp_username: cashapp_username.as_deref(), github_username: github_username.as_deref(), twitch_username: twitch_username.as_deref(), website_url: website_url.as_deref(), preferred_tts_result_visibility: preferred_tts_result_visibility.to_str(), preferred_w2l_result_visibility: preferred_w2l_result_visibility.to_str(), ip_address: &ip_address }).await
   } else {
     // TODO(2022-09-01): We need to store the moderator details or have an audit log.
     // Also, mods shouldn't change user preferences.
-    edit_user_profile_as_mod(
-      &mysql_pool,
-      edit_user_profile_as_mod::Args {
-        user_token: &user_record.user_token.0,
-        profile_markdown: profile_markdown.as_deref(),
-        profile_html: profile_html.as_deref(),
-        discord_username: discord_username.as_deref(),
-        twitter_username: twitter_username.as_deref(),
-        cashapp_username: cashapp_username.as_deref(),
-        github_username: github_username.as_deref(),
-        twitch_username: twitch_username.as_deref(),
-        website_url: website_url.as_deref(),
-      }
-    ).await
+    edit_user_profile_as_mod(&mysql_pool, edit_user_profile_as_mod::Args { user_token: &user_record.user_token.0, profile_markdown: profile_markdown.as_deref(), profile_html: profile_html.as_deref(), discord_username: discord_username.as_deref(), twitter_username: twitter_username.as_deref(), cashapp_username: cashapp_username.as_deref(), github_username: github_username.as_deref(), twitch_username: twitch_username.as_deref(), website_url: website_url.as_deref() }).await
   };
 
   match query_result {
@@ -263,7 +218,7 @@ pub async fn edit_profile_handler(
     Err(err) => {
       warn!("Profile edit DB error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   // TODO: Clear Redis cache of sessions
@@ -272,19 +227,14 @@ pub async fn edit_profile_handler(
   //  This makes sense for non-mods and should solve 95% of cases.
   if let Some(session_token) = session_checker.forgiving_get_session_token(&http_request) {
     if let Ok(mut redis_ttl_cache) = redis_ttl_cache.get_connection() {
-      let keys = vec![
-        RedisCacheKeys::session_record_user(&session_token),
-        RedisCacheKeys::session_record_light(&session_token),
-      ];
+      let keys = vec![RedisCacheKeys::session_record_user(&session_token), RedisCacheKeys::session_record_light(&session_token)];
       for key in keys.iter() {
         let _r = redis_ttl_cache.delete_from_cache(key).ok();
       }
     }
   }
 
-  let response = EditProfileSuccessResponse {
-    success: true,
-  };
+  let response = EditProfileSuccessResponse { success: true };
 
   Ok(Json(response))
 }

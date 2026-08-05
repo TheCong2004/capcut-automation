@@ -30,49 +30,20 @@ pub struct NewSsoAccountInfo {
   pub is_new_account: bool,
 }
 
-pub async fn handle_new_sso_account(
-  args: NewSsoArgs<'_>
-)
-  -> Result<NewSsoAccountInfo, CommonWebError>
-{
+pub async fn handle_new_sso_account(args: NewSsoArgs<'_>) -> Result<NewSsoAccountInfo, CommonWebError> {
   // NB: We use this routine to "normalize" email addresses in the user table.
   // It won't necessarily match the email address in the Google claims.
   // A better normalization function in the future may handle dots and plus
   // signs in Gmail addresses, for instance.
   let user_email_address = canonicalize_email_for_users_table(&args.claims_email_address);
 
-  let maybe_user_account =
-      lookup_user_for_login_by_email_with_transactor(&user_email_address, Transactor::for_connection(args.mysql_connection))
-          .await
-          .map_err(|err| {
-            warn!("error looking up user by email: {:?}", err);
-            CommonWebError::from_anyhow_error(err)
-          })?;
+  let maybe_user_account = lookup_user_for_login_by_email_with_transactor(&user_email_address, Transactor::for_connection(args.mysql_connection)).await.map_err(|err| {
+    warn!("error looking up user by email: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
   match maybe_user_account {
-    Some(user_account) => {
-      handle_new_sso_account_for_existing_user(LinkArgs {
-        http_request: args.http_request,
-        claims: args.claims,
-        claims_subject: args.claims_subject,
-        claims_email_address: &args.claims_email_address,
-        user_account,
-        mysql_connection: args.mysql_connection,
-      }).await
-    },
-    None => {
-      handle_new_sso_account_for_new_user(CreateArgs {
-        http_request: args.http_request,
-        claims: args.claims,
-        claims_subject: args.claims_subject,
-        claims_email_address: &args.claims_email_address,
-        user_email_address: &user_email_address,
-        mysql_connection: args.mysql_connection,
-        maybe_referral_url: args.maybe_referral_url,
-        maybe_landing_url: args.maybe_landing_url,
-        maybe_referral_partner: args.maybe_referral_partner,
-        maybe_referral_user_token: args.maybe_referral_user_token,
-      }).await
-    },
+    Some(user_account) => handle_new_sso_account_for_existing_user(LinkArgs { http_request: args.http_request, claims: args.claims, claims_subject: args.claims_subject, claims_email_address: &args.claims_email_address, user_account, mysql_connection: args.mysql_connection }).await,
+    None => handle_new_sso_account_for_new_user(CreateArgs { http_request: args.http_request, claims: args.claims, claims_subject: args.claims_subject, claims_email_address: &args.claims_email_address, user_email_address: &user_email_address, mysql_connection: args.mysql_connection, maybe_referral_url: args.maybe_referral_url, maybe_landing_url: args.maybe_landing_url, maybe_referral_partner: args.maybe_referral_partner, maybe_referral_user_token: args.maybe_referral_user_token }).await,
   }
 }

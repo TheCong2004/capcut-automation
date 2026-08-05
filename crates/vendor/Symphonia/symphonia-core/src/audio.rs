@@ -102,8 +102,7 @@ impl Iterator for ChannelsIter {
             let channel = Channels::from_bits_truncate(1 << self.channels.bits.trailing_zeros());
             self.channels ^= channel;
             Some(channel)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -198,8 +197,7 @@ impl<'a, S: Sample> AudioPlanes<'a, S> {
 
         if n_planes <= AUDIO_PLANES_STORAGE_STACK_LIMIT {
             AudioPlanes { planes: AudioPlaneStorage::Stack(ArrayVec::new()) }
-        }
-        else {
+        } else {
             AudioPlanes { planes: AudioPlaneStorage::Heap(Vec::with_capacity(n_planes)) }
         }
     }
@@ -245,8 +243,7 @@ impl<'a, S: Sample> AudioPlanesMut<'a, S> {
 
         if n_planes <= AUDIO_PLANES_STORAGE_STACK_LIMIT {
             AudioPlanesMut { planes: AudioPlaneStorageMut::Stack(ArrayVec::new()) }
-        }
-        else {
+        } else {
             AudioPlanesMut { planes: AudioPlaneStorageMut::Heap(Vec::with_capacity(n_planes)) }
         }
     }
@@ -594,8 +591,7 @@ impl<S: Sample> Signal<S> for AudioBuffer<S> {
             let (a, b) = self.buf.split_at_mut(second_idx);
 
             (&mut a[first_idx..first_idx + self.n_frames], &mut b[..self.n_frames])
-        }
-        else {
+        } else {
             let (a, b) = self.buf.split_at_mut(first_idx);
 
             (&mut b[..self.n_frames], &mut a[second_idx..second_idx + self.n_frames])
@@ -678,8 +674,7 @@ impl<S: Sample> Signal<S> for AudioBuffer<S> {
     fn shift(&mut self, shift: usize) {
         if shift >= self.n_frames {
             self.clear();
-        }
-        else if shift > 0 {
+        } else if shift > 0 {
             // Shift the samples down in each plane.
             for plane in self.buf.chunks_mut(self.n_capacity) {
                 plane.copy_within(shift..self.n_frames, 0);

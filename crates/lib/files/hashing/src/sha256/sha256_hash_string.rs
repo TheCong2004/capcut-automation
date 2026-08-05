@@ -16,10 +16,8 @@ mod tests {
 
   #[test]
   fn test_sha256_hash_string() {
-    assert_eq!(sha256_hash_string("test").unwrap(),
-               "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
+    assert_eq!(sha256_hash_string("test").unwrap(), "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
 
-    assert_eq!(sha256_hash_string("foo").unwrap(),
-               "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae");
+    assert_eq!(sha256_hash_string("foo").unwrap(), "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae");
   }
 }

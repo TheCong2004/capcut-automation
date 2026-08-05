@@ -11,14 +11,8 @@ use crate::http_server::endpoints::characters::list_characters_handler::list_cha
 
 pub fn add_character_routes<T, B>(app: App<T>) -> App<T>
 where
-    B: MessageBody,
-    T: ServiceFactory<
-      ServiceRequest,
-      Config = (),
-      Response = ServiceResponse<B>,
-      Error = Error,
-      InitError = (),
-    >,
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
   app
     // List characters for the current session

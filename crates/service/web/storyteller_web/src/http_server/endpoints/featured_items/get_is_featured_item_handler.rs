@@ -43,12 +43,7 @@ pub struct GetIsFeaturedItemSuccessResponse {
     (status = 400, body = CommonWebError),
   )
 )]
-pub async fn get_is_featured_item_handler(
-  http_request: HttpRequest,
-  path: Path<GetIsFeaturedItemPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<GetIsFeaturedItemSuccessResponse>, CommonWebError>
-{
+pub async fn get_is_featured_item_handler(http_request: HttpRequest, path: Path<GetIsFeaturedItemPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetIsFeaturedItemSuccessResponse>, CommonWebError> {
   // NB(bt,2023-12-14): Kasisnu found that we're getting entity type mismatches in production. Apart from
   // querying the database for entity existence, this is the next best way to prevent incorrect comment
   // attachment. This is a bit of a bad process, though, since the token types are supposed to be opaque.
@@ -67,15 +62,10 @@ pub async fn get_is_featured_item_handler(
 
   let entity = FeaturedItemEntity::from_entity_type_and_token(path.entity_type, &path.entity_token);
 
-  let is_featured = get_is_featured_by_token(&entity, &server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        warn!("MySql error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let is_featured = get_is_featured_by_token(&entity, &server_state.mysql_pool).await.map_err(|err| {
+    warn!("MySql error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  Ok(Json(GetIsFeaturedItemSuccessResponse {
-    success: true,
-    is_featured: is_featured.is_featured,
-  }))
+  Ok(Json(GetIsFeaturedItemSuccessResponse { success: true, is_featured: is_featured.is_featured }))
 }

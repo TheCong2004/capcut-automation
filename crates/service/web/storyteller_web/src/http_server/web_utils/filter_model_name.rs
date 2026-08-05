@@ -1,12 +1,6 @@
-
 pub fn filter_model_name(name: &str) -> String {
   // We're not revealing some of the models we use
-  name.replace("sadtalker", "faceanimator")
-      .replace("sad-talker", "face-animator")
-      .replace("sad_talker", "face_animator")
-      .replace("vall-e-x", "voice_designer")
-      .replace("vall_e_x", "voice_designer")
-      .replace("vallex", "voice_designer")
+  name.replace("sadtalker", "faceanimator").replace("sad-talker", "face-animator").replace("sad_talker", "face_animator").replace("vall-e-x", "voice_designer").replace("vall_e_x", "voice_designer").replace("vallex", "voice_designer")
 }
 
 pub fn maybe_filter_model_name(name: Option<&str>) -> Option<String> {

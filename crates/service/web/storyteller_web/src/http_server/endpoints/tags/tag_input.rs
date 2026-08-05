@@ -18,21 +18,14 @@ pub const MAX_TAG_LENGTH_CHARS: usize = 255;
 /// An empty RESULT is not an error here — "set to nothing" is a valid
 /// clear operation. Endpoints where zero tags makes no sense (the adds)
 /// should follow up with [`require_non_empty_tags`].
-pub fn parse_tag_input(
-  maybe_tags: Option<&str>,
-  maybe_tags_list: Option<&[String]>,
-) -> Result<Vec<NewTagValue>, CommonWebError> {
+pub fn parse_tag_input(maybe_tags: Option<&str>, maybe_tags_list: Option<&[String]>) -> Result<Vec<NewTagValue>, CommonWebError> {
   let raw_values: Vec<&str> = match (maybe_tags, maybe_tags_list) {
     (Some(_), Some(_)) => {
-      return Err(CommonWebError::BadInputWithSimpleMessage(
-        "supply either maybe_tags or maybe_tags_list, not both".to_string(),
-      ));
-    }
+      return Err(CommonWebError::BadInputWithSimpleMessage("supply either maybe_tags or maybe_tags_list, not both".to_string()));
+    },
     (None, None) => {
-      return Err(CommonWebError::BadInputWithSimpleMessage(
-        "supply one of maybe_tags or maybe_tags_list".to_string(),
-      ));
-    }
+      return Err(CommonWebError::BadInputWithSimpleMessage("supply one of maybe_tags or maybe_tags_list".to_string()));
+    },
     (Some(csv), None) => csv.split(',').collect(),
     (None, Some(list)) => list.iter().map(|s| s.as_str()).collect(),
   };
@@ -49,28 +42,19 @@ pub fn parse_tag_input(
     // lowercasing can EXPAND a string (e.g. 'İ' U+0130 lowercases to
     // "i\u{307}", two chars), and both columns are VARCHAR(255).
     let lowercase = trimmed.to_lowercase();
-    if trimmed.chars().count() > MAX_TAG_LENGTH_CHARS
-      || lowercase.chars().count() > MAX_TAG_LENGTH_CHARS
-    {
-      return Err(CommonWebError::BadInputWithSimpleMessage(
-        format!("tag is too long (max {} characters)", MAX_TAG_LENGTH_CHARS),
-      ));
+    if trimmed.chars().count() > MAX_TAG_LENGTH_CHARS || lowercase.chars().count() > MAX_TAG_LENGTH_CHARS {
+      return Err(CommonWebError::BadInputWithSimpleMessage(format!("tag is too long (max {} characters)", MAX_TAG_LENGTH_CHARS)));
     }
 
     if !seen_lowercase.insert(lowercase.clone()) {
       continue;
     }
 
-    new_tags.push(NewTagValue {
-      tag_value: trimmed.to_string(),
-      tag_value_lowercase: lowercase,
-    });
+    new_tags.push(NewTagValue { tag_value: trimmed.to_string(), tag_value_lowercase: lowercase });
   }
 
   if new_tags.len() > MAX_TAGS_PER_REQUEST {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("too many tags in one request (max {})", MAX_TAGS_PER_REQUEST),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage(format!("too many tags in one request (max {})", MAX_TAGS_PER_REQUEST)));
   }
 
   Ok(new_tags)
@@ -80,9 +64,7 @@ pub fn parse_tag_input(
 /// "add nothing" is a client bug rather than a clear operation.
 pub fn require_non_empty_tags(new_tags: &[NewTagValue]) -> Result<(), CommonWebError> {
   if new_tags.is_empty() {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "no tags supplied after trimming".to_string(),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage("no tags supplied after trimming".to_string()));
   }
   Ok(())
 }

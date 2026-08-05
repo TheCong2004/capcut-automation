@@ -9,7 +9,7 @@ pub enum RunwayMlError {
   Client(ClientError),
 }
 
-impl Display for RunwayMlError{
+impl Display for RunwayMlError {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::Api(err) => write!(f, "ApiError: {}", err),

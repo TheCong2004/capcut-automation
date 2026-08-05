@@ -15,10 +15,10 @@ use errors::AnyhowResult;
 use logging::{error, info, init_env_logger, TYPICAL_LOG_LEVEL};
 
 /// TTS models start with this prefix, eg. "TM:r60rp93g7d1x"
-const TTS_MODEL_PREFIX : &str = "TM:";
+const TTS_MODEL_PREFIX: &str = "TM:";
 
 /// VM models start with this prefix, eg. "VM:8jbc6dh0b77d"
-const VOCODER_MODEL_PREFIX : &str = "VM:";
+const VOCODER_MODEL_PREFIX: &str = "VM:";
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -83,19 +83,20 @@ fn delete_files_loop(args: CliArgs) {
 }
 
 fn find_model_files(directory: &str) -> Vec<PathBuf> {
-  WalkDir::new(directory).into_iter()
-      .filter_map(Result::ok)
-      .filter(|e| !e.file_type().is_dir())
-      .map(|e| e.path().canonicalize())
-      .filter_map(Result::ok)
-      .filter(|path| {
-        path.file_name()
+  WalkDir::new(directory)
+    .into_iter()
+    .filter_map(Result::ok)
+    .filter(|e| !e.file_type().is_dir())
+    .map(|e| e.path().canonicalize())
+    .filter_map(Result::ok)
+    .filter(|path| {
+      path.file_name()
             .and_then(|f| f.to_str())
             .map(|f| f.starts_with(TTS_MODEL_PREFIX) || f.starts_with(VOCODER_MODEL_PREFIX))
             //.map(|f| f.ends_with(".jpg") || f.starts_with("README"))
             .unwrap_or(false)
-      })
-      .collect::<Vec<_>>()
+    })
+    .collect::<Vec<_>>()
 }
 
 fn scope_to_files_to_remove(files: Vec<PathBuf>, keep_count: usize) -> Vec<PathBuf> {
@@ -112,13 +113,5 @@ fn scope_to_files_to_remove(files: Vec<PathBuf>, keep_count: usize) -> Vec<PathB
 }
 
 fn file_metadata_map(files: Vec<PathBuf>) -> BTreeMap<SystemTime, FileData> {
-  files.into_iter()
-      .map(|path| FileData {
-        last_access: path.metadata()
-            .and_then(|m| m.accessed())
-            .unwrap_or(SystemTime::UNIX_EPOCH),
-        path,
-      })
-      .map(|file_data| (file_data.last_access, file_data))
-      .collect::<BTreeMap<SystemTime, FileData>>()
+  files.into_iter().map(|path| FileData { last_access: path.metadata().and_then(|m| m.accessed()).unwrap_or(SystemTime::UNIX_EPOCH), path }).map(|file_data| (file_data.last_access, file_data)).collect::<BTreeMap<SystemTime, FileData>>()
 }

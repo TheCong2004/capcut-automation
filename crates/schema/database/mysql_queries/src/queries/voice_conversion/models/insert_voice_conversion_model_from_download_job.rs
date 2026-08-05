@@ -34,21 +34,14 @@ pub struct InsertVoiceConversionModelArgs<'a, P: AsRef<Path>> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-
-pub async fn insert_voice_conversion_model_from_download_job<P: AsRef<Path>>(
-  args: InsertVoiceConversionModelArgs<'_, P>,
-) -> AnyhowResult<(u64, VoiceConversionModelToken)> {
-
+pub async fn insert_voice_conversion_model_from_download_job<P: AsRef<Path>>(args: InsertVoiceConversionModelArgs<'_, P>) -> AnyhowResult<(u64, VoiceConversionModelToken)> {
   let model_token = VoiceConversionModelToken::generate();
 
-  let private_bucket_object_name = &args.private_bucket_object_name
-      .as_ref()
-      .display()
-      .to_string();
+  let private_bucket_object_name = &args.private_bucket_object_name.as_ref().display().to_string();
 
   // NB: 'rocket_vc' is codename for 'softvc'
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO voice_conversion_models
 SET
   token = ?,
@@ -66,21 +59,21 @@ SET
   file_size_bytes = ?,
   maybe_migration_new_model_weights_token = ?
         "#,
-      &model_token,
-      args.model_type.to_str(),
-      args.title,
-      args.creator_user_token,
-      args.creator_ip_address,
-      args.creator_ip_address,
-      args.original_download_url,
-      args.has_index_file,
-      args.private_bucket_hash,
-      private_bucket_object_name,
-      args.file_size_bytes,
-      args.maybe_new_weights_token,
-    )
-      .execute(args.mysql_pool)
-      .await;
+    &model_token,
+    args.model_type.to_str(),
+    args.title,
+    args.creator_user_token,
+    args.creator_ip_address,
+    args.creator_ip_address,
+    args.original_download_url,
+    args.has_index_file,
+    args.private_bucket_hash,
+    private_bucket_object_name,
+    args.file_size_bytes,
+    args.maybe_new_weights_token,
+  )
+  .execute(args.mysql_pool)
+  .await;
 
   let record_id = match query_result {
     Ok(res) => res.last_insert_id(),

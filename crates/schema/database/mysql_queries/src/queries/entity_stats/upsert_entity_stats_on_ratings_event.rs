@@ -32,7 +32,8 @@ pub enum RatingsAction {
 }
 
 pub struct UpsertEntityStatsArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub stats_entity_token: &'e StatsEntityToken,
   pub action: RatingsAction,
@@ -43,10 +44,9 @@ pub struct UpsertEntityStatsArgs<'e, 'c, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn upsert_entity_stats_on_ratings_event<'e, 'c : 'e, E>(
-  args: UpsertEntityStatsArgs<'e, 'c, E>,
-) -> AnyhowResult<()>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn upsert_entity_stats_on_ratings_event<'e, 'c: 'e, E>(args: UpsertEntityStatsArgs<'e, 'c, E>) -> AnyhowResult<()>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let (entity_type, entity_token) = args.stats_entity_token.get_composite_keys();
 
@@ -64,7 +64,7 @@ pub async fn upsert_entity_stats_on_ratings_event<'e, 'c : 'e, E>(
         entity_type,
         entity_token,
       )
-    }
+    },
     RatingsAction::NeutralToNegative => {
       sqlx::query!(
         r#"
@@ -78,7 +78,7 @@ pub async fn upsert_entity_stats_on_ratings_event<'e, 'c : 'e, E>(
         entity_type,
         entity_token,
       )
-    }
+    },
     RatingsAction::PositiveToNeutral => {
       sqlx::query!(
         r#"
@@ -92,7 +92,7 @@ pub async fn upsert_entity_stats_on_ratings_event<'e, 'c : 'e, E>(
         entity_type,
         entity_token,
       )
-    }
+    },
     RatingsAction::NegativeToNeutral => {
       sqlx::query!(
         r#"
@@ -106,7 +106,7 @@ pub async fn upsert_entity_stats_on_ratings_event<'e, 'c : 'e, E>(
         entity_type,
         entity_token,
       )
-    }
+    },
     RatingsAction::PositiveToNegative => {
       sqlx::query!(
         r#"
@@ -122,7 +122,7 @@ pub async fn upsert_entity_stats_on_ratings_event<'e, 'c : 'e, E>(
         entity_type,
         entity_token,
       )
-    }
+    },
     RatingsAction::NegativeToPositive => {
       sqlx::query!(
         r#"
@@ -138,7 +138,7 @@ pub async fn upsert_entity_stats_on_ratings_event<'e, 'c : 'e, E>(
         entity_type,
         entity_token,
       )
-    }
+    },
   };
 
   let query_result = query.execute(args.mysql_executor).await;

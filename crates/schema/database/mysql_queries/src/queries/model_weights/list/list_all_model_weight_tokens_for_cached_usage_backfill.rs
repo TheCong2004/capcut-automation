@@ -13,10 +13,9 @@ pub struct ModelWeightInfo {
 /// NB: This doesn't batch yet at our scale, but in the future we'll likely need/want to batch,
 /// and then we'll need another way to cursor in the event that batch_size < # records updated
 /// within a given time quantum.
-pub async fn list_all_model_weight_tokens_for_cached_usage_backfill<'e, 'c, E>(
-  mysql_executor: E,
-) -> AnyhowResult<Vec<ModelWeightInfo>>
-    where E: 'e + Executor<'c, Database=MySql>
+pub async fn list_all_model_weight_tokens_for_cached_usage_backfill<'e, 'c, E>(mysql_executor: E) -> AnyhowResult<Vec<ModelWeightInfo>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let query = sqlx::query_as!(
     RawRecord,
@@ -30,12 +29,7 @@ pub async fn list_all_model_weight_tokens_for_cached_usage_backfill<'e, 'c, E>(
 
   let results = query.fetch_all(mysql_executor).await?;
 
-  let results = results.into_iter()
-      .map(|record| ModelWeightInfo {
-        token: record.token,
-        cached_usage_count: record.cached_usage_count,
-      })
-      .collect();
+  let results = results.into_iter().map(|record| ModelWeightInfo { token: record.token, cached_usage_count: record.cached_usage_count }).collect();
 
   Ok(results)
 }

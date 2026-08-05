@@ -36,21 +36,11 @@ pub struct SessionTokenInfoSuccessResponse {
     (status = 500, description = "Server error", body = CommonWebError),
   ),
 )]
-pub async fn session_token_info_handler(
-  http_request: HttpRequest,
-  session_checker: web::Data<SessionChecker>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<SessionTokenInfoSuccessResponse>, CommonWebError>
-{
-  let maybe_session_payload = server_state
-      .session_cookie_manager
-      .check_and_return_session_token_decodes(&http_request)
-      .map_err(|e| {
-        warn!("Session cookie decode error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn session_token_info_handler(http_request: HttpRequest, session_checker: web::Data<SessionChecker>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SessionTokenInfoSuccessResponse>, CommonWebError> {
+  let maybe_session_payload = server_state.session_cookie_manager.check_and_return_session_token_decodes(&http_request).map_err(|e| {
+    warn!("Session cookie decode error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  Ok(Json(SessionTokenInfoSuccessResponse {
-    maybe_signed_session: maybe_session_payload,
-  }))
+  Ok(Json(SessionTokenInfoSuccessResponse { maybe_signed_session: maybe_session_payload }))
 }

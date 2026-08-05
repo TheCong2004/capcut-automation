@@ -19,9 +19,7 @@ where
 /// The distinct tag tokens the user currently has linked to the given
 /// media files. Called before a destructive set/clear so we know which
 /// tags need their `use_count` recounted afterwards.
-pub async fn list_linked_tag_tokens_for_media_files<'e, 'c: 'e, E>(
-  args: ListLinkedTagTokensForMediaFilesArgs<'e, 'c, E>,
-) -> Result<Vec<TagToken>, sqlx::Error>
+pub async fn list_linked_tag_tokens_for_media_files<'e, 'c: 'e, E>(args: ListLinkedTagTokensForMediaFilesArgs<'e, 'c, E>) -> Result<Vec<TagToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -29,9 +27,7 @@ where
     return Ok(Vec::new());
   }
 
-  let mut builder = QueryBuilder::<MySql>::new(
-    "SELECT DISTINCT tag_token FROM media_file_tags WHERE user_token = ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("SELECT DISTINCT tag_token FROM media_file_tags WHERE user_token = ");
   builder.push_bind(args.user_token.as_str());
 
   builder.push(" AND media_file_token IN (");
@@ -43,7 +39,5 @@ where
 
   let rows = builder.build().fetch_all(args.mysql_executor).await?;
 
-  Ok(rows.into_iter()
-    .map(|row| TagToken::new(row.get::<String, _>(0)))
-    .collect())
+  Ok(rows.into_iter().map(|row| TagToken::new(row.get::<String, _>(0))).collect())
 }

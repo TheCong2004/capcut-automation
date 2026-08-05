@@ -36,19 +36,17 @@ pub struct InsertEmailSenderJobArgs<'a> {
 pub async fn insert_email_sender_job(args: InsertEmailSenderJobArgs<'_>) -> AnyhowResult<(EmailSenderJobToken, u64)> {
   let job_token = EmailSenderJobToken::generate();
 
-  let serialized_args_payload = serde_json::ser::to_string(&args.maybe_email_args)
-      .map_err(|_e| anyhow!("could not encode inference args"))?;
+  let serialized_args_payload = serde_json::ser::to_string(&args.maybe_email_args).map_err(|_e| anyhow!("could not encode inference args"))?;
 
   // The routing tag column is VARCHAR(32), so we should truncate.
-  let maybe_routing_tag = args.maybe_routing_tag
-      .map(|routing_tag| {
-        let mut routing_tag = routing_tag.trim().to_string();
-        routing_tag.truncate(32);
-        routing_tag
-      });
+  let maybe_routing_tag = args.maybe_routing_tag.map(|routing_tag| {
+    let mut routing_tag = routing_tag.trim().to_string();
+    routing_tag.truncate(32);
+    routing_tag
+  });
 
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO email_sender_jobs
 SET
   token = ?,
@@ -74,38 +72,29 @@ SET
 
   status = "pending"
         "#,
-        job_token.as_str(),
-        args.uuid_idempotency_token,
+    job_token.as_str(),
+    args.uuid_idempotency_token,
+    args.destination_email_address,
+    args.maybe_destination_user_token,
+    args.email_category,
+    serialized_args_payload,
+    args.ietf_language_tag,
+    args.ietf_primary_language_subtag,
+    args.maybe_creator_user_token.map(|t| t.to_string()),
+    args.maybe_avt_token.map(|t| t.to_string()),
+    args.creator_ip_address,
+    args.priority_level,
+    args.is_debug_request,
+    maybe_routing_tag,
+  );
 
-        args.destination_email_address,
-        args.maybe_destination_user_token,
-
-        args.email_category,
-        serialized_args_payload,
-
-        args.ietf_language_tag,
-        args.ietf_primary_language_subtag,
-
-        args.maybe_creator_user_token.map(|t| t.to_string()),
-        args.maybe_avt_token.map(|t| t.to_string()),
-        args.creator_ip_address,
-
-        args.priority_level,
-
-        args.is_debug_request,
-        maybe_routing_tag,
-    );
-
-  let query_result = query.execute(args.mysql_pool)
-      .await;
+  let query_result = query.execute(args.mysql_pool).await;
 
   let record_id = match query_result {
-    Ok(res) => {
-      res.last_insert_id()
-    },
+    Ok(res) => res.last_insert_id(),
     Err(err) => {
       return Err(anyhow!("error inserting new generic inference job: {:?}", err));
-    }
+    },
   };
 
   Ok((job_token, record_id))

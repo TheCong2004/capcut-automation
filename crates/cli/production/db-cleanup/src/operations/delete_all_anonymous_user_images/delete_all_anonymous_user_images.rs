@@ -23,18 +23,7 @@ pub async fn delete_all_anonymous_user_images(_args: &Args, mysql: &Pool<MySql>)
   loop {
     info!("Querying page {page_index} of files...");
 
-    let media_files = list_media_files(ListMediaFilesArgs {
-      limit: 100,
-      maybe_filter_media_types: Some(&HashSet::from([MediaFileType::Image])),
-      maybe_filter_media_classes: None,
-      maybe_offset,
-      cursor_is_reversed: false,
-      sort_ascending: false,
-      view_as: ViewAs::Moderator,
-      mysql_pool: &mysql,
-      maybe_filter_engine_categories: None,
-      include_user_uploads: true,
-    }).await?;
+    let media_files = list_media_files(ListMediaFilesArgs { limit: 100, maybe_filter_media_types: Some(&HashSet::from([MediaFileType::Image])), maybe_filter_media_classes: None, maybe_offset, cursor_is_reversed: false, sort_ascending: false, view_as: ViewAs::Moderator, mysql_pool: &mysql, maybe_filter_engine_categories: None, include_user_uploads: true }).await?;
 
     if media_files.records.is_empty() {
       break;
@@ -51,7 +40,7 @@ pub async fn delete_all_anonymous_user_images(_args: &Args, mysql: &Pool<MySql>)
         _ => {
           info!("Skipping file: {:?} , which is not an image", &file.token);
           continue;
-        }
+        },
       }
 
       info!("Deleting image file: {:?}", &file.token);

@@ -21,12 +21,9 @@ pub struct UpdateGoogleSignInArgs<'e, 't> {
   pub transactor: Transactor<'e, 't>,
 }
 
-pub async fn update_google_sign_in_account<'e, 't>(
-  args: UpdateGoogleSignInArgs<'e, 't>
-) -> AnyhowResult<()>
-{
+pub async fn update_google_sign_in_account<'e, 't>(args: UpdateGoogleSignInArgs<'e, 't>) -> AnyhowResult<()> {
   let query = sqlx::query!(
-      r#"
+    r#"
 UPDATE google_sign_in_accounts
 SET
   email_address = ?,

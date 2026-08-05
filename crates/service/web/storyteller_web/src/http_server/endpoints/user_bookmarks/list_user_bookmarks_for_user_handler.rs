@@ -46,7 +46,6 @@ pub struct ListUserBookmarksQueryData {
 
   // TODO(bt,2023-12-28): Should these scope clauses be in an enum / one_of so that callers can only apply one type of
   //  scope at a time? They're kind of meaningless when used in conjunction.
-
   /// Scope to a particular type of entity (there are lots). Note that some types are deprecated
   /// and will no longer be valid soon: TtsModel, TtsResult, W2lTemplate, W2lResult,
   /// VoiceConversionModel. See `maybe_scoped_weight_type`, `maybe_scoped_weight_category`,
@@ -107,7 +106,7 @@ pub struct MediaFileData {
   pub media_type: MediaFileType,
 
   /// (DEPRECATED) URL path to the media file
-  #[deprecated(note="This field doesn't point to the full URL. Use media_links instead to leverage the CDN.")]
+  #[deprecated(note = "This field doesn't point to the full URL. Use media_links instead to leverage the CDN.")]
   pub public_bucket_path: String,
 
   /// Rich CDN links to the media, including thumbnails, previews, and more.
@@ -148,7 +147,7 @@ pub enum ListUserBookmarksForUserError {
 impl ResponseError for ListUserBookmarksForUserError {
   fn status_code(&self) -> StatusCode {
     match *self {
-      ListUserBookmarksForUserError::ServerError=> StatusCode::INTERNAL_SERVER_ERROR,
+      ListUserBookmarksForUserError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
     }
   }
 
@@ -181,167 +180,100 @@ impl fmt::Display for ListUserBookmarksForUserError {
     (status = 500, description = "Server error", body = ListUserBookmarksForUserError),
   ),
 )]
-pub async fn list_user_bookmarks_for_user_handler(
-  http_request: HttpRequest,
-  path: Path<ListUserBookmarksPathInfo>,
-  query: Query<ListUserBookmarksQueryData>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListUserBookmarksForUserSuccessResponse>, ListUserBookmarksForUserError>
-{
+pub async fn list_user_bookmarks_for_user_handler(http_request: HttpRequest, path: Path<ListUserBookmarksPathInfo>, query: Query<ListUserBookmarksQueryData>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListUserBookmarksForUserSuccessResponse>, ListUserBookmarksForUserError> {
   let sort_ascending = query.sort_ascending.unwrap_or(false);
   let page_size = query.page_size.unwrap_or(25);
   let page_index = query.page_index.unwrap_or(0);
 
-  let query_results =
-      list_user_bookmarks_by_maybe_entity_type(ListUserBookmarksForUserArgs{
-        username: path.username.as_ref(),
-        maybe_filter_entity_type: query.maybe_scoped_entity_type,
-        maybe_filter_weight_type: query.maybe_scoped_weight_type,
-        maybe_filter_weight_category: query.maybe_scoped_weight_category,
-        maybe_filter_media_file_type: query.maybe_scoped_media_file_type,
-        sort_ascending,
-        page_size,
-        page_index,
-        mysql_pool: &server_state.mysql_pool,
-      }).await;
+  let query_results = list_user_bookmarks_by_maybe_entity_type(ListUserBookmarksForUserArgs { username: path.username.as_ref(), maybe_filter_entity_type: query.maybe_scoped_entity_type, maybe_filter_weight_type: query.maybe_scoped_weight_type, maybe_filter_weight_category: query.maybe_scoped_weight_category, maybe_filter_media_file_type: query.maybe_scoped_media_file_type, sort_ascending, page_size, page_index, mysql_pool: &server_state.mysql_pool }).await;
 
   let results_page = match query_results {
     Ok(results) => results,
     Err(e) => {
       warn!("Query error: {:?}", e);
       return Err(ListUserBookmarksForUserError::ServerError);
-    }
+    },
   };
 
   let media_domain = get_media_domain(&http_request);
 
   let response = ListUserBookmarksForUserSuccessResponse {
     success: true,
-    results: results_page.results.into_iter()
-        .map(|user_bookmark| {
-          let maybe_media_file_bucket_path = user_bookmark.maybe_media_file_public_bucket_hash
-              .as_deref()
-              .map(|hash| {
-                MediaFileBucketPath::from_object_hash(
-                  hash,
-                  user_bookmark.maybe_media_file_public_bucket_prefix.as_deref(),
-                  user_bookmark.maybe_media_file_public_bucket_extension.as_deref())
-              });
+    results: results_page
+      .results
+      .into_iter()
+      .map(|user_bookmark| {
+        let maybe_media_file_bucket_path = user_bookmark.maybe_media_file_public_bucket_hash.as_deref().map(|hash| MediaFileBucketPath::from_object_hash(hash, user_bookmark.maybe_media_file_public_bucket_prefix.as_deref(), user_bookmark.maybe_media_file_public_bucket_extension.as_deref()));
 
-          let maybe_media_file_media_links = maybe_media_file_bucket_path.as_ref()
-              .map(|bucket_path| MediaLinksBuilder::from_media_path_and_env(
-                media_domain, 
-                server_state.server_environment,
-                bucket_path));
+        let maybe_media_file_media_links = maybe_media_file_bucket_path.as_ref().map(|bucket_path| MediaLinksBuilder::from_media_path_and_env(media_domain, server_state.server_environment, bucket_path));
 
-          let mut maybe_media_file_cover = None;
-          let mut maybe_model_weight_cover = None;
+        let mut maybe_media_file_cover = None;
+        let mut maybe_model_weight_cover = None;
 
-          match user_bookmark.entity_type {
-            UserBookmarkEntityType::MediaFile => {
-              maybe_media_file_cover = Some(MediaFileCoverImageDetails::from_optional_db_fields(
-                &MediaFileToken::new_from_str(&user_bookmark.entity_token),
-                media_domain,
-                server_state.server_environment,
-                user_bookmark.maybe_media_file_cover_image_public_bucket_hash.as_deref(),
-                user_bookmark.maybe_media_file_cover_image_public_bucket_prefix.as_deref(),
-                user_bookmark.maybe_media_file_cover_image_public_bucket_extension.as_deref(),
-              ));
-            }
-            UserBookmarkEntityType::ModelWeight => {
-              maybe_model_weight_cover = Some(WeightsCoverImageDetails::from_optional_db_fields(
-                media_domain,
-                server_state.server_environment,
-                &ModelWeightToken::new_from_str(&user_bookmark.entity_token),
-                user_bookmark.maybe_model_weight_cover_image_public_bucket_hash.as_deref(),
-                user_bookmark.maybe_model_weight_cover_image_public_bucket_prefix.as_deref(),
-                user_bookmark.maybe_model_weight_cover_image_public_bucket_extension.as_deref(),
-              ));
-            }
-            _ => {}
-          }
+        match user_bookmark.entity_type {
+          UserBookmarkEntityType::MediaFile => {
+            maybe_media_file_cover = Some(MediaFileCoverImageDetails::from_optional_db_fields(&MediaFileToken::new_from_str(&user_bookmark.entity_token), media_domain, server_state.server_environment, user_bookmark.maybe_media_file_cover_image_public_bucket_hash.as_deref(), user_bookmark.maybe_media_file_cover_image_public_bucket_prefix.as_deref(), user_bookmark.maybe_media_file_cover_image_public_bucket_extension.as_deref()));
+          },
+          UserBookmarkEntityType::ModelWeight => {
+            maybe_model_weight_cover = Some(WeightsCoverImageDetails::from_optional_db_fields(media_domain, server_state.server_environment, &ModelWeightToken::new_from_str(&user_bookmark.entity_token), user_bookmark.maybe_model_weight_cover_image_public_bucket_hash.as_deref(), user_bookmark.maybe_model_weight_cover_image_public_bucket_prefix.as_deref(), user_bookmark.maybe_model_weight_cover_image_public_bucket_extension.as_deref()));
+          },
+          _ => {},
+        }
 
-          // TODO: Deprecated
-          let maybe_model_weight_cover_image = user_bookmark.maybe_model_weight_cover_image_public_bucket_hash
-              .as_deref()
-              .map(|hash| {
-                MediaFileBucketPath::from_object_hash(
-                  hash,
-                  user_bookmark.maybe_model_weight_cover_image_public_bucket_prefix.as_deref(),
-                  user_bookmark.maybe_model_weight_cover_image_public_bucket_extension.as_deref())
-                    .get_full_object_path_str()
-                    .to_string()
-              });
+        // TODO: Deprecated
+        let maybe_model_weight_cover_image = user_bookmark.maybe_model_weight_cover_image_public_bucket_hash.as_deref().map(|hash| MediaFileBucketPath::from_object_hash(hash, user_bookmark.maybe_model_weight_cover_image_public_bucket_prefix.as_deref(), user_bookmark.maybe_model_weight_cover_image_public_bucket_extension.as_deref()).get_full_object_path_str().to_string());
 
-          let maybe_media_file_creator = UserDetailsLight::from_optional_db_fields(
-            user_bookmark.maybe_media_file_creator_user_token.as_ref(),
-            user_bookmark.maybe_media_file_creator_username.as_deref(),
-            user_bookmark.maybe_media_file_creator_display_name.as_deref(),
-            user_bookmark.maybe_media_file_creator_gravatar_hash.as_deref(),
-          );
+        let maybe_media_file_creator = UserDetailsLight::from_optional_db_fields(user_bookmark.maybe_media_file_creator_user_token.as_ref(), user_bookmark.maybe_media_file_creator_username.as_deref(), user_bookmark.maybe_media_file_creator_display_name.as_deref(), user_bookmark.maybe_media_file_creator_gravatar_hash.as_deref());
 
-          let maybe_model_weight_creator = UserDetailsLight::from_optional_db_fields(
-            user_bookmark.maybe_model_weight_creator_user_token.as_ref(),
-            user_bookmark.maybe_model_weight_creator_username.as_deref(),
-            user_bookmark.maybe_model_weight_creator_display_name.as_deref(),
-            user_bookmark.maybe_model_weight_creator_gravatar_hash.as_deref(),
-          );
+        let maybe_model_weight_creator = UserDetailsLight::from_optional_db_fields(user_bookmark.maybe_model_weight_creator_user_token.as_ref(), user_bookmark.maybe_model_weight_creator_username.as_deref(), user_bookmark.maybe_model_weight_creator_display_name.as_deref(), user_bookmark.maybe_model_weight_creator_gravatar_hash.as_deref());
 
-          UserBookmarkListItem {
-            token: user_bookmark.token,
-            details: UserBookmarkDetailsForUserList {
-              entity_type: user_bookmark.entity_type,
-              entity_token: user_bookmark.entity_token,
-              maybe_media_file_data: match user_bookmark.entity_type {
-                UserBookmarkEntityType::MediaFile =>
-                  match (maybe_media_file_bucket_path, maybe_media_file_media_links, maybe_media_file_cover) {
-                    (Some(path), Some(links), Some(cover)) => Some(MediaFileData {
-                      // TODO(bt,2023-12-28): Proper default, optional, or "unknown" values would be better.
-                      media_type: user_bookmark.maybe_media_file_type.unwrap_or(MediaFileType::Image),
-                      media_links: links,
-                      cover,
-                      public_bucket_path: path.get_full_object_path_str().to_string(),
-                      maybe_creator: maybe_media_file_creator,
-                    }),
-                    _ => None,
-                  },
-                _ => None, // NB: Must be a media file
+        UserBookmarkListItem {
+          token: user_bookmark.token,
+          details: UserBookmarkDetailsForUserList {
+            entity_type: user_bookmark.entity_type,
+            entity_token: user_bookmark.entity_token,
+            maybe_media_file_data: match user_bookmark.entity_type {
+              UserBookmarkEntityType::MediaFile => match (maybe_media_file_bucket_path, maybe_media_file_media_links, maybe_media_file_cover) {
+                (Some(path), Some(links), Some(cover)) => Some(MediaFileData {
+                  // TODO(bt,2023-12-28): Proper default, optional, or "unknown" values would be better.
+                  media_type: user_bookmark.maybe_media_file_type.unwrap_or(MediaFileType::Image),
+                  media_links: links,
+                  cover,
+                  public_bucket_path: path.get_full_object_path_str().to_string(),
+                  maybe_creator: maybe_media_file_creator,
+                }),
+                _ => None,
               },
-              maybe_weight_data: match user_bookmark.entity_type {
-                UserBookmarkEntityType::ModelWeight =>
-                  match maybe_model_weight_cover {
-                    Some(cover) => Some(WeightsData {
-                      // TODO(bt,2023-12-28): Proper default, optional, or "unknown" values would be better.
-                      title: user_bookmark.maybe_entity_descriptive_text.clone().unwrap_or_else(|| "weight".to_string()),
-                      weight_type: user_bookmark.maybe_model_weight_type.unwrap_or(WeightsType::Tacotron2),
-                      weight_category: user_bookmark.maybe_model_weight_category.unwrap_or(WeightsCategory::TextToSpeech),
-                      cover,
-                      maybe_cover_image_public_bucket_path: maybe_model_weight_cover_image,
-                      maybe_creator: maybe_model_weight_creator,
-                    }),
-                    None => None,
-                  },
-                _ => None, // NB: Must be a weight
-              },
-              maybe_summary_text: user_bookmark.maybe_entity_descriptive_text,
-              // TODO(bt,2023-11-21): Thumbnails need proper support. We should build them as a
-              //  first-class system before handling the backfill here.
-              maybe_thumbnail_url: None,
-
-              stats: SimpleEntityStats {
-                positive_rating_count: user_bookmark.maybe_ratings_positive_count.unwrap_or(0),
-                bookmark_count: user_bookmark.maybe_bookmark_count.unwrap_or(0),
-              },
+              _ => None, // NB: Must be a media file
             },
-            created_at: user_bookmark.created_at,
-            updated_at: user_bookmark.updated_at,
-          }
-        })
-        .collect(),
-    pagination: PaginationPage{
-      current: results_page.current_page,
-      total_page_count: results_page.total_page_count,
-    }
+            maybe_weight_data: match user_bookmark.entity_type {
+              UserBookmarkEntityType::ModelWeight => match maybe_model_weight_cover {
+                Some(cover) => Some(WeightsData {
+                  // TODO(bt,2023-12-28): Proper default, optional, or "unknown" values would be better.
+                  title: user_bookmark.maybe_entity_descriptive_text.clone().unwrap_or_else(|| "weight".to_string()),
+                  weight_type: user_bookmark.maybe_model_weight_type.unwrap_or(WeightsType::Tacotron2),
+                  weight_category: user_bookmark.maybe_model_weight_category.unwrap_or(WeightsCategory::TextToSpeech),
+                  cover,
+                  maybe_cover_image_public_bucket_path: maybe_model_weight_cover_image,
+                  maybe_creator: maybe_model_weight_creator,
+                }),
+                None => None,
+              },
+              _ => None, // NB: Must be a weight
+            },
+            maybe_summary_text: user_bookmark.maybe_entity_descriptive_text,
+            // TODO(bt,2023-11-21): Thumbnails need proper support. We should build them as a
+            //  first-class system before handling the backfill here.
+            maybe_thumbnail_url: None,
+
+            stats: SimpleEntityStats { positive_rating_count: user_bookmark.maybe_ratings_positive_count.unwrap_or(0), bookmark_count: user_bookmark.maybe_bookmark_count.unwrap_or(0) },
+          },
+          created_at: user_bookmark.created_at,
+          updated_at: user_bookmark.updated_at,
+        }
+      })
+      .collect(),
+    pagination: PaginationPage { current: results_page.current_page, total_page_count: results_page.total_page_count },
   };
 
   Ok(Json(response))

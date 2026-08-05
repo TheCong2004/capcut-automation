@@ -16,10 +16,9 @@ pub struct PipelineJobList {
   pub jobs: Vec<PipelineJob>,
 }
 
-pub async fn list_pending_pipeline_jobs(
-  args: ListPendingPipelineJobsArgs<'_>,
-) -> Result<PipelineJobList, SqliteTasksError> {
-  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(r#"
+pub async fn list_pending_pipeline_jobs(args: ListPendingPipelineJobsArgs<'_>) -> Result<PipelineJobList, SqliteTasksError> {
+  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
+    r#"
     SELECT
       id,
       status,
@@ -28,7 +27,8 @@ pub async fn list_pending_pipeline_jobs(
       stage_outputs,
       on_failure_message
     FROM pipeline_jobs
-  "#);
+  "#,
+  );
 
   if !args.statuses.is_empty() {
     query_builder.push(" WHERE status IN (");
@@ -53,12 +53,5 @@ pub async fn list_pending_pipeline_jobs(
 }
 
 pub(crate) fn raw_into_pipeline_job(raw: RawPipelineJob) -> Result<PipelineJob, SqliteTasksError> {
-  Ok(PipelineJob {
-    id: PipelineJobId::new_from_str(&raw.id),
-    status: TaskStatus::from_str(&raw.status)?,
-    current_stage: PipelineStage::from_str(&raw.current_stage)?,
-    maybe_input_payload: raw.input_payload,
-    maybe_stage_outputs: raw.stage_outputs,
-    maybe_on_failure_message: raw.on_failure_message,
-  })
+  Ok(PipelineJob { id: PipelineJobId::new_from_str(&raw.id), status: TaskStatus::from_str(&raw.status)?, current_stage: PipelineStage::from_str(&raw.current_stage)?, maybe_input_payload: raw.input_payload, maybe_stage_outputs: raw.stage_outputs, maybe_on_failure_message: raw.on_failure_message })
 }

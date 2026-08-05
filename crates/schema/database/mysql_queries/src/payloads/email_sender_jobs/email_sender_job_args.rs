@@ -1,4 +1,3 @@
-
 // TODO: Switch to protobuf or nom to better support forward-compatible changes
 
 use errors::AnyhowResult;
@@ -28,7 +27,6 @@ pub enum PolymorphicEmailSenderJobArgs {
 }
 
 impl EmailSenderJobArgs {
-
   pub fn from_json(json: &str) -> AnyhowResult<Self> {
     Ok(serde_json::from_str(json)?)
   }

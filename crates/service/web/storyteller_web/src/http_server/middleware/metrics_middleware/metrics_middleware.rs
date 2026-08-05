@@ -46,10 +46,7 @@ where
   type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
   fn new_transform(&self, service: S) -> Self::Future {
-    ready(Ok(MetricsService {
-      service,
-      collector: self.collector.clone(),
-    }))
+    ready(Ok(MetricsService { service, collector: self.collector.clone() }))
   }
 }
 
@@ -87,19 +84,17 @@ where
       let duration_ms = started.elapsed().as_secs_f64() * 1000.0;
       match &result {
         Ok(response) => {
-          let route = response.request()
-            .match_pattern()
-            .unwrap_or_else(|| UNMATCHED_ROUTE.to_string());
+          let route = response.request().match_pattern().unwrap_or_else(|| UNMATCHED_ROUTE.to_string());
           let status_code = response.status().as_u16();
           collector.record_request(route, method, status_code, duration_ms);
-        }
+        },
         Err(_) => {
           // The service returned an error before producing a response, so
           // we can't recover match_pattern. Surface this as 500/unmatched
           // — it's rare in practice (most actix error paths still produce
           // a ServiceResponse).
           collector.record_request(UNMATCHED_ROUTE, method, 500, duration_ms);
-        }
+        },
       }
       result
     })

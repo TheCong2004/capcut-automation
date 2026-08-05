@@ -47,7 +47,6 @@ Here are the domain names we handle:
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
 #![forbid(unreachable_patterns)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]

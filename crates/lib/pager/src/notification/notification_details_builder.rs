@@ -47,32 +47,7 @@ impl NotificationDetailsBuilder {
 
   /// Create a builder with an explicit title.
   pub fn from_title(title: String) -> Self {
-    Self {
-      title: Some(title),
-      description: None,
-      urgency: None,
-      event_time: Utc::now(),
-      maybe_error: None,
-      is_from_error: false,
-      extra_message: None,
-      http_method: None,
-      http_path: None,
-      http_status_code: None,
-      http_host: None,
-      http_origin: None,
-      http_referer: None,
-      http_user_agent: None,
-      artcraft_version: None,
-      user_token: None,
-      media_file_token: None,
-      inference_job_token: None,
-      third_party_id: None,
-      request_ip_address: None,
-      avt_cookie_token: None,
-      session_token: None,
-      session_user_token: None,
-      trace_id: None,
-    }
+    Self { title: Some(title), description: None, urgency: None, event_time: Utc::now(), maybe_error: None, is_from_error: false, extra_message: None, http_method: None, http_path: None, http_status_code: None, http_host: None, http_origin: None, http_referer: None, http_user_agent: None, artcraft_version: None, user_token: None, media_file_token: None, inference_job_token: None, third_party_id: None, request_ip_address: None, avt_cookie_token: None, session_token: None, session_user_token: None, trace_id: None }
   }
 
   /// Create a builder from a boxed error. Converts to `Arc` internally.
@@ -83,32 +58,7 @@ impl NotificationDetailsBuilder {
   /// Create a builder from an `Arc`'d error.
   /// Title will be auto-generated from the error if not explicitly set.
   pub fn from_error(error: Arc<dyn std::error::Error + Send + Sync + 'static>) -> Self {
-    Self {
-      title: None,
-      description: None,
-      urgency: None,
-      event_time: Utc::now(),
-      maybe_error: Some(error),
-      is_from_error: true,
-      extra_message: None,
-      http_method: None,
-      http_path: None,
-      http_status_code: None,
-      http_host: None,
-      http_origin: None,
-      http_referer: None,
-      http_user_agent: None,
-      artcraft_version: None,
-      user_token: None,
-      media_file_token: None,
-      inference_job_token: None,
-      third_party_id: None,
-      request_ip_address: None,
-      avt_cookie_token: None,
-      session_token: None,
-      session_user_token: None,
-      trace_id: None,
-    }
+    Self { title: None, description: None, urgency: None, event_time: Utc::now(), maybe_error: Some(error), is_from_error: true, extra_message: None, http_method: None, http_path: None, http_status_code: None, http_host: None, http_origin: None, http_referer: None, http_user_agent: None, artcraft_version: None, user_token: None, media_file_token: None, inference_job_token: None, third_party_id: None, request_ip_address: None, avt_cookie_token: None, session_token: None, session_user_token: None, trace_id: None }
   }
 
   // --- Setters ---
@@ -257,9 +207,7 @@ impl NotificationDetailsBuilder {
       session_user_token: self.session_user_token,
       // Auto-fill from the request's task-local so any page fired while
       // serving a request is correlated even if the caller never set it.
-      trace_id: self.trace_id.or_else(|| {
-        trace_id::current_trace_id().map(|t| t.to_string())
-      }),
+      trace_id: self.trace_id.or_else(|| trace_id::current_trace_id().map(|t| t.to_string())),
     }
   }
 
@@ -272,11 +220,7 @@ impl NotificationDetailsBuilder {
   /// 2. Error alone: "SomeError: details"
   /// 3. HTTP info alone: "POST /v1/foo - Unknown Error"
   /// 4. Nothing: "Unknown Error"
-  fn generate_title(
-    maybe_error: &Option<Arc<dyn std::error::Error + Send + Sync + 'static>>,
-    http_method: &Option<String>,
-    http_path: &Option<String>,
-  ) -> String {
+  fn generate_title(maybe_error: &Option<Arc<dyn std::error::Error + Send + Sync + 'static>>, http_method: &Option<String>, http_path: &Option<String>) -> String {
     let http_prefix = match (http_method, http_path) {
       (Some(method), Some(path)) => Some(format!("{} {}", method, path)),
       (None, Some(path)) => Some(path.clone()),
@@ -285,11 +229,7 @@ impl NotificationDetailsBuilder {
 
     let error_summary = maybe_error.as_ref().map(|err| {
       let msg = format!("{}", err);
-      if msg.len() > 150 {
-        format!("{}...", &msg[..147])
-      } else {
-        msg
-      }
+      if msg.len() > 150 { format!("{}...", &msg[..147]) } else { msg }
     });
 
     match (http_prefix, error_summary) {

@@ -9,8 +9,8 @@ pub struct SemiPersistentCacheDir {
 
   tts_synthesizer_model_root: PathBuf,
   tts_pretrained_vocoder_model_root: PathBuf, // Pretrained, non-user uploaded vocoders
-  vocoder_model_root: PathBuf, // User-uploaded vocoders
-  gpt_sovits_model_root: PathBuf, // GPT-SoViT models
+  vocoder_model_root: PathBuf,                // User-uploaded vocoders
+  gpt_sovits_model_root: PathBuf,             // GPT-SoViT models
 
   voice_conversion_model_root: PathBuf,
 
@@ -22,8 +22,6 @@ pub struct SemiPersistentCacheDir {
 }
 
 impl SemiPersistentCacheDir {
-
-
   /// Everything is rooted at `/file_cache`.
   pub fn default_paths() -> Self {
     // NB: This is the root of the filesystem
@@ -32,22 +30,7 @@ impl SemiPersistentCacheDir {
 
   pub fn configured_root<P: AsRef<Path>>(root_path: P) -> Self {
     let cache_root = root_path.as_ref().to_path_buf();
-    Self {
-      cache_root: cache_root.clone(),
-
-      tts_synthesizer_model_root: cache_root.join("tts/synthesizer_models/"),
-      tts_pretrained_vocoder_model_root: cache_root.join("tts/vocoder_models_pretrained/"),
-      vocoder_model_root: cache_root.join("tts/user_uploaded_vocoder_models/"),
-      gpt_sovits_model_root: cache_root.join("tts/gpt_sovits_models/"),
-
-      voice_conversion_model_root: cache_root.join("voice_conversion/models/"),
-
-      w2l_model_root: cache_root.join("w2l/models/"),
-      w2l_end_bump_root: cache_root.join("w2l/end_bumps/"),
-      w2l_face_templates_root: cache_root.join("w2l/face_templates/"),
-      w2l_templates_media_root: cache_root.join("w2l/template_media/"),
-      video_asset_root: cache_root.join("static_video_assets/"),
-    }
+    Self { cache_root: cache_root.clone(), tts_synthesizer_model_root: cache_root.join("tts/synthesizer_models/"), tts_pretrained_vocoder_model_root: cache_root.join("tts/vocoder_models_pretrained/"), vocoder_model_root: cache_root.join("tts/user_uploaded_vocoder_models/"), gpt_sovits_model_root: cache_root.join("tts/gpt_sovits_models/"), voice_conversion_model_root: cache_root.join("voice_conversion/models/"), w2l_model_root: cache_root.join("w2l/models/"), w2l_end_bump_root: cache_root.join("w2l/end_bumps/"), w2l_face_templates_root: cache_root.join("w2l/face_templates/"), w2l_templates_media_root: cache_root.join("w2l/template_media/"), video_asset_root: cache_root.join("static_video_assets/") }
   }
 
   // ==================== TTS SYNTHESIZER MODELS ====================

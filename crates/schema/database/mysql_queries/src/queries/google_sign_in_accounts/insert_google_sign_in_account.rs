@@ -25,14 +25,11 @@ pub struct InsertGoogleSignInArgs<'e, 't> {
   pub transaction: &'e mut Transaction<'t, MySql>,
 }
 
-pub async fn insert_google_sign_in_account<'e, 't>(
-  args: InsertGoogleSignInArgs<'e, 't>
-) -> AnyhowResult<GoogleSignInAccountToken>
-{
+pub async fn insert_google_sign_in_account<'e, 't>(args: InsertGoogleSignInArgs<'e, 't>) -> AnyhowResult<GoogleSignInAccountToken> {
   let token = GoogleSignInAccountToken::generate();
 
   let query = sqlx::query!(
-      r#"
+    r#"
 INSERT INTO google_sign_in_accounts
 SET
   token = ?,

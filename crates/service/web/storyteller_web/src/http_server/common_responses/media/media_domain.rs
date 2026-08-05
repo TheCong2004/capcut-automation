@@ -6,11 +6,9 @@ const FAKEYOU_CDN_STR: &str = "https://cdn-2.fakeyou.com";
 
 const STORYTELLER_CDN_STR: &str = "https://cdn-2.fakeyou.com";
 
-const FAKEYOU_CDN: Lazy<Url> = Lazy::new(|| Url::parse(FAKEYOU_CDN_STR)
-    .expect("should never fail"));
+const FAKEYOU_CDN: Lazy<Url> = Lazy::new(|| Url::parse(FAKEYOU_CDN_STR).expect("should never fail"));
 
-const STORYTELLER_CDN: Lazy<Url> = Lazy::new(|| Url::parse(STORYTELLER_CDN_STR)
-    .expect("should never fail"));
+const STORYTELLER_CDN: Lazy<Url> = Lazy::new(|| Url::parse(STORYTELLER_CDN_STR).expect("should never fail"));
 
 /// Which domain to generate CDN, etc. links for.
 #[derive(Copy, Clone, Debug)]

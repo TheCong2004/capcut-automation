@@ -10,25 +10,19 @@ pub struct ModelWeightsCacheMapping {
 }
 
 impl ModelWeightsCacheMapping {
-
   pub fn new_from_model(model_weight: &RetrievedModelWeight) -> Self {
     Self::from_token_and_type(&model_weight.token, model_weight.weights_type)
   }
 
   pub fn from_token_and_type(token: &ModelWeightToken, weights_type: WeightsType) -> Self {
-    Self {
-      token: token.clone(),
-      weights_type,
-    }
+    Self { token: token.clone(), weights_type }
   }
-
 
   pub fn to_path_buf(&self) -> PathBuf {
     let extension = self.extension();
     let filename = format!("{}.{}.{}", &self.token, self.weights_type, extension);
     PathBuf::from(filename)
   }
-
 
   fn extension(&self) -> &str {
     match self.weights_type {
@@ -60,10 +54,7 @@ mod tests {
 
   #[test]
   fn stable_diffusion_checkpoints() {
-    let mapper = ModelWeightsCacheMapping::from_token_and_type(
-      &ModelWeightToken::new_from_str("test_token"),
-      WeightsType::StableDiffusion15
-    );
+    let mapper = ModelWeightsCacheMapping::from_token_and_type(&ModelWeightToken::new_from_str("test_token"), WeightsType::StableDiffusion15);
     let path = mapper.to_path_buf();
 
     assert_eq!(path, PathBuf::from("test_token.sd_1.5.safetensors"));
@@ -71,10 +62,7 @@ mod tests {
 
   #[test]
   fn lora_checkpoints() {
-    let mapper = ModelWeightsCacheMapping::from_token_and_type(
-      &ModelWeightToken::new_from_str("test_lora"),
-      WeightsType::LoRA
-    );
+    let mapper = ModelWeightsCacheMapping::from_token_and_type(&ModelWeightToken::new_from_str("test_lora"), WeightsType::LoRA);
     let path = mapper.to_path_buf();
 
     assert_eq!(path, PathBuf::from("test_lora.loRA.safetensors"));

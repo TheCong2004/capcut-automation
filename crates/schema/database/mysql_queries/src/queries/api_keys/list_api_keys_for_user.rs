@@ -25,9 +25,7 @@ where
 /// List a user's API keys, newest first, **including soft-deleted** keys.
 /// Never returns the full `api_key` — only its first 20 characters — and never
 /// returns the internal `id`.
-pub async fn list_api_keys_for_user<'e, 'c: 'e, E>(
-  args: ListApiKeysForUserArgs<'e, 'c, E>,
-) -> Result<Vec<ApiKeyRow>, sqlx::Error>
+pub async fn list_api_keys_for_user<'e, 'c: 'e, E>(args: ListApiKeysForUserArgs<'e, 'c, E>) -> Result<Vec<ApiKeyRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -56,22 +54,11 @@ LIMIT ? OFFSET ?
     limit,
     offset,
   )
-    .fetch_all(args.mysql_executor)
-    .await?
-    .into_iter()
-    .map(|r| ApiKeyRow {
-      token: r.token,
-      api_key_prefix: r.api_key_prefix,
-      name: r.name,
-      maybe_description: r.maybe_description,
-      owner_user_token: r.owner_user_token,
-      ip_address_creation: r.ip_address_creation,
-      ip_address_update: r.ip_address_update,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-      maybe_deleted_at: r.maybe_deleted_at,
-    })
-    .collect::<Vec<_>>();
+  .fetch_all(args.mysql_executor)
+  .await?
+  .into_iter()
+  .map(|r| ApiKeyRow { token: r.token, api_key_prefix: r.api_key_prefix, name: r.name, maybe_description: r.maybe_description, owner_user_token: r.owner_user_token, ip_address_creation: r.ip_address_creation, ip_address_update: r.ip_address_update, created_at: r.created_at, updated_at: r.updated_at, maybe_deleted_at: r.maybe_deleted_at })
+  .collect::<Vec<_>>();
 
   Ok(rows)
 }

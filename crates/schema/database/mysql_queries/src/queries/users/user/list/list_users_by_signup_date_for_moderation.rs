@@ -34,17 +34,12 @@ pub struct ListUsersBySignupDateResult {
   pub next_cursor: Option<u64>,
 }
 
-pub async fn list_users_by_signup_date_for_moderation(
-  args: ListUsersBySignupDateArgs,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<ListUsersBySignupDateResult> {
+pub async fn list_users_by_signup_date_for_moderation(args: ListUsersBySignupDateArgs, mysql_pool: &MySqlPool) -> AnyhowResult<ListUsersBySignupDateResult> {
   // Fetch limit + 1 so we can detect whether there's a next page.
   let fetch_limit = (args.limit + 1) as i64;
 
   // Use i64::MAX when no cursor so all rows are included.
-  let id_cursor = args.maybe_id_cursor
-    .map(|c| c as i64)
-    .unwrap_or(i64::MAX);
+  let id_cursor = args.maybe_id_cursor.map(|c| c as i64).unwrap_or(i64::MAX);
 
   let rows = sqlx::query_as!(
     ListUsersBySignupDateRow,
@@ -75,23 +70,16 @@ LIMIT ?
     id_cursor,
     fetch_limit,
   )
-    .fetch_all(mysql_pool)
-    .await
-    .map_err(|err| {
-      warn!("list_users_by_signup_date_for_moderation query error: {:?}", err);
-      anyhow::anyhow!("query error")
-    })?;
+  .fetch_all(mysql_pool)
+  .await
+  .map_err(|err| {
+    warn!("list_users_by_signup_date_for_moderation query error: {:?}", err);
+    anyhow::anyhow!("query error")
+  })?;
 
   let has_next = rows.len() as u32 > args.limit;
   let users: Vec<ListUsersBySignupDateRow> = rows.into_iter().take(args.limit as usize).collect();
-  let next_cursor = if has_next {
-    users.last().map(|u| u.id)
-  } else {
-    None
-  };
+  let next_cursor = if has_next { users.last().map(|u| u.id) } else { None };
 
-  Ok(ListUsersBySignupDateResult {
-    users,
-    next_cursor,
-  })
+  Ok(ListUsersBySignupDateResult { users, next_cursor })
 }

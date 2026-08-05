@@ -1,5 +1,5 @@
 #[cfg(test)]
-pub (crate) mod test_utils;
+pub(crate) mod test_utils;
 
 pub mod api_types;
 pub mod creds;

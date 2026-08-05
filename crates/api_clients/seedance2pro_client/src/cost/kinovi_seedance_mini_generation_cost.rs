@@ -48,17 +48,9 @@ impl KinoviSeedanceMiniGenerationCost {
   /// Build a cost from base credits plus an optional video-reference
   /// surcharge (both in Kinovi credits, possibly fractional). The per-part
   /// and total USD conversions are derived.
-  pub fn from_base_and_surcharge(
-    base_credits: f64,
-    maybe_video_reference_surcharge_credits: Option<f64>,
-  ) -> Self {
+  pub fn from_base_and_surcharge(base_credits: f64, maybe_video_reference_surcharge_credits: Option<f64>) -> Self {
     let total_credits = base_credits + maybe_video_reference_surcharge_credits.unwrap_or(0.0);
-    Self {
-      total_cost: KinoviFractionalGenerationCost::from_kinovi_credits(total_credits),
-      base_cost: KinoviFractionalGenerationCost::from_kinovi_credits(base_credits),
-      video_reference_surcharge_cost: maybe_video_reference_surcharge_credits
-        .map(KinoviFractionalGenerationCost::from_kinovi_credits),
-    }
+    Self { total_cost: KinoviFractionalGenerationCost::from_kinovi_credits(total_credits), base_cost: KinoviFractionalGenerationCost::from_kinovi_credits(base_credits), video_reference_surcharge_cost: maybe_video_reference_surcharge_credits.map(KinoviFractionalGenerationCost::from_kinovi_credits) }
   }
 }
 
@@ -79,10 +71,7 @@ mod tests {
     // 480p 5s with video ref: 37.5 base + 10 surcharge = 47.5 total.
     let cost = KinoviSeedanceMiniGenerationCost::from_base_and_surcharge(37.5, Some(10.0));
     assert_eq!(cost.base_cost.kinovi_credits, 37.5);
-    assert_eq!(
-      cost.video_reference_surcharge_cost.map(|c| c.kinovi_credits),
-      Some(10.0),
-    );
+    assert_eq!(cost.video_reference_surcharge_cost.map(|c| c.kinovi_credits), Some(10.0),);
     assert_eq!(cost.total_cost.kinovi_credits, 47.5);
     // 47.5 credits; 4750/243 = 19.5473 → 20¢.
     assert_eq!(cost.total_cost.usd_cents_rounded_up, 20);

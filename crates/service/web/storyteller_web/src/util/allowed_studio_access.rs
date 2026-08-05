@@ -11,9 +11,7 @@ pub fn allowed_studio_access(maybe_session: Option<impl UserSessionStudioFlag>, 
     return true;
   }
 
-  maybe_session
-      .map(|ref session| session.can_access_studio())
-      .unwrap_or(false)
+  maybe_session.map(|ref session| session.can_access_studio()).unwrap_or(false)
 }
 
 pub trait UserSessionStudioFlag {
@@ -35,13 +33,12 @@ impl UserSessionStudioFlag for &UserSessionExtended {
 impl UserSessionStudioFlag for SessionUserRecord {
   fn can_access_studio(&self) -> bool {
     if self.can_access_studio {
-      return true
+      return true;
     }
 
     // TODO(bt, 2024-03-05): this is horrible.
     //  There should be a wrapper class between the query and the caller.
-    let flags =
-        UserSessionFeatureFlags::from_optional_str(self.maybe_feature_flags.as_deref());
+    let flags = UserSessionFeatureFlags::from_optional_str(self.maybe_feature_flags.as_deref());
 
     flags.has_flag(UserFeatureFlag::Studio)
   }
@@ -50,13 +47,12 @@ impl UserSessionStudioFlag for SessionUserRecord {
 impl UserSessionStudioFlag for &SessionUserRecord {
   fn can_access_studio(&self) -> bool {
     if self.can_access_studio {
-      return true
+      return true;
     }
 
     // TODO(bt, 2024-03-05): this is horrible.
     //  There should be a wrapper class between the query and the caller.
-    let flags =
-        UserSessionFeatureFlags::from_optional_str(self.maybe_feature_flags.as_deref());
+    let flags = UserSessionFeatureFlags::from_optional_str(self.maybe_feature_flags.as_deref());
 
     flags.has_flag(UserFeatureFlag::Studio)
   }

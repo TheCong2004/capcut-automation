@@ -12,16 +12,9 @@ use crate::http_server::endpoints::api_keys::update_api_key_handler::update_api_
 pub fn add_api_keys_routes<T, B>(app: App<T>) -> App<T>
 where
   B: MessageBody,
-  T: ServiceFactory<
-    ServiceRequest,
-    Config = (),
-    Response = ServiceResponse<B>,
-    Error = Error,
-    InitError = (),
-  >,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
-  app.service(
-    web::scope("/v1/api_keys")
+  app.service(web::scope("/v1/api_keys")
       // NB: Static routes are registered BEFORE the dynamic `/{api_key_token}`
       // route so they take precedence. API key tokens are always `api_key_…`,
       // so they can never collide with these literals anyway.
@@ -41,6 +34,5 @@ where
           .route(web::delete().to(delete_api_key_handler))
           .route(web::put().to(update_api_key_handler))
           .route(web::head().to(|| HttpResponse::Ok())),
-      ),
-  )
+      ))
 }

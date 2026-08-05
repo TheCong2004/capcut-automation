@@ -30,38 +30,21 @@ pub enum MetadataSource {
 /// 2. If that fails, falls back to `fal_content_type` (the `content_type`
 ///    field from the fal webhook payload).
 /// 3. If neither works, returns `None`.
-pub fn resolve_file_metadata(
-  file_bytes: &[u8],
-  fal_content_type: Option<&str>,
-) -> Option<ResolvedFileMetadata> {
+pub fn resolve_file_metadata(file_bytes: &[u8], fal_content_type: Option<&str>) -> Option<ResolvedFileMetadata> {
   // Primary: magic-byte detection.
   if let Some(info) = MimetypeInfo::get_for_bytes(file_bytes) {
     if let Some(ext) = info.file_extension() {
-      return Some(ResolvedFileMetadata {
-        mime_type: info.mime_type().to_string(),
-        file_extension: ext,
-        source: MetadataSource::MagicBytes,
-      });
+      return Some(ResolvedFileMetadata { mime_type: info.mime_type().to_string(), file_extension: ext, source: MetadataSource::MagicBytes });
     }
     // Magic bytes gave a mime type but no known extension — still try fal.
-    warn!(
-      "Magic bytes detected mime type '{}' but no known file extension; trying fal content_type",
-      info.mime_type(),
-    );
+    warn!("Magic bytes detected mime type '{}' but no known file extension; trying fal content_type", info.mime_type(),);
   }
 
   // Fallback: fal webhook content_type.
   if let Some(content_type) = fal_content_type {
     if let Some(ext) = FileExtension::from_mimetype(content_type) {
-      warn!(
-        "Using fal content_type '{}' as fallback (magic-byte detection failed or had no extension)",
-        content_type,
-      );
-      return Some(ResolvedFileMetadata {
-        mime_type: content_type.to_string(),
-        file_extension: ext,
-        source: MetadataSource::FalContentType,
-      });
+      warn!("Using fal content_type '{}' as fallback (magic-byte detection failed or had no extension)", content_type,);
+      return Some(ResolvedFileMetadata { mime_type: content_type.to_string(), file_extension: ext, source: MetadataSource::FalContentType });
     }
   }
 
@@ -72,11 +55,7 @@ pub fn resolve_file_metadata(
 /// extension. Mesh files often defeat the other two strategies: fal reports
 /// `application/octet-stream` for FBX, and text formats (OBJ, ASCII FBX)
 /// have no magic bytes.
-pub fn resolve_file_metadata_with_file_name(
-  file_bytes: &[u8],
-  fal_content_type: Option<&str>,
-  maybe_file_name: Option<&str>,
-) -> Option<ResolvedFileMetadata> {
+pub fn resolve_file_metadata_with_file_name(file_bytes: &[u8], fal_content_type: Option<&str>, maybe_file_name: Option<&str>) -> Option<ResolvedFileMetadata> {
   if let Some(metadata) = resolve_file_metadata(file_bytes, fal_content_type) {
     return Some(metadata);
   }
@@ -91,15 +70,8 @@ pub fn resolve_file_metadata_with_file_name(
     _ => return None,
   };
 
-  warn!(
-    "Using file name extension of {:?} as fallback (magic bytes and fal content_type both failed)",
-    file_name,
-  );
-  Some(ResolvedFileMetadata {
-    mime_type: mime_type.to_string(),
-    file_extension,
-    source: MetadataSource::FileNameExtension,
-  })
+  warn!("Using file name extension of {:?} as fallback (magic bytes and fal content_type both failed)", file_name,);
+  Some(ResolvedFileMetadata { mime_type: mime_type.to_string(), file_extension, source: MetadataSource::FileNameExtension })
 }
 
 #[cfg(test)]
@@ -121,10 +93,7 @@ mod tests {
   #[test]
   fn mp4_magic_bytes_detected() {
     // ftypisom MP4 magic
-    let mp4_bytes: Vec<u8> = vec![
-      0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70,
-      0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x02, 0x00,
-    ];
+    let mp4_bytes: Vec<u8> = vec![0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x02, 0x00];
     let result = resolve_file_metadata(&mp4_bytes, None);
 
     let meta = result.expect("should resolve");
@@ -173,11 +142,7 @@ mod tests {
   fn file_name_extension_fallback_for_fbx() {
     // ASCII FBX: no magic bytes, and fal reports octet-stream.
     let bytes = b"; FBX 7.3.0 project file".to_vec();
-    let result = resolve_file_metadata_with_file_name(
-      &bytes,
-      Some("application/octet-stream"),
-      Some("part_1.fbx"),
-    );
+    let result = resolve_file_metadata_with_file_name(&bytes, Some("application/octet-stream"), Some("part_1.fbx"));
 
     let meta = result.expect("should resolve via file name");
     assert_eq!(meta.mime_type, "model/fbx");

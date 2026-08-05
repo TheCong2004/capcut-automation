@@ -8,12 +8,8 @@ pub struct GptSovitsDependencies {
   pub ffmpeg_command_runner: FfmpegCommandRunner,
 }
 
-
 impl GptSovitsDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      inference_command: GptSovitsInferenceCommand::from_env()?,
-      ffmpeg_command_runner: FfmpegCommandRunner::from_env()?,
-    })
+    Ok(Self { inference_command: GptSovitsInferenceCommand::from_env()?, ffmpeg_command_runner: FfmpegCommandRunner::from_env()? })
   }
 }

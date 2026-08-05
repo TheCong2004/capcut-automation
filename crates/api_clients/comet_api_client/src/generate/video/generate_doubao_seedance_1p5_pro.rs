@@ -1,9 +1,7 @@
 use crate::creds::comet_api_key::CometApiKey;
 use crate::error::comet_client_error::CometClientError;
 use crate::error::comet_error::CometError;
-use crate::requests::create_video::create_video::{
-  create_video, CometVideoModelRaw, CometVideoSize, CreateVideoArgs, CreateVideoRequest,
-};
+use crate::requests::create_video::create_video::{create_video, CometVideoModelRaw, CometVideoSize, CreateVideoArgs, CreateVideoRequest};
 use crate::requests::video_task_status::CometVideoTaskStatus;
 
 /// Seedance 1.5 Pro supports 4-12 second durations.
@@ -54,20 +52,12 @@ pub struct GenerateDoubaoSeedance1p5ProResponse {
 
 // ── Entry point ──
 
-pub async fn generate_doubao_seedance_1p5_pro(
-  args: GenerateDoubaoSeedance1p5ProArgs<'_>,
-) -> Result<GenerateDoubaoSeedance1p5ProResponse, CometError> {
+pub async fn generate_doubao_seedance_1p5_pro(args: GenerateDoubaoSeedance1p5ProArgs<'_>) -> Result<GenerateDoubaoSeedance1p5ProResponse, CometError> {
   let raw_request = args.request.to_create_video_request()?;
 
-  let result = create_video(CreateVideoArgs {
-    api_key: args.api_key,
-    request: raw_request,
-  }).await?;
+  let result = create_video(CreateVideoArgs { api_key: args.api_key, request: raw_request }).await?;
 
-  Ok(GenerateDoubaoSeedance1p5ProResponse {
-    task_id: result.task_id,
-    status: result.status,
-  })
+  Ok(GenerateDoubaoSeedance1p5ProResponse { task_id: result.task_id, status: result.status })
 }
 
 impl GenerateDoubaoSeedance1p5ProRequest {
@@ -75,21 +65,11 @@ impl GenerateDoubaoSeedance1p5ProRequest {
   pub fn to_create_video_request(&self) -> Result<CreateVideoRequest, CometClientError> {
     if let Some(seconds) = self.duration_seconds {
       if !(MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&seconds) {
-        return Err(CometClientError::InvalidRequestField {
-          field: "duration_seconds",
-          raw_value: seconds.to_string(),
-          reason: format!("Seedance 1.5 Pro supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations"),
-        });
+        return Err(CometClientError::InvalidRequestField { field: "duration_seconds", raw_value: seconds.to_string(), reason: format!("Seedance 1.5 Pro supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations") });
       }
     }
 
-    Ok(CreateVideoRequest {
-      model: CometVideoModelRaw::DoubaoSeedance1p5Pro,
-      prompt: self.prompt.clone(),
-      maybe_seconds: self.duration_seconds,
-      maybe_size: self.size.map(map_size),
-      input_reference_images: vec![],
-    })
+    Ok(CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance1p5Pro, prompt: self.prompt.clone(), maybe_seconds: self.duration_seconds, maybe_size: self.size.map(map_size), input_reference_images: vec![] })
   }
 }
 
@@ -111,19 +91,10 @@ mod tests {
 
   #[test]
   fn maps_to_wire_request() {
-    let request = GenerateDoubaoSeedance1p5ProRequest {
-      prompt: "a paper boat in a storm drain".to_string(),
-      duration_seconds: Some(12),
-      size: Some(DoubaoSeedance1p5ProSize::Portrait9x16),
-    };
+    let request = GenerateDoubaoSeedance1p5ProRequest { prompt: "a paper boat in a storm drain".to_string(), duration_seconds: Some(12), size: Some(DoubaoSeedance1p5ProSize::Portrait9x16) };
 
     let raw = request.to_create_video_request().expect("should validate");
-    assert_eq!(raw.text_form_fields(), vec![
-      ("model", "doubao-seedance-1-5-pro".to_string()),
-      ("prompt", "a paper boat in a storm drain".to_string()),
-      ("seconds", "12".to_string()),
-      ("size", "9:16".to_string()),
-    ]);
+    assert_eq!(raw.text_form_fields(), vec![("model", "doubao-seedance-1-5-pro".to_string()), ("prompt", "a paper boat in a storm drain".to_string()), ("seconds", "12".to_string()), ("size", "9:16".to_string()),]);
     assert!(raw.input_reference_images.is_empty());
   }
 
@@ -137,10 +108,6 @@ mod tests {
   }
 
   fn request_with_seconds(duration_seconds: Option<u8>) -> GenerateDoubaoSeedance1p5ProRequest {
-    GenerateDoubaoSeedance1p5ProRequest {
-      prompt: "ok".to_string(),
-      duration_seconds,
-      size: None,
-    }
+    GenerateDoubaoSeedance1p5ProRequest { prompt: "ok".to_string(), duration_seconds, size: None }
   }
 }

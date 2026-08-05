@@ -1,4 +1,3 @@
-
 const HTTP_SCHEME: &str = "http";
 
 const HTTPS_SCHEME: &str = "https";
@@ -26,7 +25,7 @@ impl ApiHost {
       ApiHost::Localhost { port } => format!("http://localhost:{}", port),
     }
   }
-  
+
   pub fn scheme(&self) -> &'static str {
     match self {
       ApiHost::Storyteller => HTTPS_SCHEME,

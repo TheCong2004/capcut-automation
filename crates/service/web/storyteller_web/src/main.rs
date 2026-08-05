@@ -9,13 +9,14 @@
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
-#[macro_use] extern crate magic_crypt;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate magic_crypt;
+#[macro_use]
+extern crate serde_derive;
 
 use std::sync::Arc;
 
@@ -69,32 +70,20 @@ pub mod util;
 
 // Report cloudflare trace ID header (CF-Ray) and our request trace id in logs.
 // %{trace_id}xi is resolved by `custom_request_replace` below.
-const LOG_FORMAT: &str =
-  "[%{HOSTNAME}e] IP=[%{X-Forwarded-For}i] %{CF-Ray}i %{trace_id}xi \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
+const LOG_FORMAT: &str = "[%{HOSTNAME}e] IP=[%{X-Forwarded-For}i] %{CF-Ray}i %{trace_id}xi \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
 #[actix_web::main]
 async fn main() -> AnyhowResult<()> {
-
   // NB: Both ring (via reqwest 0.12/hyper-rustls) and aws-lc-rs (via quinn/resend-rs)
   // are compiled into this binary as rustls crypto providers. rustls 0.23 panics at
   // runtime if it can't auto-select a single provider, so we install ring explicitly.
-  rustls::crypto::ring::default_provider()
-    .install_default()
-    .expect("Failed to install rustls crypto provider");
+  rustls::crypto::ring::default_provider().install_default().expect("Failed to install rustls crypto provider");
 
-  let container_environment = bootstrap(BootstrapArgs {
-    app_name: "storyteller-web",
-    default_logging_override: Some(DEFAULT_RUST_LOG),
-    config_search_directories: &[".", "./config", "crates/service/web/storyteller_web/config"],
-    ignore_legacy_dot_env_file: true,
-  })?;
+  let container_environment = bootstrap(BootstrapArgs { app_name: "storyteller-web", default_logging_override: Some(DEFAULT_RUST_LOG), config_search_directories: &[".", "./config", "crates/service/web/storyteller_web/config"], ignore_legacy_dot_env_file: true })?;
 
   info!("Obtaining hostname...");
 
-  let server_hostname = hostname::get()
-    .ok()
-    .and_then(|h| h.into_string().ok())
-    .unwrap_or("storyteller-web-unknown".to_string());
+  let server_hostname = hostname::get().ok().and_then(|h| h.into_string().ok()).unwrap_or("storyteller-web-unknown".to_string());
 
   info!("Hostname: {}", &server_hostname);
 
@@ -122,12 +111,7 @@ async fn main() -> AnyhowResult<()> {
   let pager_clone = server_state.pager.clone();
 
   tokio_runtime.spawn(async move {
-    db_health_checker_thread(
-      health_check_status_clone,
-      mysql_pool_clone,
-      health_check_interval,
-      pager_clone,
-    ).await;
+    db_health_checker_thread(health_check_status_clone, mysql_pool_clone, health_check_interval, pager_clone).await;
   });
 
   info!("Spawning IP ban polling thread.");
@@ -150,8 +134,7 @@ async fn main() -> AnyhowResult<()> {
 
   // ==================== Metrics worker ==================== //
 
-  let (metrics_collector, maybe_metrics_worker) =
-    build_metrics(server_state.server_environment, &server_state.hostname);
+  let (metrics_collector, maybe_metrics_worker) = build_metrics(server_state.server_environment, &server_state.hostname);
 
   let maybe_metrics_shutdown = maybe_metrics_worker.map(|worker| {
     info!("Spawning metrics worker thread.");
@@ -186,11 +169,7 @@ async fn main() -> AnyhowResult<()> {
   Ok(())
 }
 
-pub async fn serve(
-  server_state: ServerState,
-  metrics_collector: metrics::collector::MetricsCollector,
-) -> AnyhowResult<()>
-{
+pub async fn serve(server_state: ServerState, metrics_collector: metrics::collector::MetricsCollector) -> AnyhowResult<()> {
   let bind_address = server_state.env_config.bind_address.clone();
   let num_workers = server_state.env_config.num_workers;
   let hostname = server_state.hostname.clone();
@@ -199,8 +178,7 @@ pub async fn serve(
 
   let paging_flags_for_middleware = server_state.flags.paging.clone();
   let pager_for_middleware = server_state.pager.clone();
-  let enable_error_alerting = paging_flags_for_middleware.is_paging_enabled
-    && paging_flags_for_middleware.is_paging_for_500s_enabled;
+  let enable_error_alerting = paging_flags_for_middleware.is_paging_enabled && paging_flags_for_middleware.is_paging_for_500s_enabled;
 
   if enable_error_alerting {
     info!("Error alerting middleware is ENABLED (ENABLE_PAGING=true, ENABLE_PAGING_FOR_500S=true).");
@@ -215,19 +193,13 @@ pub async fn serve(
   HttpServer::new(move || {
     // NB: Safe to clone due to internal arc
     let ip_ban_list = server_state_arc.ip_ban_list.clone();
-    let cidr_ban_set= server_state_arc.cidr_ban_set.clone();
+    let cidr_ban_set = server_state_arc.cidr_ban_set.clone();
 
     // NB: Dynamic dispatch needs to be wrapped with Arc.
-    let product_lookup : Arc<dyn InternalSubscriptionProductLookup> = Arc::new(StripeInternalSubscriptionProductLookupImpl {});
-    let stripe_lookup : Arc<dyn InternalProductToStripeLookup> = Arc::new(InternalProductToStripeLookupImpl{});
-    let user_lookup : Arc<dyn InternalUserLookup> = Arc::new(StripeInternalUserLookupImpl::new(
-      server_state_arc.session_checker.clone(),
-      server_state_arc.mysql_pool.clone(),
-    ));
-    let session_cache_purge : Arc<dyn InternalSessionCachePurge> = Arc::new(InternalSessionCachePurgeImpl::new(
-      server_state_arc.session_checker.clone(),
-      server_state_arc.redis_ttl_cache.clone(),
-    ));
+    let product_lookup: Arc<dyn InternalSubscriptionProductLookup> = Arc::new(StripeInternalSubscriptionProductLookupImpl {});
+    let stripe_lookup: Arc<dyn InternalProductToStripeLookup> = Arc::new(InternalProductToStripeLookupImpl {});
+    let user_lookup: Arc<dyn InternalUserLookup> = Arc::new(StripeInternalUserLookupImpl::new(server_state_arc.session_checker.clone(), server_state_arc.mysql_pool.clone()));
+    let session_cache_purge: Arc<dyn InternalSessionCachePurge> = Arc::new(InternalSessionCachePurgeImpl::new(server_state_arc.session_checker.clone(), server_state_arc.redis_ttl_cache.clone()));
 
     // NB: app_data being clone()'d below should all be safe (dependencies included)
     let app = App::new()

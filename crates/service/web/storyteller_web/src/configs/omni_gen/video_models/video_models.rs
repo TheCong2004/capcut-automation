@@ -14,12 +14,8 @@ use super::by_type::vidu_video_models::vidu_video_models;
 
 pub const OMNI_GEN_VIDEO_MODELS_AND_PROVIDERS: Lazy<OmniGenVideoModelsResponse> = Lazy::new(|| {
   let models = build_omni_gen_video_models();
-  let providers= build_omni_gen_video_model_providers();
-  OmniGenVideoModelsResponse {
-    success: true,
-    models,
-    providers,
-  }
+  let providers = build_omni_gen_video_model_providers();
+  OmniGenVideoModelsResponse { success: true, models, providers }
 });
 
 fn build_omni_gen_video_models() -> Vec<OmniGenVideoModelDetails> {
@@ -45,86 +41,26 @@ fn build_omni_gen_video_model_providers() -> Vec<OmniGenVideoModelProviderDetail
   providers.push(OmniGenVideoModelProviderDetails {
     provider: GenerationProvider::Artcraft,
     models: vec![
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Seedance1p5Pro,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Seedance2p0,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Seedance10Lite,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Sora2,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Sora2Pro,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Veo2,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Veo3,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Veo3Fast,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Veo3p1,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Veo3p1Fast,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Veo3p1Lite,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::ViduQ3,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::ViduQ3Turbo,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Kling16Pro,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Kling21Pro,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Kling21Master,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Kling2p5TurboPro,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Kling2p6Pro,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Kling3p0Pro,
-        overrides: None,
-      },
-      OmniGenVideoProviderModelDetails {
-        model: CommonVideoModel::Kling3p0Standard,
-        overrides: None,
-      },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Seedance1p5Pro, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Seedance2p0, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Seedance10Lite, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Sora2, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Sora2Pro, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Veo2, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Veo3, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Veo3Fast, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Veo3p1, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Veo3p1Fast, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Veo3p1Lite, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::ViduQ3, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::ViduQ3Turbo, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Kling16Pro, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Kling21Pro, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Kling21Master, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Kling2p5TurboPro, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Kling2p6Pro, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Kling3p0Pro, overrides: None },
+      OmniGenVideoProviderModelDetails { model: CommonVideoModel::Kling3p0Standard, overrides: None },
     ],
   });
 

@@ -25,28 +25,18 @@ pub struct DeleteIpBanPathInfo {
 pub struct DeleteIpBanRequest {
   delete: bool,
 }
-pub async fn delete_ip_ban_handler(
-  http_request: HttpRequest,
-  path: Path<DeleteIpBanPathInfo>,
-  request: Json<DeleteIpBanRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn delete_ip_ban_handler(http_request: HttpRequest, path: Path<DeleteIpBanPathInfo>, request: Json<DeleteIpBanRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if !user_session.can_ban_users {
@@ -57,25 +47,19 @@ pub async fn delete_ip_ban_handler(
   let toggle_action = if request.delete {
     info!("Deleting IP ban: {}", &path.ip_address);
     IpBanToggleState::DeleteIpBan
-
   } else {
     info!("Restoring IP ban: {}", &path.ip_address);
     IpBanToggleState::CreateIpBan
   };
 
-  let query_result = toggle_ip_ban(
-    &path.ip_address,
-    user_session.user_token.as_str(),
-    toggle_action,
-    &server_state.mysql_pool
-  ).await;
+  let query_result = toggle_ip_ban(&path.ip_address, user_session.user_token.as_str(), toggle_action, &server_state.mysql_pool).await;
 
   match query_result {
     Ok(_) => {},
     Err(err) => {
       warn!("(un)delete IP ban DB error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   Ok(Json(SimpleGenericJsonSuccess { success: true }))

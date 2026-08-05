@@ -52,7 +52,6 @@ pub struct EnqueueFaceAnimationRequest {
 
   /// Remove the watermark (premium only)
   remove_watermark: Option<bool>,
-
   ///// SadTalker: cropping
   //crop: Option<CropMode>,
 }
@@ -80,7 +79,6 @@ pub enum FrameSize {
 
   /// Twitter square = 720x720
   TwitterSquare,
-
   // D-ID: 1000x1000
   // Runway: 896x512
   // Pika: 1024x576
@@ -155,42 +153,29 @@ impl std::fmt::Display for EnqueueFaceAnimationError {
   }
 }
 
-pub async fn enqueue_face_animation_handler(
-  http_request: HttpRequest,
-  request: web::Json<EnqueueFaceAnimationRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, EnqueueFaceAnimationError>
-{
-  let mut maybe_user_token : Option<UserToken> = None;
+pub async fn enqueue_face_animation_handler(http_request: HttpRequest, request: web::Json<EnqueueFaceAnimationRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, EnqueueFaceAnimationError> {
+  let mut maybe_user_token: Option<UserToken> = None;
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        EnqueueFaceAnimationError::ServerError
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    EnqueueFaceAnimationError::ServerError
+  })?;
 
   let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== USER SESSION ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_extended_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        EnqueueFaceAnimationError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_extended_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    EnqueueFaceAnimationError::ServerError
+  })?;
 
   if let Some(user_session) = maybe_user_session.as_ref() {
     maybe_user_token = Some(UserToken::new_from_str(&user_session.user_token));
   }
 
   // TODO: Plan should handle "first anonymous use" and "investor" cases.
-  let plan = get_correct_plan_for_session(
-    server_state.server_environment,
-    maybe_user_session.as_ref());
+  let plan = get_correct_plan_for_session(server_state.server_environment, maybe_user_session.as_ref());
 
   // TODO: Separate priority for animation.
   let priority_level = plan.web_vc_base_priority_level();
@@ -213,7 +198,7 @@ pub async fn enqueue_face_animation_handler(
 
   let rate_limiter = match maybe_user_session {
     None => &server_state.redis_rate_limiters.logged_out,
-    Some(ref _user) => &server_state.redis_rate_limiters.logged_in
+    Some(ref _user) => &server_state.redis_rate_limiters.logged_in,
   };
 
   if let Err(_err) = rate_limiter.rate_limit_request(&http_request).await {
@@ -250,25 +235,11 @@ pub async fn enqueue_face_animation_handler(
 
   let ip_address = get_request_ip(&http_request);
 
-  let maybe_user_preferred_visibility : Option<Visibility> = maybe_user_session
-      .as_ref()
-      .map(|user_session: &UserSessionExtended| user_session.preferences.preferred_tts_result_visibility); // TODO: New setting for web-vc
+  let maybe_user_preferred_visibility: Option<Visibility> = maybe_user_session.as_ref().map(|user_session: &UserSessionExtended| user_session.preferences.preferred_tts_result_visibility); // TODO: New setting for web-vc
 
-  let set_visibility = request.creator_set_visibility
-      .or(maybe_user_preferred_visibility)
-      .unwrap_or(Visibility::Public);
+  let set_visibility = request.creator_set_visibility.or(maybe_user_preferred_visibility).unwrap_or(Visibility::Public);
 
-  let mut inference_args = LipsyncArgs {
-    maybe_audio_source: Some(audio_source),
-    maybe_image_source: Some(image_source),
-    maybe_face_enhancer: None,
-    maybe_pose_style: None,
-    maybe_preprocess: None,
-    maybe_make_still: None,
-    maybe_remove_watermark: None,
-    maybe_resize_width: None,
-    maybe_resize_height: None,
-  };
+  let mut inference_args = LipsyncArgs { maybe_audio_source: Some(audio_source), maybe_image_source: Some(image_source), maybe_face_enhancer: None, maybe_pose_style: None, maybe_preprocess: None, maybe_make_still: None, maybe_remove_watermark: None, maybe_resize_width: None, maybe_resize_height: None };
 
   let enable_face_enhancement = !request.disable_face_enhancement.unwrap_or(false);
 
@@ -280,16 +251,13 @@ pub async fn enqueue_face_animation_handler(
     inference_args.maybe_make_still = Some(true);
   }
 
-  let remove_watermark = request.remove_watermark.unwrap_or(false)
-      && plan.can_remove_visual_watermarks();
+  let remove_watermark = request.remove_watermark.unwrap_or(false) && plan.can_remove_visual_watermarks();
 
   if remove_watermark {
     inference_args.maybe_remove_watermark = Some(true);
   }
 
-  let (width, height) = request.dimensions
-      .unwrap_or(FrameSize::TwitterLandscape)
-      .get_width_and_height();
+  let (width, height) = request.dimensions.unwrap_or(FrameSize::TwitterLandscape).get_width_and_height();
 
   inference_args.maybe_resize_width = Some(width);
   inference_args.maybe_resize_height = Some(height);
@@ -302,17 +270,14 @@ pub async fn enqueue_face_animation_handler(
     maybe_product_category: Some(InferenceJobProductCategory::VidLipsyncSadTalker),
     inference_category: InferenceCategory::LipsyncAnimation,
     maybe_model_type: Some(InferenceModelType::SadTalker), // NB: Model is static during inference
-    maybe_model_token: None, // NB: Model is static during inference
-    maybe_input_source_token: None, // TODO: Introduce a second foreign key ?
-    maybe_input_source_token_type: None, // TODO: Introduce a second foreign key ?
+    maybe_model_token: None,                               // NB: Model is static during inference
+    maybe_input_source_token: None,                        // TODO: Introduce a second foreign key ?
+    maybe_input_source_token_type: None,                   // TODO: Introduce a second foreign key ?
     maybe_download_url: None,
     maybe_cover_image_media_file_token: None,
     maybe_raw_inference_text: None, // No text
     maybe_max_duration_seconds: None,
-    maybe_inference_args: Some(GenericInferenceArgs {
-      inference_category: Some(InferenceCategoryAbbreviated::LipsyncAnimation),
-      args: Some(PolymorphicInferenceArgs::La(inference_args)),
-    }),
+    maybe_inference_args: Some(GenericInferenceArgs { inference_category: Some(InferenceCategoryAbbreviated::LipsyncAnimation), args: Some(PolymorphicInferenceArgs::La(inference_args)) }),
     maybe_creator_user_token: maybe_user_token.as_ref(),
     maybe_avt_token: maybe_avt_token.as_ref(),
     creator_ip_address: &ip_address,
@@ -322,7 +287,8 @@ pub async fn enqueue_face_animation_handler(
     is_debug_request,
     maybe_routing_tag: maybe_routing_tag.as_deref(),
     mysql_pool: &server_state.mysql_pool,
-  }).await;
+  })
+  .await;
 
   let job_token = match query_result {
     Ok((job_token, _id)) => job_token,
@@ -332,29 +298,19 @@ pub async fn enqueue_face_animation_handler(
         return Err(EnqueueFaceAnimationError::BadInput("Duplicate idempotency token".to_string()));
       }
       return Err(EnqueueFaceAnimationError::ServerError);
-    }
+    },
   };
 
   // If you are using this file as a reference for another generic endpoint feature.
   // this feature will be sunset so don't worry about this
-  server_state.firehose_publisher.enqueue_lipsync_animation(
-    maybe_user_token.as_ref(),
-    &job_token)
-      .await
-      .map_err(|e| {
-        warn!("error publishing event: {:?}", e);
-        EnqueueFaceAnimationError::ServerError
-      })?;
+  server_state.firehose_publisher.enqueue_lipsync_animation(maybe_user_token.as_ref(), &job_token).await.map_err(|e| {
+    warn!("error publishing event: {:?}", e);
+    EnqueueFaceAnimationError::ServerError
+  })?;
 
-  let response: EnqueueFaceAnimationSuccessResponse = EnqueueFaceAnimationSuccessResponse {
-    success: true,
-    inference_job_token: job_token,
-  };
+  let response: EnqueueFaceAnimationSuccessResponse = EnqueueFaceAnimationSuccessResponse { success: true, inference_job_token: job_token };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|_e| EnqueueFaceAnimationError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|_e| EnqueueFaceAnimationError::ServerError)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

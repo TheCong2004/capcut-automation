@@ -19,13 +19,12 @@ pub struct UpsertUserStripeCustomerLink<'a> {
   pub stripe_customer_id: &'a str,
 }
 
-impl <'a> UpsertUserStripeCustomerLink<'a> {
-
+impl<'a> UpsertUserStripeCustomerLink<'a> {
   pub async fn upsert(&'a self, mysql_pool: &MySqlPool) -> Result<(), DatabaseInsertError> {
     let mut conn = mysql_pool.acquire().await?;
     self.upsert_with_connection(&mut conn).await
   }
-  
+
   pub async fn upsert_with_connection(&'a self, mysql_connection: &mut PoolConnection<MySql>) -> Result<(), DatabaseInsertError> {
     let query = self.query();
     let _result = query.execute(&mut **mysql_connection).await?;
@@ -40,7 +39,7 @@ impl <'a> UpsertUserStripeCustomerLink<'a> {
 
   fn query(&self) -> Query<MySql, MySqlArguments> {
     sqlx::query!(
-        r#"
+      r#"
 INSERT INTO user_stripe_customer_links
 SET
   user_token = ?,

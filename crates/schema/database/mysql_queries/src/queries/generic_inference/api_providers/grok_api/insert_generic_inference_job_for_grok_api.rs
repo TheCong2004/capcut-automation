@@ -18,10 +18,7 @@ use tokens::tokens::users::UserToken;
 
 use crate::errors::database_query_error::DatabaseQueryError;
 use crate::queries::generic_inference::common::job_cost_estimates::JobCostEstimates;
-use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{
-  insert_generic_inference_job_for_provider,
-  InsertGenericInferenceJobForProviderArgs,
-};
+use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{insert_generic_inference_job_for_provider, InsertGenericInferenceJobForProviderArgs};
 
 pub struct InsertGrokApiInferenceJobArgs<'e, 'c, E>
 where
@@ -44,9 +41,7 @@ where
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn insert_generic_inference_job_for_grok_api<'e, 'c: 'e, E>(
-  args: InsertGrokApiInferenceJobArgs<'e, 'c, E>,
-) -> Result<InferenceJobToken, DatabaseQueryError>
+pub async fn insert_generic_inference_job_for_grok_api<'e, 'c: 'e, E>(args: InsertGrokApiInferenceJobArgs<'e, 'c, E>) -> Result<InferenceJobToken, DatabaseQueryError>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -74,12 +69,10 @@ where
     status: JobStatusPlus::Pending,
     mysql_executor: args.mysql_executor,
     phantom: args.phantom,
-  }).await?;
+  })
+  .await?;
 
-  info!(
-    "Insert generic inference job for Grok (xAI) API: {} with record ID {}",
-    args.apriori_job_token, record_id
-  );
+  info!("Insert generic inference job for Grok (xAI) API: {} with record ID {}", args.apriori_job_token, record_id);
 
   Ok(args.apriori_job_token.clone())
 }

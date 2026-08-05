@@ -7,13 +7,7 @@ use tokens::tokens::characters::CharacterToken;
 ///
 /// All fields are always SET in the query — the caller should pass the
 /// existing values for fields that should not change.
-pub async fn update_character_name_and_description(
-  character_token: &CharacterToken,
-  character_name: &str,
-  kinovi_character_name: &str,
-  maybe_description: Option<&str>,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<(), sqlx::Error> {
+pub async fn update_character_name_and_description(character_token: &CharacterToken, character_name: &str, kinovi_character_name: &str, maybe_description: Option<&str>, connection: &mut PoolConnection<MySql>) -> Result<(), sqlx::Error> {
   sqlx::query!(
     r#"
 UPDATE characters
@@ -30,8 +24,8 @@ LIMIT 1
     maybe_description,
     character_token.as_str(),
   )
-      .execute(&mut **connection)
-      .await?;
+  .execute(&mut **connection)
+  .await?;
 
   Ok(())
 }

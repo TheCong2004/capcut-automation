@@ -22,9 +22,9 @@ use crate::state::server_state::ServerState;
 
 #[derive(Deserialize, ToSchema)]
 pub struct ChangeMediaFileAnimationTypeRequest {
-    /// The new animation type for the media file.
-    /// It can be cleared to null, but only for characters.
-    pub maybe_animation_type: Option<MediaFileAnimationType>,
+  /// The new animation type for the media file.
+  /// It can be cleared to null, but only for characters.
+  pub maybe_animation_type: Option<MediaFileAnimationType>,
 }
 
 // =============== Error Response ===============
@@ -49,79 +49,57 @@ pub struct ChangeMediaFileAnimationTypeRequest {
         ("path" = MediaFileTokenPathInfo, description = "Path for Request")
     )
 )]
-pub async fn change_media_file_animation_type_handler(
-    http_request: HttpRequest,
-    path: Path<MediaFileTokenPathInfo>,
-    request: Json<ChangeMediaFileAnimationTypeRequest>,
-    server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SimpleResponse>, CommonWebError> {
+pub async fn change_media_file_animation_type_handler(http_request: HttpRequest, path: Path<MediaFileTokenPathInfo>, request: Json<ChangeMediaFileAnimationTypeRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleResponse>, CommonWebError> {
+  let user_session = require_user_session(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
-    let user_session = require_user_session(&http_request, &server_state.session_checker, &server_state.mysql_pool)
-        .await?;
+  let media_file_token = path.token.clone();
+  let is_mod = user_session.is_mod();
 
-    let media_file_token = path.token.clone();
-    let is_mod = user_session.is_mod();
+  let media_file_lookup_result = get_media_file(&path.token, is_mod, &server_state.mysql_pool).await;
 
-    let media_file_lookup_result = get_media_file(
-        &path.token,
-        is_mod,
-        &server_state.mysql_pool,
-    ).await;
+  let media_file = match media_file_lookup_result {
+    Ok(Some(media_file)) => media_file,
+    Ok(None) => {
+      warn!("MediaFile not found: {:?}", media_file_token);
+      return Err(CommonWebError::NotFound);
+    },
+    Err(err) => {
+      warn!("Error looking up media_file: {:?}", err);
+      return Err(CommonWebError::from_anyhow_error(err));
+    },
+  };
 
-    let media_file = match media_file_lookup_result {
-        Ok(Some(media_file)) => media_file,
-        Ok(None) => {
-            warn!("MediaFile not found: {:?}", media_file_token);
-            return Err(CommonWebError::NotFound);
-        },
-        Err(err) => {
-            warn!("Error looking up media_file: {:?}", err);
-            return Err(CommonWebError::from_anyhow_error(err));
-        }
-    };
+  match media_file.maybe_engine_category {
+    // These types are allowed to have animation, others are not
+    Some(MediaFileEngineCategory::Animation) => {},
+    Some(MediaFileEngineCategory::Expression) => {},
+    Some(MediaFileEngineCategory::Character) => {},
+    // Everything else is disallowed
+    _ => {
+      return Err(CommonWebError::BadInputWithSimpleMessage("this media file engine category does not support animation".to_string()));
+    },
+  }
 
-    match media_file.maybe_engine_category {
-        // These types are allowed to have animation, others are not
-        Some(MediaFileEngineCategory::Animation) => {}
-        Some(MediaFileEngineCategory::Expression) => {}
-        Some(MediaFileEngineCategory::Character) => {}
-        // Everything else is disallowed
-        _ => {
-            return Err(CommonWebError::BadInputWithSimpleMessage(
-                "this media file engine category does not support animation".to_string()));
-        }
-    }
+  if request.maybe_animation_type.is_none() && media_file.maybe_engine_category != Some(MediaFileEngineCategory::Character) {
+    return Err(CommonWebError::BadInputWithSimpleMessage("animation type can only be cleared for character types".to_string()));
+  }
 
-    if request.maybe_animation_type.is_none()
-        && media_file.maybe_engine_category != Some(MediaFileEngineCategory::Character)
-    {
-        return Err(CommonWebError::BadInputWithSimpleMessage(
-            "animation type can only be cleared for character types".to_string()));
-    }
+  let is_creator = media_file.maybe_creator_user_token.is_some_and(|t| t.as_str() == user_session.user_token.as_str());
 
-    let is_creator = media_file.maybe_creator_user_token
-        .is_some_and(|t| t.as_str() == user_session.user_token.as_str());
+  if !is_creator && !is_mod {
+    warn!("user is not allowed to edit this media_file: {:?}", user_session.user_token);
+    return Err(CommonWebError::NotAuthorized);
+  }
 
-    if !is_creator && !is_mod {
-        warn!("user is not allowed to edit this media_file: {:?}", user_session.user_token);
-        return Err(CommonWebError::NotAuthorized);
-    }
+  let query_result = update_media_file_animation_type(&media_file_token, request.maybe_animation_type, &server_state.mysql_pool).await;
 
-    let query_result = update_media_file_animation_type(
-        &media_file_token,
-        request.maybe_animation_type,
-        &server_state.mysql_pool
-    ).await;
+  match query_result {
+    Ok(_) => {},
+    Err(err) => {
+      warn!("Update MediaFile DB error: {:?}", err);
+      return Err(CommonWebError::from_anyhow_error(err));
+    },
+  };
 
-    match query_result {
-        Ok(_) => {},
-        Err(err) => {
-            warn!("Update MediaFile DB error: {:?}", err);
-            return Err(CommonWebError::from_anyhow_error(err));
-        }
-    };
-
-    Ok(Json(SimpleResponse {
-        success: true,
-    }))
+  Ok(Json(SimpleResponse { success: true }))
 }

@@ -638,8 +638,7 @@ fn read_text_frame(
             let text = scan_text(reader, encoding, len)?;
 
             tags.push(Tag::new(std_key, id, Value::from(text)));
-        }
-        else {
+        } else {
             break;
         }
     }
@@ -680,8 +679,7 @@ fn read_txxx_frame(
         if len > 0 {
             let text = scan_text(reader, encoding, len)?;
             tags.push(Tag::new(std_key, &key, Value::from(text)));
-        }
-        else {
+        } else {
             break;
         }
     }
@@ -766,8 +764,7 @@ fn read_comm_uslt_frame(
     // an error would break far too many files to be worth it.
     let key = if validate_lang_code(lang) {
         format!("{}!{}", id, str::from_utf8(&lang).unwrap())
-    }
-    else {
+    } else {
         id.to_string()
     };
 

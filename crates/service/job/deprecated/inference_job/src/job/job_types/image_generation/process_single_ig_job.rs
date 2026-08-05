@@ -17,16 +17,11 @@ pub async fn process_single_ig_job(job_dependencies: &JobDependencies, job: &Ava
     \n - Job Type: {:?}\
     \n - Inference Category: {:?}\
     \n - Maybe Model Type: {:?}",
-    job.inference_job_token,
-    job.job_type,
-    job.inference_category,
-    job.maybe_model_type
+    job.inference_job_token, job.job_type, job.inference_category, job.maybe_model_type
   );
 
   match job.job_type {
-    InferenceJobType::ImageGenApi => {
-      Err(ProcessSingleJobError::Other(anyhow!("ImageGenAPI (Sora) jobs are no longer supported")))
-    },
+    InferenceJobType::ImageGenApi => Err(ProcessSingleJobError::Other(anyhow!("ImageGenAPI (Sora) jobs are no longer supported"))),
     _ => {
       info!("Processing image job as **NOT** ImageGenApi. Type: {:?}", job.job_type);
       match job.maybe_model_type {

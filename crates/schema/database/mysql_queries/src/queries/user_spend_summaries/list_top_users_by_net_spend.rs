@@ -36,9 +36,7 @@ where
 }
 
 /// Top spenders for a namespace, sorted by net spend over the requested window.
-pub async fn list_top_users_by_net_spend<'e, 'c: 'e, E>(
-  args: ListTopUsersByNetSpendArgs<'e, 'c, E>,
-) -> Result<Vec<TopUserByNetSpend>, sqlx::Error>
+pub async fn list_top_users_by_net_spend<'e, 'c: 'e, E>(args: ListTopUsersByNetSpendArgs<'e, 'c, E>) -> Result<Vec<TopUserByNetSpend>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -80,8 +78,8 @@ LIMIT ? OFFSET ?
     args.limit,
     args.offset,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

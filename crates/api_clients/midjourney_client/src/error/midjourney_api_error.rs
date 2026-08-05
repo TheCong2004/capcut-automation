@@ -33,16 +33,10 @@ pub enum MidjourneyApiError {
   TooManyRequests(String),
 
   /// 500. An internal server error occurred.
-  InternalServerError {
-    body: String,
-    backend_hostname: Option<String>,
-  },
+  InternalServerError { body: String, backend_hostname: Option<String> },
 
   /// Eg. when downloading images
-  UnknownHttpFailure {
-    status_code: u16,
-    body: String,
-  },
+  UnknownHttpFailure { status_code: u16, body: String },
 
   /// Cloudflare errors.
   CloudflareError(CloudflareError),
@@ -78,10 +72,8 @@ impl Display for MidjourneyApiError {
       Self::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
       Self::NotFound(msg) => write!(f, "Not found: {}", msg),
       Self::TooManyRequests(msg) => write!(f, "Too many requests: {}", msg),
-      Self::InternalServerError {body, backend_hostname} =>
-        write!(f, "Internal Server Error; backend hostname: {:?} ; body: {}; ", backend_hostname, body),
-      Self::UnknownHttpFailure {status_code, body} =>
-        write!(f, "Unknown HTTP failure; status code: {}; body: {}", status_code, body),
+      Self::InternalServerError { body, backend_hostname } => write!(f, "Internal Server Error; backend hostname: {:?} ; body: {}; ", backend_hostname, body),
+      Self::UnknownHttpFailure { status_code, body } => write!(f, "Unknown HTTP failure; status code: {}; body: {}", status_code, body),
       // Deserialization errors
       // Server response handling errors
       Self::DeserializationError(error) => write!(f, "Deserialization error: {}", error),

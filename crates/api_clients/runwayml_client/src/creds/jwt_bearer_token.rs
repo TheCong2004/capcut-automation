@@ -12,10 +12,7 @@ pub struct JwtBearerToken {
 impl JwtBearerToken {
   pub fn new(raw_jwt: String) -> Result<Self, ApiError> {
     let jwt_claims = JwtClaims::parse_claims(&raw_jwt)?;
-    Ok(Self {
-      raw_jwt,
-      jwt_claims,
-    })
+    Ok(Self { raw_jwt, jwt_claims })
   }
 
   pub fn raw_jwt_str(&self) -> &str {

@@ -21,47 +21,27 @@ pub struct SyncMultiCacheMissStrategizer {
 }
 
 impl SyncMultiCacheMissStrategizer {
-  pub fn new(
-    in_memory_log: CacheMissStrategizer<String>,
-    on_disk_log: CacheMissStrategizer<String>,
-  ) -> Self {
-    let multi_cache_log = MultiCacheMissStrategizer::new(
-      in_memory_log,
-      on_disk_log,
-    );
-    Self {
-      multi_cache_log: Arc::new(RwLock::new(multi_cache_log)),
-    }
+  pub fn new(in_memory_log: CacheMissStrategizer<String>, on_disk_log: CacheMissStrategizer<String>) -> Self {
+    let multi_cache_log = MultiCacheMissStrategizer::new(in_memory_log, on_disk_log);
+    Self { multi_cache_log: Arc::new(RwLock::new(multi_cache_log)) }
   }
 
   #[must_use]
   pub fn memory_cache_miss(&self, token: &str) -> AnyhowResult<CacheMissStrategy> {
-    let result = self.multi_cache_log
-        .write()
-        .map(|mut cache_logs| cache_logs.memory_cache_miss(token))
-        .map_err(|err| anyhow!("mutex error: {:?}", err))?;
+    let result = self.multi_cache_log.write().map(|mut cache_logs| cache_logs.memory_cache_miss(token)).map_err(|err| anyhow!("mutex error: {:?}", err))?;
     Ok(result)
   }
 
   #[must_use]
   pub fn disk_cache_miss(&self, token: &str) -> AnyhowResult<CacheMissStrategy> {
-    let result = self.multi_cache_log
-        .write()
-        .map(|mut cache_logs| cache_logs.disk_cache_miss(token))
-        .map_err(|err| anyhow!("mutex error: {:?}", err))?;
+    let result = self.multi_cache_log.write().map(|mut cache_logs| cache_logs.disk_cache_miss(token)).map_err(|err| anyhow!("mutex error: {:?}", err))?;
     Ok(result)
   }
 }
 
 impl MultiCacheMissStrategizer {
-  pub fn new(
-    in_memory_log: CacheMissStrategizer<String>,
-    on_disk_log: CacheMissStrategizer<String>,
-  ) -> Self {
-    Self {
-      in_memory_log,
-      on_disk_log,
-    }
+  pub fn new(in_memory_log: CacheMissStrategizer<String>, on_disk_log: CacheMissStrategizer<String>) -> Self {
+    Self { in_memory_log, on_disk_log }
   }
 
   #[must_use]

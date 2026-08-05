@@ -50,13 +50,13 @@ async fn main() -> AnyhowResult<()> {
   match args.action {
     Action::DeleteAllAnonymousUserImages => {
       delete_all_anonymous_user_images(&args, &mysql).await?;
-    }
+    },
     Action::DeleteUserFiles => {
       delete_user_files(&args, &mysql).await?;
-    }
+    },
     Action::MigrateMediaFilesEnumValues => {
       migrate_media_files_enum_values(&args, &mysql).await?;
-    }
+    },
   }
 
   Ok(())
@@ -65,10 +65,7 @@ async fn main() -> AnyhowResult<()> {
 async fn get_mysql(env_var_name: &str) -> errors::AnyhowResult<Pool<MySql>> {
   info!("Connecting to MySQL {env_var_name}...");
 
-  let pool = MySqlPoolOptions::new()
-      .max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 3)?)
-      .connect(&easyenv::get_env_string_required(env_var_name)?)
-      .await?;
+  let pool = MySqlPoolOptions::new().max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 3)?).connect(&easyenv::get_env_string_required(env_var_name)?).await?;
 
   Ok(pool)
 }

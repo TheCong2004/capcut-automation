@@ -70,11 +70,7 @@ mod tests {
 
     assert_eq!(suffix.len(), ENTROPY_CHAR_COUNT);
     for byte in suffix.bytes() {
-      assert!(
-        CROCKFORD_LOWERCASE_CHARSET.contains(&byte),
-        "unexpected character {:?} in entropy suffix",
-        byte as char,
-      );
+      assert!(CROCKFORD_LOWERCASE_CHARSET.contains(&byte), "unexpected character {:?} in entropy suffix", byte as char,);
     }
     // Crockford excludes the ambiguous i, l, o, u.
     assert!(!suffix.contains(['i', 'l', 'o', 'u']));

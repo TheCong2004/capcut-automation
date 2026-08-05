@@ -64,50 +64,31 @@ pub struct PollPredictionResultApiResponse {
 
 // --- Implementation ---
 
-pub async fn poll_prediction_result(
-  args: PollPredictionResultArgs<'_>,
-) -> Result<PollPredictionResultApiResponse, MuapiError> {
+pub async fn poll_prediction_result(args: PollPredictionResultArgs<'_>) -> Result<PollPredictionResultApiResponse, MuapiError> {
   let url = format!("{}/{}/result", PREDICTIONS_BASE_URL, args.request_id.as_str());
 
   info!("Polling Muapi prediction result: {}", url);
 
   let api_key = args.session.api_key.as_str();
 
-  let client = Client::builder()
-    .build()
-    .map_err(|err| MuapiClientError::WreqClientError(err))?;
+  let client = Client::builder().build().map_err(|err| MuapiClientError::WreqClientError(err))?;
 
-  let response = client.get(&url)
-    .header("Content-Type", "application/json")
-    .header("x-api-key", api_key)
-    .send()
-    .await
-    .map_err(|err| MuapiGenericApiError::WreqError(err))?;
+  let response = client.get(&url).header("Content-Type", "application/json").header("x-api-key", api_key).send().await.map_err(|err| MuapiGenericApiError::WreqError(err))?;
 
   let status = response.status();
-  let response_body = response.text()
-    .await
-    .map_err(|err| MuapiGenericApiError::WreqError(err))?;
+  let response_body = response.text().await.map_err(|err| MuapiGenericApiError::WreqError(err))?;
 
   info!("Muapi poll response status: {}, body: {}", status, response_body);
 
   if !status.is_success() {
-    return Err(MuapiGenericApiError::UncategorizedBadResponseWithStatusAndBody {
-      status_code: status,
-      body: response_body,
-    }.into());
+    return Err(MuapiGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code: status, body: response_body }.into());
   }
 
-  let parsed: PollPredictionResultResponse = serde_json::from_str(&response_body)
-    .map_err(|err| MuapiGenericApiError::SerdeResponseParseErrorWithBody(err, response_body))?;
+  let parsed: PollPredictionResultResponse = serde_json::from_str(&response_body).map_err(|err| MuapiGenericApiError::SerdeResponseParseErrorWithBody(err, response_body))?;
 
   let output_urls = parsed.outputs.and_then(|urls| if urls.is_empty() { None } else { Some(urls) });
 
-  Ok(PollPredictionResultApiResponse {
-    status: PredictionStatus::from_str(&parsed.status),
-    output_urls,
-    error: parsed.error,
-  })
+  Ok(PollPredictionResultApiResponse { status: PredictionStatus::from_str(&parsed.status), output_urls, error: parsed.error })
 }
 
 #[cfg(test)]
@@ -129,10 +110,7 @@ mod tests {
     let request_id = RequestId::from_str("671c2dee-2ca9-47d7-a12e-d16610b1b365"); // Corgi TTV #1
     let request_id = RequestId::from_str("8c5303f6-b602-433c-bae8-2d3ef915b7bb"); // Corgi TTV #2
 
-    let result = poll_prediction_result(PollPredictionResultArgs {
-      session: &session,
-      request_id: &request_id,
-    }).await?;
+    let result = poll_prediction_result(PollPredictionResultArgs { session: &session, request_id: &request_id }).await?;
     println!("Status: {:?}", result.status);
     println!("Output URLs: {:?}", result.output_urls);
     println!("Error: {:?}", result.error);

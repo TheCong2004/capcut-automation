@@ -1,6 +1,4 @@
-use gmicloud_client::requests::api::video::seedance_2_0_fast_260128::api::{
-  Seedance20FastRatio, Seedance20FastRequest, Seedance20FastResolution,
-};
+use gmicloud_client::requests::api::video::seedance_2_0_fast_260128::api::{Seedance20FastRatio, Seedance20FastRequest, Seedance20FastResolution};
 
 use crate::api::audio_list_ref::AudioListRef;
 use crate::api::router_aspect_ratio::RouterAspectRatio;
@@ -16,9 +14,7 @@ use crate::generate::generate_video::providers::gmicloud::seedance_2p0_fast_g::r
 use crate::generate::generate_video::video_generation_draft_or_request::VideoGenerationDraftOrRequest;
 use crate::generate::generate_video::video_generation_request::VideoGenerationRequest;
 
-pub fn build_gmicloud_seedance_2p0_u_fast(
-  mut builder: GenerateVideoRequestBuilder,
-) -> Result<VideoGenerationDraftOrRequest, ArtcraftRouterError> {
+pub fn build_gmicloud_seedance_2p0_u_fast(mut builder: GenerateVideoRequestBuilder) -> Result<VideoGenerationDraftOrRequest, ArtcraftRouterError> {
   let strategy = builder.request_mismatch_mitigation_strategy;
 
   let ratio = plan_ratio(builder.aspect_ratio.take(), strategy)?;
@@ -32,53 +28,26 @@ pub fn build_gmicloud_seedance_2p0_u_fast(
   let reference_videos = resolve_url_list_from_videos(builder.reference_videos.take())?;
   let reference_audios = resolve_url_list_from_audios(builder.reference_audio.take())?;
 
-  let request = Seedance20FastRequest {
-    prompt,
-    duration,
-    resolution,
-    ratio,
-    seed: None,
-    watermark: Some(false),
-    generate_audio: Some(true),
-    web_search: None,
-    first_frame,
-    last_frame,
-    reference_images,
-    reference_videos,
-    reference_audios,
-    reference_asset_ids: None,
-  };
+  let request = Seedance20FastRequest { prompt, duration, resolution, ratio, seed: None, watermark: Some(false), generate_audio: Some(true), web_search: None, first_frame, last_frame, reference_images, reference_videos, reference_audios, reference_asset_ids: None };
 
   let state = GmiCloudSeedance2p0UltraFastRequestState { request };
   Ok(VideoGenerationDraftOrRequest::Request(VideoGenerationRequest::GmiCloudSeedance2p0UltraFast(state)))
 }
 
-fn plan_ratio(
-  aspect_ratio: Option<RouterAspectRatio>,
-  _strategy: RequestMismatchMitigationStrategy,
-) -> Result<Option<Seedance20FastRatio>, ArtcraftRouterError> {
+fn plan_ratio(aspect_ratio: Option<RouterAspectRatio>, _strategy: RequestMismatchMitigationStrategy) -> Result<Option<Seedance20FastRatio>, ArtcraftRouterError> {
   match aspect_ratio {
-    None | Some(RouterAspectRatio::Auto) | Some(RouterAspectRatio::Auto2k)
-    | Some(RouterAspectRatio::Auto3k) | Some(RouterAspectRatio::Auto4k) => Ok(None),
+    None | Some(RouterAspectRatio::Auto) | Some(RouterAspectRatio::Auto2k) | Some(RouterAspectRatio::Auto3k) | Some(RouterAspectRatio::Auto4k) => Ok(None),
     Some(RouterAspectRatio::WideSixteenByNine) | Some(RouterAspectRatio::Wide) => Ok(Some(Seedance20FastRatio::Landscape16x9)),
     Some(RouterAspectRatio::TallNineBySixteen) | Some(RouterAspectRatio::Tall) => Ok(Some(Seedance20FastRatio::Portrait9x16)),
     Some(RouterAspectRatio::Square) | Some(RouterAspectRatio::SquareHd) => Ok(Some(Seedance20FastRatio::Square)),
     Some(RouterAspectRatio::WideFourByThree) => Ok(Some(Seedance20FastRatio::Standard4x3)),
     Some(RouterAspectRatio::TallThreeByFour) => Ok(Some(Seedance20FastRatio::Portrait3x4)),
-    Some(RouterAspectRatio::WideTwentyOneByNine) | Some(RouterAspectRatio::TallNineByTwentyOne) => {
-      Ok(Some(Seedance20FastRatio::UltraWide21x9))
-    }
-    Some(RouterAspectRatio::WideThreeByTwo) | Some(RouterAspectRatio::WideFiveByFour)
-    | Some(RouterAspectRatio::TallFourByFive) | Some(RouterAspectRatio::TallTwoByThree) => {
-      Ok(Some(Seedance20FastRatio::Adaptive))
-    }
+    Some(RouterAspectRatio::WideTwentyOneByNine) | Some(RouterAspectRatio::TallNineByTwentyOne) => Ok(Some(Seedance20FastRatio::UltraWide21x9)),
+    Some(RouterAspectRatio::WideThreeByTwo) | Some(RouterAspectRatio::WideFiveByFour) | Some(RouterAspectRatio::TallFourByFive) | Some(RouterAspectRatio::TallTwoByThree) => Ok(Some(Seedance20FastRatio::Adaptive)),
   }
 }
 
-fn plan_resolution(
-  resolution: Option<RouterResolution>,
-  _strategy: RequestMismatchMitigationStrategy,
-) -> Result<Option<Seedance20FastResolution>, ArtcraftRouterError> {
+fn plan_resolution(resolution: Option<RouterResolution>, _strategy: RequestMismatchMitigationStrategy) -> Result<Option<Seedance20FastResolution>, ArtcraftRouterError> {
   match resolution {
     None => Ok(None),
     Some(RouterResolution::FourEightyP) => Ok(Some(Seedance20FastResolution::FourEightyP)),
@@ -86,9 +55,7 @@ fn plan_resolution(
     // Fast model doesn't support 1080p — fall back to 720p
     Some(RouterResolution::TenEightyP) => Ok(Some(Seedance20FastResolution::SevenTwentyP)),
     Some(RouterResolution::HalfK) | Some(RouterResolution::OneK) => Ok(Some(Seedance20FastResolution::FourEightyP)),
-    Some(RouterResolution::TwoK) | Some(RouterResolution::ThreeK) | Some(RouterResolution::FourK) => {
-      Ok(Some(Seedance20FastResolution::SevenTwentyP))
-    }
+    Some(RouterResolution::TwoK) | Some(RouterResolution::ThreeK) | Some(RouterResolution::FourK) => Ok(Some(Seedance20FastResolution::SevenTwentyP)),
   }
 }
 
@@ -96,50 +63,29 @@ fn resolve_url(image_ref: Option<ImageRef>) -> Result<Option<String>, ArtcraftRo
   match image_ref {
     None => Ok(None),
     Some(ImageRef::Url(url)) => Ok(Some(url)),
-    Some(ImageRef::MediaFileToken(_)) => {
-      Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption {
-        field: "start_frame/end_frame",
-        value: "GmiCloud only supports image URLs, not media file tokens".to_string(),
-      }))
-    }
+    Some(ImageRef::MediaFileToken(_)) => Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption { field: "start_frame/end_frame", value: "GmiCloud only supports image URLs, not media file tokens".to_string() })),
   }
 }
 
-fn resolve_url_list_from_images(
-  list_ref: Option<ImageListRef>,
-) -> Result<Option<Vec<String>>, ArtcraftRouterError> {
+fn resolve_url_list_from_images(list_ref: Option<ImageListRef>) -> Result<Option<Vec<String>>, ArtcraftRouterError> {
   match list_ref {
     None => Ok(None),
     Some(ImageListRef::Urls(urls)) => Ok(Some(urls)),
-    Some(ImageListRef::MediaFileTokens(_)) => {
-      Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption {
-        field: "reference_images",
-        value: "GmiCloud only supports image URLs, not media file tokens".to_string(),
-      }))
-    }
+    Some(ImageListRef::MediaFileTokens(_)) => Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption { field: "reference_images", value: "GmiCloud only supports image URLs, not media file tokens".to_string() })),
   }
 }
 
-fn resolve_url_list_from_videos(
-  list_ref: Option<VideoListRef>,
-) -> Result<Option<Vec<String>>, ArtcraftRouterError> {
+fn resolve_url_list_from_videos(list_ref: Option<VideoListRef>) -> Result<Option<Vec<String>>, ArtcraftRouterError> {
   match list_ref {
     None => Ok(None),
     Some(VideoListRef::Urls(urls)) => Ok(Some(urls)),
-    Some(VideoListRef::MediaFileTokens(_)) => {
-      Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption {
-        field: "reference_videos",
-        value: "GmiCloud only supports video URLs, not media file tokens".to_string(),
-      }))
-    }
+    Some(VideoListRef::MediaFileTokens(_)) => Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption { field: "reference_videos", value: "GmiCloud only supports video URLs, not media file tokens".to_string() })),
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use gmicloud_client::requests::api::video::seedance_2_0_fast_260128::api::{
-    Seedance20FastRatio, Seedance20FastResolution,
-  };
+  use gmicloud_client::requests::api::video::seedance_2_0_fast_260128::api::{Seedance20FastRatio, Seedance20FastResolution};
   use tokens::tokens::media_files::MediaFileToken;
 
   use crate::api::router_aspect_ratio::RouterAspectRatio;
@@ -161,25 +107,33 @@ mod tests {
 
     #[test]
     fn prompt_passed_through() {
-      let req = unwrap_request(make_builder(|b| { b.prompt = Some("fast test".to_string()); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.prompt = Some("fast test".to_string());
+      }));
       assert_eq!(req.request.prompt, "fast test");
     }
 
     #[test]
     fn duration_passed_through() {
-      let req = unwrap_request(make_builder(|b| { b.duration_seconds = Some(8); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.duration_seconds = Some(8);
+      }));
       assert_eq!(req.request.duration, Some(8));
     }
 
     #[test]
     fn duration_clamped_to_min() {
-      let req = unwrap_request(make_builder(|b| { b.duration_seconds = Some(2); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.duration_seconds = Some(2);
+      }));
       assert_eq!(req.request.duration, Some(4));
     }
 
     #[test]
     fn duration_clamped_to_max() {
-      let req = unwrap_request(make_builder(|b| { b.duration_seconds = Some(30); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.duration_seconds = Some(30);
+      }));
       assert_eq!(req.request.duration, Some(15));
     }
   }
@@ -189,19 +143,25 @@ mod tests {
 
     #[test]
     fn res_480p() {
-      let req = unwrap_request(make_builder(|b| { b.resolution = Some(RouterResolution::FourEightyP); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.resolution = Some(RouterResolution::FourEightyP);
+      }));
       assert_eq!(req.request.resolution, Some(Seedance20FastResolution::FourEightyP));
     }
 
     #[test]
     fn res_720p() {
-      let req = unwrap_request(make_builder(|b| { b.resolution = Some(RouterResolution::SevenTwentyP); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.resolution = Some(RouterResolution::SevenTwentyP);
+      }));
       assert_eq!(req.request.resolution, Some(Seedance20FastResolution::SevenTwentyP));
     }
 
     #[test]
     fn res_1080p_falls_back_to_720p() {
-      let req = unwrap_request(make_builder(|b| { b.resolution = Some(RouterResolution::TenEightyP); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.resolution = Some(RouterResolution::TenEightyP);
+      }));
       assert_eq!(req.request.resolution, Some(Seedance20FastResolution::SevenTwentyP));
     }
 
@@ -217,19 +177,25 @@ mod tests {
 
     #[test]
     fn landscape_16x9() {
-      let req = unwrap_request(make_builder(|b| { b.aspect_ratio = Some(RouterAspectRatio::WideSixteenByNine); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.aspect_ratio = Some(RouterAspectRatio::WideSixteenByNine);
+      }));
       assert_eq!(req.request.ratio, Some(Seedance20FastRatio::Landscape16x9));
     }
 
     #[test]
     fn square() {
-      let req = unwrap_request(make_builder(|b| { b.aspect_ratio = Some(RouterAspectRatio::Square); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.aspect_ratio = Some(RouterAspectRatio::Square);
+      }));
       assert_eq!(req.request.ratio, Some(Seedance20FastRatio::Square));
     }
 
     #[test]
     fn auto_maps_to_none() {
-      let req = unwrap_request(make_builder(|b| { b.aspect_ratio = Some(RouterAspectRatio::Auto); }));
+      let req = unwrap_request(make_builder(|b| {
+        b.aspect_ratio = Some(RouterAspectRatio::Auto);
+      }));
       assert_eq!(req.request.ratio, None);
     }
   }
@@ -247,10 +213,7 @@ mod tests {
 
     #[test]
     fn media_file_token_rejected() {
-      let result = build_gmicloud_seedance_2p0_u_fast(GenerateVideoRequestBuilder {
-        start_frame: Some(ImageRef::MediaFileToken(MediaFileToken::new("mf_x".to_string()))),
-        ..base_builder()
-      });
+      let result = build_gmicloud_seedance_2p0_u_fast(GenerateVideoRequestBuilder { start_frame: Some(ImageRef::MediaFileToken(MediaFileToken::new("mf_x".to_string()))), ..base_builder() });
       assert!(result.is_err());
     }
 
@@ -283,13 +246,7 @@ mod tests {
   }
 
   fn base_builder() -> GenerateVideoRequestBuilder {
-    GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Seedance2p0UltraFast,
-      provider: RouterProvider::GmiCloud,
-      duration_seconds: Some(5),
-      video_batch_count: Some(1),
-      ..Default::default()
-    }
+    GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0UltraFast, provider: RouterProvider::GmiCloud, duration_seconds: Some(5), video_batch_count: Some(1), ..Default::default() }
   }
 
   fn make_builder(f: impl FnOnce(&mut GenerateVideoRequestBuilder)) -> GenerateVideoRequestBuilder {
@@ -307,17 +264,10 @@ mod tests {
   }
 }
 
-fn resolve_url_list_from_audios(
-  list_ref: Option<AudioListRef>,
-) -> Result<Option<Vec<String>>, ArtcraftRouterError> {
+fn resolve_url_list_from_audios(list_ref: Option<AudioListRef>) -> Result<Option<Vec<String>>, ArtcraftRouterError> {
   match list_ref {
     None => Ok(None),
     Some(AudioListRef::Urls(urls)) => Ok(Some(urls)),
-    Some(AudioListRef::MediaFileTokens(_)) => {
-      Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption {
-        field: "reference_audios",
-        value: "GmiCloud only supports audio URLs, not media file tokens".to_string(),
-      }))
-    }
+    Some(AudioListRef::MediaFileTokens(_)) => Err(ArtcraftRouterError::Client(ClientError::ModelDoesNotSupportOption { field: "reference_audios", value: "GmiCloud only supports audio URLs, not media file tokens".to_string() })),
   }
 }

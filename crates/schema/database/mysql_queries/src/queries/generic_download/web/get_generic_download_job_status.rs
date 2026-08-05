@@ -20,12 +20,10 @@ pub struct GenericDownloadJobStatus {
 
 /// Look up job status.
 /// Returns Ok(None) when the record cannot be found.
-pub async fn get_generic_download_job_status(job_token: &DownloadJobToken, mysql_pool: &MySqlPool)
-  -> AnyhowResult<Option<GenericDownloadJobStatus>>
-{
+pub async fn get_generic_download_job_status(job_token: &DownloadJobToken, mysql_pool: &MySqlPool) -> AnyhowResult<Option<GenericDownloadJobStatus>> {
   let maybe_status = sqlx::query_as!(
-      GenericDownloadJobStatus,
-        r#"
+    GenericDownloadJobStatus,
+    r#"
 SELECT
     jobs.token as `job_token: tokens::tokens::generic_download_jobs::DownloadJobToken`,
 
@@ -41,10 +39,10 @@ FROM generic_download_jobs as jobs
 
 WHERE jobs.token = ?
         "#,
-      job_token
-    )
-      .fetch_one(mysql_pool)
-      .await;
+    job_token
+  )
+  .fetch_one(mysql_pool)
+  .await;
 
   match maybe_status {
     Ok(record) => Ok(Some(record)),
@@ -53,7 +51,7 @@ WHERE jobs.token = ?
       _ => {
         warn!("error querying job record: {:?}", err);
         Err(anyhow!("error querying job record: {:?}", err))
-      }
-    }
+      },
+    },
   }
 }

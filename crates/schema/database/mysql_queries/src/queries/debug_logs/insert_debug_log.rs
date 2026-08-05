@@ -40,9 +40,7 @@ where
 /// Insert a single debug log row.
 ///
 /// Returns the event token used.
-pub async fn insert_debug_log<'e, 'c: 'e, E>(
-  args: InsertDebugLogArgs<'e, 'c, E>,
-) -> Result<DebugLogEventToken, sqlx::Error>
+pub async fn insert_debug_log<'e, 'c: 'e, E>(args: InsertDebugLogArgs<'e, 'c, E>) -> Result<DebugLogEventToken, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -71,8 +69,8 @@ SET
     args.maybe_url.map(|url| truncate_chars(url, MAX_URL_CHARS)),
     args.message,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(event_token)
 }

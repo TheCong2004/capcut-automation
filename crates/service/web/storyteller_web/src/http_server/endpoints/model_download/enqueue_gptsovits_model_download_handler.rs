@@ -61,30 +61,19 @@ pub struct EnqueueGptSovitsModelDownloadSuccessResponse {
     (status = 400, body = CommonWebError),
   )
 )]
-pub async fn enqueue_gptsovits_model_download_handler(
-  http_request: HttpRequest,
-  request: Json<EnqueueGptSovitsModelDownloadRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<EnqueueGptSovitsModelDownloadSuccessResponse>, CommonWebError>
-{
+pub async fn enqueue_gptsovits_model_download_handler(http_request: HttpRequest, request: Json<EnqueueGptSovitsModelDownloadRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<EnqueueGptSovitsModelDownloadSuccessResponse>, CommonWebError> {
   // ==================== DB ==================== //
 
-  let mut mysql_connection = server_state.mysql_pool
-    .acquire()
-    .await
-    .map_err(|err| {
-      warn!("MySql pool error: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // ==================== USER SESSION ==================== //
 
-  let maybe_avt_token = server_state.avt_cookie_manager
-    .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
-  let user_session = require_user_session_extended(
-    &http_request,
-    &server_state.session_checker,
-    &mut *mysql_connection).await?;
+  let user_session = require_user_session_extended(&http_request, &server_state.session_checker, &mut *mysql_connection).await?;
 
   // NB: The connection isn't needed past this point (the enqueue below uses the pool directly),
   // so release it now rather than holding a pool slot for the rest of the handler.
@@ -99,7 +88,7 @@ pub async fn enqueue_gptsovits_model_download_handler(
 
   let is_debug_request = has_debug_header(&http_request);
 
-  let maybe_routing_tag= get_routing_tag_header(&http_request);
+  let maybe_routing_tag = get_routing_tag_header(&http_request);
 
   if let Err(_err) = server_state.redis_rate_limiters.model_upload.rate_limit_request(&http_request).await {
     return Err(CommonWebError::TooManyRequests);
@@ -124,14 +113,14 @@ pub async fn enqueue_gptsovits_model_download_handler(
   }
 
   match is_bad_tts_model_download_url(&download_url) {
-    Ok(false) => {} // Ok case
+    Ok(false) => {}, // Ok case
     Ok(true) => {
       return Err(CommonWebError::BadInputWithSimpleMessage("Bad model download URL".to_string()));
-    }
+    },
     Err(err) => {
       warn!("Error parsing url: {:?}", err);
       return Err(CommonWebError::BadInputWithSimpleMessage("Bad model download URL".to_string()));
-    }
+    },
   }
 
   let query_result = insert_generic_inference_job(InsertGenericInferenceArgs {
@@ -149,15 +138,13 @@ pub async fn enqueue_gptsovits_model_download_handler(
     maybe_max_duration_seconds: None,
     maybe_inference_args: Some(GenericInferenceArgs {
       inference_category: Some(InferenceCategoryAbbreviated::GptSovits),
-      args: Some(PolymorphicInferenceArgs::Gs(
-        GptSovitsPayload {
-          maybe_title: title.map(|s| s.to_string()),
-          maybe_description: description.map(|s| s.to_string()),
-          creator_visibility: Some(creator_set_visibility),
-          // Inference only args:
-          append_advertisement: None,
-        })
-      ),
+      args: Some(PolymorphicInferenceArgs::Gs(GptSovitsPayload {
+        maybe_title: title.map(|s| s.to_string()),
+        maybe_description: description.map(|s| s.to_string()),
+        creator_visibility: Some(creator_set_visibility),
+        // Inference only args:
+        append_advertisement: None,
+      })),
     }),
     maybe_creator_user_token: Some(&user_session.user_token_typed),
     maybe_avt_token: maybe_avt_token.as_ref(),
@@ -168,7 +155,8 @@ pub async fn enqueue_gptsovits_model_download_handler(
     is_debug_request,
     maybe_routing_tag: maybe_routing_tag.as_deref(),
     mysql_pool: &server_state.mysql_pool,
-  }).await;
+  })
+  .await;
 
   let job_token = match query_result {
     Ok((job_token, _id)) => job_token,
@@ -178,11 +166,8 @@ pub async fn enqueue_gptsovits_model_download_handler(
         return Err(CommonWebError::BadInputWithSimpleMessage("Duplicate idempotency token".to_string()));
       }
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
-  Ok(Json(EnqueueGptSovitsModelDownloadSuccessResponse {
-    success: true,
-    job_token,
-  }))
+  Ok(Json(EnqueueGptSovitsModelDownloadSuccessResponse { success: true, job_token }))
 }

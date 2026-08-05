@@ -10,11 +10,7 @@ const MAX_RECENCY_COMPONENT: f64 = 300.0;
 /// the score is a value component (dominant, log-scaled lifetime net spend) plus a
 /// recency component that decays with time since the user lapsed. A big spender who
 /// lapsed a while ago still outranks a small spender who just lapsed.
-pub fn reengagement_score(
-  lifetime_net_spend_usd_cents: u64,
-  maybe_days_since_last_payment: Option<u32>,
-  config: &ReengagementConfig,
-) -> u32 {
+pub fn reengagement_score(lifetime_net_spend_usd_cents: u64, maybe_days_since_last_payment: Option<u32>, config: &ReengagementConfig) -> u32 {
   let days_since_last = match maybe_days_since_last_payment {
     Some(days) => days,
     None => return 0, // never paid -> not a re-engagement target
@@ -28,9 +24,7 @@ pub fn reengagement_score(
   }
 
   let dollars = lifetime_net_spend_usd_cents as f64 / 100.0;
-  let value_component = (MAX_VALUE_COMPONENT * (1.0 + dollars).ln()
-    / (1.0 + config.value_cap_dollars).ln())
-    .clamp(0.0, MAX_VALUE_COMPONENT);
+  let value_component = (MAX_VALUE_COMPONENT * (1.0 + dollars).ln() / (1.0 + config.value_cap_dollars).ln()).clamp(0.0, MAX_VALUE_COMPONENT);
 
   let days_lapsed = (days_since_last - config.active_threshold_days) as f64;
   let recency_fraction = (1.0 - days_lapsed / config.decay_days).max(0.0);
@@ -43,11 +37,7 @@ pub fn reengagement_score(
 mod tests {
   use super::*;
 
-  const CONFIG: ReengagementConfig = ReengagementConfig {
-    value_cap_dollars: 1000.0,
-    active_threshold_days: 14,
-    decay_days: 350.0,
-  };
+  const CONFIG: ReengagementConfig = ReengagementConfig { value_cap_dollars: 1000.0, active_threshold_days: 14, decay_days: 350.0 };
 
   #[test]
   fn never_paid_scores_zero() {

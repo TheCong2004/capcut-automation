@@ -11,10 +11,7 @@ use crate::order_reconciler::OrderDetails;
 
 /// Reconcile a single finished order into our system, dispatching on its
 /// terminal status and media type.
-pub async fn process_one_order(
-  deps: &JobDependencies,
-  details: &OrderDetails,
-) -> AnyhowResult<()> {
+pub async fn process_one_order(deps: &JobDependencies, details: &OrderDetails) -> AnyhowResult<()> {
   let job = &details.database_record;
   let order = &details.kinovi_record;
 
@@ -28,33 +25,24 @@ pub async fn process_one_order(
         Some(OrderMediaType::Image) => process_successful_image_job(deps, job, order).await,
         Some(OrderMediaType::Video) | None => process_successful_video_job(deps, job, order).await,
         Some(OrderMediaType::Unknown(other)) => {
-          warn!(
-            "Order {} has unrecognised media_type {:?}; treating as video.",
-            order.order_id, other,
-          );
+          warn!("Order {} has unrecognised media_type {:?}; treating as video.", order.order_id, other,);
           process_successful_video_job(deps, job, order).await
-        }
+        },
       }
-    }
+    },
     TaskStatus::Failed => {
       process_failed_job(deps, job, order).await;
       Ok(())
-    }
+    },
     // The poller only stages terminal orders, so these shouldn't occur — but be
     // defensive rather than mis-process a non-final order.
     TaskStatus::Pending | TaskStatus::Processing => {
-      warn!(
-        "Staged order {} is unexpectedly still in progress ({:?}); skipping.",
-        order.order_id, order.task_status,
-      );
+      warn!("Staged order {} is unexpectedly still in progress ({:?}); skipping.", order.order_id, order.task_status,);
       Ok(())
-    }
+    },
     TaskStatus::Unknown(status) => {
-      warn!(
-        "Staged order {} has unknown status {:?}; skipping.",
-        order.order_id, status,
-      );
+      warn!("Staged order {} has unknown status {:?}; skipping.", order.order_id, status,);
       Ok(())
-    }
+    },
   }
 }

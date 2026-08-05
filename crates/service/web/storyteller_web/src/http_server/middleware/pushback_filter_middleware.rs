@@ -42,9 +42,7 @@ impl ResponseError for PushbackError {
     // NB: I'm setting a string error code because I mistakenly got caught by this in local dev
     // and couldn't figure out the issue for a bit. At least I can grep for this string.
     // However, I need to balance this requirement with not cluing in those that are banned.
-    to_simple_json_error(
-      "ERR429.67: too many requests",
-      self.status_code())
+    to_simple_json_error("ERR429.67: too many requests", self.status_code())
   }
 }
 
@@ -55,16 +53,14 @@ pub struct PushbackFilter {
 
 impl PushbackFilter {
   pub fn new(feature_flags: &StaticFeatureFlags) -> Self {
-    Self {
-      feature_flags: feature_flags.clone(),
-    }
+    Self { feature_flags: feature_flags.clone() }
   }
 }
 
 impl<S, B> Transform<S, ServiceRequest> for PushbackFilter
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;
@@ -83,9 +79,9 @@ pub struct PushbackFilterMiddleware<S> {
 }
 
 impl<S, B> Service<ServiceRequest> for PushbackFilterMiddleware<S>
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;
@@ -119,9 +115,7 @@ impl<S, B> Service<ServiceRequest> for PushbackFilterMiddleware<S>
 
     if !can_bypass_filter {
       // TODO: Clean up with transpose() once stable
-      let result = req.headers()
-          .get("bypass-pushback-filter")
-          .map(|h| h.to_str());
+      let result = req.headers().get("bypass-pushback-filter").map(|h| h.to_str());
 
       can_bypass_filter = match result {
         Some(Ok(header)) => true,
@@ -173,9 +167,5 @@ fn is_kube_probe_health_check(request: &ServiceRequest) -> bool {
 }
 
 fn get_header_value<'a>(request: &'a ServiceRequest, header_name: &HeaderName) -> Option<&'a str> {
-  request.headers()
-      .get(header_name)
-      .map(|h| h.to_str())
-      .transpose()
-      .unwrap_or(None)
+  request.headers().get(header_name).map(|h| h.to_str()).transpose().unwrap_or(None)
 }

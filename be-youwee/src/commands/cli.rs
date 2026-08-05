@@ -13,121 +13,97 @@ const ALLOWED_SUBTITLE_FORMATS: [&str; 3] = ["srt", "vtt", "ass"];
 
 #[derive(Clone, serde::Serialize)]
 pub struct CliDownloadRequest {
-    pub url: String,
-    pub target: String,
-    pub action: String,
-    pub media: String,
-    pub quality: String,
-    pub output_path: Option<String>,
-    pub skip_live: bool,
-    pub download_playlist: Option<bool>,
-    pub subtitle_mode: Option<String>,
-    pub subtitle_langs: Vec<String>,
-    pub subtitle_embed: bool,
-    pub subtitle_format: Option<String>,
-    pub download_sections: Option<String>,
-    pub live_from_start: bool,
-    pub trusted_local: bool,
+  pub url: String,
+  pub target: String,
+  pub action: String,
+  pub media: String,
+  pub quality: String,
+  pub output_path: Option<String>,
+  pub skip_live: bool,
+  pub download_playlist: Option<bool>,
+  pub subtitle_mode: Option<String>,
+  pub subtitle_langs: Vec<String>,
+  pub subtitle_embed: bool,
+  pub subtitle_format: Option<String>,
+  pub download_sections: Option<String>,
+  pub live_from_start: bool,
+  pub trusted_local: bool,
 }
 
 #[derive(Clone, serde::Serialize)]
 pub struct ExternalCliDownloadEventPayload {
-    pub requests: Vec<CliDownloadRequest>,
+  pub requests: Vec<CliDownloadRequest>,
 }
 
 #[derive(Default)]
 pub struct CliDownloadArgs {
-    pub url: Option<String>,
-    pub quality: Option<String>,
-    pub output_path: Option<String>,
-    pub audio: bool,
-    pub queue_only: bool,
-    pub target: Option<String>,
-    pub skip_live: bool,
-    pub download_playlist: Option<bool>,
-    pub subtitle_mode: Option<String>,
-    pub subtitle_langs: Option<String>,
-    pub subtitle_embed: bool,
-    pub subtitle_format: Option<String>,
-    pub download_sections: Option<String>,
-    pub live_from_start: bool,
+  pub url: Option<String>,
+  pub quality: Option<String>,
+  pub output_path: Option<String>,
+  pub audio: bool,
+  pub queue_only: bool,
+  pub target: Option<String>,
+  pub skip_live: bool,
+  pub download_playlist: Option<bool>,
+  pub subtitle_mode: Option<String>,
+  pub subtitle_langs: Option<String>,
+  pub subtitle_embed: bool,
+  pub subtitle_format: Option<String>,
+  pub download_sections: Option<String>,
+  pub live_from_start: bool,
 }
 
 pub fn print_cli_usage_and_should_exit(argv: &[String]) -> bool {
-    if argv
-        .iter()
-        .skip(1)
-        .any(|arg| arg == "--help" || arg == "-h")
-    {
-        print_cli_text(&cli_help_text(command_name(argv)));
-        return true;
-    }
+  if argv.iter().skip(1).any(|arg| arg == "--help" || arg == "-h") {
+    print_cli_text(&cli_help_text(command_name(argv)));
+    return true;
+  }
 
-    if argv
-        .iter()
-        .skip(1)
-        .any(|arg| arg == "--version" || arg == "-V")
-    {
-        print_cli_text(&format!("Youwee {}", env!("CARGO_PKG_VERSION")));
-        return true;
-    }
+  if argv.iter().skip(1).any(|arg| arg == "--version" || arg == "-V") {
+    print_cli_text(&format!("Youwee {}", env!("CARGO_PKG_VERSION")));
+    return true;
+  }
 
-    false
+  false
 }
 
 fn print_cli_text(text: &str) {
-    #[cfg(windows)]
-    if print_to_windows_parent_console(text) {
-        return;
-    }
+  #[cfg(windows)]
+  if print_to_windows_parent_console(text) {
+    return;
+  }
 
-    println!("{}", text);
+  println!("{}", text);
 }
 
 #[cfg(windows)]
 fn print_to_windows_parent_console(text: &str) -> bool {
-    use windows_sys::Win32::System::Console::{
-        AttachConsole, FreeConsole, GetStdHandle, WriteConsoleW, ATTACH_PARENT_PROCESS,
-        STD_OUTPUT_HANDLE,
-    };
+  use windows_sys::Win32::System::Console::{AttachConsole, FreeConsole, GetStdHandle, WriteConsoleW, ATTACH_PARENT_PROCESS, STD_OUTPUT_HANDLE};
 
-    unsafe {
-        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
-            return false;
-        }
-
-        let mut output = text.to_string();
-        output.push_str("\r\n");
-        let wide: Vec<u16> = output.encode_utf16().collect();
-        let mut written = 0;
-        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        let ok = WriteConsoleW(
-            handle,
-            wide.as_ptr().cast(),
-            wide.len() as u32,
-            &mut written,
-            std::ptr::null_mut(),
-        ) != 0;
-
-        FreeConsole();
-        ok
+  unsafe {
+    if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+      return false;
     }
+
+    let mut output = text.to_string();
+    output.push_str("\r\n");
+    let wide: Vec<u16> = output.encode_utf16().collect();
+    let mut written = 0;
+    let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    let ok = WriteConsoleW(handle, wide.as_ptr().cast(), wide.len() as u32, &mut written, std::ptr::null_mut()) != 0;
+
+    FreeConsole();
+    ok
+  }
 }
 
 fn command_name(argv: &[String]) -> &str {
-    argv.first()
-        .and_then(|arg| {
-            std::path::Path::new(arg)
-                .file_name()
-                .and_then(|name| name.to_str())
-        })
-        .filter(|name| !name.is_empty())
-        .unwrap_or("youwee")
+  argv.first().and_then(|arg| std::path::Path::new(arg).file_name().and_then(|name| name.to_str())).filter(|name| !name.is_empty()).unwrap_or("youwee")
 }
 
 fn cli_help_text(command: &str) -> String {
-    format!(
-        "\
+  format!(
+    "\
 Youwee {version}
 GUI for yt-dlp. Pass a video URL to queue or download it.
 
@@ -155,677 +131,481 @@ Options:
       --live-from-start Download livestreams from the beginning
   -h, --help            Print help
   -V, --version         Print version",
-        version = env!("CARGO_PKG_VERSION")
-    )
+    version = env!("CARGO_PKG_VERSION")
+  )
 }
 
 fn is_accepted_cli_url(url: &str) -> bool {
-    if url.is_empty() || url.len() > MAX_CLI_URL_LENGTH {
-        return false;
-    }
-    if url.contains(char::is_whitespace) {
-        return false;
-    }
-    if url.contains('\\') {
-        return false;
-    }
+  if url.is_empty() || url.len() > MAX_CLI_URL_LENGTH {
+    return false;
+  }
+  if url.contains(char::is_whitespace) {
+    return false;
+  }
+  if url.contains('\\') {
+    return false;
+  }
 
-    let Ok(parsed) = Url::parse(url) else {
-        return false;
-    };
-    if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return false;
-    }
+  let Ok(parsed) = Url::parse(url) else {
+    return false;
+  };
+  if parsed.scheme() != "http" && parsed.scheme() != "https" {
+    return false;
+  }
 
-    parsed
-        .host_str()
-        .map(|host| !is_private_or_local_host(host))
-        .unwrap_or(false)
+  parsed.host_str().map(|host| !is_private_or_local_host(host)).unwrap_or(false)
 }
 
 fn is_private_or_local_host(hostname: &str) -> bool {
-    let host = hostname
-        .trim()
-        .trim_start_matches('[')
-        .trim_end_matches(']')
-        .to_ascii_lowercase();
-    if host.is_empty() {
-        return true;
-    }
+  let host = hostname.trim().trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+  if host.is_empty() {
+    return true;
+  }
 
-    if host == "localhost"
-        || host == "0.0.0.0"
-        || host == "::"
-        || host == "::1"
-        || host.ends_with(".localhost")
-        || host.ends_with(".local")
-        || host.ends_with(".internal")
-    {
-        return true;
-    }
+  if host == "localhost" || host == "0.0.0.0" || host == "::" || host == "::1" || host.ends_with(".localhost") || host.ends_with(".local") || host.ends_with(".internal") {
+    return true;
+  }
 
-    if host.starts_with("127.")
-        || host.starts_with("10.")
-        || host.starts_with("192.168.")
-        || host.starts_with("169.254.")
-    {
-        return true;
-    }
+  if host.starts_with("127.") || host.starts_with("10.") || host.starts_with("192.168.") || host.starts_with("169.254.") {
+    return true;
+  }
 
-    if let Some(second_octet) = host
-        .strip_prefix("172.")
-        .and_then(|rest| rest.split('.').next())
-        .and_then(|octet| octet.parse::<u8>().ok())
-    {
-        if (16..=31).contains(&second_octet) {
-            return true;
-        }
+  if let Some(second_octet) = host.strip_prefix("172.").and_then(|rest| rest.split('.').next()).and_then(|octet| octet.parse::<u8>().ok()) {
+    if (16..=31).contains(&second_octet) {
+      return true;
     }
+  }
 
-    if host.contains(':') {
-        return host.starts_with("fe80:") || host.starts_with("fc") || host.starts_with("fd");
-    }
+  if host.contains(':') {
+    return host.starts_with("fe80:") || host.starts_with("fc") || host.starts_with("fd");
+  }
 
-    false
+  false
 }
 
 /// Build a structured CLI download request from parsed CLI arguments.
 /// Returns `None` when no usable URL is present.
 pub fn build_cli_download_request(args: &CliDownloadArgs) -> Option<CliDownloadRequest> {
-    let url = normalize_cli_url_arg(args.url.as_ref()?);
-    if !is_accepted_cli_url(&url) {
-        return None;
-    }
+  let url = normalize_cli_url_arg(args.url.as_ref()?);
+  if !is_accepted_cli_url(&url) {
+    return None;
+  }
 
-    let media = if args.audio { "audio" } else { "video" }.to_string();
-    let quality = normalize_cli_quality(args.quality.as_deref(), args.audio);
-    let output_path = normalize_cli_output_path(args.output_path.as_deref());
-    let action = if args.queue_only {
-        "queue_only"
+  let media = if args.audio { "audio" } else { "video" }.to_string();
+  let quality = normalize_cli_quality(args.quality.as_deref(), args.audio);
+  let output_path = normalize_cli_output_path(args.output_path.as_deref());
+  let action = if args.queue_only { "queue_only" } else { "download_now" }.to_string();
+  let target = normalize_cli_target(args.target.as_deref());
+  let subtitle_format = args.subtitle_format.as_deref().map(|format| normalize_cli_subtitle_format(Some(format)));
+  let subtitle_langs = normalize_cli_subtitle_langs(args.subtitle_langs.as_deref());
+  let subtitle_mode = args.subtitle_mode.as_deref().map(|mode| normalize_cli_subtitle_mode(Some(mode))).or_else(|| {
+    if !subtitle_langs.is_empty() {
+      Some("manual".to_string())
+    } else if args.subtitle_embed || subtitle_format.is_some() {
+      Some("auto".to_string())
     } else {
-        "download_now"
+      None
     }
-    .to_string();
-    let target = normalize_cli_target(args.target.as_deref());
-    let subtitle_format = args
-        .subtitle_format
-        .as_deref()
-        .map(|format| normalize_cli_subtitle_format(Some(format)));
-    let subtitle_langs = normalize_cli_subtitle_langs(args.subtitle_langs.as_deref());
-    let subtitle_mode = args
-        .subtitle_mode
-        .as_deref()
-        .map(|mode| normalize_cli_subtitle_mode(Some(mode)))
-        .or_else(|| {
-            if !subtitle_langs.is_empty() {
-                Some("manual".to_string())
-            } else if args.subtitle_embed || subtitle_format.is_some() {
-                Some("auto".to_string())
-            } else {
-                None
-            }
-        });
-    let download_sections = normalize_cli_download_sections(args.download_sections.as_deref());
+  });
+  let download_sections = normalize_cli_download_sections(args.download_sections.as_deref());
 
-    Some(CliDownloadRequest {
-        url,
-        target,
-        action,
-        media,
-        quality,
-        output_path,
-        skip_live: args.skip_live,
-        download_playlist: args.download_playlist,
-        subtitle_mode,
-        subtitle_langs,
-        subtitle_embed: args.subtitle_embed,
-        subtitle_format,
-        download_sections,
-        live_from_start: args.live_from_start,
-        trusted_local: true,
-    })
+  Some(CliDownloadRequest { url, target, action, media, quality, output_path, skip_live: args.skip_live, download_playlist: args.download_playlist, subtitle_mode, subtitle_langs, subtitle_embed: args.subtitle_embed, subtitle_format, download_sections, live_from_start: args.live_from_start, trusted_local: true })
 }
 
 fn normalize_cli_url_arg(value: &str) -> String {
-    let trimmed = value.trim().trim_matches('"').trim_matches('\'');
-    let mut normalized = String::with_capacity(trimmed.len());
-    let mut chars = trimmed.chars().peekable();
+  let trimmed = value.trim().trim_matches('"').trim_matches('\'');
+  let mut normalized = String::with_capacity(trimmed.len());
+  let mut chars = trimmed.chars().peekable();
 
-    while let Some(ch) = chars.next() {
-        if ch == '\\' {
-            if let Some(next) = chars.peek().copied() {
-                if is_shell_escaped_url_char(next) {
-                    normalized.push(next);
-                    chars.next();
-                    continue;
-                }
-            }
+  while let Some(ch) = chars.next() {
+    if ch == '\\' {
+      if let Some(next) = chars.peek().copied() {
+        if is_shell_escaped_url_char(next) {
+          normalized.push(next);
+          chars.next();
+          continue;
         }
-        normalized.push(ch);
+      }
     }
+    normalized.push(ch);
+  }
 
-    normalized
+  normalized
 }
 
 fn is_shell_escaped_url_char(ch: char) -> bool {
-    matches!(
-        ch,
-        '?' | '='
-            | '&'
-            | '#'
-            | '%'
-            | '+'
-            | ':'
-            | '/'
-            | '.'
-            | '_'
-            | '-'
-            | '~'
-            | '@'
-            | '!'
-            | '$'
-            | '\''
-            | '('
-            | ')'
-            | '*'
-            | ','
-            | ';'
-            | '['
-            | ']'
-    )
+  matches!(ch, '?' | '=' | '&' | '#' | '%' | '+' | ':' | '/' | '.' | '_' | '-' | '~' | '@' | '!' | '$' | '\'' | '(' | ')' | '*' | ',' | ';' | '[' | ']')
 }
 
 fn normalize_cli_quality(value: Option<&str>, audio: bool) -> String {
-    let fallback = if audio { "auto" } else { "best" };
-    let Some(quality) = value.map(|q| q.trim().to_ascii_lowercase()) else {
-        return fallback.to_string();
-    };
-    let allowed = if audio {
-        ALLOWED_AUDIO_QUALITIES.contains(&quality.as_str())
-    } else {
-        ALLOWED_VIDEO_QUALITIES.contains(&quality.as_str())
-    };
-    if allowed {
-        quality
-    } else {
-        fallback.to_string()
-    }
+  let fallback = if audio { "auto" } else { "best" };
+  let Some(quality) = value.map(|q| q.trim().to_ascii_lowercase()) else {
+    return fallback.to_string();
+  };
+  let allowed = if audio { ALLOWED_AUDIO_QUALITIES.contains(&quality.as_str()) } else { ALLOWED_VIDEO_QUALITIES.contains(&quality.as_str()) };
+  if allowed {
+    quality
+  } else {
+    fallback.to_string()
+  }
 }
 
 fn normalize_cli_output_path(value: Option<&str>) -> Option<String> {
-    let path = value?.trim().trim_matches('"').trim_matches('\'');
-    if path.is_empty()
-        || path.len() > 4096
-        || path.contains('\0')
-        || path.chars().any(|c| c.is_control())
-        || !is_cross_platform_absolute_path(path)
-    {
-        return None;
-    }
-    Some(path.to_string())
+  let path = value?.trim().trim_matches('"').trim_matches('\'');
+  if path.is_empty() || path.len() > 4096 || path.contains('\0') || path.chars().any(|c| c.is_control()) || !is_cross_platform_absolute_path(path) {
+    return None;
+  }
+  Some(path.to_string())
 }
 
 fn is_cross_platform_absolute_path(path: &str) -> bool {
-    if path.starts_with('/') {
-        return true;
-    }
-    if path.starts_with("\\\\") || path.starts_with("//") {
-        return true;
-    }
+  if path.starts_with('/') {
+    return true;
+  }
+  if path.starts_with("\\\\") || path.starts_with("//") {
+    return true;
+  }
 
-    let bytes = path.as_bytes();
-    bytes.len() >= 3
-        && bytes[0].is_ascii_alphabetic()
-        && bytes[1] == b':'
-        && (bytes[2] == b'\\' || bytes[2] == b'/')
+  let bytes = path.as_bytes();
+  bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/')
 }
 
 fn normalize_cli_target(value: Option<&str>) -> String {
-    let Some(target) = value.map(|t| t.trim().to_ascii_lowercase()) else {
-        return "auto".to_string();
-    };
-    if target == "youtube" || target == "universal" {
-        target
-    } else {
-        "auto".to_string()
-    }
+  let Some(target) = value.map(|t| t.trim().to_ascii_lowercase()) else {
+    return "auto".to_string();
+  };
+  if target == "youtube" || target == "universal" {
+    target
+  } else {
+    "auto".to_string()
+  }
 }
 
 fn normalize_cli_subtitle_mode(value: Option<&str>) -> String {
-    let Some(mode) = value.map(|m| m.trim().to_ascii_lowercase()) else {
-        return "off".to_string();
-    };
-    if ALLOWED_SUBTITLE_MODES.contains(&mode.as_str()) {
-        mode
-    } else {
-        "off".to_string()
-    }
+  let Some(mode) = value.map(|m| m.trim().to_ascii_lowercase()) else {
+    return "off".to_string();
+  };
+  if ALLOWED_SUBTITLE_MODES.contains(&mode.as_str()) {
+    mode
+  } else {
+    "off".to_string()
+  }
 }
 
 fn normalize_cli_subtitle_format(value: Option<&str>) -> String {
-    let Some(format) = value.map(|f| f.trim().to_ascii_lowercase()) else {
-        return "srt".to_string();
-    };
-    if ALLOWED_SUBTITLE_FORMATS.contains(&format.as_str()) {
-        format
-    } else {
-        "srt".to_string()
-    }
+  let Some(format) = value.map(|f| f.trim().to_ascii_lowercase()) else {
+    return "srt".to_string();
+  };
+  if ALLOWED_SUBTITLE_FORMATS.contains(&format.as_str()) {
+    format
+  } else {
+    "srt".to_string()
+  }
 }
 
 fn normalize_cli_subtitle_langs(value: Option<&str>) -> Vec<String> {
-    value
-        .unwrap_or("")
-        .split(',')
-        .filter_map(|lang| {
-            let lang = lang.trim();
-            if lang.is_empty()
-                || lang.len() > 16
-                || !lang
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-            {
-                None
-            } else {
-                Some(lang.to_string())
-            }
-        })
-        .take(20)
-        .collect()
+  value
+    .unwrap_or("")
+    .split(',')
+    .filter_map(|lang| {
+      let lang = lang.trim();
+      if lang.is_empty() || lang.len() > 16 || !lang.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        None
+      } else {
+        Some(lang.to_string())
+      }
+    })
+    .take(20)
+    .collect()
 }
 
 fn normalize_cli_download_sections(value: Option<&str>) -> Option<String> {
-    let section = value?.trim().trim_start_matches('*');
-    if section.is_empty() || section.len() > 64 || section.contains(char::is_whitespace) {
-        return None;
-    }
-    let (start, end) = section.split_once('-')?;
-    if is_valid_time_marker(start) && is_valid_time_marker(end) {
-        Some(format!("*{}-{}", start, end))
-    } else {
-        None
-    }
+  let section = value?.trim().trim_start_matches('*');
+  if section.is_empty() || section.len() > 64 || section.contains(char::is_whitespace) {
+    return None;
+  }
+  let (start, end) = section.split_once('-')?;
+  if is_valid_time_marker(start) && is_valid_time_marker(end) {
+    Some(format!("*{}-{}", start, end))
+  } else {
+    None
+  }
 }
 
 fn is_valid_time_marker(value: &str) -> bool {
-    let parts: Vec<&str> = value.split(':').collect();
-    if parts.len() < 2 || parts.len() > 3 {
-        return false;
-    }
-    parts
-        .iter()
-        .all(|part| !part.is_empty() && part.len() <= 2 && part.chars().all(|c| c.is_ascii_digit()))
+  let parts: Vec<&str> = value.split(':').collect();
+  if parts.len() < 2 || parts.len() > 3 {
+    return false;
+  }
+  parts.iter().all(|part| !part.is_empty() && part.len() <= 2 && part.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Best-effort parser for raw argv (used by the single-instance callback where
 /// only the raw process arguments are available). Supports the same flags as
 /// the declared CLI schema. Unknown flags are ignored.
 pub fn parse_cli_args_from_argv(argv: &[String]) -> CliDownloadArgs {
-    let mut args = CliDownloadArgs::default();
-    let mut iter = argv.iter().skip(1).peekable();
+  let mut args = CliDownloadArgs::default();
+  let mut iter = argv.iter().skip(1).peekable();
 
-    while let Some(arg) = iter.next() {
-        match arg.as_str() {
-            "--url" | "-u" => {
-                if let Some(value) = iter.next() {
-                    args.url = Some(value.clone());
-                }
-            }
-            "--quality" | "-q" => {
-                if let Some(value) = iter.next() {
-                    args.quality = Some(value.clone());
-                }
-            }
-            "--output" | "--output-dir" | "-o" => {
-                if let Some(value) = iter.next() {
-                    args.output_path = Some(value.clone());
-                }
-            }
-            "--target" | "-t" => {
-                if let Some(value) = iter.next() {
-                    args.target = Some(value.clone());
-                }
-            }
-            "--audio" | "-a" => args.audio = true,
-            "--queue-only" => args.queue_only = true,
-            "--skip-live" => args.skip_live = true,
-            "--playlist" => args.download_playlist = Some(true),
-            "--no-playlist" => args.download_playlist = Some(false),
-            "--embed-subs" => args.subtitle_embed = true,
-            "--live-from-start" => args.live_from_start = true,
-            "--subtitle-mode" => {
-                if let Some(value) = iter.next() {
-                    args.subtitle_mode = Some(value.clone());
-                }
-            }
-            "--subtitle-langs" => {
-                if let Some(value) = iter.next() {
-                    args.subtitle_langs = Some(value.clone());
-                }
-            }
-            "--subtitle-format" => {
-                if let Some(value) = iter.next() {
-                    args.subtitle_format = Some(value.clone());
-                }
-            }
-            "--download-sections" => {
-                if let Some(value) = iter.next() {
-                    args.download_sections = Some(value.clone());
-                }
-            }
-            other => {
-                // Handle --flag=value form.
-                if let Some(rest) = other.strip_prefix("--url=") {
-                    args.url = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--quality=") {
-                    args.quality = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--output=") {
-                    args.output_path = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--output-dir=") {
-                    args.output_path = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--target=") {
-                    args.target = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--subtitle-mode=") {
-                    args.subtitle_mode = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--subtitle-langs=") {
-                    args.subtitle_langs = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--subtitle-format=") {
-                    args.subtitle_format = Some(rest.to_string());
-                } else if let Some(rest) = other.strip_prefix("--download-sections=") {
-                    args.download_sections = Some(rest.to_string());
-                } else if !other.starts_with('-') && args.url.is_none() {
-                    // First positional argument is treated as the URL.
-                    args.url = Some(other.to_string());
-                }
-            }
+  while let Some(arg) = iter.next() {
+    match arg.as_str() {
+      "--url" | "-u" => {
+        if let Some(value) = iter.next() {
+          args.url = Some(value.clone());
         }
+      },
+      "--quality" | "-q" => {
+        if let Some(value) = iter.next() {
+          args.quality = Some(value.clone());
+        }
+      },
+      "--output" | "--output-dir" | "-o" => {
+        if let Some(value) = iter.next() {
+          args.output_path = Some(value.clone());
+        }
+      },
+      "--target" | "-t" => {
+        if let Some(value) = iter.next() {
+          args.target = Some(value.clone());
+        }
+      },
+      "--audio" | "-a" => args.audio = true,
+      "--queue-only" => args.queue_only = true,
+      "--skip-live" => args.skip_live = true,
+      "--playlist" => args.download_playlist = Some(true),
+      "--no-playlist" => args.download_playlist = Some(false),
+      "--embed-subs" => args.subtitle_embed = true,
+      "--live-from-start" => args.live_from_start = true,
+      "--subtitle-mode" => {
+        if let Some(value) = iter.next() {
+          args.subtitle_mode = Some(value.clone());
+        }
+      },
+      "--subtitle-langs" => {
+        if let Some(value) = iter.next() {
+          args.subtitle_langs = Some(value.clone());
+        }
+      },
+      "--subtitle-format" => {
+        if let Some(value) = iter.next() {
+          args.subtitle_format = Some(value.clone());
+        }
+      },
+      "--download-sections" => {
+        if let Some(value) = iter.next() {
+          args.download_sections = Some(value.clone());
+        }
+      },
+      other => {
+        // Handle --flag=value form.
+        if let Some(rest) = other.strip_prefix("--url=") {
+          args.url = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--quality=") {
+          args.quality = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--output=") {
+          args.output_path = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--output-dir=") {
+          args.output_path = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--target=") {
+          args.target = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--subtitle-mode=") {
+          args.subtitle_mode = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--subtitle-langs=") {
+          args.subtitle_langs = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--subtitle-format=") {
+          args.subtitle_format = Some(rest.to_string());
+        } else if let Some(rest) = other.strip_prefix("--download-sections=") {
+          args.download_sections = Some(rest.to_string());
+        } else if !other.starts_with('-') && args.url.is_none() {
+          // First positional argument is treated as the URL.
+          args.url = Some(other.to_string());
+        }
+      },
     }
+  }
 
-    args
+  args
 }
 
 /// Build a structured CLI download request from raw argv.
 pub fn build_cli_download_request_from_argv(argv: &[String]) -> Option<CliDownloadRequest> {
-    let args = parse_cli_args_from_argv(argv);
-    build_cli_download_request(&args)
+  let args = parse_cli_args_from_argv(argv);
+  build_cli_download_request(&args)
 }
 
 pub fn enqueue_cli_download_requests(requests: Vec<CliDownloadRequest>) {
-    if requests.is_empty() {
-        return;
-    }
-    if let Ok(mut pending) = PENDING_CLI_DOWNLOAD_REQUESTS.lock() {
-        for request in requests {
-            if !is_accepted_cli_url(&request.url) {
-                continue;
-            }
-            if let Some(existing) = pending.iter_mut().find(|existing| {
-                existing.url == request.url
-                    && existing.target == request.target
-                    && existing.action == request.action
-                    && existing.media == request.media
-                    && existing.quality == request.quality
-                    && existing.output_path == request.output_path
-                    && existing.skip_live == request.skip_live
-                    && existing.download_playlist == request.download_playlist
-                    && existing.subtitle_mode == request.subtitle_mode
-                    && existing.subtitle_langs == request.subtitle_langs
-                    && existing.subtitle_embed == request.subtitle_embed
-                    && existing.subtitle_format == request.subtitle_format
-                    && existing.download_sections == request.download_sections
-                    && existing.live_from_start == request.live_from_start
-            }) {
-                existing.trusted_local = existing.trusted_local || request.trusted_local;
-            } else {
-                pending.push(request);
-                if pending.len() > MAX_PENDING_CLI_DOWNLOAD_REQUESTS {
-                    let overflow = pending.len() - MAX_PENDING_CLI_DOWNLOAD_REQUESTS;
-                    pending.drain(0..overflow);
-                }
-            }
+  if requests.is_empty() {
+    return;
+  }
+  if let Ok(mut pending) = PENDING_CLI_DOWNLOAD_REQUESTS.lock() {
+    for request in requests {
+      if !is_accepted_cli_url(&request.url) {
+        continue;
+      }
+      if let Some(existing) = pending.iter_mut().find(|existing| existing.url == request.url && existing.target == request.target && existing.action == request.action && existing.media == request.media && existing.quality == request.quality && existing.output_path == request.output_path && existing.skip_live == request.skip_live && existing.download_playlist == request.download_playlist && existing.subtitle_mode == request.subtitle_mode && existing.subtitle_langs == request.subtitle_langs && existing.subtitle_embed == request.subtitle_embed && existing.subtitle_format == request.subtitle_format && existing.download_sections == request.download_sections && existing.live_from_start == request.live_from_start) {
+        existing.trusted_local = existing.trusted_local || request.trusted_local;
+      } else {
+        pending.push(request);
+        if pending.len() > MAX_PENDING_CLI_DOWNLOAD_REQUESTS {
+          let overflow = pending.len() - MAX_PENDING_CLI_DOWNLOAD_REQUESTS;
+          pending.drain(0..overflow);
         }
+      }
     }
+  }
 }
 
 pub fn take_pending_cli_download_requests() -> Vec<CliDownloadRequest> {
-    if let Ok(mut pending) = PENDING_CLI_DOWNLOAD_REQUESTS.lock() {
-        return std::mem::take(&mut *pending);
-    }
-    Vec::new()
+  if let Ok(mut pending) = PENDING_CLI_DOWNLOAD_REQUESTS.lock() {
+    return std::mem::take(&mut *pending);
+  }
+  Vec::new()
 }
 
 #[tauri::command]
 pub fn consume_pending_cli_download_requests() -> Vec<CliDownloadRequest> {
-    take_pending_cli_download_requests()
+  take_pending_cli_download_requests()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+  use super::*;
 
-    #[test]
-    fn cli_request_preserves_url_without_deep_link_encoding() {
-        let args = CliDownloadArgs {
-            url: Some("https://www.youtube.com/watch?v=abc123&list=PL1#t=30".to_string()),
-            quality: Some("720".to_string()),
-            ..Default::default()
-        };
+  #[test]
+  fn cli_request_preserves_url_without_deep_link_encoding() {
+    let args = CliDownloadArgs { url: Some("https://www.youtube.com/watch?v=abc123&list=PL1#t=30".to_string()), quality: Some("720".to_string()), ..Default::default() };
 
-        let request = build_cli_download_request(&args).expect("expected CLI request");
+    let request = build_cli_download_request(&args).expect("expected CLI request");
 
-        assert_eq!(
-            request.url,
-            "https://www.youtube.com/watch?v=abc123&list=PL1#t=30"
-        );
-        assert_eq!(request.quality, "720");
-        assert_eq!(request.action, "download_now");
-        assert_eq!(request.media, "video");
-        assert_eq!(request.target, "auto");
-        assert!(request.trusted_local);
-    }
+    assert_eq!(request.url, "https://www.youtube.com/watch?v=abc123&list=PL1#t=30");
+    assert_eq!(request.quality, "720");
+    assert_eq!(request.action, "download_now");
+    assert_eq!(request.media, "video");
+    assert_eq!(request.target, "auto");
+    assert!(request.trusted_local);
+  }
 
-    #[test]
-    fn cli_request_unescapes_shell_quoted_url_punctuation() {
-        let args = CliDownloadArgs {
-            url: Some(r"https://www.youtube.com/watch\?v\=f6COwmcIA3E".to_string()),
-            audio: true,
-            ..Default::default()
-        };
+  #[test]
+  fn cli_request_unescapes_shell_quoted_url_punctuation() {
+    let args = CliDownloadArgs { url: Some(r"https://www.youtube.com/watch\?v\=f6COwmcIA3E".to_string()), audio: true, ..Default::default() };
 
-        let request = build_cli_download_request(&args).expect("expected CLI request");
+    let request = build_cli_download_request(&args).expect("expected CLI request");
 
-        assert_eq!(request.url, "https://www.youtube.com/watch?v=f6COwmcIA3E");
-        assert_eq!(request.media, "audio");
-        assert_eq!(request.quality, "auto");
-    }
+    assert_eq!(request.url, "https://www.youtube.com/watch?v=f6COwmcIA3E");
+    assert_eq!(request.media, "audio");
+    assert_eq!(request.quality, "auto");
+  }
 
-    #[test]
-    fn cli_request_rejects_unhandled_backslash_urls() {
-        let args = CliDownloadArgs {
-            url: Some(r"https://www.youtube.com\watch?v=f6COwmcIA3E".to_string()),
-            ..Default::default()
-        };
+  #[test]
+  fn cli_request_rejects_unhandled_backslash_urls() {
+    let args = CliDownloadArgs { url: Some(r"https://www.youtube.com\watch?v=f6COwmcIA3E".to_string()), ..Default::default() };
 
-        assert!(build_cli_download_request(&args).is_none());
-    }
+    assert!(build_cli_download_request(&args).is_none());
+  }
 
-    #[test]
-    fn cli_request_rejects_non_http_urls() {
-        let args = CliDownloadArgs {
-            url: Some("file:///tmp/video.mp4".to_string()),
-            ..Default::default()
-        };
+  #[test]
+  fn cli_request_rejects_non_http_urls() {
+    let args = CliDownloadArgs { url: Some("file:///tmp/video.mp4".to_string()), ..Default::default() };
 
-        assert!(build_cli_download_request(&args).is_none());
-    }
+    assert!(build_cli_download_request(&args).is_none());
+  }
 
-    #[test]
-    fn cli_request_rejects_private_urls() {
-        let args = CliDownloadArgs {
-            url: Some("http://localhost:8080/video".to_string()),
-            ..Default::default()
-        };
+  #[test]
+  fn cli_request_rejects_private_urls() {
+    let args = CliDownloadArgs { url: Some("http://localhost:8080/video".to_string()), ..Default::default() };
 
-        assert!(build_cli_download_request(&args).is_none());
-    }
+    assert!(build_cli_download_request(&args).is_none());
+  }
 
-    #[test]
-    fn raw_argv_supports_positional_url_and_flags() {
-        let argv = vec![
-            "youwee".to_string(),
-            "https://example.com/video".to_string(),
-            "--quality=480".to_string(),
-            "--output".to_string(),
-            "/Users/example/Videos".to_string(),
-            "--queue-only".to_string(),
-            "--target".to_string(),
-            "universal".to_string(),
-        ];
+  #[test]
+  fn raw_argv_supports_positional_url_and_flags() {
+    let argv = vec!["youwee".to_string(), "https://example.com/video".to_string(), "--quality=480".to_string(), "--output".to_string(), "/Users/example/Videos".to_string(), "--queue-only".to_string(), "--target".to_string(), "universal".to_string()];
 
-        let request = build_cli_download_request_from_argv(&argv).expect("expected CLI request");
+    let request = build_cli_download_request_from_argv(&argv).expect("expected CLI request");
 
-        assert_eq!(request.url, "https://example.com/video");
-        assert_eq!(request.quality, "480");
-        assert_eq!(
-            request.output_path.as_deref(),
-            Some("/Users/example/Videos")
-        );
-        assert_eq!(request.action, "queue_only");
-        assert_eq!(request.target, "universal");
-    }
+    assert_eq!(request.url, "https://example.com/video");
+    assert_eq!(request.quality, "480");
+    assert_eq!(request.output_path.as_deref(), Some("/Users/example/Videos"));
+    assert_eq!(request.action, "queue_only");
+    assert_eq!(request.target, "universal");
+  }
 
-    #[test]
-    fn cli_request_accepts_cross_platform_absolute_output_paths() {
-        let unix_args = CliDownloadArgs {
-            url: Some("https://example.com/video".to_string()),
-            output_path: Some("/Users/example/Videos".to_string()),
-            ..Default::default()
-        };
-        let unix_request = build_cli_download_request(&unix_args).expect("expected CLI request");
-        assert_eq!(
-            unix_request.output_path.as_deref(),
-            Some("/Users/example/Videos")
-        );
+  #[test]
+  fn cli_request_accepts_cross_platform_absolute_output_paths() {
+    let unix_args = CliDownloadArgs { url: Some("https://example.com/video".to_string()), output_path: Some("/Users/example/Videos".to_string()), ..Default::default() };
+    let unix_request = build_cli_download_request(&unix_args).expect("expected CLI request");
+    assert_eq!(unix_request.output_path.as_deref(), Some("/Users/example/Videos"));
 
-        let windows_args = CliDownloadArgs {
-            url: Some("https://example.com/video".to_string()),
-            output_path: Some(r"C:\Users\example\Videos".to_string()),
-            ..Default::default()
-        };
-        let windows_request =
-            build_cli_download_request(&windows_args).expect("expected CLI request");
-        assert_eq!(
-            windows_request.output_path.as_deref(),
-            Some(r"C:\Users\example\Videos")
-        );
+    let windows_args = CliDownloadArgs { url: Some("https://example.com/video".to_string()), output_path: Some(r"C:\Users\example\Videos".to_string()), ..Default::default() };
+    let windows_request = build_cli_download_request(&windows_args).expect("expected CLI request");
+    assert_eq!(windows_request.output_path.as_deref(), Some(r"C:\Users\example\Videos"));
 
-        let unc_args = CliDownloadArgs {
-            url: Some("https://example.com/video".to_string()),
-            output_path: Some(r"\\server\share\Videos".to_string()),
-            ..Default::default()
-        };
-        let unc_request = build_cli_download_request(&unc_args).expect("expected CLI request");
-        assert_eq!(
-            unc_request.output_path.as_deref(),
-            Some(r"\\server\share\Videos")
-        );
-    }
+    let unc_args = CliDownloadArgs { url: Some("https://example.com/video".to_string()), output_path: Some(r"\\server\share\Videos".to_string()), ..Default::default() };
+    let unc_request = build_cli_download_request(&unc_args).expect("expected CLI request");
+    assert_eq!(unc_request.output_path.as_deref(), Some(r"\\server\share\Videos"));
+  }
 
-    #[test]
-    fn cli_request_falls_back_for_unsupported_values() {
-        let args = CliDownloadArgs {
-            url: Some("https://example.com/video".to_string()),
-            quality: Some("999".to_string()),
-            target: Some("desktop".to_string()),
-            ..Default::default()
-        };
+  #[test]
+  fn cli_request_falls_back_for_unsupported_values() {
+    let args = CliDownloadArgs { url: Some("https://example.com/video".to_string()), quality: Some("999".to_string()), target: Some("desktop".to_string()), ..Default::default() };
 
-        let request = build_cli_download_request(&args).expect("expected CLI request");
+    let request = build_cli_download_request(&args).expect("expected CLI request");
 
-        assert_eq!(request.quality, "best");
-        assert_eq!(request.target, "auto");
-    }
+    assert_eq!(request.quality, "best");
+    assert_eq!(request.target, "auto");
+  }
 
-    #[test]
-    fn raw_argv_supports_download_option_overrides() {
-        let argv = vec![
-            "youwee".to_string(),
-            "https://example.com/video".to_string(),
-            "--skip-live".to_string(),
-            "--playlist".to_string(),
-            "--subtitle-mode=manual".to_string(),
-            "--subtitle-langs".to_string(),
-            "en,vi".to_string(),
-            "--subtitle-format".to_string(),
-            "vtt".to_string(),
-            "--embed-subs".to_string(),
-            "--download-sections=00:30-02:10".to_string(),
-            "--live-from-start".to_string(),
-        ];
+  #[test]
+  fn raw_argv_supports_download_option_overrides() {
+    let argv = vec!["youwee".to_string(), "https://example.com/video".to_string(), "--skip-live".to_string(), "--playlist".to_string(), "--subtitle-mode=manual".to_string(), "--subtitle-langs".to_string(), "en,vi".to_string(), "--subtitle-format".to_string(), "vtt".to_string(), "--embed-subs".to_string(), "--download-sections=00:30-02:10".to_string(), "--live-from-start".to_string()];
 
-        let request = build_cli_download_request_from_argv(&argv).expect("expected CLI request");
+    let request = build_cli_download_request_from_argv(&argv).expect("expected CLI request");
 
-        assert!(request.skip_live);
-        assert_eq!(request.download_playlist, Some(true));
-        assert_eq!(request.subtitle_mode.as_deref(), Some("manual"));
-        assert_eq!(request.subtitle_langs, vec!["en", "vi"]);
-        assert!(request.subtitle_embed);
-        assert_eq!(request.subtitle_format.as_deref(), Some("vtt"));
-        assert_eq!(request.download_sections.as_deref(), Some("*00:30-02:10"));
-        assert!(request.live_from_start);
-    }
+    assert!(request.skip_live);
+    assert_eq!(request.download_playlist, Some(true));
+    assert_eq!(request.subtitle_mode.as_deref(), Some("manual"));
+    assert_eq!(request.subtitle_langs, vec!["en", "vi"]);
+    assert!(request.subtitle_embed);
+    assert_eq!(request.subtitle_format.as_deref(), Some("vtt"));
+    assert_eq!(request.download_sections.as_deref(), Some("*00:30-02:10"));
+    assert!(request.live_from_start);
+  }
 
-    #[test]
-    fn cli_request_sanitizes_download_option_overrides() {
-        let args = CliDownloadArgs {
-            url: Some("https://example.com/video".to_string()),
-            subtitle_mode: Some("invalid".to_string()),
-            subtitle_langs: Some("en,../../secret,vi".to_string()),
-            subtitle_format: Some("txt".to_string()),
-            download_sections: Some("not a range".to_string()),
-            output_path: Some("relative/videos".to_string()),
-            ..Default::default()
-        };
+  #[test]
+  fn cli_request_sanitizes_download_option_overrides() {
+    let args = CliDownloadArgs { url: Some("https://example.com/video".to_string()), subtitle_mode: Some("invalid".to_string()), subtitle_langs: Some("en,../../secret,vi".to_string()), subtitle_format: Some("txt".to_string()), download_sections: Some("not a range".to_string()), output_path: Some("relative/videos".to_string()), ..Default::default() };
 
-        let request = build_cli_download_request(&args).expect("expected CLI request");
+    let request = build_cli_download_request(&args).expect("expected CLI request");
 
-        assert_eq!(request.subtitle_mode.as_deref(), Some("off"));
-        assert_eq!(request.subtitle_langs, vec!["en", "vi"]);
-        assert_eq!(request.subtitle_format.as_deref(), Some("srt"));
-        assert_eq!(request.download_sections, None);
-        assert_eq!(request.output_path, None);
-    }
+    assert_eq!(request.subtitle_mode.as_deref(), Some("off"));
+    assert_eq!(request.subtitle_langs, vec!["en", "vi"]);
+    assert_eq!(request.subtitle_format.as_deref(), Some("srt"));
+    assert_eq!(request.download_sections, None);
+    assert_eq!(request.output_path, None);
+  }
 
-    #[test]
-    fn subtitle_options_imply_subtitle_mode_when_omitted() {
-        let args = CliDownloadArgs {
-            url: Some("https://example.com/video".to_string()),
-            subtitle_langs: Some("en,vi".to_string()),
-            ..Default::default()
-        };
-        let request = build_cli_download_request(&args).expect("expected CLI request");
-        assert_eq!(request.subtitle_mode.as_deref(), Some("manual"));
+  #[test]
+  fn subtitle_options_imply_subtitle_mode_when_omitted() {
+    let args = CliDownloadArgs { url: Some("https://example.com/video".to_string()), subtitle_langs: Some("en,vi".to_string()), ..Default::default() };
+    let request = build_cli_download_request(&args).expect("expected CLI request");
+    assert_eq!(request.subtitle_mode.as_deref(), Some("manual"));
 
-        let args = CliDownloadArgs {
-            url: Some("https://example.com/video".to_string()),
-            subtitle_embed: true,
-            ..Default::default()
-        };
-        let request = build_cli_download_request(&args).expect("expected CLI request");
-        assert_eq!(request.subtitle_mode.as_deref(), Some("auto"));
-    }
+    let args = CliDownloadArgs { url: Some("https://example.com/video".to_string()), subtitle_embed: true, ..Default::default() };
+    let request = build_cli_download_request(&args).expect("expected CLI request");
+    assert_eq!(request.subtitle_mode.as_deref(), Some("auto"));
+  }
 
-    #[test]
-    fn cli_help_request_exits_before_app_start() {
-        let argv = vec!["youwee".to_string(), "--help".to_string()];
+  #[test]
+  fn cli_help_request_exits_before_app_start() {
+    let argv = vec!["youwee".to_string(), "--help".to_string()];
 
-        assert!(print_cli_usage_and_should_exit(&argv));
-    }
+    assert!(print_cli_usage_and_should_exit(&argv));
+  }
 
-    #[test]
-    fn cli_version_request_exits_before_app_start() {
-        let argv = vec!["youwee".to_string(), "-V".to_string()];
+  #[test]
+  fn cli_version_request_exits_before_app_start() {
+    let argv = vec!["youwee".to_string(), "-V".to_string()];
 
-        assert!(print_cli_usage_and_should_exit(&argv));
-    }
+    assert!(print_cli_usage_and_should_exit(&argv));
+  }
 }

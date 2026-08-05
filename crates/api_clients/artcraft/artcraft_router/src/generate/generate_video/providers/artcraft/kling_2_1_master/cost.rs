@@ -15,15 +15,7 @@ impl ArtcraftKling21MasterCostState {
     // Mirrors fal_client kling_v2p1_master: 5s = $1.40, 10s = $2.80.
     let cost_in_usd_cents: u64 = if self.is_ten_seconds { 280 } else { 140 };
 
-    VideoGenerationCostEstimate {
-      cost_in_credits: Some(cost_in_usd_cents),
-      cost_in_usd_cents: Some(cost_in_usd_cents),
-      is_free: false,
-      is_unlimited: false,
-      is_rate_limited: false,
-      has_watermark: false,
-      failures_are_refunded: None,
-    }
+    VideoGenerationCostEstimate { cost_in_credits: Some(cost_in_usd_cents), cost_in_usd_cents: Some(cost_in_usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None }
   }
 }
 
@@ -36,23 +28,22 @@ mod tests {
   use tokens::tokens::media_files::MediaFileToken;
 
   fn cost_cents(duration_seconds: Option<u16>) -> u64 {
-    let b = GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Kling21Master,
-      provider: RouterProvider::Artcraft,
-      prompt: Some("test".to_string()),
-      start_frame: Some(ImageRef::MediaFileToken(MediaFileToken::new("mf_x".to_string()))),
-      duration_seconds,
-      ..Default::default()
-    };
+    let b = GenerateVideoRequestBuilder { model: RouterVideoModel::Kling21Master, provider: RouterProvider::Artcraft, prompt: Some("test".to_string()), start_frame: Some(ImageRef::MediaFileToken(MediaFileToken::new("mf_x".to_string()))), duration_seconds, ..Default::default() };
     b.build2().unwrap().estimate_cost().unwrap().cost_in_usd_cents.unwrap()
   }
 
   #[test]
-  fn five_seconds_is_140() { assert_eq!(cost_cents(Some(5)), 140); }
+  fn five_seconds_is_140() {
+    assert_eq!(cost_cents(Some(5)), 140);
+  }
 
   #[test]
-  fn ten_seconds_is_280() { assert_eq!(cost_cents(Some(10)), 280); }
+  fn ten_seconds_is_280() {
+    assert_eq!(cost_cents(Some(10)), 280);
+  }
 
   #[test]
-  fn default_duration_is_5s_priced_at_140() { assert_eq!(cost_cents(None), 140); }
+  fn default_duration_is_5s_priced_at_140() {
+    assert_eq!(cost_cents(None), 140);
+  }
 }

@@ -23,18 +23,10 @@ impl ProductByWeekSubkey {
 
   pub fn from_string(key: &str) -> AnyhowResult<Self> {
     let mut parts = key.split(':');
-    let product_name = parts.next()
-        .ok_or_else(|| anyhow!("No product name"))?;
-    let product_name = PremiumProductName::from_str(product_name)
-        .map_err(|err| anyhow!(err))?;
-    let week = parts.next()
-        .ok_or_else(|| anyhow!("No week"))?
-        .parse()
-        .map_err(|err: ParseIntError| anyhow!(err))?;
-    Ok(Self {
-      product_name,
-      week,
-    })
+    let product_name = parts.next().ok_or_else(|| anyhow!("No product name"))?;
+    let product_name = PremiumProductName::from_str(product_name).map_err(|err| anyhow!(err))?;
+    let week = parts.next().ok_or_else(|| anyhow!("No week"))?.parse().map_err(|err: ParseIntError| anyhow!(err))?;
+    Ok(Self { product_name, week })
   }
 
   pub fn to_string(&self) -> String {

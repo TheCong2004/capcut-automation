@@ -264,8 +264,7 @@ fn add_generic_tag<B: ReadBytes>(
         // Parse the value atom data into a string, if possible.
         if let Some(value) = parse_tag_value(value_atom.data_type, &value_atom.data) {
             builder.add_tag(Tag::new(std_key, "", value));
-        }
-        else {
+        } else {
             warn!("unsupported data type {:?} for {:?} tag", value_atom.data_type, std_key);
         }
     }
@@ -283,8 +282,7 @@ fn add_var_unsigned_int_tag<B: ReadBytes>(
     if let Some(value_atom) = tag.values.first() {
         if let Some(value) = parse_var_unsigned_int(&value_atom.data) {
             builder.add_tag(Tag::new(Some(std_key), "", value));
-        }
-        else {
+        } else {
             warn!("got unexpected data for {:?} tag", std_key);
         }
     }
@@ -302,8 +300,7 @@ fn add_var_signed_int_tag<B: ReadBytes>(
     if let Some(value_atom) = tag.values.first() {
         if let Some(value) = parse_var_signed_int(&value_atom.data) {
             builder.add_tag(Tag::new(Some(std_key), "", value));
-        }
-        else {
+        } else {
             warn!("got unexpected data for {:?} tag", std_key);
         }
     }
@@ -462,8 +459,7 @@ fn add_freeform_tag<B: ReadBytes>(
             let std_key = itunes::std_key_from_tag(&full_name);
 
             builder.add_tag(Tag::new(std_key, &full_name, value));
-        }
-        else {
+        } else {
             warn!("unsupported data type {:?} for free-form tag", value_atom.data_type);
         }
     }

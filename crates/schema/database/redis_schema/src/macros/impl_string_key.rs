@@ -1,4 +1,3 @@
-
 // Default methods for string keys.
 macro_rules! impl_string_key {
   ($t:ident) => {
@@ -26,5 +25,5 @@ macro_rules! impl_string_key {
         write!(f, "{}", self.0)
       }
     }
-  }
+  };
 }

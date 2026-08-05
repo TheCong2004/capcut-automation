@@ -38,7 +38,7 @@ pub struct CreateAccountRequest {
   pub password: String,
   pub password_confirmation: String,
   pub email_address: String,
-  
+
   /// Optional: Source of the signup, e.g. "artcraft", "fakeyou", "storyteller", etc.
   /// If not provided, we try to infer it from the Origin header instead.
   pub signup_source: Option<UserSignupSource>,
@@ -89,19 +89,11 @@ pub enum CreateAccountErrorType {
 
 impl CreateAccountErrorResponse {
   fn server_error() -> Self {
-    Self {
-      success: false,
-      error_type: CreateAccountErrorType::ServerError,
-      error_fields: HashMap::new(),
-    }
+    Self { success: false, error_type: CreateAccountErrorType::ServerError, error_fields: HashMap::new() }
   }
 
   fn bad_request() -> Self {
-    Self {
-      success: false,
-      error_type: CreateAccountErrorType::BadRequest,
-      error_fields: HashMap::new(),
-    }
+    Self { success: false, error_type: CreateAccountErrorType::BadRequest, error_fields: HashMap::new() }
   }
 }
 
@@ -144,14 +136,7 @@ impl ResponseError for CreateAccountErrorResponse {
     ("request" = CreateAccountRequest, description = "Payload for Request"),
   )
 )]
-pub async fn create_account_handler(
-  http_request: HttpRequest,
-  request: web::Json<CreateAccountRequest>,
-  mysql_pool: web::Data<MySqlPool>,
-  session_cookie_manager: web::Data<HttpUserSessionManager>,
-  firehose_publisher: web::Data<FirehosePublisher>,
-) -> Result<HttpResponse, CreateAccountErrorResponse>
-{
+pub async fn create_account_handler(http_request: HttpRequest, request: web::Json<CreateAccountRequest>, mysql_pool: web::Data<MySqlPool>, session_cookie_manager: web::Data<HttpUserSessionManager>, firehose_publisher: web::Data<FirehosePublisher>) -> Result<HttpResponse, CreateAccountErrorResponse> {
   let mut error_fields = HashMap::new();
 
   if let Err(reason) = validate_username(&request.username) {
@@ -173,19 +158,11 @@ pub async fn create_account_handler(
   if is_reserved_username(&request.username) {
     error_fields.insert("username".to_string(), "username is reserved".to_string());
 
-    return Err(CreateAccountErrorResponse {
-      success: false,
-      error_type: CreateAccountErrorType::UsernameReserved,
-      error_fields
-    });
+    return Err(CreateAccountErrorResponse { success: false, error_type: CreateAccountErrorType::UsernameReserved, error_fields });
   }
 
   if !error_fields.is_empty() {
-    return Err(CreateAccountErrorResponse {
-      success: false,
-      error_type: CreateAccountErrorType::BadInput,
-      error_fields
-    });
+    return Err(CreateAccountErrorResponse { success: false, error_type: CreateAccountErrorType::BadInput, error_fields });
   }
 
   let password_hash = match bcrypt_hash_password(request.password.clone()) {
@@ -193,7 +170,7 @@ pub async fn create_account_handler(
     Err(err) => {
       warn!("Bcrypt error: {:?}", err);
       return Err(CreateAccountErrorResponse::server_error());
-    }
+    },
   };
 
   let username = request.username.trim().to_lowercase();
@@ -207,36 +184,25 @@ pub async fn create_account_handler(
   let ip_address = get_request_ip(&http_request);
 
   let mut maybe_source = request.signup_source;
-  
+
   if maybe_source.is_none() {
     maybe_source = get_request_signup_source_enum(&http_request);
   }
 
-  let maybe_referral_url = request.maybe_referral_url.clone()
-    .or_else(|| {
-      http_request.headers().get("referer")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-    });
+  let maybe_referral_url = request.maybe_referral_url.clone().or_else(|| http_request.headers().get("referer").and_then(|v| v.to_str().ok()).map(|s| s.to_string()));
 
   let maybe_landing_url = request.maybe_landing_url.clone();
 
   // Acquire a single connection for pre-creation lookups.
-  let mut mysql_connection = mysql_pool.acquire().await
-    .map_err(|err| {
-      warn!("MySql pool error: {:?}", err);
-      CreateAccountErrorResponse::server_error()
-    })?;
+  let mut mysql_connection = mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CreateAccountErrorResponse::server_error()
+  })?;
 
   // Resolve referral info from code (preferred) or username (fallback).
-  let referral_info = resolve_referral_info(
-    request.maybe_referral_code.as_deref(),
-    request.maybe_referral_username.as_deref(),
-    &mut mysql_connection,
-  ).await;
+  let referral_info = resolve_referral_info(request.maybe_referral_code.as_deref(), request.maybe_referral_username.as_deref(), &mut mysql_connection).await;
 
-  info!("Resolved referral info for maybe_referral_code {:?} and maybe_referral_username {:?} : {:?}",
-    request.maybe_referral_code, request.maybe_referral_username, referral_info);
+  info!("Resolved referral info for maybe_referral_code {:?} and maybe_referral_username {:?} : {:?}", request.maybe_referral_code, request.maybe_referral_username, referral_info);
 
   let create_account_result = create_account_from_email_and_password(
     CreateAccountFromEmailPasswordArgs {
@@ -254,7 +220,8 @@ pub async fn create_account_handler(
       maybe_user_token: None, // NB: This parameter is for internal testing only
     },
     &mut mysql_connection,
-  ).await;
+  )
+  .await;
 
   let new_user_data = match create_account_result {
     Ok(success) => success,
@@ -266,66 +233,48 @@ pub async fn create_account_handler(
         CreateAccountError::EmailIsTaken => {
           error_type = CreateAccountErrorType::EmailTaken;
           error_fields.insert("email_address".to_string(), "email is taken".to_string());
-        }
+        },
         CreateAccountError::UsernameIsTaken => {
           error_type = CreateAccountErrorType::UsernameTaken;
           error_fields.insert("username".to_string(), "username is taken".to_string());
-        }
+        },
         CreateAccountError::DatabaseError | CreateAccountError::OtherError => {
           error_type = CreateAccountErrorType::ServerError;
-        }
+        },
       }
 
-      return Err(CreateAccountErrorResponse {
-        success: false,
-        error_type,
-        error_fields
-      });
-    }
+      return Err(CreateAccountErrorResponse { success: false, error_type, error_fields });
+    },
   };
 
   info!("new user id: {}", new_user_data.user_id);
 
   // Record the referral relationship if we resolved a referrer.
   if let Some(referrer_user_token) = &referral_info.maybe_referral_user_token {
-    if let Err(err) = insert_user_referral(
-      InsertUserReferralArgs {
-        invited_user_token: &new_user_data.user_token,
-        referrer_user_token,
-        maybe_referral_code_token: referral_info.maybe_referral_code_token.as_ref(),
-        maybe_referral_url: maybe_referral_url.as_deref(),
-        maybe_landing_url: maybe_landing_url.as_deref(),
-      },
-      &mut *mysql_connection,
-    ).await {
+    if let Err(err) = insert_user_referral(InsertUserReferralArgs { invited_user_token: &new_user_data.user_token, referrer_user_token, maybe_referral_code_token: referral_info.maybe_referral_code_token.as_ref(), maybe_referral_url: maybe_referral_url.as_deref(), maybe_landing_url: maybe_landing_url.as_deref() }, &mut *mysql_connection).await {
       warn!("Failed to insert user_referral record (continuing): {:?}", err);
     }
   }
 
-  let session_token = create_user_session_with_executor(
-    &new_user_data.user_token,
-    &ip_address,
-    &mut *mysql_connection,
-  ).await
-    .map_err(|e| {
-      warn!("create account session creation error : {:?}", e);
-      CreateAccountErrorResponse::server_error()
-    })?;
+  let session_token = create_user_session_with_executor(&new_user_data.user_token, &ip_address, &mut *mysql_connection).await.map_err(|e| {
+    warn!("create account session creation error : {:?}", e);
+    CreateAccountErrorResponse::server_error()
+  })?;
 
   info!("new user session created");
 
-  firehose_publisher.publish_user_sign_up(new_user_data.user_token.as_str())
-    .await
-    .map_err(|e| {
-      warn!("error publishing event: {:?}", e);
-      CreateAccountErrorResponse::server_error()
-    })?;
+  firehose_publisher.publish_user_sign_up(new_user_data.user_token.as_str()).await.map_err(|e| {
+    warn!("error publishing event: {:?}", e);
+    CreateAccountErrorResponse::server_error()
+  })?;
 
   // NB: Enroll new users in studio for a while.
-  enroll_in_studio(&new_user_data.user_token, &ip_address, &mut mysql_connection, None).await
+  enroll_in_studio(&new_user_data.user_token, &ip_address, &mut mysql_connection, None)
+    .await
     .map_err(|e| {
       warn!("error enrolling in studio: {:?}", e);
-    }).ok();
+    })
+    .ok();
 
   let session_cookie = match session_cookie_manager.create_cookie(&session_token, &new_user_data.user_token) {
     Ok(cookie) => cookie,
@@ -337,16 +286,9 @@ pub async fn create_account_handler(
     Err(_) => return Err(CreateAccountErrorResponse::server_error()),
   };
 
-  let response = CreateAccountSuccessResponse {
-    success: true,
-    signed_session,
-  };
+  let response = CreateAccountSuccessResponse { success: true, signed_session };
 
-  let body = serde_json::to_string(&response)
-    .map_err(|_e| CreateAccountErrorResponse::server_error())?;
+  let body = serde_json::to_string(&response).map_err(|_e| CreateAccountErrorResponse::server_error())?;
 
-  Ok(HttpResponse::Ok()
-    .cookie(session_cookie)
-    .content_type("application/json")
-    .body(body))
+  Ok(HttpResponse::Ok().cookie(session_cookie).content_type("application/json").body(body))
 }

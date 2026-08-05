@@ -35,32 +35,16 @@ pub struct SubscriptionProductKey {
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn list_active_user_subscriptions_handler(
-  http_request: HttpRequest,
-  internal_user_lookup: web::Data<dyn InternalUserLookup>,
-) -> Result<Json<ListActiveUserSubscriptionsResponse>, CommonWebError> {
-  let maybe_user_metadata = internal_user_lookup
-    .lookup_user_from_http_request(&http_request)
-    .await
-    .map_err(|err| {
-      warn!("Error looking up user: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+pub async fn list_active_user_subscriptions_handler(http_request: HttpRequest, internal_user_lookup: web::Data<dyn InternalUserLookup>) -> Result<Json<ListActiveUserSubscriptionsResponse>, CommonWebError> {
+  let maybe_user_metadata = internal_user_lookup.lookup_user_from_http_request(&http_request).await.map_err(|err| {
+    warn!("Error looking up user: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   let user_metadata = match maybe_user_metadata {
     None => return Err(CommonWebError::NotAuthorized),
     Some(user_metadata) => user_metadata,
   };
 
-  Ok(Json(ListActiveUserSubscriptionsResponse {
-    success: true,
-    maybe_loyalty_program: user_metadata.maybe_loyalty_program_key,
-    active_subscriptions: user_metadata.existing_subscription_keys
-      .into_iter()
-      .map(|sub| SubscriptionProductKey {
-        namespace: sub.internal_subscription_namespace,
-        product_slug: sub.internal_subscription_product_slug,
-      })
-      .collect(),
-  }))
+  Ok(Json(ListActiveUserSubscriptionsResponse { success: true, maybe_loyalty_program: user_metadata.maybe_loyalty_program_key, active_subscriptions: user_metadata.existing_subscription_keys.into_iter().map(|sub| SubscriptionProductKey { namespace: sub.internal_subscription_namespace, product_slug: sub.internal_subscription_product_slug }).collect() }))
 }

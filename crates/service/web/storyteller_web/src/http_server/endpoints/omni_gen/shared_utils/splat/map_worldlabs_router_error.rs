@@ -14,18 +14,14 @@ use crate::http_server::common_responses::common_web_error::CommonWebError;
 /// Map an artcraft router error to a web error, unwrapping World Labs errors.
 pub fn map_worldlabs_router_error(error: ArtcraftRouterError) -> CommonWebError {
   match error {
-    ArtcraftRouterError::Provider(ProviderError::WorldLabs(worldlabs_error)) => {
-      classify_worldlabs_error(worldlabs_error)
-    }
+    ArtcraftRouterError::Provider(ProviderError::WorldLabs(worldlabs_error)) => classify_worldlabs_error(worldlabs_error),
     other => CommonWebError::from_error(other),
   }
 }
 
 fn classify_worldlabs_error(err: WorldLabsError) -> CommonWebError {
   if let WorldLabsError::ApiSpecific(WorldLabsSpecificApiError::NsfwContentPolicyRejected { message }) = &err {
-    return CommonWebError::ContentPolicyRejectedWithMessage(
-      message.clone().unwrap_or_else(|| "Content rejected by policy".to_string())
-    );
+    return CommonWebError::ContentPolicyRejectedWithMessage(message.clone().unwrap_or_else(|| "Content rejected by policy".to_string()));
   }
 
   if err.is_403_forbidden() {

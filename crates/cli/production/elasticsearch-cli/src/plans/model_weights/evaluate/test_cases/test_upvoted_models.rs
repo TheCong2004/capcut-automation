@@ -10,10 +10,7 @@ const UPVOTED_MODELS: [&str; 3] = [
   "weight_7jk8mgwkzsycqrxmfw5q4245y", // Homer Simpson: 115
 ];
 
-pub async fn test_upvoted_models(
-  client: &Elasticsearch
-) -> AnyhowResult<()> {
-
+pub async fn test_upvoted_models(client: &Elasticsearch) -> AnyhowResult<()> {
   let results = search_model_weights(SearchArgs {
     search_term: "", // No search term
     maybe_creator_user_token: None,
@@ -24,7 +21,8 @@ pub async fn test_upvoted_models(
     sort_direction: None,
     minimum_score: None,
     client: &client,
-  }).await?;
+  })
+  .await?;
 
   print_titles_and_rating_count(&results);
 
@@ -41,10 +39,10 @@ pub async fn test_upvoted_models(
     sort_direction: Some(ModelWeightsSortDirection::Ascending), // Least popular first
     minimum_score: None,
     client: &client,
-  }).await?;
+  })
+  .await?;
 
   assert_results_do_not_contain_tokens(&results, &UPVOTED_MODELS)?;
 
   Ok(())
 }
-

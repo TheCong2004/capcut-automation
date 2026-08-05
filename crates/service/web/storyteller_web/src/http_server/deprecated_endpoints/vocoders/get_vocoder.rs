@@ -75,34 +75,25 @@ pub struct VocoderModFields {
 
 // =============== Error Response ===============
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn get_vocoder_handler(
-  http_request: HttpRequest,
-  path: Path<GetVocoderPathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError> {
-
+pub async fn get_vocoder_handler(http_request: HttpRequest, path: Path<GetVocoderPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
   let is_moderator = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?
-      .map(|session| {
-        // NB: Since we need to rip out and replace the permissions system,
-        // this is a proxy for being a moderator.
-        session.can_ban_users
-      })
-      .unwrap_or(false);
+    .session_checker
+    .maybe_get_user_session(&http_request, &server_state.mysql_pool)
+    .await
+    .map_err(|e| {
+      warn!("Session checker error: {:?}", e);
+      CommonWebError::from_error(e)
+    })?
+    .map(|session| {
+      // NB: Since we need to rip out and replace the permissions system,
+      // this is a proxy for being a moderator.
+      session.can_ban_users
+    })
+    .unwrap_or(false);
 
-  const NO_CREATOR_SCOPING_HERE : Option<&'static str> = None;
+  const NO_CREATOR_SCOPING_HERE: Option<&'static str> = None;
 
-  let query_result = get_vocoder_model_by_token(
-    &path.token,
-    is_moderator,
-    &server_state.mysql_pool,
-  ).await;
+  let query_result = get_vocoder_model_by_token(&path.token, is_moderator, &server_state.mysql_pool).await;
 
   let vocoder = match query_result {
     Ok(Some(model)) => model,
@@ -110,7 +101,7 @@ pub async fn get_vocoder_handler(
     Err(e) => {
       warn!("query error: {:?}", e);
       return Err(CommonWebError::from_anyhow_error(e));
-    }
+    },
   };
 
   let mut vocoder = Vocoder {
@@ -127,33 +118,16 @@ pub async fn get_vocoder_handler(
     creator_set_visibility: vocoder.creator_set_visibility,
     created_at: vocoder.created_at,
     updated_at: vocoder.updated_at,
-    moderator_fields: vocoder.maybe_moderator_fields.map(|mod_fields| {
-      VocoderModFields {
-        creator_is_banned: mod_fields.creator_is_banned,
-        creator_ip_address_creation: mod_fields.creator_ip_address_creation,
-        creator_ip_address_last_update: mod_fields.creator_ip_address_last_update,
-        is_mod_disabled_from_public_use: mod_fields.is_mod_disabled_from_public_use,
-        is_mod_disabled_from_author_use: mod_fields.is_mod_disabled_from_author_use,
-        is_mod_author_editing_locked: mod_fields.is_mod_author_editing_locked,
-        user_deleted_at: mod_fields.user_deleted_at,
-        mod_deleted_at: mod_fields.mod_deleted_at,
-      }
-    })
+    moderator_fields: vocoder.maybe_moderator_fields.map(|mod_fields| VocoderModFields { creator_is_banned: mod_fields.creator_is_banned, creator_ip_address_creation: mod_fields.creator_ip_address_creation, creator_ip_address_last_update: mod_fields.creator_ip_address_last_update, is_mod_disabled_from_public_use: mod_fields.is_mod_disabled_from_public_use, is_mod_disabled_from_author_use: mod_fields.is_mod_disabled_from_author_use, is_mod_author_editing_locked: mod_fields.is_mod_author_editing_locked, user_deleted_at: mod_fields.user_deleted_at, mod_deleted_at: mod_fields.mod_deleted_at }),
   };
 
   if !is_moderator {
     vocoder.moderator_fields = None;
   }
 
-  let response = GetVocoderSuccessResponse {
-    success: true,
-    vocoder,
-  };
+  let response = GetVocoderSuccessResponse { success: true, vocoder };
 
-  let body = serde_json::to_string(&response)
-      .map_err(CommonWebError::from_error)?;
+  let body = serde_json::to_string(&response).map_err(CommonWebError::from_error)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

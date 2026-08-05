@@ -19,17 +19,13 @@ impl ScopedTempDirCreator {
     // TODO: Only run this on macOS
     let maybe_mac_tmp = easyenv::get_env_pathbuf_optional("TMPDIR");
 
-    let directory = maybe_tmp
-        .or(maybe_mac_tmp)
-        .unwrap_or_else(|| PathBuf::from("/tmp"));
+    let directory = maybe_tmp.or(maybe_mac_tmp).unwrap_or_else(|| PathBuf::from("/tmp"));
 
     Self::for_directory(directory)
   }
 
   pub fn for_directory<P: AsRef<Path>>(base_dir: P) -> Self {
-    Self {
-      base_dir: PathBuf::from(&base_dir.as_ref()),
-    }
+    Self { base_dir: PathBuf::from(&base_dir.as_ref()) }
   }
 
   pub fn get_base_dir(&self) -> &Path {

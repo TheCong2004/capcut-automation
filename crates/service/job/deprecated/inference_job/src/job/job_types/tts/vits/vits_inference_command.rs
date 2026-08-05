@@ -60,26 +60,18 @@ pub struct VitsInferenceArgs<P: AsRef<Path>> {
 }
 
 impl VitsInferenceCommand {
-
   pub fn from_env() -> AnyhowResult<Self> {
-    let root_directory = easyenv::get_env_string_required(
-      "VITS_INFERENCE_ROOT_DIRECTORY")?;
+    let root_directory = easyenv::get_env_string_required("VITS_INFERENCE_ROOT_DIRECTORY")?;
 
-    let inference_script = easyenv::get_env_string_or_default(
-      "VITS_INFERENCE_SCRIPT",
-      "infer_ts_job.py");
+    let inference_script = easyenv::get_env_string_or_default("VITS_INFERENCE_SCRIPT", "infer_ts_job.py");
 
-    let maybe_venv_command = easyenv::get_env_string_optional(
-      "VITS_INFERENCE_MAYBE_VENV_COMMAND");
+    let maybe_venv_command = easyenv::get_env_string_optional("VITS_INFERENCE_MAYBE_VENV_COMMAND");
 
-    let maybe_python_interpreter = easyenv::get_env_string_optional(
-      "VITS_INFERENCE_MAYBE_PYTHON_INTERPRETER");
+    let maybe_python_interpreter = easyenv::get_env_string_optional("VITS_INFERENCE_MAYBE_PYTHON_INTERPRETER");
 
-    let maybe_huggingface_dataset_cache = easyenv::get_env_string_optional(
-      "HF_DATASETS_CACHE");
+    let maybe_huggingface_dataset_cache = easyenv::get_env_string_optional("HF_DATASETS_CACHE");
 
-    let maybe_nltk_data_cache = easyenv::get_env_string_optional(
-      "NLTK_DATA");
+    let maybe_nltk_data_cache = easyenv::get_env_string_optional("NLTK_DATA");
 
     let mut docker_env_vars = Vec::new();
 
@@ -93,56 +85,18 @@ impl VitsInferenceCommand {
       docker_env_vars.push(DockerEnvVar::new("NLTK_DATA_PATH", cache_dir));
     }
 
-    let maybe_docker_env_vars =
-        if docker_env_vars.is_empty() { None } else { Some(docker_env_vars) };
+    let maybe_docker_env_vars = if docker_env_vars.is_empty() { None } else { Some(docker_env_vars) };
 
-    let maybe_docker_options = easyenv::get_env_string_optional(
-      "VITS_INFERENCE_MAYBE_DOCKER_IMAGE_SHA")
-        .map(|image_name| {
-          DockerOptions {
-            image_name,
-            maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()),
-            maybe_environment_variables: maybe_docker_env_vars,
-            maybe_gpu: Some(DockerGpu::All),
-          }
-        });
+    let maybe_docker_options = easyenv::get_env_string_optional("VITS_INFERENCE_MAYBE_DOCKER_IMAGE_SHA").map(|image_name| DockerOptions { image_name, maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()), maybe_environment_variables: maybe_docker_env_vars, maybe_gpu: Some(DockerGpu::All) });
 
-    Ok(Self::new(
-      root_directory,
-      inference_script,
-      maybe_python_interpreter.as_deref(),
-      maybe_venv_command.as_deref(),
-      maybe_huggingface_dataset_cache.as_deref(),
-      maybe_nltk_data_cache.as_deref(),
-      maybe_docker_options,
-    ))
+    Ok(Self::new(root_directory, inference_script, maybe_python_interpreter.as_deref(), maybe_venv_command.as_deref(), maybe_huggingface_dataset_cache.as_deref(), maybe_nltk_data_cache.as_deref(), maybe_docker_options))
   }
 
-  pub fn new<P: AsRef<Path>>(
-    vits_root_code_directory: P,
-    inference_script_name: P,
-    maybe_override_python_interpreter: Option<&str>,
-    maybe_virtual_env_activation_command: Option<&str>,
-    maybe_huggingface_cache_directory: Option<&str>,
-    maybe_nltk_cache_directory: Option<&str>,
-    maybe_docker_options: Option<DockerOptions>,
-  ) -> Self {
-    Self {
-      vits_root_code_directory: vits_root_code_directory.as_ref().to_path_buf(),
-      inference_script_name: inference_script_name.as_ref().to_path_buf(),
-      maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()),
-      maybe_huggingface_cache_dir: maybe_huggingface_cache_directory.map(|s| s.to_string()),
-      maybe_nltk_cache_dir: maybe_nltk_cache_directory.map(|s| s.to_string()),
-      maybe_override_python_interpreter: maybe_override_python_interpreter.map(|s| s.to_string()),
-      maybe_docker_options,
-    }
+  pub fn new<P: AsRef<Path>>(vits_root_code_directory: P, inference_script_name: P, maybe_override_python_interpreter: Option<&str>, maybe_virtual_env_activation_command: Option<&str>, maybe_huggingface_cache_directory: Option<&str>, maybe_nltk_cache_directory: Option<&str>, maybe_docker_options: Option<DockerOptions>) -> Self {
+    Self { vits_root_code_directory: vits_root_code_directory.as_ref().to_path_buf(), inference_script_name: inference_script_name.as_ref().to_path_buf(), maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()), maybe_huggingface_cache_dir: maybe_huggingface_cache_directory.map(|s| s.to_string()), maybe_nltk_cache_dir: maybe_nltk_cache_directory.map(|s| s.to_string()), maybe_override_python_interpreter: maybe_override_python_interpreter.map(|s| s.to_string()), maybe_docker_options }
   }
 
-  pub fn execute_inference<P: AsRef<Path>>(
-    &self,
-    args: VitsInferenceArgs<P>,
-  ) -> AnyhowResult<()> {
-
+  pub fn execute_inference<P: AsRef<Path>>(&self, args: VitsInferenceArgs<P>) -> AnyhowResult<()> {
     let mut command = String::new();
     command.push_str(&format!("cd {}", path_to_string(&self.vits_root_code_directory)));
 
@@ -152,9 +106,7 @@ impl VitsInferenceCommand {
       command.push_str(" ");
     }
 
-    let python_binary = self.maybe_override_python_interpreter
-        .as_deref()
-        .unwrap_or("python");
+    let python_binary = self.maybe_override_python_interpreter.as_deref().unwrap_or("python");
 
     command.push_str(" && ");
     command.push_str(python_binary);
@@ -194,11 +146,7 @@ impl VitsInferenceCommand {
 
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
     let mut env_vars = Vec::new();
 

@@ -40,26 +40,14 @@ pub async fn create_upload_url(args: CreateUploadUrlArgs) -> Result<CreateUpload
 
   info!("Creating Beeble upload URL for filename: {}", args.filename);
 
-  let request_body = CreateUploadUrlRequestBody {
-    filename: args.filename,
-  };
+  let request_body = CreateUploadUrlRequestBody { filename: args.filename };
 
-  let client = reqwest::Client::builder()
-    .build()
-    .map_err(|err| BeebleClientError::ReqwestClientError(err))?;
+  let client = reqwest::Client::builder().build().map_err(|err| BeebleClientError::ReqwestClientError(err))?;
 
-  let response = client.post(&url)
-    .header("x-api-key", &args.api_key.api_key)
-    .header("Content-Type", "application/json")
-    .json(&request_body)
-    .send()
-    .await
-    .map_err(|err| BeebleGenericApiError::ReqwestError(err))?;
+  let response = client.post(&url).header("x-api-key", &args.api_key.api_key).header("Content-Type", "application/json").json(&request_body).send().await.map_err(|err| BeebleGenericApiError::ReqwestError(err))?;
 
   let status = response.status();
-  let response_body = response.text()
-    .await
-    .map_err(|err| BeebleGenericApiError::ReqwestError(err))?;
+  let response_body = response.text().await.map_err(|err| BeebleGenericApiError::ReqwestError(err))?;
 
   info!("Beeble create upload URL response: status={}", status);
 
@@ -68,20 +56,12 @@ pub async fn create_upload_url(args: CreateUploadUrlArgs) -> Result<CreateUpload
   }
 
   if !status.is_success() {
-    return Err(BeebleGenericApiError::UncategorizedBadResponseWithStatusAndBody {
-      status_code: status,
-      body: response_body,
-    }.into());
+    return Err(BeebleGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code: status, body: response_body }.into());
   }
 
-  let parsed: CreateUploadUrlResponseBody = serde_json::from_str(&response_body)
-    .map_err(|err| BeebleGenericApiError::SerdeResponseParseError(err, response_body.clone()))?;
+  let parsed: CreateUploadUrlResponseBody = serde_json::from_str(&response_body).map_err(|err| BeebleGenericApiError::SerdeResponseParseError(err, response_body.clone()))?;
 
-  Ok(CreateUploadUrlSuccess {
-    id: parsed.id,
-    upload_url: parsed.upload_url,
-    beeble_uri: parsed.beeble_uri,
-  })
+  Ok(CreateUploadUrlSuccess { id: parsed.id, upload_url: parsed.upload_url, beeble_uri: parsed.beeble_uri })
 }
 
 #[cfg(test)]
@@ -92,9 +72,7 @@ mod tests {
 
   #[test]
   fn request_body_serializes() {
-    let body = CreateUploadUrlRequestBody {
-      filename: "test_video.mp4".to_string(),
-    };
+    let body = CreateUploadUrlRequestBody { filename: "test_video.mp4".to_string() };
     let json = serde_json::to_string(&body).unwrap();
     assert!(json.contains("test_video.mp4"));
   }
@@ -111,10 +89,7 @@ mod tests {
   #[ignore] // manually test — requires real API key
   async fn test_create_upload_url() -> AnyhowResult<()> {
     let api_key = get_test_api_key()?;
-    let result = create_upload_url(CreateUploadUrlArgs {
-      api_key,
-      filename: "test_image.png".to_string(),
-    }).await?;
+    let result = create_upload_url(CreateUploadUrlArgs { api_key, filename: "test_image.png".to_string() }).await?;
 
     println!("Upload ID: {}", result.id);
     println!("Upload URL: {}", result.upload_url);

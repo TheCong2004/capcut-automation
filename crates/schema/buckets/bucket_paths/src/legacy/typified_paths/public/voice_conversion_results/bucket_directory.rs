@@ -18,15 +18,11 @@ pub struct VoiceConversionResultDirectory {
 impl PublicPath for VoiceConversionResultDirectory {}
 
 impl VoiceConversionResultDirectory {
-
   pub fn from_public_bucket_directory_hash(object_hash: &str) -> Self {
     // TODO: Path construction could be cleaner.
     let middle = hashed_directory_path_long_string(object_hash);
     let directory = format!("{}/{}{}", DIRECTORY, middle, object_hash);
-    Self {
-      object_hash: object_hash.to_string(),
-      directory,
-    }
+    Self { object_hash: object_hash.to_string(), directory }
   }
 
   pub fn get_directory_path_str(&self) -> &str {

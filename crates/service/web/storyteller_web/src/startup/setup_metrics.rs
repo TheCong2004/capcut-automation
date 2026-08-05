@@ -12,18 +12,11 @@ use shared_env_var_config::metrics::{env_enable_metrics_default_false, env_optio
 /// collector into the middleware unconditionally so the request path
 /// stays identical in both modes. Callers that want a graceful shutdown
 /// drain can grab `worker.shutdown_handle()` before spawning the worker.
-pub fn build_metrics(
-  server_environment: server_environment::ServerEnvironment,
-  hostname: &str,
-) -> (MetricsCollector, Option<MetricsWorker>) {
+pub fn build_metrics(server_environment: server_environment::ServerEnvironment, hostname: &str) -> (MetricsCollector, Option<MetricsWorker>) {
   // Loud-on-purpose: silence in the logs after deploy is the most common
   // way "metrics aren't showing up" goes unnoticed. Make the disabled-state
   // unmistakable in every env.
-  let env_label = if server_environment.is_deployed_in_production() {
-    "production"
-  } else {
-    "development"
-  };
+  let env_label = if server_environment.is_deployed_in_production() { "production" } else { "development" };
 
   if !env_enable_metrics_default_false() {
     warn!(
@@ -45,24 +38,16 @@ pub fn build_metrics(
 
   let client = DatadogClient::new(DatadogApiKey::new(api_key));
 
-  let build = MetricsBuilder::new()
-    .datadog_client(client)
-    .service_name("storyteller-web")
-    .env(env_label)
-    .host(hostname)
-    .build();
+  let build = MetricsBuilder::new().datadog_client(client).service_name("storyteller-web").env(env_label).host(hostname).build();
 
   match build {
     Ok(out) => {
-      info!(
-        "Metrics worker configured (service=storyteller-web, env={}, host={})",
-        env_label, hostname,
-      );
+      info!("Metrics worker configured (service=storyteller-web, env={}, host={})", env_label, hostname,);
       (out.collector, Some(out.worker))
-    }
+    },
     Err(e) => {
       warn!("Failed to build metrics worker: {}. Falling back to no-op.", e);
       (MetricsCollector::noop(), None)
-    }
+    },
   }
 }

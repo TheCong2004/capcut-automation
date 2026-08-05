@@ -22,9 +22,7 @@ where
 
 /// Load all ArtCraft `user_stripe_customer_links` for the backfill's in-memory
 /// customer→user fallback map.
-pub async fn backfill_list_artcraft_customer_links<'c, E>(
-  args: BackfillListCustomerLinksArgs<'c, E>,
-) -> Result<Vec<ArtcraftCustomerLink>, sqlx::Error>
+pub async fn backfill_list_artcraft_customer_links<'c, E>(args: BackfillListCustomerLinksArgs<'c, E>) -> Result<Vec<ArtcraftCustomerLink>, sqlx::Error>
 where
   E: Executor<'c, Database = MySql>,
 {
@@ -38,8 +36,8 @@ FROM user_stripe_customer_links
 WHERE payments_namespace = 'artcraft'
     "#,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

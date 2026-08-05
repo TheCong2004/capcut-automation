@@ -17,80 +17,60 @@ pub enum BucketUploadResult {
 }
 
 pub enum BucketUploadMessage {
-  UploadFrame {
-    disk_path: PathBuf,
-    bucket_path: MediaFileBucketPath,
-    bucket_client: LegacyBucketClient,
-    result: oneshot::Sender<BucketUploadResult>
-  },
-  UploadMultipleFrames {
-    requests: Vec<BucketUploadRequest>,
-    bucket_client: LegacyBucketClient,
-    result: oneshot::Sender<Vec<(PathBuf, BucketUploadResult)>>,
-  },
+  UploadFrame { disk_path: PathBuf, bucket_path: MediaFileBucketPath, bucket_client: LegacyBucketClient, result: oneshot::Sender<BucketUploadResult> },
+  UploadMultipleFrames { requests: Vec<BucketUploadRequest>, bucket_client: LegacyBucketClient, result: oneshot::Sender<Vec<(PathBuf, BucketUploadResult)>> },
 }
 
 pub enum BucketUploadMessageResponse {
   UploadSingleFrameResult(BucketUploadResult),
-  UploadMultipleFramesResult(Vec<(PathBuf,BucketUploadResult)>),
+  UploadMultipleFramesResult(Vec<(PathBuf, BucketUploadResult)>),
 }
 
 struct BucketUploadActor {
   rx: mpsc::Receiver<BucketUploadMessage>,
 }
 
-fn handle_single_frame_upload(disk_path: PathBuf, bucket_path: MediaFileBucketPath, bucket_client: LegacyBucketClient) -> (PathBuf,BucketUploadResult) {
+fn handle_single_frame_upload(disk_path: PathBuf, bucket_path: MediaFileBucketPath, bucket_client: LegacyBucketClient) -> (PathBuf, BucketUploadResult) {
   let disk_path2 = disk_path.clone();
   let handle = tokio::runtime::Handle::current();
-  let attempt = handle.block_on(
-    bucket_client.upload_file(
-      bucket_path.get_full_object_path_str(),
-      &file_read_bytes(&disk_path2).unwrap(),
-    )
-  );
+  let attempt = handle.block_on(bucket_client.upload_file(bucket_path.get_full_object_path_str(), &file_read_bytes(&disk_path2).unwrap()));
   // tokio::time::sleep(Duration::from_secs(1)).await;
   match attempt {
     Ok(_) => {
       debug!("Uploaded frame to bucket: {:?}", disk_path);
       (disk_path, BucketUploadResult::Success)
-    }
+    },
     Err(e) => {
       warn!("Failed to upload frame to bucket: {:?}", e);
       (disk_path, BucketUploadResult::Failure)
-    }
+    },
   }
 }
 
 impl BucketUploadActor {
   pub fn new(rx: mpsc::Receiver<BucketUploadMessage>) -> Self {
-    Self {
-      rx,
-    }
+    Self { rx }
   }
-  
 
-  pub async fn handle_message(&mut self, message: BucketUploadMessage) -> (){
+  pub async fn handle_message(&mut self, message: BucketUploadMessage) -> () {
     match message {
       BucketUploadMessage::UploadFrame { disk_path, bucket_path, bucket_client, result } => {
-        let attempt = bucket_client.upload_file(
-          bucket_path.get_full_object_path_str(),
-          &file_read_bytes(&disk_path).unwrap(),
-        ).await;
+        let attempt = bucket_client.upload_file(bucket_path.get_full_object_path_str(), &file_read_bytes(&disk_path).unwrap()).await;
         match attempt {
           Ok(_) => {
             debug!("Uploaded frame to bucket: {:?}", disk_path);
             let _ = result.send(BucketUploadResult::Success);
-          }
+          },
           Err(e) => {
             warn!("Failed to upload frame to bucket: {:?}", e);
             let _ = result.send(BucketUploadResult::Failure);
-          }
+          },
         }
-      }
-      
+      },
+
       BucketUploadMessage::UploadMultipleFrames { requests, bucket_client, result } => {
         let max_concurrent_uploads = 20;
-        let mut join_set:JoinSet<(PathBuf,BucketUploadResult)> = JoinSet::new();
+        let mut join_set: JoinSet<(PathBuf, BucketUploadResult)> = JoinSet::new();
         let mut results = vec![];
         for request in requests {
           while join_set.len() >= max_concurrent_uploads {
@@ -101,17 +81,15 @@ impl BucketUploadActor {
           let bucket_path = request.bucket_path;
           let bucket_client = bucket_client.clone();
 
-          join_set.spawn_blocking(move || {
-            handle_single_frame_upload(disk_path, bucket_path, bucket_client)
-          });
+          join_set.spawn_blocking(move || handle_single_frame_upload(disk_path, bucket_path, bucket_client));
         }
-        
+
         while join_set.len() > 0 {
           let r = join_set.join_next().await.unwrap().unwrap();
           results.push(r);
         }
         let _ = result.send(results);
-      }
+      },
     }
   }
 }
@@ -134,30 +112,19 @@ impl BucketUploadActorHandle {
     tokio::spawn(async move {
       run_bucket_upload_actor(actor).await;
     });
-    Self {
-      tx,
-    }
+    Self { tx }
   }
 
   pub async fn upload_frame(&self, disk_path: PathBuf, bucket_path: MediaFileBucketPath, bucket_client: LegacyBucketClient) -> () {
     let (tx, rx) = oneshot::channel();
-    let message = BucketUploadMessage::UploadFrame {
-      disk_path,
-      bucket_path,
-      bucket_client,
-      result: tx,
-    };
+    let message = BucketUploadMessage::UploadFrame { disk_path, bucket_path, bucket_client, result: tx };
     let _ = self.tx.send(message).await;
     let _ = rx.await;
   }
-  
-  pub async fn upload_multiple_frames(&self, requests: Vec<BucketUploadRequest>, bucket_client: LegacyBucketClient) -> Vec<(PathBuf,BucketUploadResult)> {
+
+  pub async fn upload_multiple_frames(&self, requests: Vec<BucketUploadRequest>, bucket_client: LegacyBucketClient) -> Vec<(PathBuf, BucketUploadResult)> {
     let (tx, rx) = oneshot::channel();
-    let message = BucketUploadMessage::UploadMultipleFrames {
-      requests,
-      bucket_client,
-      result: tx,
-    };
+    let message = BucketUploadMessage::UploadMultipleFrames { requests, bucket_client, result: tx };
     let _ = self.tx.send(message).await;
     let results = rx.await.unwrap();
     results

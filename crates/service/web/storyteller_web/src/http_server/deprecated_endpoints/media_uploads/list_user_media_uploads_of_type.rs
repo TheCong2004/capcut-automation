@@ -51,70 +51,39 @@ pub struct MediaUploadEntry {
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 #[deprecated(note = "Use `media_files` instead of `media_uploads`.")]
-pub async fn list_user_media_uploads_of_type_handler(
-  http_request: HttpRequest,
-  path: Path<ListUserMediaUploadsOfTypeProfilePathInfo>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+pub async fn list_user_media_uploads_of_type_handler(http_request: HttpRequest, path: Path<ListUserMediaUploadsOfTypeProfilePathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // ==================== USER SESSION ==================== //
 
-  let maybe_user_session : Option<UserSessionExtended> = server_state
-      .session_checker
-      .maybe_get_user_session_extended_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session: Option<UserSessionExtended> = server_state.session_checker.maybe_get_user_session_extended_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_token = match maybe_user_session {
     None => {
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
     Some(user_session) => UserToken::new_from_str(&user_session.user_token),
   };
 
-  let query_results = reverse_list_user_media_uploads_of_type_with_connection(
-    &user_token,
-    path.media_type,
-    &mut mysql_connection,
-  ).await;
+  let query_results = reverse_list_user_media_uploads_of_type_with_connection(&user_token, path.media_type, &mut mysql_connection).await;
 
   let uploads = match query_results {
     Ok(results) => results,
     Err(e) => {
       warn!("Query error: {:?}", e);
       return Err(CommonWebError::from_anyhow_error(e));
-    }
+    },
   };
 
-  let response = ListUserMediaUploadsOfTypeSuccessResponse {
-    success: true,
-    uploads: uploads.into_iter().map(|upload| MediaUploadEntry {
-      token: upload.token,
-      media_type: upload.media_type,
-      maybe_original_filename: upload.maybe_original_filename,
-      original_file_size_bytes: upload.original_file_size_bytes,
-      original_duration_millis: upload.original_duration_millis,
-      creator_set_visibility: upload.creator_set_visibility,
-      created_at: upload.created_at,
-      updated_at: upload.updated_at,
-    }).collect(),
-  };
+  let response = ListUserMediaUploadsOfTypeSuccessResponse { success: true, uploads: uploads.into_iter().map(|upload| MediaUploadEntry { token: upload.token, media_type: upload.media_type, maybe_original_filename: upload.maybe_original_filename, original_file_size_bytes: upload.original_file_size_bytes, original_duration_millis: upload.original_duration_millis, creator_set_visibility: upload.creator_set_visibility, created_at: upload.created_at, updated_at: upload.updated_at }).collect() };
 
-  let body = serde_json::to_string(&response)
-    .map_err(|e| CommonWebError::from_error(e))?;
+  let body = serde_json::to_string(&response).map_err(|e| CommonWebError::from_error(e))?;
 
-  Ok(HttpResponse::Ok()
-    .content_type("application/json")
-    .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

@@ -22,9 +22,7 @@ where
 /// row is soft-deleted (`maybe_deleted_at IS NOT NULL`). The full secret is
 /// never echoed back — only its first 20 characters — and the internal `id` is
 /// omitted.
-pub async fn get_live_api_key_by_value<'e, 'c: 'e, E>(
-  args: GetLiveApiKeyByValueArgs<'e, 'c, E>,
-) -> Result<Option<ApiKeyRow>, sqlx::Error>
+pub async fn get_live_api_key_by_value<'e, 'c: 'e, E>(args: GetLiveApiKeyByValueArgs<'e, 'c, E>) -> Result<Option<ApiKeyRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -48,19 +46,8 @@ LIMIT 1
     "#,
     args.api_key,
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|r| ApiKeyRow {
-    token: r.token,
-    api_key_prefix: r.api_key_prefix,
-    name: r.name,
-    maybe_description: r.maybe_description,
-    owner_user_token: r.owner_user_token,
-    ip_address_creation: r.ip_address_creation,
-    ip_address_update: r.ip_address_update,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-    maybe_deleted_at: r.maybe_deleted_at,
-  }))
+  Ok(result.map(|r| ApiKeyRow { token: r.token, api_key_prefix: r.api_key_prefix, name: r.name, maybe_description: r.maybe_description, owner_user_token: r.owner_user_token, ip_address_creation: r.ip_address_creation, ip_address_update: r.ip_address_update, created_at: r.created_at, updated_at: r.updated_at, maybe_deleted_at: r.maybe_deleted_at }))
 }

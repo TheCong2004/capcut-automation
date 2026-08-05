@@ -47,9 +47,7 @@ pub struct AppStateLegacyPermissionFlags {
   pub can_delete_users: bool,
 }
 
-pub fn get_permissions(
-  maybe_user: Option<&UserSessionExtended>
-) -> AppStatePermissions {
+pub fn get_permissions(maybe_user: Option<&UserSessionExtended>) -> AppStatePermissions {
   match maybe_user {
     None => LOGGED_OUT_PERMISSIONS.clone(),
     Some(user) => AppStatePermissions {
@@ -80,31 +78,7 @@ pub fn get_permissions(
   }
 }
 
-const LOGGED_OUT_PERMISSIONS : AppStatePermissions  = AppStatePermissions {
-  is_moderator: false,
-  feature_flags: BTreeSet::new(),
-  legacy_permission_flags: AppStateLegacyPermissionFlags {
-    can_use_tts: false,
-    can_use_w2l: false,
-    can_delete_own_tts_results: false,
-    can_delete_own_w2l_results: false,
-    can_delete_own_account: false,
-    can_upload_tts_models: false,
-    can_upload_w2l_templates: false,
-    can_delete_own_tts_models: false,
-    can_delete_own_w2l_templates: false,
-    can_approve_w2l_templates: false,
-    can_edit_other_users_profiles: false,
-    can_edit_other_users_tts_models: false,
-    can_edit_other_users_w2l_templates: false,
-    can_delete_other_users_tts_models: false,
-    can_delete_other_users_tts_results: false,
-    can_delete_other_users_w2l_templates: false,
-    can_delete_other_users_w2l_results: false,
-    can_ban_users: false,
-    can_delete_users: false,
-  },
-};
+const LOGGED_OUT_PERMISSIONS: AppStatePermissions = AppStatePermissions { is_moderator: false, feature_flags: BTreeSet::new(), legacy_permission_flags: AppStateLegacyPermissionFlags { can_use_tts: false, can_use_w2l: false, can_delete_own_tts_results: false, can_delete_own_w2l_results: false, can_delete_own_account: false, can_upload_tts_models: false, can_upload_w2l_templates: false, can_delete_own_tts_models: false, can_delete_own_w2l_templates: false, can_approve_w2l_templates: false, can_edit_other_users_profiles: false, can_edit_other_users_tts_models: false, can_edit_other_users_w2l_templates: false, can_delete_other_users_tts_models: false, can_delete_other_users_tts_results: false, can_delete_other_users_w2l_templates: false, can_delete_other_users_w2l_results: false, can_ban_users: false, can_delete_users: false } };
 
 fn is_moderator(role: &UserSessionRoleAndPermissions) -> bool {
   match role.user_role_slug.as_str() {

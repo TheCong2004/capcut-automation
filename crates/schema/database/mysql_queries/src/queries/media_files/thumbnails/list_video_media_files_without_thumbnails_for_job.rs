@@ -33,10 +33,9 @@ pub struct VideoMediaFileWithoutThumbnail {
   pub maybe_public_bucket_extension: Option<String>,
 }
 
-pub async fn list_video_media_files_without_thumbnails_for_job<'e, 'c, E>(
-  args: ListVideoMediaFilesWithoutThumbnailsArgs<E>,
-) -> Result<VideoMediaFilesWithoutThumbnails, sqlx::Error>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn list_video_media_files_without_thumbnails_for_job<'e, 'c, E>(args: ListVideoMediaFilesWithoutThumbnailsArgs<E>) -> Result<VideoMediaFilesWithoutThumbnails, sqlx::Error>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let cursor = args.maybe_id_cursor.unwrap_or(i64::MAX);
 
@@ -74,14 +73,10 @@ LIMIT ?
     MEDIA_CLASS_VIDEO,
     page_size,
   )
-    .fetch_all(args.executor)
-    .await?;
+  .fetch_all(args.executor)
+  .await?;
 
-  let next_cursor = if media_files.len() as i64 == page_size {
-    media_files.last().map(|f| f.id)
-  } else {
-    None
-  };
+  let next_cursor = if media_files.len() as i64 == page_size { media_files.last().map(|f| f.id) } else { None };
 
   Ok(VideoMediaFilesWithoutThumbnails { media_files, next_cursor })
 }

@@ -6,7 +6,6 @@ use crate::job::job_types::workflow::comfy_ui_dependencies::ComfyDependencies;
 pub struct ComfyDirs {
   pub comfy_input_dir: PathBuf,
   pub comfy_output_dir: PathBuf,
-
 }
 
 impl ComfyDirs {
@@ -16,9 +15,6 @@ impl ComfyDirs {
     //  jobs enqueue the expected output path -- no idea why that was done.
     //  This should all be fixed.
     let root_comfy_path = comfy_deps.inference_command.mounts_directory.as_path();
-    Self {
-      comfy_input_dir: root_comfy_path.join("input"),
-      comfy_output_dir: root_comfy_path.join("output"),
-    }
+    Self { comfy_input_dir: root_comfy_path.join("input"), comfy_output_dir: root_comfy_path.join("output") }
   }
 }

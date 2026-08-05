@@ -100,8 +100,7 @@ impl From<f32> for Time {
     fn from(seconds: f32) -> Self {
         if seconds >= 0.0 {
             Time::new(seconds.trunc() as u64, f64::from(seconds.fract()))
-        }
-        else {
+        } else {
             Time::new(0, 0.0)
         }
     }
@@ -111,8 +110,7 @@ impl From<f64> for Time {
     fn from(seconds: f64) -> Self {
         if seconds >= 0.0 {
             Time::new(seconds.trunc() as u64, seconds.fract())
-        }
-        else {
+        } else {
             Time::new(0, 0.0)
         }
     }
@@ -159,8 +157,7 @@ impl TimeBase {
             let seconds = (dividend as f64) / f64::from(self.denom);
 
             Time::new(seconds.trunc() as u64, seconds.fract())
-        }
-        else {
+        } else {
             // If the dividend requires more than 52 bits, calculate the integer portion using
             // integer arithmetic, then calculate the fractional part separately.
             let quotient = dividend / u128::from(self.denom);
@@ -204,8 +201,7 @@ impl TimeBase {
 
             // Add the upper and lower halves.
             ((uk as u64) << 48).wrapping_add(ul as u64)
-        }
-        else {
+        } else {
             ((product as f64) * k) as u64
         };
 

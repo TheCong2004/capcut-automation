@@ -3,23 +3,19 @@ use crate::types::{PluginManifest, PluginProvider, PostDownloadPluginPayload};
 use super::sdk_bundle::current_sdk_version;
 
 fn sdk_trigger_identifier(trigger: &str) -> &'static str {
-    match trigger {
-        "download.queued" => "triggers.downloadQueued",
-        "download.beforeStart" => "triggers.downloadBeforeStart",
-        "download.completed" => "triggers.downloadCompleted",
-        "download.failed" => "triggers.downloadFailed",
-        _ => "triggers.downloadCompleted",
-    }
+  match trigger {
+    "download.queued" => "triggers.downloadQueued",
+    "download.beforeStart" => "triggers.downloadBeforeStart",
+    "download.completed" => "triggers.downloadCompleted",
+    "download.failed" => "triggers.downloadFailed",
+    _ => "triggers.downloadCompleted",
+  }
 }
 
 pub(super) fn build_scaffold_plugin_module(manifest: &PluginManifest) -> String {
-    let primary_trigger = manifest
-        .triggers
-        .first()
-        .map(|trigger| sdk_trigger_identifier(trigger))
-        .unwrap_or("triggers.downloadCompleted");
-    format!(
-        r#"import {{ definePlugin, triggers, type PluginDefinition }} from "youwee-sdk";
+  let primary_trigger = manifest.triggers.first().map(|trigger| sdk_trigger_identifier(trigger)).unwrap_or("triggers.downloadCompleted");
+  format!(
+    r#"import {{ definePlugin, triggers, type PluginDefinition }} from "youwee-sdk";
 
 const plugin = definePlugin({{
   meta: {{
@@ -54,30 +50,26 @@ const plugin = definePlugin({{
 
 export default plugin;
 "#,
-        name = manifest.name.replace('"', "\\\""),
-        version = manifest.version.replace('"', "\\\""),
-        description = manifest
-            .description
-            .as_deref()
-            .unwrap_or("Describe what this plugin does.")
-            .replace('"', "\\\""),
-        primary_trigger = primary_trigger,
-    )
+    name = manifest.name.replace('"', "\\\""),
+    version = manifest.version.replace('"', "\\\""),
+    description = manifest.description.as_deref().unwrap_or("Describe what this plugin does.").replace('"', "\\\""),
+    primary_trigger = primary_trigger,
+  )
 }
 
 pub(super) fn build_scaffold_locale_file() -> String {
-    r#"{
+  r#"{
   "log.hookStarted": "Hook started",
   "result.success": "Plugin scaffold ran successfully."
 }
 "#
-    .to_string()
+  .to_string()
 }
 
 pub(super) fn build_scaffold_package_json(manifest: &PluginManifest) -> String {
-    let sdk_version = current_sdk_version();
-    format!(
-        r#"{{
+  let sdk_version = current_sdk_version();
+  format!(
+    r#"{{
   "name": "{slug}",
   "version": "{version}",
   "private": true,
@@ -99,19 +91,15 @@ pub(super) fn build_scaffold_package_json(manifest: &PluginManifest) -> String {
   }}
 }}
 "#,
-        slug = manifest.slug,
-        version = manifest.version,
-        sdk_version = sdk_version,
-        description = manifest
-            .description
-            .as_deref()
-            .unwrap_or("Youwee plugin scaffold")
-            .replace('"', "\\\"")
-    )
+    slug = manifest.slug,
+    version = manifest.version,
+    sdk_version = sdk_version,
+    description = manifest.description.as_deref().unwrap_or("Youwee plugin scaffold").replace('"', "\\\"")
+  )
 }
 
 pub(super) fn build_scaffold_tsconfig() -> String {
-    r#"{
+  r#"{
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -125,11 +113,11 @@ pub(super) fn build_scaffold_tsconfig() -> String {
   "include": ["src/**/*.ts"]
 }
 "#
-    .to_string()
+  .to_string()
 }
 
 pub(super) fn build_scaffold_ci_workflow() -> String {
-    r#"name: Plugin CI
+  r#"name: Plugin CI
 
 on:
   push:
@@ -170,11 +158,11 @@ jobs:
       - name: Run Deno runtime check
         run: bun run test:deno < examples/payload.download.completed.json
 "#
-    .to_string()
+  .to_string()
 }
 
 pub(super) fn build_scaffold_release_workflow() -> String {
-    r#"name: Plugin Release
+  r#"name: Plugin Release
 
 on:
   push:
@@ -246,12 +234,12 @@ jobs:
             release/*.ywp
             release/*.sha256
 "#
-    .to_string()
+  .to_string()
 }
 
 pub(super) fn build_scaffold_readme(manifest: &PluginManifest) -> String {
-    format!(
-        r#"# {name}
+  format!(
+    r#"# {name}
 
 ## Overview
 
@@ -544,33 +532,22 @@ The source workspace is for development and packaging, not direct end-user insta
 
 Edit `src/plugin.ts` first and replace the example hook body with your actual logic.
 "#,
-        name = manifest.name,
-        plugin_id = manifest.plugin_id,
-        slug = manifest.slug,
-        icon = manifest.icon.as_deref().unwrap_or("puzzle"),
-        language = manifest.runtime.language.as_str(),
-        providers = manifest
-            .runtime
-            .supported_providers
-            .iter()
-            .map(PluginProvider::as_str)
-            .collect::<Vec<_>>()
-            .join(", "),
-        preferred = manifest
-            .runtime
-            .preferred_provider
-            .as_ref()
-            .map(PluginProvider::as_str)
-            .unwrap_or("none")
-    )
+    name = manifest.name,
+    plugin_id = manifest.plugin_id,
+    slug = manifest.slug,
+    icon = manifest.icon.as_deref().unwrap_or("puzzle"),
+    language = manifest.runtime.language.as_str(),
+    providers = manifest.runtime.supported_providers.iter().map(PluginProvider::as_str).collect::<Vec<_>>().join(", "),
+    preferred = manifest.runtime.preferred_provider.as_ref().map(PluginProvider::as_str).unwrap_or("none")
+  )
 }
 
 pub(super) fn build_scaffold_changelog() -> String {
-    "# Changelog\n\n## [0.1.0]\n- Initial scaffold\n".to_string()
+  "# Changelog\n\n## [0.1.0]\n- Initial scaffold\n".to_string()
 }
 
 pub(super) fn build_scaffold_success_result_example() -> String {
-    r#"{
+  r#"{
   "success": true,
   "message": "Uploaded successfully",
   "artifacts": null,
@@ -579,11 +556,11 @@ pub(super) fn build_scaffold_success_result_example() -> String {
   }
 }
 "#
-    .to_string()
+  .to_string()
 }
 
 pub(super) fn build_scaffold_failure_result_example() -> String {
-    r#"{
+  r#"{
   "success": false,
   "message": "Missing configuration",
   "artifacts": null,
@@ -592,29 +569,9 @@ pub(super) fn build_scaffold_failure_result_example() -> String {
   }
 }
 "#
-    .to_string()
+  .to_string()
 }
 
 pub(super) fn sample_download_payload() -> PostDownloadPluginPayload {
-    PostDownloadPluginPayload {
-        job_id: "sample-job".to_string(),
-        source: Some("youtube".to_string()),
-        trigger: "download.completed".to_string(),
-        filepath: "/tmp/sample.mp4".to_string(),
-        filename: "sample.mp4".to_string(),
-        directory: "/tmp".to_string(),
-        filesize: Some(12345678),
-        format: Some("mp4".to_string()),
-        quality: Some("1080p".to_string()),
-        url: "https://example.com/video".to_string(),
-        title: Some("Sample video".to_string()),
-        thumbnail: Some("https://example.com/thumb.jpg".to_string()),
-        history_id: Some("sample-history-id".to_string()),
-        time_range: None,
-        download_kind: "download".to_string(),
-        workflow_run_id: None,
-        workflow_step_index: None,
-        workflow_step_plugin_id: None,
-        chain_state: None,
-    }
+  PostDownloadPluginPayload { job_id: "sample-job".to_string(), source: Some("youtube".to_string()), trigger: "download.completed".to_string(), filepath: "/tmp/sample.mp4".to_string(), filename: "sample.mp4".to_string(), directory: "/tmp".to_string(), filesize: Some(12345678), format: Some("mp4".to_string()), quality: Some("1080p".to_string()), url: "https://example.com/video".to_string(), title: Some("Sample video".to_string()), thumbnail: Some("https://example.com/thumb.jpg".to_string()), history_id: Some("sample-history-id".to_string()), time_range: None, download_kind: "download".to_string(), workflow_run_id: None, workflow_step_index: None, workflow_step_plugin_id: None, chain_state: None }
 }

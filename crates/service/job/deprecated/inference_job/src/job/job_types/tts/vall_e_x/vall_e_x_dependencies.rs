@@ -11,10 +11,6 @@ pub struct VallExDependencies {
 
 impl VallExDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      create_embedding_command: VallEXCreateEmbeddingCommand::from_env()?,
-      downloaders: VallEXDownloaders::build_all_from_env(),
-      inference_command: VallEXInferenceCommand::from_env()?,
-    })
+    Ok(Self { create_embedding_command: VallEXCreateEmbeddingCommand::from_env()?, downloaders: VallEXDownloaders::build_all_from_env(), inference_command: VallEXInferenceCommand::from_env()? })
   }
 }

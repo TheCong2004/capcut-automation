@@ -1,1 +1,2 @@
-#[macro_use] pub (crate) mod impl_string_key;
+#[macro_use]
+pub(crate) mod impl_string_key;

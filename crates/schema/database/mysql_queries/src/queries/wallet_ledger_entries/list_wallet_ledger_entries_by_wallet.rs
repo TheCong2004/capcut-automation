@@ -25,10 +25,7 @@ pub struct WalletLedgerEntryForModerationResult {
   pub maybe_linked_refund_ledger_token: Option<WalletLedgerEntryToken>,
 }
 
-pub async fn list_wallet_ledger_entries_by_wallet(
-  wallet_token: &WalletToken,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Vec<WalletLedgerEntryForModerationResult>> {
+pub async fn list_wallet_ledger_entries_by_wallet(wallet_token: &WalletToken, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<WalletLedgerEntryForModerationResult>> {
   let results = sqlx::query_as!(
     WalletLedgerEntryForModerationResult,
     r#"
@@ -51,14 +48,14 @@ ORDER BY id DESC
     "#,
     wallet_token,
   )
-    .fetch_all(mysql_pool)
-    .await;
+  .fetch_all(mysql_pool)
+  .await;
 
   match results {
     Ok(records) => Ok(records),
     Err(err) => {
       warn!("list_wallet_ledger_entries_by_wallet query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }

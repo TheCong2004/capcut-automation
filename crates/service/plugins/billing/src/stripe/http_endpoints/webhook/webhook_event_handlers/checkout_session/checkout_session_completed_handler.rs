@@ -15,19 +15,10 @@ pub fn checkout_session_completed_handler(checkout_session: CheckoutSession) -> 
 
   // NB: We'll need this to send them to the "customer portal", which is how they can modify or cancel
   // their subscriptions.
-  let maybe_stripe_customer_id  = checkout_session.customer
-      .as_ref()
-      .map(|c| expand_customer_id(c));
+  let maybe_stripe_customer_id = checkout_session.customer.as_ref().map(|c| expand_customer_id(c));
 
   // NB: Our internal user token.
-  let maybe_user_token = checkout_session.metadata
-      .and_then(|m| m.get(METADATA_USER_TOKEN).map(|t| t.to_string()));
+  let maybe_user_token = checkout_session.metadata.and_then(|m| m.get(METADATA_USER_TOKEN).map(|t| t.to_string()));
 
-  Ok(StripeWebhookSummary {
-    maybe_user_token,
-    maybe_event_entity_id: Some(stripe_checkout_id),
-    maybe_stripe_customer_id,
-    action_was_taken: false,
-    should_ignore_retry: false,
-  })
+  Ok(StripeWebhookSummary { maybe_user_token, maybe_event_entity_id: Some(stripe_checkout_id), maybe_stripe_customer_id, action_was_taken: false, should_ignore_retry: false })
 }

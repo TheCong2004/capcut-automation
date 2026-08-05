@@ -42,7 +42,8 @@ use crate::queries::generic_inference::common::job_cost_estimates::JobCostEstima
 use crate::payloads::generic_inference_args::generic_inference_args::GenericInferenceArgs;
 
 pub(crate) struct InsertFullGenericInferenceJobRecordArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub token: &'e InferenceJobToken,
   pub uuid_idempotency_token: &'e str,
@@ -104,34 +105,28 @@ pub(crate) struct InsertFullGenericInferenceJobRecordArgs<'e, 'c, E>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub(crate) async fn insert_full_generic_inference_job_record<'e, 'c: 'e, E>(
-  args: InsertFullGenericInferenceJobRecordArgs<'e, 'c, E>,
-) -> Result<u64, DatabaseQueryError>
-  where E: 'e + Executor<'c, Database = MySql>
+pub(crate) async fn insert_full_generic_inference_job_record<'e, 'c: 'e, E>(args: InsertFullGenericInferenceJobRecordArgs<'e, 'c, E>) -> Result<u64, DatabaseQueryError>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   // VARCHAR(32) historically, but the web insert was truncating to 64 and
   // trimming — preserve exactly so the refactor is behavior-neutral.
-  let maybe_routing_tag = args.maybe_routing_tag
-      .map(|tag| {
-        let mut tag = tag.trim().to_string();
-        tag.truncate(64);
-        tag
-      });
+  let maybe_routing_tag = args.maybe_routing_tag.map(|tag| {
+    let mut tag = tag.trim().to_string();
+    tag.truncate(64);
+    tag
+  });
 
-  let maybe_truncated_failure_reason = args.maybe_failure_reason
-      .map(|s| if s.len() > 255 { &s[..255] } else { s });
+  let maybe_truncated_failure_reason = args.maybe_failure_reason.map(|s| if s.len() > 255 { &s[..255] } else { s });
 
   // Serialize Some(args) → JSON string; None → DB NULL.
   let maybe_inference_args_json = match args.maybe_inference_args.as_ref() {
-    Some(payload) => Some(
-      serde_json::ser::to_string(payload)
-          .map_err(|_e| anyhow!("could not encode inference args"))?
-    ),
+    Some(payload) => Some(serde_json::ser::to_string(payload).map_err(|_e| anyhow!("could not encode inference args"))?),
     None => None,
   };
 
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO generic_inference_jobs
 SET
   token = ?,
@@ -187,63 +182,44 @@ SET
 
   status = ?
         "#,
-        args.token.as_str(),
-        args.uuid_idempotency_token,
+    args.token.as_str(),
+    args.uuid_idempotency_token,
+    args.job_type.to_str(),
+    args.maybe_external_third_party.map(|e| e.to_str()),
+    args.maybe_external_third_party_id,
+    args.maybe_product_category.map(|c| c.to_str()),
+    args.inference_category.to_str(),
+    args.maybe_model_type.map(|t| t.to_str()),
+    args.maybe_model_token,
+    args.maybe_input_source_token,
+    args.maybe_input_source_token_type.map(|t| t.to_str()),
+    args.maybe_download_url,
+    args.maybe_cover_image_media_file_token.map(|t| t.as_str()),
+    args.maybe_prompt_token.map(|t| t.to_string()),
+    args.maybe_wallet_ledger_entry_token.map(|t| t.to_string()),
+    args.maybe_raw_inference_text,
+    maybe_inference_args_json,
+    args.maybe_creator_user_token.map(|t| t.to_string()),
+    args.maybe_avt_token.map(|t| t.to_string()),
+    args.creator_ip_address,
+    args.creator_set_visibility.to_str(),
+    args.maybe_platform_type.map(|p| p.to_str()),
+    args.maybe_cost_estimates.and_then(|c| c.maybe_external_third_party_cost_credits),
+    args.maybe_cost_estimates.and_then(|c| c.maybe_external_third_party_cost_usd_cents),
+    args.maybe_cost_estimates.and_then(|c| c.maybe_system_cost_credits),
+    args.maybe_cost_estimates.and_then(|c| c.maybe_system_cost_usd_cents),
+    args.priority_level,
+    args.requires_keepalive,
+    args.max_duration_seconds,
+    args.is_debug_request,
+    maybe_routing_tag,
+    args.maybe_debug_log_event_token.map(|t| t.as_str()),
+    args.maybe_frontend_failure_category.map(|c| c.to_str()),
+    maybe_truncated_failure_reason,
+    args.status.to_str(),
+  );
 
-        args.job_type.to_str(),
-
-        args.maybe_external_third_party.map(|e| e.to_str()),
-        args.maybe_external_third_party_id,
-
-        args.maybe_product_category.map(|c| c.to_str()),
-        args.inference_category.to_str(),
-
-        args.maybe_model_type.map(|t| t.to_str()),
-        args.maybe_model_token,
-
-        args.maybe_input_source_token,
-        args.maybe_input_source_token_type.map(|t| t.to_str()),
-
-        args.maybe_download_url,
-        args.maybe_cover_image_media_file_token.map(|t| t.as_str()),
-
-        args.maybe_prompt_token.map(|t| t.to_string()),
-        args.maybe_wallet_ledger_entry_token.map(|t| t.to_string()),
-
-        args.maybe_raw_inference_text,
-
-        maybe_inference_args_json,
-
-        args.maybe_creator_user_token.map(|t| t.to_string()),
-        args.maybe_avt_token.map(|t| t.to_string()),
-        args.creator_ip_address,
-        args.creator_set_visibility.to_str(),
-
-        args.maybe_platform_type.map(|p| p.to_str()),
-
-        args.maybe_cost_estimates.and_then(|c| c.maybe_external_third_party_cost_credits),
-        args.maybe_cost_estimates.and_then(|c| c.maybe_external_third_party_cost_usd_cents),
-        args.maybe_cost_estimates.and_then(|c| c.maybe_system_cost_credits),
-        args.maybe_cost_estimates.and_then(|c| c.maybe_system_cost_usd_cents),
-
-        args.priority_level,
-        args.requires_keepalive,
-        args.max_duration_seconds,
-        args.is_debug_request,
-
-        maybe_routing_tag,
-
-        args.maybe_debug_log_event_token.map(|t| t.as_str()),
-
-        args.maybe_frontend_failure_category.map(|c| c.to_str()),
-        maybe_truncated_failure_reason,
-
-        args.status.to_str(),
-    );
-
-  let record_id = query.execute(args.mysql_executor)
-      .await?
-      .last_insert_id();
+  let record_id = query.execute(args.mysql_executor).await?.last_insert_id();
 
   Ok(record_id)
 }

@@ -12,7 +12,6 @@ pub enum StatsEntityToken {
 }
 
 impl StatsEntityToken {
-
   /// Bookmark entity types aren't 1:1, and they're not a superset (yet) either.
   pub fn from_bookmark_entity_type_and_token(entity_type: UserBookmarkEntityType, token: &str) -> Option<Self> {
     match entity_type {

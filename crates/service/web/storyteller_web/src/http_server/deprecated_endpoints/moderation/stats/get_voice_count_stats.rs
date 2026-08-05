@@ -18,26 +18,18 @@ pub struct GetVoiceCountStatsResponse {
   pub public_voices_count: i64,
 }
 // NB: Not using DeriveMore since Clion doesn't understand it.
-pub async fn get_voice_count_stats_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<HttpResponse, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn get_voice_count_stats_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: Not a good fit for this permission.
@@ -46,23 +38,11 @@ pub async fn get_voice_count_stats_handler(
     return Err(CommonWebError::NotAuthorized);
   }
 
-  let result = get_voice_count_stats(&server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  let result = get_voice_count_stats(&server_state.mysql_pool).await.map_err(|e| CommonWebError::from_anyhow_error(e))?;
 
-  let response = GetVoiceCountStatsResponse {
-    success: true,
-    all_voices_count_including_deleted: result.all_count,
-    public_voices_count: result.public_count,
-  };
+  let response = GetVoiceCountStatsResponse { success: true, all_voices_count_including_deleted: result.all_count, public_voices_count: result.public_count };
 
-  let body = serde_json::to_string(&response)
-      .map_err(CommonWebError::from_error)?;
+  let body = serde_json::to_string(&response).map_err(CommonWebError::from_error)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }
-

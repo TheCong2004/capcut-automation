@@ -1,9 +1,7 @@
 use log::{debug, warn};
 
 use rootly_client::creds::rootly_api_key::RootlyApiKey;
-use rootly_client::requests::create_alert::create_alert::{
-  create_alert, CreateAlertArgs,
-};
+use rootly_client::requests::create_alert::create_alert::{create_alert, CreateAlertArgs};
 
 use crate::error::pager_error::PagerError;
 use crate::error::pager_service_error::PagerServiceError;
@@ -71,13 +69,7 @@ pub struct PageSentResult {
 impl PagerClient {
   // --- Constructor ---
 
-  pub fn new(
-    client_config: PagerClientConfig,
-    application_name: Option<String>,
-    environment: Option<String>,
-    hostname: Option<String>,
-    service_id: Option<String>,
-  ) -> Self {
+  pub fn new(client_config: PagerClientConfig, application_name: Option<String>, environment: Option<String>, hostname: Option<String>, service_id: Option<String>) -> Self {
     Self { client_config, application_name, environment, hostname, service_id }
   }
 
@@ -93,43 +85,25 @@ impl PagerClient {
       PagerClientConfig::NoOp => {
         debug!("Pager no-op: would have sent page: {}", notification.title);
         Ok(None)
-      }
-      PagerClientConfig::Rootly { .. } => {
-        self.send_page_via_rootly(notification).await.map(Some)
-      }
+      },
+      PagerClientConfig::Rootly { .. } => self.send_page_via_rootly(notification).await.map(Some),
     }
   }
 
   // --- Private helpers (called by send_page) ---
 
-  async fn send_page_via_rootly(
-    &self,
-    notification: &NotificationDetails,
-  ) -> Result<PageSentResult, PagerError> {
-    let PagerClientConfig::Rootly {
-      api_key,
-      urgency_id_high,
-      urgency_id_medium,
-      urgency_id_low,
-      notification_target_type,
-      notification_target_id,
-    } = &self.client_config else {
+  async fn send_page_via_rootly(&self, notification: &NotificationDetails) -> Result<PageSentResult, PagerError> {
+    let PagerClientConfig::Rootly { api_key, urgency_id_high, urgency_id_medium, urgency_id_low, notification_target_type, notification_target_id } = &self.client_config else {
       return Ok(PageSentResult { id: None, short_id: None });
     };
 
-    let source = self.application_name
-        .clone()
-        .unwrap_or_else(|| "unknown".to_string());
+    let source = self.application_name.clone().unwrap_or_else(|| "unknown".to_string());
 
     debug!("Sending page via Rootly (source={}): {}", source, notification.title);
 
     let labels = self.build_labels(notification);
 
-    let description = notification.build_enriched_description(
-      self.application_name.as_deref(),
-      self.service_id.as_deref(),
-      self.hostname.as_deref(),
-    );
+    let description = notification.build_enriched_description(self.application_name.as_deref(), self.service_id.as_deref(), self.hostname.as_deref());
 
     // https://docs.rootly.com/api-reference/alerts/creates-an-alert
     let result = create_alert(CreateAlertArgs {
@@ -138,9 +112,7 @@ impl PagerClient {
       summary: notification.title.clone(),
       description,
       status: Some("triggered".to_string()),
-      service_ids: self.service_id
-          .as_ref()
-          .map(|id| vec![id.clone()]),
+      service_ids: self.service_id.as_ref().map(|id| vec![id.clone()]),
       group_ids: None,
       environment_ids: None,
       external_id: None,
@@ -154,20 +126,18 @@ impl PagerClient {
       notification_target_id: notification_target_id.clone(),
       labels,
       deduplication_key: Some(notification.to_deduplication_key()),
-    }).await;
+    })
+    .await;
 
     match result {
       Ok(success) => {
         debug!("Page sent successfully via Rootly: id={}, short_id={:?}", success.id, success.short_id);
-        Ok(PageSentResult {
-          id: Some(success.id),
-          short_id: success.short_id,
-        })
-      }
+        Ok(PageSentResult { id: Some(success.id), short_id: success.short_id })
+      },
       Err(err) => {
         warn!("Failed to send page via Rootly: {}", err);
         Err(PagerError::Service(PagerServiceError::RootlyError(err)))
-      }
+      },
     }
   }
 

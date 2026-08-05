@@ -15,42 +15,29 @@ use tokens::tokens::users::UserToken;
 use crate::seeding::users::HANASHI_USERNAME;
 
 pub async fn seed_test_videos(mysql_pool: &Pool<MySql>, user_token: UserToken) -> AnyhowResult<()> {
-    let model_weight_token1 = MediaFileToken::generate_for_testing_and_dev_seeding_never_use_in_production_seriously();
-    let seed_tool_data_root = get_seed_tool_data_root();
-    let mut media_file_path = seed_tool_data_root.clone();
-    media_file_path.push("media/video/video-style-transfer/miku.mp4");
-    let remote_cloud_file_client = RemoteCloudFileClient::get_remote_cloud_file_client().await?;
-    let video_media_descriptor = Box::new(MediaVideoMp4Descriptor {});
-    let metadata1 = remote_cloud_file_client.upload_file(video_media_descriptor, media_file_path.as_path().to_str().unwrap()).await?;
-    let bucket_details = metadata1.bucket_details.as_ref().unwrap().clone();
-    let media1 = InsertArgs {
-        pool: &mysql_pool,
-        maybe_use_apriori_media_token: Some(&model_weight_token1),
-        media_file_type: MediaFileType::Mp4,
-        maybe_mime_type: Some(&*metadata1.mimetype),
-        file_size_bytes: metadata1.file_size_bytes,
-        sha256_checksum: &metadata1.sha256_checksum,
-        maybe_origin_filename: Some("miku.mp4"),
-        maybe_creator_user_token: Some(&user_token),
-        creator_set_visibility: Visibility::Public,
-        public_bucket_directory_hash: &bucket_details.object_hash,
-        maybe_public_bucket_prefix: Some(&bucket_details.prefix),
-        maybe_public_bucket_extension: Some(&bucket_details.suffix),
-    };
-    let (_media_file_token1, _) = insert_media_file_from_cli_tool(media1).await.unwrap();
+  let model_weight_token1 = MediaFileToken::generate_for_testing_and_dev_seeding_never_use_in_production_seriously();
+  let seed_tool_data_root = get_seed_tool_data_root();
+  let mut media_file_path = seed_tool_data_root.clone();
+  media_file_path.push("media/video/video-style-transfer/miku.mp4");
+  let remote_cloud_file_client = RemoteCloudFileClient::get_remote_cloud_file_client().await?;
+  let video_media_descriptor = Box::new(MediaVideoMp4Descriptor {});
+  let metadata1 = remote_cloud_file_client.upload_file(video_media_descriptor, media_file_path.as_path().to_str().unwrap()).await?;
+  let bucket_details = metadata1.bucket_details.as_ref().unwrap().clone();
+  let media1 = InsertArgs { pool: &mysql_pool, maybe_use_apriori_media_token: Some(&model_weight_token1), media_file_type: MediaFileType::Mp4, maybe_mime_type: Some(&*metadata1.mimetype), file_size_bytes: metadata1.file_size_bytes, sha256_checksum: &metadata1.sha256_checksum, maybe_origin_filename: Some("miku.mp4"), maybe_creator_user_token: Some(&user_token), creator_set_visibility: Visibility::Public, public_bucket_directory_hash: &bucket_details.object_hash, maybe_public_bucket_prefix: Some(&bucket_details.prefix), maybe_public_bucket_extension: Some(&bucket_details.suffix) };
+  let (_media_file_token1, _) = insert_media_file_from_cli_tool(media1).await.unwrap();
 
-    Ok(())
+  Ok(())
 }
 
 pub async fn seed_media_seedtool(mysql_pool: &Pool<MySql>) -> AnyhowResult<()> {
-    info!("Seeding media...");
+  info!("Seeding media...");
 
-    let user_token = match get_user_token_by_username(HANASHI_USERNAME, mysql_pool).await? {
-        None => {
-            return Err(anyhow!("could not find user hanashi"));
-        }
-        Some(token) => token,
-    };
-    seed_test_videos(mysql_pool, user_token.clone()).await?;
-    Ok(())
+  let user_token = match get_user_token_by_username(HANASHI_USERNAME, mysql_pool).await? {
+    None => {
+      return Err(anyhow!("could not find user hanashi"));
+    },
+    Some(token) => token,
+  };
+  seed_test_videos(mysql_pool, user_token.clone()).await?;
+  Ok(())
 }

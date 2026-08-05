@@ -19,24 +19,17 @@ pub struct PremiumPayload {
 }
 
 impl PremiumPayload {
-
   pub fn new() -> Self {
-    Self {
-      premium_credits_used: 0,
-      free_uses: ProductByWeekStore::new(),
-    }
+    Self { premium_credits_used: 0, free_uses: ProductByWeekStore::new() }
   }
 
   pub fn maximum(&self, other: &Self) -> Self {
     let premium_credits_used = self.premium_credits_used.max(other.premium_credits_used);
     let free_uses = self.free_uses.maximum(&other.free_uses);
-    Self {
-      premium_credits_used,
-      free_uses
-    }
+    Self { premium_credits_used, free_uses }
   }
 
-  pub (crate) fn from_redis_hkey_map(map: &HashMap<String, String>) -> AnyhowResult<Self> {
+  pub(crate) fn from_redis_hkey_map(map: &HashMap<String, String>) -> AnyhowResult<Self> {
     let mut credits = 0;
     let mut free_uses = ProductByWeekStore::new();
 
@@ -50,13 +43,10 @@ impl PremiumPayload {
       }
     }
 
-    Ok(Self {
-      premium_credits_used: credits,
-      free_uses
-    })
+    Ok(Self { premium_credits_used: credits, free_uses })
   }
 
-  pub (crate) fn to_redis_hkey_map(&self) -> HashMap<String, String> {
+  pub(crate) fn to_redis_hkey_map(&self) -> HashMap<String, String> {
     let mut map = HashMap::new();
     map.insert(PREMIUM_CREDITS_SUBKEY.to_string(), self.premium_credits_used.to_string());
     for (key, value) in self.free_uses.free_uses_per_product_map.iter() {
@@ -65,7 +55,7 @@ impl PremiumPayload {
     map
   }
 
-  pub (crate) fn to_redis_hkey_vec(&self) -> Vec<(String, String)> {
+  pub(crate) fn to_redis_hkey_vec(&self) -> Vec<(String, String)> {
     let map = self.to_redis_hkey_map();
     map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
   }
@@ -115,10 +105,7 @@ mod tests {
     free_uses.set_use_count(ProductByWeekSubkey::new(PremiumProductName::VideoStyleTransfer, 1), 1);
     free_uses.set_use_count(ProductByWeekSubkey::new(PremiumProductName::VideoStyleTransfer, 2), 1);
 
-    let payload = PremiumPayload {
-      premium_credits_used: 10,
-      free_uses
-    };
+    let payload = PremiumPayload { premium_credits_used: 10, free_uses };
 
     let map = payload.to_redis_hkey_map();
     assert_eq!(map.get("credits").unwrap(), "10");

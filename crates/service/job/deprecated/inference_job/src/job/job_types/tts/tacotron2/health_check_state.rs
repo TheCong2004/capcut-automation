@@ -16,12 +16,7 @@ struct InnerHealthCheckState {
 
 impl HealthCheckState {
   pub fn new() -> Self {
-    Self {
-      inner: Arc::new(RwLock::new(InnerHealthCheckState {
-        checked_health_at_least_once: false,
-        maybe_needs_health_check: false,
-      }))
-    }
+    Self { inner: Arc::new(RwLock::new(InnerHealthCheckState { checked_health_at_least_once: false, maybe_needs_health_check: false })) }
   }
 
   //pub fn mark_first_health_check_done(&self) -> AnyhowResult<()> {
@@ -43,7 +38,7 @@ impl HealthCheckState {
           lock.checked_health_at_least_once = true;
         }
         Ok(())
-      }
+      },
     }
   }
 
@@ -53,7 +48,7 @@ impl HealthCheckState {
       Ok(lock) => {
         let needs_health_check = !lock.checked_health_at_least_once || lock.maybe_needs_health_check;
         Ok(needs_health_check)
-      }
+      },
     }
   }
 }

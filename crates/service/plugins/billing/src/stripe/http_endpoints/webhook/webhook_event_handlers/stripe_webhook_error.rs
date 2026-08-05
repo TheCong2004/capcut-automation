@@ -32,4 +32,3 @@ impl fmt::Display for StripeWebhookError {
     write!(f, "{:?}", self)
   }
 }
-

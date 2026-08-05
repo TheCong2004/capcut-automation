@@ -1,10 +1,7 @@
 use crate::creds::comet_api_key::CometApiKey;
 use crate::error::comet_client_error::CometClientError;
 use crate::error::comet_error::CometError;
-use crate::requests::create_video::create_video::{
-  create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize,
-  CreateVideoArgs, CreateVideoRequest,
-};
+use crate::requests::create_video::create_video::{create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize, CreateVideoArgs, CreateVideoRequest};
 use crate::requests::video_task_status::CometVideoTaskStatus;
 
 /// Wan 2.7 supports 2-15 second durations.
@@ -80,20 +77,12 @@ pub struct GenerateWan2p7Response {
 
 // ── Entry point ──
 
-pub async fn generate_wan_2p7(
-  args: GenerateWan2p7Args<'_>,
-) -> Result<GenerateWan2p7Response, CometError> {
+pub async fn generate_wan_2p7(args: GenerateWan2p7Args<'_>) -> Result<GenerateWan2p7Response, CometError> {
   let raw_request = args.request.to_create_video_request()?;
 
-  let result = create_video(CreateVideoArgs {
-    api_key: args.api_key,
-    request: raw_request,
-  }).await?;
+  let result = create_video(CreateVideoArgs { api_key: args.api_key, request: raw_request }).await?;
 
-  Ok(GenerateWan2p7Response {
-    task_id: result.task_id,
-    status: result.status,
-  })
+  Ok(GenerateWan2p7Response { task_id: result.task_id, status: result.status })
 }
 
 impl GenerateWan2p7Request {
@@ -101,21 +90,11 @@ impl GenerateWan2p7Request {
   pub fn to_create_video_request(&self) -> Result<CreateVideoRequest, CometClientError> {
     if let Some(seconds) = self.duration_seconds {
       if !(MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&seconds) {
-        return Err(CometClientError::InvalidRequestField {
-          field: "duration_seconds",
-          raw_value: seconds.to_string(),
-          reason: format!("Wan 2.7 supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations"),
-        });
+        return Err(CometClientError::InvalidRequestField { field: "duration_seconds", raw_value: seconds.to_string(), reason: format!("Wan 2.7 supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations") });
       }
     }
 
-    Ok(CreateVideoRequest {
-      model: CometVideoModelRaw::Wan2p7,
-      prompt: self.prompt.clone(),
-      maybe_seconds: self.duration_seconds,
-      maybe_size: self.size.map(map_size),
-      input_reference_images: self.input_reference_images.clone(),
-    })
+    Ok(CreateVideoRequest { model: CometVideoModelRaw::Wan2p7, prompt: self.prompt.clone(), maybe_seconds: self.duration_seconds, maybe_size: self.size.map(map_size), input_reference_images: self.input_reference_images.clone() })
   }
 }
 
@@ -132,20 +111,10 @@ mod tests {
 
   #[test]
   fn maps_to_wire_request() {
-    let request = GenerateWan2p7Request {
-      prompt: "a koi pond at golden hour".to_string(),
-      duration_seconds: Some(5),
-      size: Some(Wan2p7Size::SevenTwentyP),
-      input_reference_images: vec![],
-    };
+    let request = GenerateWan2p7Request { prompt: "a koi pond at golden hour".to_string(), duration_seconds: Some(5), size: Some(Wan2p7Size::SevenTwentyP), input_reference_images: vec![] };
 
     let raw = request.to_create_video_request().expect("should validate");
-    assert_eq!(raw.text_form_fields(), vec![
-      ("model", "wan2.7".to_string()),
-      ("prompt", "a koi pond at golden hour".to_string()),
-      ("seconds", "5".to_string()),
-      ("size", "1280x720".to_string()),
-    ]);
+    assert_eq!(raw.text_form_fields(), vec![("model", "wan2.7".to_string()), ("prompt", "a koi pond at golden hour".to_string()), ("seconds", "5".to_string()), ("size", "1280x720".to_string()),]);
   }
 
   #[test]
@@ -176,11 +145,6 @@ mod tests {
   }
 
   fn request_with_seconds(duration_seconds: Option<u8>) -> GenerateWan2p7Request {
-    GenerateWan2p7Request {
-      prompt: "ok".to_string(),
-      duration_seconds,
-      size: None,
-      input_reference_images: vec![],
-    }
+    GenerateWan2p7Request { prompt: "ok".to_string(), duration_seconds, size: None, input_reference_images: vec![] }
   }
 }

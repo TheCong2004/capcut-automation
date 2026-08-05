@@ -3,19 +3,19 @@ use serde_derive::{Deserialize, Serialize};
 // ======================== Request ========================
 
 #[derive(Serialize, Debug)]
-pub (crate) struct CreateAlertRequest {
+pub(crate) struct CreateAlertRequest {
   pub data: CreateAlertRequestData,
 }
 
 #[derive(Serialize, Debug)]
-pub (crate) struct CreateAlertRequestData {
+pub(crate) struct CreateAlertRequestData {
   #[serde(rename = "type")]
   pub data_type: &'static str,
   pub attributes: CreateAlertRequestAttributes,
 }
 
 #[derive(Serialize, Debug)]
-pub (crate) struct CreateAlertRequestAttributes {
+pub(crate) struct CreateAlertRequestAttributes {
   pub source: String,
   pub summary: String,
 
@@ -63,7 +63,7 @@ pub (crate) struct CreateAlertRequestAttributes {
 }
 
 #[derive(Serialize, Debug)]
-pub (crate) struct CreateAlertLabel {
+pub(crate) struct CreateAlertLabel {
   pub key: String,
   pub value: String,
 }
@@ -71,12 +71,12 @@ pub (crate) struct CreateAlertLabel {
 // ======================== Response ========================
 
 #[derive(Deserialize, Debug)]
-pub (crate) struct CreateAlertResponse {
+pub(crate) struct CreateAlertResponse {
   pub data: CreateAlertResponseData,
 }
 
 #[derive(Deserialize, Debug)]
-pub (crate) struct CreateAlertResponseData {
+pub(crate) struct CreateAlertResponseData {
   pub id: String,
 
   #[serde(rename = "type")]
@@ -86,7 +86,7 @@ pub (crate) struct CreateAlertResponseData {
 }
 
 #[derive(Deserialize, Debug)]
-pub (crate) struct CreateAlertResponseAttributes {
+pub(crate) struct CreateAlertResponseAttributes {
   pub short_id: Option<String>,
   pub source: Option<String>,
   pub summary: Option<String>,
@@ -110,7 +110,7 @@ pub (crate) struct CreateAlertResponseAttributes {
 }
 
 #[derive(Deserialize, Debug)]
-pub (crate) struct CreateAlertResponseLabel {
+pub(crate) struct CreateAlertResponseLabel {
   pub key: Option<String>,
   pub value: Option<String>,
 }

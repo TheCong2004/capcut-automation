@@ -12,17 +12,17 @@ pub struct FailPipelineJobArgs<'a> {
 
 /// Mark a job as failed: status = complete_failure, record the message,
 /// stamp `completed_at`. Returns true if a row was updated.
-pub async fn fail_pipeline_job(
-  args: FailPipelineJobArgs<'_>,
-) -> Result<bool, SqliteTasksError> {
+pub async fn fail_pipeline_job(args: FailPipelineJobArgs<'_>) -> Result<bool, SqliteTasksError> {
   let status = TaskStatus::CompleteFailure.to_str().to_string();
   let failure_message = args.failure_message.to_string();
   let id = args.pipeline_job_id.as_str().to_string();
 
-  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(r#"
+  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
+    r#"
     UPDATE pipeline_jobs
     SET status =
-  "#);
+  "#,
+  );
   query_builder.push_bind(status);
   query_builder.push(", on_failure_message = ");
   query_builder.push_bind(failure_message);

@@ -15,27 +15,21 @@ pub struct ScopedDownloads {
 }
 
 impl ScopedDownloads {
-
   pub fn new_from_set(scoped_types: BTreeSet<GenericDownloadType>) -> Self {
-    Self {
-      scoped_types: Some(scoped_types),
-    }
+    Self { scoped_types: Some(scoped_types) }
   }
 
   pub fn new_from_env() -> AnyhowResult<Self> {
-    let scoped_types =
-        match easyenv::get_env_string_optional("SCOPED_DOWNLOAD_TYPES") {
-          Some(comma_separated_types) => Some(parse_download_types(&comma_separated_types)?),
-          None => None,
-        };
+    let scoped_types = match easyenv::get_env_string_optional("SCOPED_DOWNLOAD_TYPES") {
+      Some(comma_separated_types) => Some(parse_download_types(&comma_separated_types)?),
+      None => None,
+    };
 
     if let Some(types) = scoped_types.as_ref() {
       info!("Scoping download to model types: {:?}", types);
     }
 
-    Ok(Self {
-      scoped_types,
-    })
+    Ok(Self { scoped_types })
   }
 
   pub fn can_run_job(&self, job_model_type: GenericDownloadType) -> bool {
@@ -51,19 +45,12 @@ impl ScopedDownloads {
 }
 
 pub fn parse_download_types(comma_separated_types: &str) -> AnyhowResult<BTreeSet<GenericDownloadType>> {
-  let scoped_types = comma_separated_types.trim()
-      .split(",")
-      .map(|val| val.to_lowercase())
-      .collect::<Vec<String>>();
+  let scoped_types = comma_separated_types.trim().split(",").map(|val| val.to_lowercase()).collect::<Vec<String>>();
 
   let mut model_types = BTreeSet::new();
 
   for t in scoped_types.into_iter() {
-    let model_type = GenericDownloadType::from_str(&t)
-        .map_err(|_err| anyhow!(
-          "Invalid model type: {:?}; should include only items from: {:?}",
-          t,
-          GenericDownloadType::all_variants()))?;
+    let model_type = GenericDownloadType::from_str(&t).map_err(|_err| anyhow!("Invalid model type: {:?}; should include only items from: {:?}", t, GenericDownloadType::all_variants()))?;
 
     model_types.insert(model_type);
   }
@@ -81,16 +68,12 @@ mod tests {
 
   #[test]
   fn test_parse() {
-    assert_eq!(parse_download_types("rvc_v2,so_vits_svc").unwrap(),
-      BTreeSet::from([GenericDownloadType::RvcV2, GenericDownloadType::SoVitsSvc]));
+    assert_eq!(parse_download_types("rvc_v2,so_vits_svc").unwrap(), BTreeSet::from([GenericDownloadType::RvcV2, GenericDownloadType::SoVitsSvc]));
   }
 
   #[test]
   fn test_can_execute() {
-    let scoping = ScopedDownloads::new_from_set(BTreeSet::from([
-      GenericDownloadType::RvcV2,
-      GenericDownloadType::Vits,
-    ]));
+    let scoping = ScopedDownloads::new_from_set(BTreeSet::from([GenericDownloadType::RvcV2, GenericDownloadType::Vits]));
 
     assert_eq!(true, scoping.can_run_job(GenericDownloadType::RvcV2));
     assert_eq!(true, scoping.can_run_job(GenericDownloadType::Vits));

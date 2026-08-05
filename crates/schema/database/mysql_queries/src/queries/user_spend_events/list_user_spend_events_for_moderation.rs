@@ -41,9 +41,7 @@ where
 }
 
 /// List spend events, most recent payment date first, with the spender's display info.
-pub async fn list_user_spend_events_for_moderation<'e, 'c: 'e, E>(
-  args: ListUserSpendEventsForModerationArgs<'e, 'c, E>,
-) -> Result<Vec<UserSpendEventListItem>, sqlx::Error>
+pub async fn list_user_spend_events_for_moderation<'e, 'c: 'e, E>(args: ListUserSpendEventsForModerationArgs<'e, 'c, E>) -> Result<Vec<UserSpendEventListItem>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -80,8 +78,8 @@ LIMIT ? OFFSET ?
     args.limit,
     args.offset,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

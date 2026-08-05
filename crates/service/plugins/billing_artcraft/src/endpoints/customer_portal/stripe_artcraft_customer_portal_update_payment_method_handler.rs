@@ -26,30 +26,16 @@ use stripe_core::CustomerId;
 use tokens::tokens::users::UserToken;
 use user_traits_component::traits::internal_session_cache_purge::InternalSessionCachePurge;
 
-pub async fn stripe_artcraft_customer_portal_update_payment_method_handler(
-  http_request: HttpRequest,
-  request: Json<StripeArtcraftCustomerPortalUpdatePaymentMethodRequest>,
-  stripe_config: Data<ArtcraftStripeConfigWithClient>,
-  server_environment: Data<ServerEnvironment>,
-  internal_user_lookup: Data<dyn InternalUserLookup>,
-  mysql_pool: Data<MySqlPool>,
-) -> Result<Json<StripeArtcraftCustomerPortalUpdatePaymentMethodResponse>, CommonWebError>
-{
-  let mut mysql_connection = mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("Could not acquire mysql connection: {:?}", err);
-        CommonWebError::ServerError
-      })?;
+pub async fn stripe_artcraft_customer_portal_update_payment_method_handler(http_request: HttpRequest, request: Json<StripeArtcraftCustomerPortalUpdatePaymentMethodRequest>, stripe_config: Data<ArtcraftStripeConfigWithClient>, server_environment: Data<ServerEnvironment>, internal_user_lookup: Data<dyn InternalUserLookup>, mysql_pool: Data<MySqlPool>) -> Result<Json<StripeArtcraftCustomerPortalUpdatePaymentMethodResponse>, CommonWebError> {
+  let mut mysql_connection = mysql_pool.acquire().await.map_err(|err| {
+    error!("Could not acquire mysql connection: {:?}", err);
+    CommonWebError::ServerError
+  })?;
 
-  let maybe_user_metadata = internal_user_lookup
-      .lookup_user_from_http_request(&http_request)
-      .await
-      .map_err(|err| {
-        error!("Error looking up user: {:?}", err);
-        CommonWebError::ServerError // NB: This was probably *our* fault.
-      })?;
+  let maybe_user_metadata = internal_user_lookup.lookup_user_from_http_request(&http_request).await.map_err(|err| {
+    error!("Error looking up user: {:?}", err);
+    CommonWebError::ServerError // NB: This was probably *our* fault.
+  })?;
 
   // NB: Our integration relies on an internal user token being present.
   let user_metadata = match maybe_user_metadata {
@@ -59,20 +45,14 @@ pub async fn stripe_artcraft_customer_portal_update_payment_method_handler(
 
   let user_token = UserToken::new_from_str(&user_metadata.user_token);
 
-  let result = find_subscription_for_owner_user_using_connection(
-    &user_token,
-    PaymentsNamespace::Artcraft,
-    &mut mysql_connection
-  ).await;
+  let result = find_subscription_for_owner_user_using_connection(&user_token, PaymentsNamespace::Artcraft, &mut mysql_connection).await;
 
   let subscription = match result {
     Err(err) => {
       error!("Error looking up user's ({}) existing subscription: {:?}", &user_metadata.user_token, err);
       return Err(CommonWebError::ServerError); // NB: This was probably *our* fault.
-    }
-    Ok(None) => {
-      return Err(CommonWebError::BadInputWithSimpleMessage("user has no active subscription".to_string()))
-    }
+    },
+    Ok(None) => return Err(CommonWebError::BadInputWithSimpleMessage("user has no active subscription".to_string())),
     Ok(Some(subscription)) => subscription,
   };
 
@@ -94,16 +74,10 @@ pub async fn stripe_artcraft_customer_portal_update_payment_method_handler(
         subscription_update_confirm: None,
       });
 
-  let portal_session = portal_builder
-      .send(&stripe_config.client)
-      .await
-      .map_err(|err| {
-        error!("Stripe Error: {:?}", err);
-        CommonWebError::ServerError
-      })?;
+  let portal_session = portal_builder.send(&stripe_config.client).await.map_err(|err| {
+    error!("Stripe Error: {:?}", err);
+    CommonWebError::ServerError
+  })?;
 
-  Ok(Json(StripeArtcraftCustomerPortalUpdatePaymentMethodResponse {
-    success: true,
-    stripe_portal_url: portal_session.url,
-  }))
+  Ok(Json(StripeArtcraftCustomerPortalUpdatePaymentMethodResponse { success: true, stripe_portal_url: portal_session.url }))
 }

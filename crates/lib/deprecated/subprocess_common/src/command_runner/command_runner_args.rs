@@ -6,7 +6,6 @@ use crate::command_runner::command_args::CommandArgs;
 pub enum FileOrCreate<'a> {
   /// Open the file at the path. Overwrite if it already exists.
   NewFileWithName(&'a Path),
-
   // Future option(1): new file
   // /// Create a new file (and presumably return the name)
   // NewFile,

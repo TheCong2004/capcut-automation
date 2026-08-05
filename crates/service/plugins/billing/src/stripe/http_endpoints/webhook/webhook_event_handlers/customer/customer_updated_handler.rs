@@ -11,15 +11,7 @@ pub fn customer_updated_handler(customer: &Customer) -> Result<StripeWebhookSumm
   let customer_id = customer.id.to_string();
 
   // NB: Our internal user token.
-  let maybe_user_token = customer.metadata
-      .as_ref()
-      .and_then(|m| m.get(METADATA_USER_TOKEN).map(|t| t.to_string()));
+  let maybe_user_token = customer.metadata.as_ref().and_then(|m| m.get(METADATA_USER_TOKEN).map(|t| t.to_string()));
 
-  Ok(StripeWebhookSummary {
-    maybe_user_token,
-    maybe_event_entity_id: Some(customer_id.clone()),
-    maybe_stripe_customer_id: Some(customer_id.clone()),
-    action_was_taken: false,
-    should_ignore_retry: false,
-  })
+  Ok(StripeWebhookSummary { maybe_user_token, maybe_event_entity_id: Some(customer_id.clone()), maybe_stripe_customer_id: Some(customer_id.clone()), action_was_taken: false, should_ignore_retry: false })
 }

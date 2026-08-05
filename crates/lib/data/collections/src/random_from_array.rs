@@ -15,7 +15,7 @@ mod tests {
     let selected = random_from_array(&items).unwrap();
     assert!(items.contains(selected));
 
-    let items : [String; 3] = ["one".to_string(), "two".to_string(), "three".to_string()];
+    let items: [String; 3] = ["one".to_string(), "two".to_string(), "three".to_string()];
 
     let selected = random_from_array(&items).unwrap();
     assert!(items.contains(selected));
@@ -23,7 +23,7 @@ mod tests {
 
   #[test]
   fn behavior_on_empty() {
-    let items : [String; 0] = [];
+    let items: [String; 0] = [];
     let selected = random_from_array(&items);
     assert!(selected.is_none());
   }

@@ -38,7 +38,7 @@ pub enum ProcessSingleJobError {
 
   /// We hit a feature or a path for this job that has not yet been implemented.
   /// Permanently fail the job.
-  NotYetImplemented
+  NotYetImplemented,
 }
 
 impl From<std::io::Error> for ProcessSingleJobError {

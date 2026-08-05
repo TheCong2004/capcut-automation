@@ -22,11 +22,7 @@ mod tests {
 
   #[test]
   fn test_serialize() {
-    let pagination = PaginationPage {
-      current: 5,
-      total_page_count: 123,
-
-    };
+    let pagination = PaginationPage { current: 5, total_page_count: 123 };
 
     let json = serde_json::to_string(&pagination).expect("serialization");
 

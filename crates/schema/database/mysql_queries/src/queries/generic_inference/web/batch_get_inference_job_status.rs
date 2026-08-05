@@ -23,9 +23,7 @@ use crate::queries::generic_inference::web::job_status::{GenericInferenceJobStat
 
 /// Look up job status.
 /// Returns Ok(Vec::new()) when the records cannot be found.
-pub async fn batch_get_inference_job_status(job_tokens: &[InferenceJobToken], mysql_pool: &MySqlPool)
-  -> AnyhowResult<Vec<GenericInferenceJobStatus>>
-{
+pub async fn batch_get_inference_job_status(job_tokens: &[InferenceJobToken], mysql_pool: &MySqlPool) -> AnyhowResult<Vec<GenericInferenceJobStatus>> {
   if job_tokens.is_empty() {
     // NB: We should always eagerly return, but if we don't, the query builder will build an
     // invalid query.
@@ -38,12 +36,7 @@ pub async fn batch_get_inference_job_status(job_tokens: &[InferenceJobToken], my
 
 /// Look up job status.
 /// Returns Ok(Vec::new()) when the records cannot be found.
-pub async fn batch_get_inference_job_status_from_connection(
-  job_tokens: &[InferenceJobToken],
-  mysql_connection: &mut PoolConnection<MySql>
-)
-  -> AnyhowResult<Vec<GenericInferenceJobStatus>>
-{
+pub async fn batch_get_inference_job_status_from_connection(job_tokens: &[InferenceJobToken], mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<GenericInferenceJobStatus>> {
   if job_tokens.is_empty() {
     // NB: We should always eagerly return, but if we don't, the query builder will build an
     // invalid query.
@@ -68,10 +61,12 @@ pub async fn batch_get_inference_job_status_from_connection(
 
   let records = match query_results {
     Ok(records) => records,
-    Err(ref err) => return match err {
-      sqlx::Error::RowNotFound => Ok(Vec::new()),
-      _ => Err(anyhow!("database error: {:?}", err)),
-    }
+    Err(ref err) => {
+      return match err {
+        sqlx::Error::RowNotFound => Ok(Vec::new()),
+        _ => Err(anyhow!("database error: {:?}", err)),
+      }
+    },
   };
 
   Ok(raw_records_to_public_result(records))
@@ -81,7 +76,8 @@ fn make_query_builder() -> QueryBuilder<'static, MySql> {
   // NB(bt): jobs.uuid_idempotency_token is the current way to reconstruct the hash of the
   // TTS result since we don't store a bucket hash on the table. This is an ugly hack :(
   // TODO(bt,2023-10-12): ^^^ Is this comment still accurate? I don't see that field referenced below.
-  QueryBuilder::new(r#"
+  QueryBuilder::new(
+    r#"
 SELECT
     jobs.token as job_token,
 
@@ -140,14 +136,16 @@ LEFT OUTER JOIN voice_conversion_models ON jobs.maybe_model_token = voice_conver
 LEFT OUTER JOIN tts_results ON jobs.on_success_result_entity_token = tts_results.token
 LEFT OUTER JOIN voice_conversion_results ON jobs.on_success_result_entity_token = voice_conversion_results.token
 LEFT OUTER JOIN media_files ON jobs.on_success_result_entity_token = media_files.token
-        "#)
+        "#,
+  )
 }
 
 /// Map the internal record type (since we query over several result tables)
 fn raw_records_to_public_result(records: Vec<RawGenericInferenceJobStatus>) -> Vec<GenericInferenceJobStatus> {
-  records.into_iter()
-      .map(|record| {
-        let maybe_args = record.maybe_inference_args
+  records
+    .into_iter()
+    .map(|record| {
+      let maybe_args = record.maybe_inference_args
             .as_deref()
             .map(|args| GenericInferenceArgs::from_json(args))
             .transpose()
@@ -156,136 +154,100 @@ fn raw_records_to_public_result(records: Vec<RawGenericInferenceJobStatus>) -> V
             .map(|generic_args| generic_args.args)
             .flatten();
 
-        let mut maybe_style_name = None;
+      let mut maybe_style_name = None;
 
-        match maybe_args {
-          Some(PolymorphicInferenceArgs::Cu(workflow_args)) => {
-            maybe_style_name = workflow_args.style_name;
-          }
-          _ => {}
-        }
+      match maybe_args {
+        Some(PolymorphicInferenceArgs::Cu(workflow_args)) => {
+          maybe_style_name = workflow_args.style_name;
+        },
+        _ => {},
+      }
 
-        let mut maybe_model_title = None;
+      let mut maybe_model_title = None;
 
-        if let Some(title) = record.maybe_model_weights_title.as_deref() {
-          maybe_model_title = Some(title);
-        }
+      if let Some(title) = record.maybe_model_weights_title.as_deref() {
+        maybe_model_title = Some(title);
+      }
 
-        if maybe_model_title.is_none() {
-          maybe_model_title = match record.inference_category {
-            InferenceCategory::LipsyncAnimation => Some("lipsync animation"),
-            InferenceCategory::TextToSpeech => record.maybe_tts_model_title.as_deref(),
-            InferenceCategory::VoiceConversion => record.maybe_voice_conversion_model_title.as_deref(),
-            InferenceCategory::VideoFilter => Some("Video Filter"),
-            InferenceCategory::ImageGeneration => Some("Image Generation"),
-            InferenceCategory::VideoGeneration => Some("Video Generation"),
-      InferenceCategory::AudioGeneration => Some("Audio Generation"),
-            InferenceCategory::ObjectGeneration => Some("Object Generation"),
-            InferenceCategory::BackgroundRemoval => Some("Background Removal"),
-            InferenceCategory::Mocap => Some("Mocap"),
-            InferenceCategory::Workflow => Some("Workflow"),
-            InferenceCategory::FormatConversion => Some("format conversion"),
-            InferenceCategory::LivePortrait => Some("Live Portrait"),
-            InferenceCategory::F5TTS => Some("F5 TTS"),
-            InferenceCategory::SeedVc => Some("Seed VC"),
-            InferenceCategory::ConvertBvhToWorkflow => Some("BVH to Workflow"),
-            InferenceCategory::SplatGeneration => Some("Splat Generation"),
-            InferenceCategory::CharacterGeneration => Some("Character Generation"),
-            InferenceCategory::DeprecatedField => Some("Job"), // TODO(bt,2024-07-16): Fix
-          };
-        }
-
-        // NB: A bit of a hack. We store TTS results with a full path.
-        // Going forward, all other record types will store a hash.
-        let (mut bucket_path_is_hash, mut maybe_public_bucket_hash) = match record.inference_category {
-          InferenceCategory::LipsyncAnimation => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::TextToSpeech => (false, record.maybe_tts_public_bucket_path.as_deref()),
-          InferenceCategory::F5TTS => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::VoiceConversion => (true, record.maybe_voice_conversion_public_bucket_hash.as_deref()),
-          InferenceCategory::VideoFilter => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::ImageGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::VideoGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-    InferenceCategory::AudioGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::ObjectGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::BackgroundRemoval => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::Mocap => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::Workflow => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::FormatConversion => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::SeedVc => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::LivePortrait => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::ConvertBvhToWorkflow => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::SplatGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::CharacterGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
-          InferenceCategory::DeprecatedField => (true, None), // TODO(bt,2024-07-16): We'll need to read another field!
+      if maybe_model_title.is_none() {
+        maybe_model_title = match record.inference_category {
+          InferenceCategory::LipsyncAnimation => Some("lipsync animation"),
+          InferenceCategory::TextToSpeech => record.maybe_tts_model_title.as_deref(),
+          InferenceCategory::VoiceConversion => record.maybe_voice_conversion_model_title.as_deref(),
+          InferenceCategory::VideoFilter => Some("Video Filter"),
+          InferenceCategory::ImageGeneration => Some("Image Generation"),
+          InferenceCategory::VideoGeneration => Some("Video Generation"),
+          InferenceCategory::AudioGeneration => Some("Audio Generation"),
+          InferenceCategory::ObjectGeneration => Some("Object Generation"),
+          InferenceCategory::BackgroundRemoval => Some("Background Removal"),
+          InferenceCategory::Mocap => Some("Mocap"),
+          InferenceCategory::Workflow => Some("Workflow"),
+          InferenceCategory::FormatConversion => Some("format conversion"),
+          InferenceCategory::LivePortrait => Some("Live Portrait"),
+          InferenceCategory::F5TTS => Some("F5 TTS"),
+          InferenceCategory::SeedVc => Some("Seed VC"),
+          InferenceCategory::ConvertBvhToWorkflow => Some("BVH to Workflow"),
+          InferenceCategory::SplatGeneration => Some("Splat Generation"),
+          InferenceCategory::CharacterGeneration => Some("Character Generation"),
+          InferenceCategory::DeprecatedField => Some("Job"), // TODO(bt,2024-07-16): Fix
         };
+      }
 
-        // NB: We've moved voice conversion out of their own table and into media_files
-        // This check should allow for graceful migration to the new end-state.
-        match record.maybe_result_entity_type.as_deref() {
-          Some("media_file") => {
-            bucket_path_is_hash = true;
-            maybe_public_bucket_hash = record.maybe_media_file_public_bucket_directory_hash.as_deref();
-          }
-          _ => {}
-        }
+      // NB: A bit of a hack. We store TTS results with a full path.
+      // Going forward, all other record types will store a hash.
+      let (mut bucket_path_is_hash, mut maybe_public_bucket_hash) = match record.inference_category {
+        InferenceCategory::LipsyncAnimation => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::TextToSpeech => (false, record.maybe_tts_public_bucket_path.as_deref()),
+        InferenceCategory::F5TTS => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::VoiceConversion => (true, record.maybe_voice_conversion_public_bucket_hash.as_deref()),
+        InferenceCategory::VideoFilter => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::ImageGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::VideoGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::AudioGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::ObjectGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::BackgroundRemoval => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::Mocap => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::Workflow => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::FormatConversion => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::SeedVc => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::LivePortrait => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::ConvertBvhToWorkflow => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::SplatGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::CharacterGeneration => (true, record.maybe_media_file_public_bucket_directory_hash.as_deref()),
+        InferenceCategory::DeprecatedField => (true, None), // TODO(bt,2024-07-16): We'll need to read another field!
+      };
 
-        let maybe_result_details = record
-            .maybe_result_entity_type
-            .as_deref()
-            .and_then(|entity_type| {
-              record.maybe_result_entity_token
-                  .as_deref()
-                  .and_then(|entity_token| {
-                    maybe_public_bucket_hash.map(|public_bucket_hash| {
-                      ResultDetails {
-                        entity_type: entity_type.to_string(),
-                        entity_token: entity_token.to_string(),
-                        maybe_batch_token: record.maybe_result_batch_token
-                            .as_ref()
-                            .map(|token| BatchGenerationToken::new_from_str(token)),
-                        public_bucket_location_or_hash: public_bucket_hash.to_string(),
-                        maybe_media_file_public_bucket_prefix: record.maybe_media_file_public_bucket_prefix.clone(),
-                        maybe_media_file_public_bucket_extension: record.maybe_media_file_public_bucket_extension.clone(),
-                        public_bucket_location_is_hash: bucket_path_is_hash,
-                        maybe_successfully_completed_at: record.maybe_successfully_completed_at,
-                      }
-                    })
-                  })
-            });
+      // NB: We've moved voice conversion out of their own table and into media_files
+      // This check should allow for graceful migration to the new end-state.
+      match record.maybe_result_entity_type.as_deref() {
+        Some("media_file") => {
+          bucket_path_is_hash = true;
+          maybe_public_bucket_hash = record.maybe_media_file_public_bucket_directory_hash.as_deref();
+        },
+        _ => {},
+      }
 
-        GenericInferenceJobStatus {
-          job_token: record.job_token,
-          status: record.status,
-          attempt_count: record.attempt_count,
-          maybe_assigned_worker: record.maybe_assigned_worker,
-          maybe_assigned_cluster: record.maybe_assigned_cluster,
-          maybe_first_started_at: record.maybe_first_started_at,
-          maybe_frontend_failure_category: record.maybe_frontend_failure_category,
-          failure_reason: record.failure_reason,
-          request_details: RequestDetails {
-            maybe_product_category: record.product_category,
-            inference_category: record.inference_category,
-            maybe_model_type: record.maybe_model_type,
-            maybe_model_token: record.maybe_model_token,
-            maybe_model_title: maybe_model_title.map(|title| title.to_string()),
-            maybe_raw_inference_text: record.maybe_raw_inference_text,
-            maybe_inference_args: record.maybe_inference_args,
-            maybe_prompt_token: record.maybe_prompt_token,
-            maybe_style_name,
-          },
-          maybe_result_details,
-          user_details: UserDetails {
-            maybe_creator_user_token: record.maybe_creator_user_token,
-            maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-            creator_ip_address: record.creator_ip_address,
-          },
-          is_keepalive_required: i8_to_bool(record.is_keepalive_required),
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-          database_clock: record.database_clock,
-        }
-      })
-      .collect::<Vec<_>>()
+      let maybe_result_details = record.maybe_result_entity_type.as_deref().and_then(|entity_type| record.maybe_result_entity_token.as_deref().and_then(|entity_token| maybe_public_bucket_hash.map(|public_bucket_hash| ResultDetails { entity_type: entity_type.to_string(), entity_token: entity_token.to_string(), maybe_batch_token: record.maybe_result_batch_token.as_ref().map(|token| BatchGenerationToken::new_from_str(token)), public_bucket_location_or_hash: public_bucket_hash.to_string(), maybe_media_file_public_bucket_prefix: record.maybe_media_file_public_bucket_prefix.clone(), maybe_media_file_public_bucket_extension: record.maybe_media_file_public_bucket_extension.clone(), public_bucket_location_is_hash: bucket_path_is_hash, maybe_successfully_completed_at: record.maybe_successfully_completed_at })));
+
+      GenericInferenceJobStatus {
+        job_token: record.job_token,
+        status: record.status,
+        attempt_count: record.attempt_count,
+        maybe_assigned_worker: record.maybe_assigned_worker,
+        maybe_assigned_cluster: record.maybe_assigned_cluster,
+        maybe_first_started_at: record.maybe_first_started_at,
+        maybe_frontend_failure_category: record.maybe_frontend_failure_category,
+        failure_reason: record.failure_reason,
+        request_details: RequestDetails { maybe_product_category: record.product_category, inference_category: record.inference_category, maybe_model_type: record.maybe_model_type, maybe_model_token: record.maybe_model_token, maybe_model_title: maybe_model_title.map(|title| title.to_string()), maybe_raw_inference_text: record.maybe_raw_inference_text, maybe_inference_args: record.maybe_inference_args, maybe_prompt_token: record.maybe_prompt_token, maybe_style_name },
+        maybe_result_details,
+        user_details: UserDetails { maybe_creator_user_token: record.maybe_creator_user_token, maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token, creator_ip_address: record.creator_ip_address },
+        is_keepalive_required: i8_to_bool(record.is_keepalive_required),
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        database_clock: record.database_clock,
+      }
+    })
+    .collect::<Vec<_>>()
 }
 
 #[derive(Debug, Default)]
@@ -315,8 +277,8 @@ struct RawGenericInferenceJobStatus {
   pub maybe_tts_model_title: Option<String>,
   pub maybe_voice_conversion_model_title: Option<String>,
 
-  pub maybe_voice_conversion_public_bucket_hash: Option<String>, // NB: This is the bucket hash.
-  pub maybe_tts_public_bucket_path: Option<String>, // NB: This isn't the bucket path, but the whole hash.
+  pub maybe_voice_conversion_public_bucket_hash: Option<String>,     // NB: This is the bucket hash.
+  pub maybe_tts_public_bucket_path: Option<String>,                  // NB: This isn't the bucket path, but the whole hash.
   pub maybe_media_file_public_bucket_directory_hash: Option<String>, // NB: This is the bucket directory hash
   pub maybe_media_file_public_bucket_prefix: Option<String>,
   pub maybe_media_file_public_bucket_extension: Option<String>,

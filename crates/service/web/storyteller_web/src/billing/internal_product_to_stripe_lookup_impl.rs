@@ -8,28 +8,27 @@ use crate::configs::plans::plan_list::{DEVELOPMENT_PREMIUM_PLANS_BY_SLUG, PRODUC
 pub struct InternalProductToStripeLookupImpl;
 
 impl InternalProductToStripeLookup for InternalProductToStripeLookupImpl {
-    fn lookup_stripe_product_from_internal_product_key(&self, server_environment: ServerEnvironment, internal_product_key: &str) -> Result<Option<StripeProduct>, StripeProductLookupError> {
-        let plans_by_slug = match server_environment {
-          ServerEnvironment::Development => &DEVELOPMENT_PREMIUM_PLANS_BY_SLUG,
-          ServerEnvironment::Production => &PRODUCTION_PREMIUM_PLANS_BY_SLUG,
-        };
-        Ok(plans_by_slug.get(internal_product_key)
-            .and_then(|plan| {
-                let stripe_product_id = match plan.stripe_product_id() {
-                    None => return None,
-                    Some(stripe_product_id) => stripe_product_id.to_string(),
-                };
+  fn lookup_stripe_product_from_internal_product_key(&self, server_environment: ServerEnvironment, internal_product_key: &str) -> Result<Option<StripeProduct>, StripeProductLookupError> {
+    let plans_by_slug = match server_environment {
+      ServerEnvironment::Development => &DEVELOPMENT_PREMIUM_PLANS_BY_SLUG,
+      ServerEnvironment::Production => &PRODUCTION_PREMIUM_PLANS_BY_SLUG,
+    };
+    Ok(plans_by_slug.get(internal_product_key).and_then(|plan| {
+      let stripe_product_id = match plan.stripe_product_id() {
+        None => return None,
+        Some(stripe_product_id) => stripe_product_id.to_string(),
+      };
 
-                let stripe_price_id = match plan.stripe_price_id() {
-                    None => return None,
-                    Some(stripe_price_id) => stripe_price_id.to_string(),
-                };
+      let stripe_price_id = match plan.stripe_price_id() {
+        None => return None,
+        Some(stripe_price_id) => stripe_price_id.to_string(),
+      };
 
-                Some(StripeProduct {
-                    stripe_product_id,
-                    stripe_price_id,
-                    is_subscription_product: true, // NB: For now all plans are subscription plans.
-                })
-            }))
-    }
+      Some(StripeProduct {
+        stripe_product_id,
+        stripe_price_id,
+        is_subscription_product: true, // NB: For now all plans are subscription plans.
+      })
+    }))
+  }
 }

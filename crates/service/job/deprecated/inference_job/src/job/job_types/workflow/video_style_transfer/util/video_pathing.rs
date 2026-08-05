@@ -61,7 +61,6 @@ pub struct PrimaryInputVideoAndPaths {
   pub watermarked_video_path: Option<PathBuf>,
 }
 
-
 /// This is for the secondary depth, normal, and outline videos.
 /// We attach metadata as these videos progress through the system (if they're present).
 pub struct SecondaryInputVideoAndPaths {
@@ -83,43 +82,29 @@ impl PrimaryInputVideoAndPaths {
     let comfy_input_video_path = comfy_dirs.comfy_input_dir.join("input.mp4");
     let comfy_output_video_path = comfy_dirs.comfy_output_dir.join(job_output_path); // TODO: This sucks.
 
-    Self {
-      record: media_file_record,
-      original_download_path: original_video_path,
-      maybe_trimmed_resampled_path: Some(trimmed_resampled_video_path),
-      trimmed_wav_audio_path: trimmed_audio_path,
-      comfy_input_video_path,
-      comfy_output_video_path,
-      audio_restored_video_path: None,
-      watermarked_video_path: None,
-    }
+    Self { record: media_file_record, original_download_path: original_video_path, maybe_trimmed_resampled_path: Some(trimmed_resampled_video_path), trimmed_wav_audio_path: trimmed_audio_path, comfy_input_video_path, comfy_output_video_path, audio_restored_video_path: None, watermarked_video_path: None }
   }
 
   pub fn input_video(&self) -> &Path {
     // If trimming and resampling is disabled, use the original download
     // as an input to comfy and audio restoration.
-    self.maybe_trimmed_resampled_path.as_deref()
-        .unwrap_or(&self.original_download_path)
+    self.maybe_trimmed_resampled_path.as_deref().unwrap_or(&self.original_download_path)
   }
 
   pub fn video_to_watermark(&self) -> &Path {
     // Try to use the audio-restored video if it's available
-    self.audio_restored_video_path.as_ref()
-        .unwrap_or(&self.comfy_output_video_path)
+    self.audio_restored_video_path.as_ref().unwrap_or(&self.comfy_output_video_path)
   }
 
   pub fn get_final_video_to_upload(&self) -> &Path {
     // This is the video to upload as the result and save in the media_files table.
-    self.watermarked_video_path.as_ref()
-        .or(self.audio_restored_video_path.as_ref())
-        .unwrap_or(&self.comfy_output_video_path)
+    self.watermarked_video_path.as_ref().or(self.audio_restored_video_path.as_ref()).unwrap_or(&self.comfy_output_video_path)
   }
 
   pub fn get_non_watermarked_video_to_upload(&self) -> &Path {
     // We'll upload this for internal use and for premium users.
     // Same as "video_to_watermark()"
-    self.audio_restored_video_path.as_ref()
-        .unwrap_or(&self.comfy_output_video_path)
+    self.audio_restored_video_path.as_ref().unwrap_or(&self.comfy_output_video_path)
   }
 }
 

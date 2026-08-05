@@ -5,13 +5,7 @@ use once_cell::sync::Lazy;
 use crate::BANNED_SLURS;
 use crate::latin_alphabet::latin_to_ascii;
 
-static BANNED_SLURS_SET : Lazy<HashSet<String>> = Lazy::new(|| {
-  BANNED_SLURS.lines()
-      .map(|line| line.trim())
-      .filter(|line| !(line.starts_with("#") || line.is_empty()))
-      .map(|line| line.to_string())
-      .collect::<HashSet<String>>()
-});
+static BANNED_SLURS_SET: Lazy<HashSet<String>> = Lazy::new(|| BANNED_SLURS.lines().map(|line| line.trim()).filter(|line| !(line.starts_with("#") || line.is_empty())).map(|line| line.to_string()).collect::<HashSet<String>>());
 
 pub fn contains_slurs(unparsed_text: &str) -> bool {
   let simplified = latin_to_ascii(unparsed_text).to_lowercase();

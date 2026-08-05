@@ -8,14 +8,8 @@ use sqlx::MySql;
 use tokens::tokens::users::UserToken;
 use tokens::tokens::wallets::WalletToken;
 
-pub async fn find_primary_wallet_token_for_owner_using_connection(
-  user_token: &UserToken,
-  namespace: PaymentsNamespace,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<Option<WalletToken>, SelectOptionalRecordError> {
-  let result = query(user_token, namespace)
-      .fetch_optional(&mut **connection)
-      .await;
+pub async fn find_primary_wallet_token_for_owner_using_connection(user_token: &UserToken, namespace: PaymentsNamespace, connection: &mut PoolConnection<MySql>) -> Result<Option<WalletToken>, SelectOptionalRecordError> {
+  let result = query(user_token, namespace).fetch_optional(&mut **connection).await;
 
   match result {
     Ok(Some(record)) => Ok(Some(record.token)),
@@ -24,15 +18,8 @@ pub async fn find_primary_wallet_token_for_owner_using_connection(
   }
 }
 
-
-pub async fn find_primary_wallet_token_for_owner_using_transaction(
-  user_token: &UserToken,
-  namespace: PaymentsNamespace,
-  transaction: &mut sqlx::Transaction<'_, MySql>,
-) -> Result<Option<WalletToken>, SelectOptionalRecordError> {
-  let result = query(user_token, namespace)
-      .fetch_optional(&mut **transaction)
-      .await;
+pub async fn find_primary_wallet_token_for_owner_using_transaction(user_token: &UserToken, namespace: PaymentsNamespace, transaction: &mut sqlx::Transaction<'_, MySql>) -> Result<Option<WalletToken>, SelectOptionalRecordError> {
+  let result = query(user_token, namespace).fetch_optional(&mut **transaction).await;
 
   match result {
     Ok(Some(record)) => Ok(Some(record.token)),
@@ -41,14 +28,12 @@ pub async fn find_primary_wallet_token_for_owner_using_transaction(
   }
 }
 
-fn query(user_token: &UserToken, namespace: PaymentsNamespace)
-  -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RecordRaw, sqlx::Error>>
-{
+fn query(user_token: &UserToken, namespace: PaymentsNamespace) -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RecordRaw, sqlx::Error>> {
   // NB: We want to eventually support multiple wallets per user (eg. company use case),
   // so we do not have a unique key on user token. We do, however, have a temporary(?) unique
   // key on the combination of (owner_user_token + wallet_namespace) that we could potentially
-  // lift later. 
-  // In the meantime, to ensure we use the same wallet each time, we order by id and take the 
+  // lift later.
+  // In the meantime, to ensure we use the same wallet each time, we order by id and take the
   // first one.
   sqlx::query_as!(
     RecordRaw,
@@ -65,7 +50,6 @@ fn query(user_token: &UserToken, namespace: PaymentsNamespace)
     namespace.to_str(),
   )
 }
-
 
 #[derive(sqlx::FromRow)]
 struct RecordRaw {

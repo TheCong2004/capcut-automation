@@ -13,12 +13,7 @@ pub struct ImageDownloaderClient {
 
 impl ImageDownloaderClient {
   pub fn create() -> Result<Self, MidjourneyClientError> {
-    Ok(Self {
-      client: Client::builder()
-          .emulation(Emulation::Firefox139)
-          .build()
-          .map_err(|err| MidjourneyClientError::WreqError(err))?
-    })
+    Ok(Self { client: Client::builder().emulation(Emulation::Firefox139).build().map_err(|err| MidjourneyClientError::WreqError(err))? })
   }
 
   pub async fn download_image(&self, job_id: &str, image_index: u8) -> anyhow::Result<Vec<u8>, MidjourneyError> {
@@ -40,18 +35,13 @@ impl ImageDownloaderClient {
         .header("sec-fetch-mode", "no-cors")
         .header("sec-fetch-site", "same-site");
 
-    let http_request  = http_request
-        .build()
-        .map_err(|err| MidjourneyClientError::WreqError(err))?;
+    let http_request = http_request.build().map_err(|err| MidjourneyClientError::WreqError(err))?;
 
-    let response = self.client.execute(http_request)
-        .await
-        .map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
+    let response = self.client.execute(http_request).await.map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
 
     let status = response.status();
 
-    let response_bytes = response.bytes().await
-        .map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
+    let response_bytes = response.bytes().await.map_err(|e| MidjourneyApiError::NetworkError(e.to_string()))?;
 
     if !status.is_success() {
       let response_body = String::from_utf8_lossy(&response_bytes).to_string();
@@ -59,10 +49,7 @@ impl ImageDownloaderClient {
         return Err(MidjourneyApiError::CloudflareError(err).into());
       }
 
-      return Err(MidjourneyApiError::UnknownHttpFailure {
-        status_code: status.as_u16(),
-        body: response_body,
-      }.into());
+      return Err(MidjourneyApiError::UnknownHttpFailure { status_code: status.as_u16(), body: response_body }.into());
     }
 
     Ok(response_bytes.to_vec())

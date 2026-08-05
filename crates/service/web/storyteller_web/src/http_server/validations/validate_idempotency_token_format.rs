@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-static EXPECTED_FORMAT : Lazy<Regex> = Lazy::new(|| {
+static EXPECTED_FORMAT: Lazy<Regex> = Lazy::new(|| {
   // Support UUID with or without the dashes.
   Regex::new(r"^(([a-zA-Z0-9]{32})|([a-zA-Z0-9\-]{36}))$").expect("should be valid regex")
 });

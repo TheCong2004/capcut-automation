@@ -11,11 +11,7 @@ pub fn load_ip_set_from_file<P: AsRef<Path>>(path: P) -> AnyhowResult<IpSet> {
   let file = File::open(path)?;
   let reader = BufReader::new(file);
 
-  let lines = reader.lines()
-      .filter_map(|line| line.ok())
-      .map(|line| line.trim().to_string())
-      .filter(|line| !(line.starts_with("#") || line.is_empty()))
-      .collect::<HashSet<String>>();
+  let lines = reader.lines().filter_map(|line| line.ok()).map(|line| line.trim().to_string()).filter(|line| !(line.starts_with("#") || line.is_empty())).collect::<HashSet<String>>();
 
   Ok(IpSet::from_set(lines))
 }

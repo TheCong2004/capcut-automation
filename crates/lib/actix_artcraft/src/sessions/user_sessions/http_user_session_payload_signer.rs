@@ -13,7 +13,7 @@ use tokens::tokens::users::UserToken;
  *  Version 2: The "user_token" is added to the claims, and the version is bumped to "2"
  *  Version 3: Rename "cookie_version" to "version". Should be harmless since we don't read it. Bump to "3".
  */
-const PAYLOAD_VERSION : u32 = 3;
+const PAYLOAD_VERSION: u32 = 3;
 
 #[derive(Clone)]
 pub struct HttpUserSessionPayloadSigner {
@@ -22,16 +22,10 @@ pub struct HttpUserSessionPayloadSigner {
 
 impl HttpUserSessionPayloadSigner {
   pub fn new(hmac_secret: &str) -> Result<Self, HttpUserSessionPayloadError> {
-    Ok(Self {
-      jwt_signer: JwtSigner::new(hmac_secret)?,
-    })
+    Ok(Self { jwt_signer: JwtSigner::new(hmac_secret)? })
   }
 
-  pub fn encode(
-    &self,
-    session_token: &UserSessionToken,
-    user_token: &UserToken,
-  ) -> Result<String, HttpUserSessionPayloadError> {
+  pub fn encode(&self, session_token: &UserSessionToken, user_token: &UserToken) -> Result<String, HttpUserSessionPayloadError> {
     let mut claims: BTreeMap<&str, &str> = BTreeMap::new();
     let payload_version = PAYLOAD_VERSION.to_string();
 
@@ -43,10 +37,7 @@ impl HttpUserSessionPayloadSigner {
     Ok(jwt_string)
   }
 
-  pub fn decode(
-    &self,
-    session_payload_contents: &str,
-  ) -> Result<HttpUserSessionPayload, HttpUserSessionPayloadError> {
+  pub fn decode(&self, session_payload_contents: &str) -> Result<HttpUserSessionPayload, HttpUserSessionPayloadError> {
     let claims = self.jwt_signer.jwt_to_claims(session_payload_contents)?;
     HttpUserSessionPayload::from_map(claims)
   }
@@ -63,18 +54,14 @@ mod tests {
     let signer = HttpUserSessionPayloadSigner::new("fake_secret").unwrap();
     let encoded_payload = signer.encode(&UserSessionToken::new_from_str("ex_session_token"), &UserToken::new_from_str("ex_user_token")).unwrap();
 
-    assert_eq!(
-      encoded_payload,
-      "eyJhbGciOiJIUzI1NiJ9.eyJzZXNzaW9uX3Rva2VuIjoiZXhfc2Vzc2lvbl90b2tlbiIsInVzZXJfdG9rZW4iOiJleF91c2VyX3Rva2VuIiwidmVyc2lvbiI6IjMifQ.e37pyJkaTqo1ifcL6JcNxB0q0LdL09BmTOzIahepiLE"
-    );
+    assert_eq!(encoded_payload, "eyJhbGciOiJIUzI1NiJ9.eyJzZXNzaW9uX3Rva2VuIjoiZXhfc2Vzc2lvbl90b2tlbiIsInVzZXJfdG9rZW4iOiJleF91c2VyX3Rva2VuIiwidmVyc2lvbiI6IjMifQ.e37pyJkaTqo1ifcL6JcNxB0q0LdL09BmTOzIahepiLE");
   }
 
   #[test]
   fn test_decode_version_2() {
     // NB(1): Version 2 payload. The version field was named "cookie_version"
     // NB(2): A different fake secret was used to encode this.
-    let payload =
-        "eyJhbGciOiJIUzI1NiJ9.eyJjb29raWVfdmVyc2lvbiI6IjIiLCJzZXNzaW9uX3Rva2VuIjoiZXhfc2Vzc2lvbl90b2tlbiIsInVzZXJfdG9rZW4iOiJleF91c2VyX3Rva2VuIn0.94ly2gHhlPVtnANsNy6cJozFVmId4imwW5v-mei7jD8";
+    let payload = "eyJhbGciOiJIUzI1NiJ9.eyJjb29raWVfdmVyc2lvbiI6IjIiLCJzZXNzaW9uX3Rva2VuIjoiZXhfc2Vzc2lvbl90b2tlbiIsInVzZXJfdG9rZW4iOiJleF91c2VyX3Rva2VuIn0.94ly2gHhlPVtnANsNy6cJozFVmId4imwW5v-mei7jD8";
 
     let signer = HttpUserSessionPayloadSigner::new("secret").unwrap();
     let decoded_payload = signer.decode(&payload).unwrap();
@@ -86,8 +73,7 @@ mod tests {
   #[test]
   fn test_decode_version_3() {
     // NB: Version 3 payload.
-    let payload =
-        "eyJhbGciOiJIUzI1NiJ9.eyJzZXNzaW9uX3Rva2VuIjoiZXhfc2Vzc2lvbl90b2tlbiIsInVzZXJfdG9rZW4iOiJleF91c2VyX3Rva2VuIiwidmVyc2lvbiI6IjMifQ.e37pyJkaTqo1ifcL6JcNxB0q0LdL09BmTOzIahepiLE";
+    let payload = "eyJhbGciOiJIUzI1NiJ9.eyJzZXNzaW9uX3Rva2VuIjoiZXhfc2Vzc2lvbl90b2tlbiIsInVzZXJfdG9rZW4iOiJleF91c2VyX3Rva2VuIiwidmVyc2lvbiI6IjMifQ.e37pyJkaTqo1ifcL6JcNxB0q0LdL09BmTOzIahepiLE";
 
     let signer = HttpUserSessionPayloadSigner::new("fake_secret").unwrap();
     let decoded_payload = signer.decode(&payload).unwrap();

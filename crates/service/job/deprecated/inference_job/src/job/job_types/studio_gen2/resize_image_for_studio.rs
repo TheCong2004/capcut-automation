@@ -7,7 +7,7 @@ use std::fs::{read_to_string, File};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub enum ImageResizeType {
   AnimateX,
   StableAnimator,
@@ -45,11 +45,9 @@ pub fn resize_image_for_studio(input_image_path: &Path, output_image_path: &Path
   let file = File::open(input_image_path)?;
   let reader = BufReader::new(file);
 
-  let reader = Reader::new(reader)
-      .with_guessed_format()?;
+  let reader = Reader::new(reader).with_guessed_format()?;
 
-  let image = reader.decode()
-      .map_err(|err| anyhow!("Could not decode image: {:?}", err))?;
+  let image = reader.decode().map_err(|err| anyhow!("Could not decode image: {:?}", err))?;
 
   info!("Original image is {}x{}", image.width(), image.height());
 
@@ -57,7 +55,7 @@ pub fn resize_image_for_studio(input_image_path: &Path, output_image_path: &Path
   let height_bounds;
 
   if image.width() > image.height() {
-    width_bounds = image_resize_type.max_large_dimension();;
+    width_bounds = image_resize_type.max_large_dimension();
     height_bounds = image_resize_type.max_small_dimension();
   } else if image.height() > image.width() {
     width_bounds = image_resize_type.max_small_dimension();
@@ -73,11 +71,7 @@ pub fn resize_image_for_studio(input_image_path: &Path, output_image_path: &Path
 
   info!("Resized image to {}x{}", resized_image.width(), resized_image.height());
 
-  resized_image.save(output_image_path)
-      .map_err(|err| anyhow!("Could not save resized image to {:?}: {:?}", output_image_path, err))?;
+  resized_image.save(output_image_path).map_err(|err| anyhow!("Could not save resized image to {:?}: {:?}", output_image_path, err))?;
 
-  Ok(Dimensions {
-    width: resized_image.width(),
-    height: resized_image.height(),
-  })
+  Ok(Dimensions { width: resized_image.width(), height: resized_image.height() })
 }

@@ -1,4 +1,3 @@
-
 // TODO(bt,2025-03-13): When it's time for dynamic, non-const allocation, refer to
 //  http::header::name::HeaderName: https://github.com/hyperium/http/blob/master/src/header/name.rs
 //  as a pattern that will support both compile-time constants and dynamically allocated String-based variants.

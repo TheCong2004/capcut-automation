@@ -69,7 +69,6 @@ pub struct MediaFileForElasticsearchRecord {
 
   //pub maybe_frame_width: Option<u64>,
   //pub maybe_frame_height: Option<u64>,
-
   pub maybe_engine_category: Option<MediaFileEngineCategory>,
   pub maybe_animation_type: Option<MediaFileAnimationType>,
 
@@ -101,7 +100,6 @@ pub struct MediaFileForElasticsearchRecord {
   pub is_featured: bool,
 
   // TODO: Other fields really don't matter.
-
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 
@@ -125,84 +123,81 @@ pub struct ListArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn list_media_files_for_elastic_search_backfill_using_cursor(
-  args: ListArgs<'_>
-) -> AnyhowResult<Vec<MediaFileForElasticsearchRecord>> {
-
+pub async fn list_media_files_for_elastic_search_backfill_using_cursor(args: ListArgs<'_>) -> AnyhowResult<Vec<MediaFileForElasticsearchRecord>> {
   let mut query = query_builder(&args);
 
   let query = query.build_query_as::<RawRecord>();
 
   let maybe_media_files = query.fetch_all(args.mysql_pool).await;
 
-  let media_files : Vec<RawRecord> = match maybe_media_files {
+  let media_files: Vec<RawRecord> = match maybe_media_files {
     Ok(media_files) => media_files,
     Err(sqlx::error::Error::RowNotFound) => return Ok(Vec::new()),
     Err(err) => {
       warn!("media file list query error: {:?}", err);
       return Err(anyhow!("media file list query error"));
-    }
+    },
   };
 
-  Ok(media_files.into_iter()
-      .map(|record| {
-        MediaFileForElasticsearchRecord {
-          id: record.id,
-          token: record.token,
-          origin_category: record.origin_category,
-          origin_product_category: record.origin_product_category,
-          maybe_origin_model_type: record.maybe_origin_model_type,
-          maybe_origin_model_token: record.maybe_origin_model_token,
-          maybe_origin_filename: record.maybe_origin_filename,
-          maybe_batch_token: record.maybe_batch_token,
-          is_user_upload: i8_to_bool(record.is_user_upload),
-          is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
-          maybe_title: record.maybe_title,
-          maybe_cover_image_media_file_token: record.maybe_cover_image_media_file_token,
-          maybe_cover_image_public_bucket_hash: record.maybe_cover_image_public_bucket_hash,
-          maybe_cover_image_public_bucket_prefix: record.maybe_cover_image_public_bucket_prefix,
-          maybe_cover_image_public_bucket_extension: record.maybe_cover_image_public_bucket_extension,
-          maybe_style_transfer_source_media_file_token: record.maybe_style_transfer_source_media_file_token,
-          maybe_scene_source_media_file_token: record.maybe_scene_source_media_file_token,
-          media_type: record.media_type,
-          media_class: record.media_class,
-          maybe_mime_type: record.maybe_mime_type,
-          file_size_bytes: record.file_size_bytes as u64,
-          maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
-          maybe_audio_encoding: record.maybe_audio_encoding,
-          maybe_video_encoding: record.maybe_video_encoding,
-          maybe_engine_category: record.maybe_engine_category,
-          maybe_animation_type: record.maybe_animation_type,
-          maybe_text_transcript: record.maybe_text_transcript,
-          maybe_prompt_token: record.maybe_prompt_token,
-          checksum_sha2: record.checksum_sha2,
-          public_bucket_directory_hash: record.public_bucket_directory_hash,
-          maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
-          maybe_public_bucket_extension: record.maybe_public_bucket_extension,
-          extra_file_modification_info: record.extra_file_modification_info,
-          maybe_creator_user_token: record.maybe_creator_user_token,
-          maybe_creator_username: record.maybe_creator_username,
-          maybe_creator_display_name: record.maybe_creator_display_name,
-          maybe_creator_gravatar_hash: record.maybe_creator_gravatar_hash,
-          maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-          creator_ip_address: record.creator_ip_address,
-          creator_set_visibility: record.creator_set_visibility,
-          is_featured: i8_to_bool(record.is_featured),
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-          user_deleted_at: record.user_deleted_at,
-          mod_deleted_at: record.mod_deleted_at,
-          database_read_time: record.database_read_time.and_utc(),
-        }
+  Ok(
+    media_files
+      .into_iter()
+      .map(|record| MediaFileForElasticsearchRecord {
+        id: record.id,
+        token: record.token,
+        origin_category: record.origin_category,
+        origin_product_category: record.origin_product_category,
+        maybe_origin_model_type: record.maybe_origin_model_type,
+        maybe_origin_model_token: record.maybe_origin_model_token,
+        maybe_origin_filename: record.maybe_origin_filename,
+        maybe_batch_token: record.maybe_batch_token,
+        is_user_upload: i8_to_bool(record.is_user_upload),
+        is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
+        maybe_title: record.maybe_title,
+        maybe_cover_image_media_file_token: record.maybe_cover_image_media_file_token,
+        maybe_cover_image_public_bucket_hash: record.maybe_cover_image_public_bucket_hash,
+        maybe_cover_image_public_bucket_prefix: record.maybe_cover_image_public_bucket_prefix,
+        maybe_cover_image_public_bucket_extension: record.maybe_cover_image_public_bucket_extension,
+        maybe_style_transfer_source_media_file_token: record.maybe_style_transfer_source_media_file_token,
+        maybe_scene_source_media_file_token: record.maybe_scene_source_media_file_token,
+        media_type: record.media_type,
+        media_class: record.media_class,
+        maybe_mime_type: record.maybe_mime_type,
+        file_size_bytes: record.file_size_bytes as u64,
+        maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
+        maybe_audio_encoding: record.maybe_audio_encoding,
+        maybe_video_encoding: record.maybe_video_encoding,
+        maybe_engine_category: record.maybe_engine_category,
+        maybe_animation_type: record.maybe_animation_type,
+        maybe_text_transcript: record.maybe_text_transcript,
+        maybe_prompt_token: record.maybe_prompt_token,
+        checksum_sha2: record.checksum_sha2,
+        public_bucket_directory_hash: record.public_bucket_directory_hash,
+        maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
+        maybe_public_bucket_extension: record.maybe_public_bucket_extension,
+        extra_file_modification_info: record.extra_file_modification_info,
+        maybe_creator_user_token: record.maybe_creator_user_token,
+        maybe_creator_username: record.maybe_creator_username,
+        maybe_creator_display_name: record.maybe_creator_display_name,
+        maybe_creator_gravatar_hash: record.maybe_creator_gravatar_hash,
+        maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
+        creator_ip_address: record.creator_ip_address,
+        creator_set_visibility: record.creator_set_visibility,
+        is_featured: i8_to_bool(record.is_featured),
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        user_deleted_at: record.user_deleted_at,
+        mod_deleted_at: record.mod_deleted_at,
+        database_read_time: record.database_read_time.and_utc(),
       })
-      .collect::<Vec<MediaFileForElasticsearchRecord>>())
+      .collect::<Vec<MediaFileForElasticsearchRecord>>(),
+  )
 }
 
-fn query_builder<'a>(
-  args: &ListArgs<'a>
-) -> QueryBuilder<'a, MySql> {
+fn query_builder<'a>(args: &ListArgs<'a>) -> QueryBuilder<'a, MySql> {
   // NB: Query cannot be statically checked by sqlx
-  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(r#"
+  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
+    r#"
 SELECT
     m.id,
     m.token,
@@ -286,7 +281,8 @@ LEFT OUTER JOIN featured_items
     ON featured_items.entity_type = "media_file"
     AND featured_items.deleted_at IS NULL
     AND featured_items.entity_token = m.token
-    "#);
+    "#,
+  );
 
   query_builder.push(" WHERE m.id > ");
   query_builder.push_bind(format!("{}", args.cursor));
@@ -388,7 +384,6 @@ struct RawRecord {
 
   //pub maybe_frame_width: Option<u64>,
   //pub maybe_frame_height: Option<u64>,
-
   pub maybe_engine_category: Option<MediaFileEngineCategory>,
   pub maybe_animation_type: Option<MediaFileAnimationType>,
 
@@ -420,7 +415,6 @@ struct RawRecord {
   pub is_featured: i8,
 
   // TODO: Other fields really don't matter.
-
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 

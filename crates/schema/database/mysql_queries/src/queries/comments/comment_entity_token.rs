@@ -16,7 +16,6 @@ pub enum CommentEntityToken {
 }
 
 impl CommentEntityToken {
-
   pub fn from_entity_type_and_token(entity_type: CommentEntityType, token: &str) -> Self {
     match entity_type {
       CommentEntityType::User => Self::User(UserToken::new_from_str(token)),

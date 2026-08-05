@@ -35,31 +35,23 @@ pub struct SidecarDeps {
 
 impl Tacotron2Dependencies {
   pub fn setup() -> AnyhowResult<Self> {
-
     // The following are for TT2 that existed in inference-job but that are in an unknown state:
 
-    let waveglow_vocoder_model_filename = easyenv::get_env_string_or_default(
-      "TTS_WAVEGLOW_VOCODER_MODEL_FILENAME", "waveglow.pth");
+    let waveglow_vocoder_model_filename = easyenv::get_env_string_or_default("TTS_WAVEGLOW_VOCODER_MODEL_FILENAME", "waveglow.pth");
 
-    let hifigan_vocoder_model_filename = easyenv::get_env_string_or_default(
-      "TTS_HIFIGAN_VOCODER_MODEL_FILENAME", "hifigan.pth");
+    let hifigan_vocoder_model_filename = easyenv::get_env_string_or_default("TTS_HIFIGAN_VOCODER_MODEL_FILENAME", "hifigan.pth");
 
-    let hifigan_superres_vocoder_model_filename = easyenv::get_env_string_or_default(
-      "TTS_HIFIGAN_SUPERRES_VOCODER_MODEL_FILENAME", "hifigan_superres.pth");
+    let hifigan_superres_vocoder_model_filename = easyenv::get_env_string_or_default("TTS_HIFIGAN_SUPERRES_VOCODER_MODEL_FILENAME", "hifigan_superres.pth");
 
     // The following are for TT2 that was directly ported from tts-inference-job
 
-    let sidecar_hostname =
-        easyenv::get_env_string_required("TTS_INFERENCE_SIDECAR_HOSTNAME")?;
+    let sidecar_hostname = easyenv::get_env_string_required("TTS_INFERENCE_SIDECAR_HOSTNAME")?;
 
-    let inference_client =
-        Tacotron2InferenceSidecarClient::new(&sidecar_hostname);
+    let inference_client = Tacotron2InferenceSidecarClient::new(&sidecar_hostname);
 
-    let health_check_client=
-        Tacotron2SidecarHealthCheckClient::new(&sidecar_hostname)?;
+    let health_check_client = Tacotron2SidecarHealthCheckClient::new(&sidecar_hostname)?;
 
-    let sidecar_max_synthesizer_models = easyenv::get_env_num(
-      "TTS_SIDECAR_MAX_SYNTHESIZER_MODELS", 3)?;
+    let sidecar_max_synthesizer_models = easyenv::get_env_num("TTS_SIDECAR_MAX_SYNTHESIZER_MODELS", 3)?;
 
     let virtual_lfu_cache = SyncVirtualLfuCache::new(sidecar_max_synthesizer_models)?;
 

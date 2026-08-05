@@ -14,7 +14,7 @@ use crate::util::filesystem::scoped_temp_dir_creator::ScopedTempDirCreator;
 
 // TODO(bt, 2022-07-15): Make a concrete type for bucket paths
 
-#[deprecated(note="Try to use a more modern downloader instead.")]
+#[deprecated(note = "Try to use a more modern downloader instead.")]
 pub struct MaybeDownloadArgs<'a> {
   pub name_or_description_of_file: &'a str,
   pub final_filesystem_file_path: &'a Path,
@@ -27,11 +27,8 @@ pub struct MaybeDownloadArgs<'a> {
   pub maybe_existing_file_minimum_size_required: Option<u64>,
 }
 
-#[deprecated(note="Try to use a more modern downloader instead.")]
-pub async fn maybe_download_file_from_bucket(
-  args: MaybeDownloadArgs<'_>
-) -> Result<(), ProcessSingleJobError> {
-
+#[deprecated(note = "Try to use a more modern downloader instead.")]
+pub async fn maybe_download_file_from_bucket(args: MaybeDownloadArgs<'_>) -> Result<(), ProcessSingleJobError> {
   if args.final_filesystem_file_path.exists() {
     // TODO(bt, 2022-07-15): Check signature of file as best proof of file validity
     let mut existing_file_is_valid = true;
@@ -47,11 +44,9 @@ pub async fn maybe_download_file_from_bucket(
       //   -rw-r--r-- 1 root root        0 Nov 30 00:52 VM:1dzepsnwzbkc
       //   -rw-r--r-- 1 root root        0 Nov 30 00:29 VM:7c2df5a36qjb
       //
-      let size = file_size(args.final_filesystem_file_path)
-          .map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
+      let size = file_size(args.final_filesystem_file_path).map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
 
-      info!("{} exists at path {:?} ; file size = {size}",
-        &args.name_or_description_of_file,&args.final_filesystem_file_path);
+      info!("{} exists at path {:?} ; file size = {size}", &args.name_or_description_of_file, &args.final_filesystem_file_path);
 
       if size < existing_file_minimum_size_required {
         existing_file_is_valid = false;
@@ -59,80 +54,72 @@ pub async fn maybe_download_file_from_bucket(
     }
 
     if existing_file_is_valid {
-      return Ok(())
+      return Ok(());
     }
   } else {
     warn!("{} does not exist at path: {:?}", args.name_or_description_of_file, &args.final_filesystem_file_path);
   }
 
-  args.job_progress_reporter.log_status(args.job_progress_update_description)
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  args.job_progress_reporter.log_status(args.job_progress_update_description).map_err(|e| ProcessSingleJobError::Other(e))?;
 
   // NB: Download to temp directory to stop concurrent writes and race conditions from other
   // workers writing to a shared volume.
   let temp_dir = format!("temp_download_{}", args.job_id);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let temp_dir = args.scoped_tempdir_creator.new_tempdir(&temp_dir)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let temp_dir = args.scoped_tempdir_creator.new_tempdir(&temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   let temp_path = temp_dir.path().join("download.part");
 
   info!("Downloading {} from bucket path: {:?}", args.name_or_description_of_file, &args.bucket_object_path);
 
-  args.bucket_client.download_file_to_disk(&args.bucket_object_path, &temp_path)
-      .await
-      .map_err(|e| {
-        safe_delete_directory(&temp_dir);
-        ProcessSingleJobError::Other(e)
-      })?;
+  args.bucket_client.download_file_to_disk(&args.bucket_object_path, &temp_path).await.map_err(|e| {
+    safe_delete_directory(&temp_dir);
+    ProcessSingleJobError::Other(e)
+  })?;
 
   info!("Downloaded {} from bucket!", args.name_or_description_of_file);
 
-  let original_size = file_size(&temp_path)
-      .map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
+  let original_size = file_size(&temp_path).map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
 
-  info!("File size of {} temp download file {:?} is {original_size}",
-    args.name_or_description_of_file, &temp_path);
+  info!("File size of {} temp download file {:?} is {original_size}", args.name_or_description_of_file, &temp_path);
 
-  info!("Renaming {} temp file from {:?} to {:?}!",
-    args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
+  info!("Renaming {} temp file from {:?} to {:?}!", args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
 
-  rename_across_devices(&temp_path, &args.final_filesystem_file_path)
-      .map_err(|err| {
-        error!("could not rename on disk: {:?}", err);
-        safe_delete_file(&temp_path);
-        safe_delete_directory(&temp_dir);
-        match err {
-          RenameError::StorageFull => ProcessSingleJobError::FilesystemFull,
-          RenameError::IoError(err) => ProcessSingleJobError::from_io_error(err),
-        }
-      })?;
+  rename_across_devices(&temp_path, &args.final_filesystem_file_path).map_err(|err| {
+    error!("could not rename on disk: {:?}", err);
+    safe_delete_file(&temp_path);
+    safe_delete_directory(&temp_dir);
+    match err {
+      RenameError::StorageFull => ProcessSingleJobError::FilesystemFull,
+      RenameError::IoError(err) => ProcessSingleJobError::from_io_error(err),
+    }
+  })?;
 
-//  info!("Copying {} temp file from {:?} to {:?}!",
-//    args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
-//
-//  // NB: We're now seeing a bug where the resultant copied file is 0 bytes
-//  match copy_with_logging(&temp_path, &args.final_filesystem_file_path) {
-//    Err(err) => {
-//      error!("Error Copying {} temp file from {:?} to {:?}! {err}",
-//        args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
-//
-//      safe_delete_file(&temp_path);
-//      safe_delete_directory(&temp_dir);
-//
-//      return Err(ProcessSingleJobError::from_anyhow_error(err));
-//    }
-//    Ok(false) => {
-//      error!("Error copying {} temp file from {:?} to {:?}! File size in bytes did not match.",
-//        args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
-//
-//      reattempt_copy_if_failed(&args, &temp_dir, &temp_path, original_size)?;
-//    }
-//    Ok(true) => {
-//      // Success case
-//    }
-//  }
+  //  info!("Copying {} temp file from {:?} to {:?}!",
+  //    args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
+  //
+  //  // NB: We're now seeing a bug where the resultant copied file is 0 bytes
+  //  match copy_with_logging(&temp_path, &args.final_filesystem_file_path) {
+  //    Err(err) => {
+  //      error!("Error Copying {} temp file from {:?} to {:?}! {err}",
+  //        args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
+  //
+  //      safe_delete_file(&temp_path);
+  //      safe_delete_directory(&temp_dir);
+  //
+  //      return Err(ProcessSingleJobError::from_anyhow_error(err));
+  //    }
+  //    Ok(false) => {
+  //      error!("Error copying {} temp file from {:?} to {:?}! File size in bytes did not match.",
+  //        args.name_or_description_of_file, &temp_path, &args.final_filesystem_file_path);
+  //
+  //      reattempt_copy_if_failed(&args, &temp_dir, &temp_path, original_size)?;
+  //    }
+  //    Ok(true) => {
+  //      // Success case
+  //    }
+  //  }
 
   info!("Finished downloading {} file to {:?}", args.name_or_description_of_file, &args.final_filesystem_file_path);
 

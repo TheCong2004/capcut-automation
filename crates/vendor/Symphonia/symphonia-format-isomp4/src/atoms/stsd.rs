@@ -210,23 +210,20 @@ fn lpcm_codec_type(bits_per_sample: u32, lpcm_flags: u32) -> CodecType {
             32 => {
                 if is_big_endian {
                     CODEC_TYPE_PCM_F32BE
-                }
-                else {
+                } else {
                     CODEC_TYPE_PCM_F32LE
                 }
             }
             64 => {
                 if is_big_endian {
                     CODEC_TYPE_PCM_F64BE
-                }
-                else {
+                } else {
                     CODEC_TYPE_PCM_F64LE
                 }
             }
             _ => CODEC_TYPE_NULL,
         }
-    }
-    else {
+    } else {
         // Integer sample format.
         if is_signed {
             // Signed-integer sample format.
@@ -235,55 +232,48 @@ fn lpcm_codec_type(bits_per_sample: u32, lpcm_flags: u32) -> CodecType {
                 16 => {
                     if is_big_endian {
                         CODEC_TYPE_PCM_S16BE
-                    }
-                    else {
+                    } else {
                         CODEC_TYPE_PCM_S16LE
                     }
                 }
                 24 => {
                     if is_big_endian {
                         CODEC_TYPE_PCM_S24BE
-                    }
-                    else {
+                    } else {
                         CODEC_TYPE_PCM_S24LE
                     }
                 }
                 32 => {
                     if is_big_endian {
                         CODEC_TYPE_PCM_S32BE
-                    }
-                    else {
+                    } else {
                         CODEC_TYPE_PCM_S32LE
                     }
                 }
                 _ => CODEC_TYPE_NULL,
             }
-        }
-        else {
+        } else {
             // Unsigned-integer sample format.
             match bits_per_sample {
                 8 => CODEC_TYPE_PCM_U8,
                 16 => {
                     if is_big_endian {
                         CODEC_TYPE_PCM_U16BE
-                    }
-                    else {
+                    } else {
                         CODEC_TYPE_PCM_U16LE
                     }
                 }
                 24 => {
                     if is_big_endian {
                         CODEC_TYPE_PCM_U24BE
-                    }
-                    else {
+                    } else {
                         CODEC_TYPE_PCM_U24LE
                     }
                 }
                 32 => {
                     if is_big_endian {
                         CODEC_TYPE_PCM_U32BE
-                    }
-                    else {
+                    } else {
                         CODEC_TYPE_PCM_U32LE
                     }
                 }
@@ -378,8 +368,7 @@ fn read_audio_sample_entry<B: ReadBytes>(
                     frames_per_packet: 1,
                     channels: pcm_channels(num_channels)?,
                 }))
-            }
-            else {
+            } else {
                 None
             }
         }
@@ -418,8 +407,7 @@ fn read_audio_sample_entry<B: ReadBytes>(
                     frames_per_packet: 1,
                     channels: pcm_channels(num_channels)?,
                 }))
-            }
-            else {
+            } else {
                 None
             }
         }
@@ -453,8 +441,7 @@ fn read_audio_sample_entry<B: ReadBytes>(
                     frames_per_packet: u64::from(lpcm_frames_per_packet),
                     channels: lpcm_channels(num_channels)?,
                 }))
-            }
-            else {
+            } else {
                 None
             }
         }

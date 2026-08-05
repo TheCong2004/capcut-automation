@@ -13,26 +13,16 @@ use tokens::tokens::users::UserToken;
 
 /// Get TTS model
 /// This is for the inference inference job.
-pub async fn get_tts_model_for_run_inference_migration(
-  tts_model_token: &str,
-  mysql_pool: &MySqlPool,
-) -> Result<Option<TtsModelForRunInferenceMigrationWrapper>, TtsModelForInferenceError> {
+pub async fn get_tts_model_for_run_inference_migration(tts_model_token: &str, mysql_pool: &MySqlPool) -> Result<Option<TtsModelForRunInferenceMigrationWrapper>, TtsModelForInferenceError> {
   // NB: This is temporary migration code as we switch from the `tts_models` table to the `model_weights` table.
   if tts_model_token.starts_with(ModelWeightToken::token_prefix()) {
     let token = ModelWeightToken::new_from_str(tts_model_token);
 
-    let maybe_model = get_weight_for_legacy_tts_inference(
-      &token,
-      mysql_pool
-    ).await?;
+    let maybe_model = get_weight_for_legacy_tts_inference(&token, mysql_pool).await?;
 
     Ok(maybe_model.map(|model| TtsModelForRunInferenceMigrationWrapper::ModelWeight(model)))
   } else {
-
-    let maybe_model = get_tts_model_for_inference_improved(
-      mysql_pool,
-      &tts_model_token,
-    ).await?;
+    let maybe_model = get_tts_model_for_inference_improved(mysql_pool, &tts_model_token).await?;
 
     Ok(maybe_model.map(|model| TtsModelForRunInferenceMigrationWrapper::LegacyTts(model)))
   }
@@ -180,10 +170,7 @@ impl TtsModelForRunInferenceMigrationWrapper {
     match self {
       Self::LegacyTts(ref model) => bucket_path_unifier.tts_synthesizer_path(&model.private_bucket_hash),
       Self::ModelWeight(ref model) => {
-        let path = WeightFileBucketPath::from_object_hash(
-          &model.public_bucket_hash,
-          model.maybe_public_bucket_prefix.as_deref(),
-          model.maybe_public_bucket_extension.as_deref());
+        let path = WeightFileBucketPath::from_object_hash(&model.public_bucket_hash, model.maybe_public_bucket_prefix.as_deref(), model.maybe_public_bucket_extension.as_deref());
 
         PathBuf::from(path.get_full_object_path_str())
       },

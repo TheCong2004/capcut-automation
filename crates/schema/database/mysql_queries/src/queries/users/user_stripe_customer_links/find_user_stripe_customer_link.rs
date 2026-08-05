@@ -20,52 +20,31 @@ pub struct UserStripeCustomerLink {
   pub stripe_customer_id: String,
 }
 
-pub async fn find_user_stripe_customer_link_using_connection(
-  user_token: &UserToken,
-  namespace: PaymentsNamespace,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<Option<UserStripeCustomerLink>, SelectOptionalRecordError> {
-
+pub async fn find_user_stripe_customer_link_using_connection(user_token: &UserToken, namespace: PaymentsNamespace, connection: &mut PoolConnection<MySql>) -> Result<Option<UserStripeCustomerLink>, SelectOptionalRecordError> {
   let query = query(user_token, namespace);
 
-  let result = query
-      .fetch_optional(&mut **connection)
-      .await;
+  let result = query.fetch_optional(&mut **connection).await;
 
   map_result(result)
 }
 
-
-pub async fn find_user_stripe_customer_link_using_transaction(
-  user_token: &UserToken,
-  namespace: PaymentsNamespace,
-  transaction: &mut sqlx::Transaction<'_, MySql>,
-) -> Result<Option<UserStripeCustomerLink>, SelectOptionalRecordError> {
-
+pub async fn find_user_stripe_customer_link_using_transaction(user_token: &UserToken, namespace: PaymentsNamespace, transaction: &mut sqlx::Transaction<'_, MySql>) -> Result<Option<UserStripeCustomerLink>, SelectOptionalRecordError> {
   let query = query(user_token, namespace);
 
-  let result = query
-      .fetch_optional(&mut **transaction)
-      .await;
+  let result = query.fetch_optional(&mut **transaction).await;
 
   map_result(result)
 }
 
 fn map_result(result: Result<Option<RawUserStripeCustomerLink>, sqlx::Error>) -> Result<Option<UserStripeCustomerLink>, SelectOptionalRecordError> {
   match result {
-    Ok(Some(record)) => Ok(Some(UserStripeCustomerLink {
-      user_token: record.user_token,
-      payments_namespace: record.payments_namespace,
-      stripe_customer_id: record.stripe_customer_id,
-    })),
+    Ok(Some(record)) => Ok(Some(UserStripeCustomerLink { user_token: record.user_token, payments_namespace: record.payments_namespace, stripe_customer_id: record.stripe_customer_id })),
     Ok(None) => Ok(None),
     Err(e) => Err(e.into()),
   }
 }
 
-fn query(user_token: &UserToken, namespace: PaymentsNamespace)
-  -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RawUserStripeCustomerLink, sqlx::Error>>
-{
+fn query(user_token: &UserToken, namespace: PaymentsNamespace) -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RawUserStripeCustomerLink, sqlx::Error>> {
   sqlx::query_as!(
     RawUserStripeCustomerLink,
     r#"
@@ -86,7 +65,6 @@ WHERE
     namespace.to_str(),
   )
 }
-
 
 #[derive(sqlx::FromRow)]
 struct RawUserStripeCustomerLink {

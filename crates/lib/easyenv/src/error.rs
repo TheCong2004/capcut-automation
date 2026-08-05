@@ -10,12 +10,12 @@ pub enum EnvError {
   /// Problem parsing the env variable as the desired type.
   ParseError {
     /// Explanation of the parsing failure.
-    reason: String
+    reason: String,
   },
   /// The required environment variable wasn't present.
   RequiredNotPresent {
     /// The name of the missing environment variable.
-    name: String
+    name: String,
   },
 }
 
@@ -24,8 +24,10 @@ impl Display for EnvError {
     let reason = match self {
       EnvError::NotUnicode => "EnvError::NotUnicode",
       EnvError::ParseError { .. } => "EnvError::ParseError",
-      EnvError::RequiredNotPresent { name } =>
-        return write!(f, r#"
+      EnvError::RequiredNotPresent { name } => {
+        return write!(
+          f,
+          r#"
           EnvError::RequiredNotPresent: the following environment variable was not present:
 
               --->  {:?}
@@ -36,7 +38,10 @@ impl Display for EnvError {
           If it looks like it might be a secret, ask for help in our company Discord.
 
           In production, make sure these environment variables are set in Kubernetes.
-        "#, name),
+        "#,
+          name
+        )
+      },
     };
     write!(f, "{:?}", reason)
   }

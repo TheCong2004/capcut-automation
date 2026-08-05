@@ -22,7 +22,7 @@ pub async fn insert_generic_download_job(args: InsertGenericDownloadJobArgs<'_>)
   let job_token = DownloadJobToken::generate();
 
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO generic_download_jobs
 SET
   token = ?,
@@ -35,26 +35,23 @@ SET
   creator_set_visibility = ?,
   status = "pending"
         "#,
-        &job_token,
-        args.uuid_idempotency_token,
-        args.download_type.to_str(),
-        args.download_url,
-        args.title,
-        args.creator_user_token,
-        args.creator_ip_address,
-        args.creator_set_visibility.to_str(),
-    );
+    &job_token,
+    args.uuid_idempotency_token,
+    args.download_type.to_str(),
+    args.download_url,
+    args.title,
+    args.creator_user_token,
+    args.creator_ip_address,
+    args.creator_set_visibility.to_str(),
+  );
 
-  let query_result = query.execute(args.mysql_pool)
-      .await;
+  let query_result = query.execute(args.mysql_pool).await;
 
   let record_id = match query_result {
-    Ok(res) => {
-      res.last_insert_id()
-    },
+    Ok(res) => res.last_insert_id(),
     Err(err) => {
       return Err(anyhow!("error inserting new generic download job: {:?}", err));
-    }
+    },
   };
 
   Ok((job_token, record_id))

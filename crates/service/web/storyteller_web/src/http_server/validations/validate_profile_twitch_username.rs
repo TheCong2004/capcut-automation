@@ -2,9 +2,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 pub fn validate_profile_twitch_username(username: &str) -> Result<(), String> {
-  static TWITCH_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^[a-zA-Z0-9]{4,25}$").expect("should be valid regex")
-  });
+  static TWITCH_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-zA-Z0-9]{4,25}$").expect("should be valid regex"));
 
   if username.len() < 4 {
     return Err("twitch username is too short".to_string());

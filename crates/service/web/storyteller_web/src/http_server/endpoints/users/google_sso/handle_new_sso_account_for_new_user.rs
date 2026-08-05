@@ -28,17 +28,11 @@ pub struct CreateArgs<'a> {
   pub maybe_landing_url: Option<String>,
   pub maybe_referral_user_token: Option<UserToken>,
 }
-pub async fn handle_new_sso_account_for_new_user(
-  args: CreateArgs<'_>
-)
-  -> Result<NewSsoAccountInfo, CommonWebError>
-{
-  let mut transaction = args.mysql_connection.begin()
-      .await
-      .map_err(|e| {
-        warn!("Could not begin transaction: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn handle_new_sso_account_for_new_user(args: CreateArgs<'_>) -> Result<NewSsoAccountInfo, CommonWebError> {
+  let mut transaction = args.mysql_connection.begin().await.map_err(|e| {
+    warn!("Could not begin transaction: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   // Enroll users in studio temporarily.
   let user_feature_flags = studio_feature_flags();
@@ -58,23 +52,7 @@ pub async fn handle_new_sso_account_for_new_user(
 
     info!("generated username: {}", username);
 
-    let result = create_account_from_google_sso(
-      CreateAccountFromGoogleSsoArgs {
-        username: &username,
-        display_name: &display_name,
-        email_address: &args.user_email_address,
-        email_gravatar_hash: &user_email_gravatar_hash,
-        email_confirmed_by_google: args.claims.email_verified(),
-        maybe_feature_flags: user_feature_flags.as_deref(),
-        ip_address: &ip_address,
-        maybe_source,
-        maybe_referral_partner: args.maybe_referral_partner.clone(),
-        maybe_referral_url: args.maybe_referral_url.clone(),
-        maybe_landing_url: args.maybe_landing_url.clone(),
-        maybe_referral_user_token: args.maybe_referral_user_token.as_ref(),
-      },
-      &mut *transaction,
-    ).await;
+    let result = create_account_from_google_sso(CreateAccountFromGoogleSsoArgs { username: &username, display_name: &display_name, email_address: &args.user_email_address, email_gravatar_hash: &user_email_gravatar_hash, email_confirmed_by_google: args.claims.email_verified(), maybe_feature_flags: user_feature_flags.as_deref(), ip_address: &ip_address, maybe_source, maybe_referral_partner: args.maybe_referral_partner.clone(), maybe_referral_url: args.maybe_referral_url.clone(), maybe_landing_url: args.maybe_landing_url.clone(), maybe_referral_user_token: args.maybe_referral_user_token.as_ref() }, &mut *transaction).await;
 
     match result {
       Ok(token) => {
@@ -88,25 +66,19 @@ pub async fn handle_new_sso_account_for_new_user(
       Err(err) => {
         warn!("error creating account from google sso: {:?}", err);
         // CreateAccountError doesn't impl std::error::Error, so fold it into anyhow.
-        return Err(CommonWebError::from_anyhow_error(
-          anyhow::anyhow!("error creating account from google sso: {:?}", err),
-        ));
+        return Err(CommonWebError::from_anyhow_error(anyhow::anyhow!("error creating account from google sso: {:?}", err)));
       },
     }
   }
 
   let user_token = maybe_user_token.ok_or_else(|| {
     error!("no username without collision after several tries (token)");
-    CommonWebError::server_error_with_message(
-      "no username without collision after several tries (token)",
-    )
+    CommonWebError::server_error_with_message("no username without collision after several tries (token)")
   })?;
 
   let user_display_name = maybe_user_display_name.ok_or_else(|| {
     error!("no username without collision after several tries (display name)");
-    CommonWebError::server_error_with_message(
-      "no username without collision after several tries (display name)",
-    )
+    CommonWebError::server_error_with_message("no username without collision after several tries (display name)")
   })?;
 
   let _token = insert_google_sign_in_account(InsertGoogleSignInArgs {
@@ -120,17 +92,17 @@ pub async fn handle_new_sso_account_for_new_user(
     maybe_family_name: args.claims.family_name(),
     creator_ip_address: &ip_address,
     transaction: &mut transaction,
-  }).await.map_err(|err| {
+  })
+  .await
+  .map_err(|err| {
     warn!("error inserting google sign in account: {:?}", err);
     CommonWebError::from_anyhow_error(err)
   })?;
 
-  transaction.commit()
-      .await
-      .map_err(|e| {
-        warn!("Could not commit transaction: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  transaction.commit().await.map_err(|e| {
+    warn!("Could not commit transaction: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   Ok(NewSsoAccountInfo {
     user_token,
@@ -143,13 +115,9 @@ pub async fn handle_new_sso_account_for_new_user(
 fn studio_feature_flags() -> Option<String> {
   let mut user_feature_flags = UserSessionFeatureFlags::empty();
 
-  user_feature_flags.add_flags([
-    UserFeatureFlag::Studio,
-    UserFeatureFlag::VideoStyleTransfer,
-  ]);
+  user_feature_flags.add_flags([UserFeatureFlag::Studio, UserFeatureFlag::VideoStyleTransfer]);
 
-  let user_feature_flags = user_feature_flags
-      .maybe_serialize_string();
+  let user_feature_flags = user_feature_flags.maybe_serialize_string();
 
   user_feature_flags
 }

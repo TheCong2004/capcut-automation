@@ -11,32 +11,19 @@ use errors::AnyhowResult;
 pub struct TacotronModelCheckCommand {
   /// Where the Tacotron code lives
   tacotron_root_code_directory: String,
-  
+
   /// eg. `source python/bin/activate`
   virtual_env_activation_command: String,
-  
+
   tacotron_model_check_script_name: String,
 }
 
 impl TacotronModelCheckCommand {
-  pub fn new(
-    tacotron_root_code_directory: &str,
-    virtual_env_activation_command: &str,
-    tacotron_model_check_script_name: &str,
-  ) -> Self {
-    Self {
-      tacotron_root_code_directory: tacotron_root_code_directory.to_string(),
-      virtual_env_activation_command: virtual_env_activation_command.to_string(),
-      tacotron_model_check_script_name: tacotron_model_check_script_name.to_string(),
-    }
+  pub fn new(tacotron_root_code_directory: &str, virtual_env_activation_command: &str, tacotron_model_check_script_name: &str) -> Self {
+    Self { tacotron_root_code_directory: tacotron_root_code_directory.to_string(), virtual_env_activation_command: virtual_env_activation_command.to_string(), tacotron_model_check_script_name: tacotron_model_check_script_name.to_string() }
   }
 
-  pub fn execute<P: AsRef<Path>>(
-    &self,
-    synthesizer_checkpoint_path: P,
-    output_metadata_filename: P,
-    spawn_process: bool
-  ) -> AnyhowResult<()> {
+  pub fn execute<P: AsRef<Path>>(&self, synthesizer_checkpoint_path: P, output_metadata_filename: P, spawn_process: bool) -> AnyhowResult<()> {
     let mut command = String::new();
 
     command.push_str("echo 'test'");
@@ -54,42 +41,30 @@ impl TacotronModelCheckCommand {
 
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
     if spawn_process {
       // NB: This forks and returns immediately.
       //let _child_pid = command_builder.spawn()?;
 
-      let stdout_file = OpenOptions::new()
-          .read(true)
-          .write(true)
-          .create(true)
-          .truncate(true)
-          .open("/tmp/tacotron_upload_stdout.txt")?;
+      let stdout_file = OpenOptions::new().read(true).write(true).create(true).truncate(true).open("/tmp/tacotron_upload_stdout.txt")?;
 
-      let stderr_file = OpenOptions::new()
-          .read(true)
-          .write(true)
-          .create(true)
-          .truncate(true)
-          .open("/tmp/tacotron_upload_stderr.txt")?;
+      let stderr_file = OpenOptions::new().read(true).write(true).create(true).truncate(true).open("/tmp/tacotron_upload_stderr.txt")?;
 
-      let mut p = Popen::create(&command_parts, PopenConfig {
-        //stdout: Redirection::Pipe,
-        //stderr: Redirection::Pipe,
-        stdout: Redirection::File(stdout_file),
-        stderr: Redirection::File(stderr_file),
-        ..Default::default()
-      })?;
+      let mut p = Popen::create(
+        &command_parts,
+        PopenConfig {
+          //stdout: Redirection::Pipe,
+          //stderr: Redirection::Pipe,
+          stdout: Redirection::File(stdout_file),
+          stderr: Redirection::File(stderr_file),
+          ..Default::default()
+        },
+      )?;
 
       info!("Pid : {:?}", p.pid());
 
       p.detach();
-
     } else {
       // NB: This is a blocking call.
       /*let output = command_builder.output()?;
@@ -102,11 +77,14 @@ impl TacotronModelCheckCommand {
         bail!("Bad error code: {:?}", output.status);
       }*/
 
-      let mut p = Popen::create(&command_parts, PopenConfig {
-        //stdout: Redirection::Pipe,
-        //stderr: Redirection::Pipe,
-        ..Default::default()
-      })?;
+      let mut p = Popen::create(
+        &command_parts,
+        PopenConfig {
+          //stdout: Redirection::Pipe,
+          //stderr: Redirection::Pipe,
+          ..Default::default()
+        },
+      )?;
 
       info!("Pid : {:?}", p.pid());
 

@@ -36,9 +36,10 @@ pub fn language_subtag_predicate(language_subtag: &str) -> Value {
   })
 }
 
-
 pub fn weights_categories_predicates(weights_categories: &HashSet<WeightsCategory>) -> Value {
-  should_predicates(weights_categories.iter()
+  should_predicates(
+    weights_categories
+      .iter()
       .map(|weight_category| {
         json!({
           "term": {
@@ -46,11 +47,14 @@ pub fn weights_categories_predicates(weights_categories: &HashSet<WeightsCategor
           }
         })
       })
-      .collect())
+      .collect(),
+  )
 }
 
 pub fn weights_types_predicates(weights_types: &HashSet<WeightsType>) -> Value {
-  should_predicates(weights_types.iter()
+  should_predicates(
+    weights_types
+      .iter()
       .map(|weights_type| {
         json!({
           "term": {
@@ -58,7 +62,8 @@ pub fn weights_types_predicates(weights_types: &HashSet<WeightsType>) -> Value {
           }
         })
       })
-      .collect())
+      .collect(),
+  )
 }
 
 // NB: "Should" is a logical OR.
@@ -69,4 +74,3 @@ pub fn should_predicates(predicates: Vec<Value>) -> Value {
     }
   })
 }
-

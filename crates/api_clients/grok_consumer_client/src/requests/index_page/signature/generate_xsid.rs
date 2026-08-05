@@ -69,11 +69,10 @@ pub fn generate_xsid_with_timestamp(timestamp: u32, args: GenerateXsidArgs<'_>) 
 
   debug!("[xsid] t = {:?}", t);
 
-  let r = BASE64_STANDARD.decode(&args.verification_token.0)
-      .map_err(|err| {
-        error!("Decode verification_token failed. {}", err);
-        GrokClientError::FailedToDecodeVerificationToken(err)
-      })?; // TODO: Not sure this is right.
+  let r = BASE64_STANDARD.decode(&args.verification_token.0).map_err(|err| {
+    error!("Decode verification_token failed. {}", err);
+    GrokClientError::FailedToDecodeVerificationToken(err)
+  })?; // TODO: Not sure this is right.
 
   debug!("[xsid] r = {:?}", r);
 
@@ -100,7 +99,7 @@ pub fn generate_xsid_with_timestamp(timestamp: u32, args: GenerateXsidArgs<'_>) 
     return Err(GrokClientError::BadSignatureInputs);
   }
 
-  let digest : &[u8] = &digest_all_bytes[.. 16];
+  let digest: &[u8] = &digest_all_bytes[..16];
 
   debug!("[xsid] digest = {:?}", digest);
 
@@ -117,12 +116,12 @@ pub fn generate_xsid_with_timestamp(timestamp: u32, args: GenerateXsidArgs<'_>) 
   debug!("[xsid] assembled = {:?}", assembled);
 
   /*
-        arr = bytearray(assembled)
-        if len(arr) > 0:
-            first = arr[0]
-            for i in range(1, len(arr)):
-                arr[i] = arr[i] ^ first
-   */
+       arr = bytearray(assembled)
+       if len(arr) > 0:
+           first = arr[0]
+           for i in range(1, len(arr)):
+               arr[i] = arr[i] ^ first
+  */
 
   let arr = assembled.clone();
 
@@ -150,7 +149,6 @@ pub fn generate_xsid_with_timestamp(timestamp: u32, args: GenerateXsidArgs<'_>) 
   Ok(encoded_bytes)
 }
 
-
 #[cfg(test)]
 mod tests {
   use crate::datatypes::api::svg_path_data::SvgPathData;
@@ -169,13 +167,7 @@ mod tests {
     let numbers = XsidNumbers { numbers };
     let timestamp = 1761646073;
 
-    let observed = generate_xsid_with_timestamp(timestamp, GenerateXsidArgs {
-      path: "/rest/app-chat/conversations/new",
-      method: "POST",
-      verification_token: &ver,
-      svg_data: &svg_data,
-      numbers: &numbers,
-    })?;
+    let observed = generate_xsid_with_timestamp(timestamp, GenerateXsidArgs { path: "/rest/app-chat/conversations/new", method: "POST", verification_token: &ver, svg_data: &svg_data, numbers: &numbers })?;
 
     let expected = "AMrdeglolCONrO8BhnjMXHRCE9pojxeT1ThmRdSXGnuyuxzEKy3iOEU2Ln5nXwSGVIkysQRoLOMjee3yLtjtJXbPVwjgAw";
 

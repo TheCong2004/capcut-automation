@@ -32,26 +32,18 @@ pub struct IpBanRecordForList {
   pub updated_at: DateTime<Utc>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn list_ip_bans_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListIpBansResponse>, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn list_ip_bans_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListIpBansResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if !user_session.can_ban_users {
@@ -60,31 +52,16 @@ pub async fn list_ip_bans_handler(
   }
 
   let results = list_ip_bans(&server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        error!("list ip bans db error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?
-      .into_iter()
-      .map(|ban| {
-        IpBanRecordForList {
-          ip_address: ban.ip_address,
-          maybe_target_user_token: ban.maybe_target_user_token,
-          maybe_target_username: ban.maybe_target_username,
-          mod_user_token: ban.mod_user_token,
-          mod_username: ban.mod_username,
-          mod_display_name: ban.mod_display_name,
-          mod_notes: ban.mod_notes,
-          created_at: ban.created_at,
-          updated_at: ban.updated_at,
-        }
-      })
-      .collect();
+    .await
+    .map_err(|err| {
+      error!("list ip bans db error: {:?}", err);
+      CommonWebError::from_anyhow_error(err)
+    })?
+    .into_iter()
+    .map(|ban| IpBanRecordForList { ip_address: ban.ip_address, maybe_target_user_token: ban.maybe_target_user_token, maybe_target_username: ban.maybe_target_username, mod_user_token: ban.mod_user_token, mod_username: ban.mod_username, mod_display_name: ban.mod_display_name, mod_notes: ban.mod_notes, created_at: ban.created_at, updated_at: ban.updated_at })
+    .collect();
 
-  let response = ListIpBansResponse {
-    success: true,
-    ip_address_bans: results,
-  };
+  let response = ListIpBansResponse { success: true, ip_address_bans: results };
 
   Ok(Json(response))
 }

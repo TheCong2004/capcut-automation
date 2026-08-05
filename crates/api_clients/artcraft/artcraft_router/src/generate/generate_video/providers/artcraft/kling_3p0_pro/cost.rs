@@ -24,15 +24,7 @@ impl ArtcraftKling3p0ProCostState {
     let rate: u64 = if self.generate_audio { 336 } else { 224 };
     let cost_in_usd_cents = (rate * self.duration_seconds + 9) / 10;
 
-    VideoGenerationCostEstimate {
-      cost_in_credits: Some(cost_in_usd_cents),
-      cost_in_usd_cents: Some(cost_in_usd_cents),
-      is_free: false,
-      is_unlimited: false,
-      is_rate_limited: false,
-      has_watermark: false,
-      failures_are_refunded: None,
-    }
+    VideoGenerationCostEstimate { cost_in_credits: Some(cost_in_usd_cents), cost_in_usd_cents: Some(cost_in_usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None }
   }
 }
 
@@ -43,14 +35,7 @@ mod tests {
   use crate::generate::generate_video::generate_video_request_builder::GenerateVideoRequestBuilder;
 
   fn cost_cents(duration_seconds: Option<u16>, generate_audio: Option<bool>) -> u64 {
-    let b = GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Kling3p0Pro,
-      provider: RouterProvider::Artcraft,
-      prompt: Some("test".to_string()),
-      duration_seconds,
-      generate_audio,
-      ..Default::default()
-    };
+    let b = GenerateVideoRequestBuilder { model: RouterVideoModel::Kling3p0Pro, provider: RouterProvider::Artcraft, prompt: Some("test".to_string()), duration_seconds, generate_audio, ..Default::default() };
     b.build2().unwrap().estimate_cost().unwrap().cost_in_usd_cents.unwrap()
   }
 

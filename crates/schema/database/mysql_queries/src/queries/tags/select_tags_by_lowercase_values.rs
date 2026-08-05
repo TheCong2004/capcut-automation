@@ -19,9 +19,7 @@ where
 
 /// Look up a user's (live) tags by their lowercased values. Used after
 /// `upsert_tags` to resolve the canonical tokens for the batch.
-pub async fn select_tags_by_lowercase_values<'e, 'c: 'e, E>(
-  args: SelectTagsByLowercaseValuesArgs<'e, 'c, E>,
-) -> Result<Vec<TagRow>, sqlx::Error>
+pub async fn select_tags_by_lowercase_values<'e, 'c: 'e, E>(args: SelectTagsByLowercaseValuesArgs<'e, 'c, E>) -> Result<Vec<TagRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -45,13 +43,5 @@ where
 
   let rows = builder.build().fetch_all(args.mysql_executor).await?;
 
-  Ok(rows.into_iter()
-    .map(|row| TagRow {
-      id: row.get::<u64, _>(0),
-      token: TagToken::new(row.get::<String, _>(1)),
-      tag_value: row.get::<String, _>(2),
-      tag_value_lowercase: row.get::<String, _>(3),
-      use_count: row.get::<u32, _>(4),
-    })
-    .collect())
+  Ok(rows.into_iter().map(|row| TagRow { id: row.get::<u64, _>(0), token: TagToken::new(row.get::<String, _>(1)), tag_value: row.get::<String, _>(2), tag_value_lowercase: row.get::<String, _>(3), use_count: row.get::<u32, _>(4) }).collect())
 }

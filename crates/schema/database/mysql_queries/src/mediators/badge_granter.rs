@@ -25,12 +25,8 @@ struct CountRecord {
 }
 
 impl BadgeGranter {
-
   pub async fn grant_early_user_badge(&self, user_token: &str) -> AnyhowResult<()> {
-    let _record_id = self.insert(
-      UserBadge::EarlyUser,
-      user_token,
-    ).await?;
+    let _record_id = self.insert(UserBadge::EarlyUser, user_token).await?;
     Ok(())
   }
 
@@ -70,16 +66,12 @@ impl BadgeGranter {
     };
 
     if self.has_badge(user_token.as_str(), badge).await? {
-      return Ok(())
+      return Ok(());
     }
 
-    let _record_id = self.insert(
-      badge,
-      user_token.as_str(),
-    ).await?;
+    let _record_id = self.insert(badge, user_token.as_str()).await?;
 
-    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value())
-        .await?;
+    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value()).await?;
 
     Ok(())
   }
@@ -120,20 +112,15 @@ impl BadgeGranter {
     };
 
     if self.has_badge(user_token.as_str(), badge).await? {
-      return Ok(())
+      return Ok(());
     }
 
-    let _record_id = self.insert(
-      badge,
-      user_token.as_str(),
-    ).await?;
+    let _record_id = self.insert(badge, user_token.as_str()).await?;
 
-    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value())
-        .await?;
+    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value()).await?;
 
     Ok(())
   }
-
 
   /// This needs to be called *after* successful upload.
   pub async fn maybe_grant_w2l_template_uploads_badge(&self, user_token: &str) -> AnyhowResult<()> {
@@ -169,16 +156,12 @@ impl BadgeGranter {
     };
 
     if self.has_badge(user_token, badge).await? {
-      return Ok(())
+      return Ok(());
     }
 
-    let _record_id = self.insert(
-      badge,
-      user_token,
-    ).await?;
+    let _record_id = self.insert(badge, user_token).await?;
 
-    self.firehose_publisher.publish_user_badge_granted(user_token, badge.to_db_value())
-        .await?;
+    self.firehose_publisher.publish_user_badge_granted(user_token, badge.to_db_value()).await?;
 
     Ok(())
   }
@@ -219,16 +202,12 @@ impl BadgeGranter {
     };
 
     if self.has_badge(user_token.as_str(), badge).await? {
-      return Ok(())
+      return Ok(());
     }
 
-    let _record_id = self.insert(
-      badge,
-      user_token.as_str(),
-    ).await?;
+    let _record_id = self.insert(badge, user_token.as_str()).await?;
 
-    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value())
-        .await?;
+    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value()).await?;
 
     Ok(())
   }
@@ -269,16 +248,12 @@ impl BadgeGranter {
     };
 
     if self.has_badge(user_token.as_str(), badge).await? {
-      return Ok(())
+      return Ok(());
     }
 
-    let _record_id = self.insert(
-      badge,
-      user_token.as_str(),
-    ).await?;
+    let _record_id = self.insert(badge, user_token.as_str()).await?;
 
-    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value())
-        .await?;
+    self.firehose_publisher.publish_user_badge_granted(user_token.as_str(), badge.to_db_value()).await?;
 
     Ok(())
   }
@@ -288,7 +263,7 @@ impl BadgeGranter {
   pub async fn has_badge(&self, user_token: &str, user_badge: UserBadge) -> AnyhowResult<bool> {
     let maybe_result = sqlx::query_as!(
       ExistenceRecord,
-        r#"
+      r#"
 SELECT 1 as does_exist
 FROM user_badges
 WHERE
@@ -300,20 +275,18 @@ LIMIT 1
       user_token,
       user_badge.to_db_value()
     )
-        .fetch_one(&self.mysql_pool)
-        .await;
+    .fetch_one(&self.mysql_pool)
+    .await;
 
     let exists = match maybe_result {
       Ok(_record) => true,
-      Err(err) => {
-        match err {
-          sqlx::Error::RowNotFound => false,
-          _ => {
-            warn!("query error: {:?}", err);
-            return Err(anyhow!("error querying: {:?}", err));
-          }
-        }
-      }
+      Err(err) => match err {
+        sqlx::Error::RowNotFound => false,
+        _ => {
+          warn!("query error: {:?}", err);
+          return Err(anyhow!("error querying: {:?}", err));
+        },
+      },
     };
 
     Ok(exists)
@@ -321,14 +294,11 @@ LIMIT 1
 
   // =======================================================================
 
-  async fn count_tts_models_uploaded(
-    &self,
-    user_token: &str,
-  ) -> AnyhowResult<u64> {
+  async fn count_tts_models_uploaded(&self, user_token: &str) -> AnyhowResult<u64> {
     // NB: This could get expensive!
     let maybe_result = sqlx::query_as!(
       CountRecord,
-        r#"
+      r#"
 SELECT count(*) as count
 FROM tts_models
 WHERE
@@ -337,20 +307,17 @@ LIMIT 1
         "#,
       user_token
     )
-        .fetch_one(&self.mysql_pool)
-        .await;
+    .fetch_one(&self.mysql_pool)
+    .await;
 
     self.handle_count_query(maybe_result)
   }
 
-  async fn count_voice_conversion_models_uploaded(
-    &self,
-    user_token: &UserToken,
-  ) -> AnyhowResult<u64> {
+  async fn count_voice_conversion_models_uploaded(&self, user_token: &UserToken) -> AnyhowResult<u64> {
     // NB: This could get expensive!
     let maybe_result = sqlx::query_as!(
       CountRecord,
-        r#"
+      r#"
 SELECT count(*) as count
 FROM voice_conversion_models
 WHERE
@@ -359,20 +326,17 @@ LIMIT 1
         "#,
       user_token
     )
-        .fetch_one(&self.mysql_pool)
-        .await;
+    .fetch_one(&self.mysql_pool)
+    .await;
 
     self.handle_count_query(maybe_result)
   }
 
-  async fn count_vocoder_models_uploaded(
-    &self,
-    user_token: &str,
-  ) -> AnyhowResult<u64> {
+  async fn count_vocoder_models_uploaded(&self, user_token: &str) -> AnyhowResult<u64> {
     // NB: This could get expensive!
     let maybe_result = sqlx::query_as!(
       CountRecord,
-        r#"
+      r#"
 SELECT count(*) as count
 FROM vocoder_models
 WHERE
@@ -382,20 +346,17 @@ LIMIT 1
         "#,
       user_token
     )
-        .fetch_one(&self.mysql_pool)
-        .await;
+    .fetch_one(&self.mysql_pool)
+    .await;
 
     self.handle_count_query(maybe_result)
   }
 
-  async fn count_softvc_vocoder_models_uploaded(
-    &self,
-    user_token: &str,
-  ) -> AnyhowResult<u64> {
+  async fn count_softvc_vocoder_models_uploaded(&self, user_token: &str) -> AnyhowResult<u64> {
     // NB: This could get expensive!
     let maybe_result = sqlx::query_as!(
       CountRecord,
-        r#"
+      r#"
 SELECT count(*) as count
 FROM vocoder_models
 WHERE
@@ -405,21 +366,18 @@ LIMIT 1
         "#,
       user_token
     )
-        .fetch_one(&self.mysql_pool)
-        .await;
+    .fetch_one(&self.mysql_pool)
+    .await;
 
     self.handle_count_query(maybe_result)
   }
 
-  async fn count_w2l_templates_uploaded(
-    &self,
-    user_token: &str,
-  ) -> AnyhowResult<u64> {
+  async fn count_w2l_templates_uploaded(&self, user_token: &str) -> AnyhowResult<u64> {
     // NB: This could get expensive!
     // Especially at the scale we'll likely have W2L templates.
     let maybe_result = sqlx::query_as!(
       CountRecord,
-        r#"
+      r#"
 SELECT count(*) as count
 FROM w2l_templates
 WHERE
@@ -428,19 +386,15 @@ LIMIT 1
         "#,
       user_token
     )
-        .fetch_one(&self.mysql_pool)
-        .await;
+    .fetch_one(&self.mysql_pool)
+    .await;
 
     self.handle_count_query(maybe_result)
   }
 
-  async fn insert(
-    &self,
-    user_badge: UserBadge,
-    user_token: &str,
-  ) -> AnyhowResult<u64> {
+  async fn insert(&self, user_badge: UserBadge, user_token: &str) -> AnyhowResult<u64> {
     let query_result = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO user_badges
 SET
   user_token = ?,
@@ -449,8 +403,8 @@ SET
       user_token,
       user_badge.to_db_value(),
     )
-        .execute(&self.mysql_pool)
-        .await;
+    .execute(&self.mysql_pool)
+    .await;
 
     let record_id = Self::handle_results(query_result)?;
     Ok(record_id)
@@ -458,9 +412,7 @@ SET
 
   fn handle_results(query_result: Result<MySqlQueryResult, sqlx::Error>) -> AnyhowResult<u64> {
     let record_id = match query_result {
-      Ok(res) => {
-        res.last_insert_id()
-      },
+      Ok(res) => res.last_insert_id(),
       Err(err) => {
         warn!("Insert badge record DB error: {:?}", err);
 
@@ -483,7 +435,7 @@ SET
           _ => {},
         }
         return Err(anyhow!("Error inserting record"));
-      }
+      },
     };
 
     Ok(record_id)
@@ -492,15 +444,13 @@ SET
   fn handle_count_query(&self, query_result: Result<CountRecord, sqlx::Error>) -> AnyhowResult<u64> {
     let count = match query_result {
       Ok(record) => record.count as u64,
-      Err(err) => {
-        match err {
-          sqlx::Error::RowNotFound => 0,
-          _ => {
-            warn!("query error: {:?}", err);
-            return Err(anyhow!("error querying: {:?}", err));
-          }
-        }
-      }
+      Err(err) => match err {
+        sqlx::Error::RowNotFound => 0,
+        _ => {
+          warn!("query error: {:?}", err);
+          return Err(anyhow!("error querying: {:?}", err));
+        },
+      },
     };
 
     Ok(count)

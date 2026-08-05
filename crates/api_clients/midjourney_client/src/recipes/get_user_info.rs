@@ -19,66 +19,63 @@ pub struct GetUserInfoResponse {
 }
 
 pub async fn get_user_info(req: GetUserInfoRequest) -> Result<GetUserInfoResponse, MidjourneyError> {
-  let index_html = get_index_page_html(GetIndexPageRequest {
-    hostname: req.hostname,
-    cookie_header: req.cookie_header,
-  }).await?;
+  let index_html = get_index_page_html(GetIndexPageRequest { hostname: req.hostname, cookie_header: req.cookie_header }).await?;
 
   /*
-    <script id="initialProps" type="application/json">
-      {
-          "initialAuthUser": {
-              "idpID": "ENTROPY",
-              "id": "UUID",
-              "displayName": "uNUMBER",
-              "email": "USER@gmail.com",
-              "emailVerified": true,
-              "photoURL": "https://lh3.googleusercontent.com/a/ENTROPY",
-              "abilities": {
-                  "admin": false,
-                  "developer": false,
-                  "accepted_tos": true,
-                  "moderator": false,
-                  "guide": false,
-                  "vip": false,
-                  "employee": false,
-                  "content_moderator": false,
-                  "gdpr_preferences_set": false,
-                  "gdpr_allow_advertising": false,
-                  "gdpr_allow_analytics": false,
-                  "editor_whitelist": false,
-                  "allow_nsfw": false,
-                  "cooldowns_removed": false,
-                  "blocked": false,
-                  "community": false,
-                  "billing": false,
-                  "system_verified": false,
-                  "simplified_flow": false,
-                  "total_jobs": 57,
-                  "is_sub_at_least_one_year_old": false,
-                  "can_private": false,
-                  "can_relax": false,
-                  "has_discord": false,
-                  "delete_at": null,
-                  "subscription": {
-                      "type": "subscription",
-                      "plan_type": "basic",
-                      "recurring": "month"
-                  },
-                  "relax_video_job_concurrency": 0
-              },
-              "websocketToken": "WEBSOCKET_TOKEN_ENTROPY",
-              "providers": [
-                  "google.com"
-              ],
-              "system": "firebase",
-              "streamToken": "STREAM_TOKEN_ENTROPY"
-          },
-          "urlFromInitialServerRequest": "/"
-      }
-    </script>
-   */
-  
+   <script id="initialProps" type="application/json">
+     {
+         "initialAuthUser": {
+             "idpID": "ENTROPY",
+             "id": "UUID",
+             "displayName": "uNUMBER",
+             "email": "USER@gmail.com",
+             "emailVerified": true,
+             "photoURL": "https://lh3.googleusercontent.com/a/ENTROPY",
+             "abilities": {
+                 "admin": false,
+                 "developer": false,
+                 "accepted_tos": true,
+                 "moderator": false,
+                 "guide": false,
+                 "vip": false,
+                 "employee": false,
+                 "content_moderator": false,
+                 "gdpr_preferences_set": false,
+                 "gdpr_allow_advertising": false,
+                 "gdpr_allow_analytics": false,
+                 "editor_whitelist": false,
+                 "allow_nsfw": false,
+                 "cooldowns_removed": false,
+                 "blocked": false,
+                 "community": false,
+                 "billing": false,
+                 "system_verified": false,
+                 "simplified_flow": false,
+                 "total_jobs": 57,
+                 "is_sub_at_least_one_year_old": false,
+                 "can_private": false,
+                 "can_relax": false,
+                 "has_discord": false,
+                 "delete_at": null,
+                 "subscription": {
+                     "type": "subscription",
+                     "plan_type": "basic",
+                     "recurring": "month"
+                 },
+                 "relax_video_job_concurrency": 0
+             },
+             "websocketToken": "WEBSOCKET_TOKEN_ENTROPY",
+             "providers": [
+                 "google.com"
+             ],
+             "system": "firebase",
+             "streamToken": "STREAM_TOKEN_ENTROPY"
+         },
+         "urlFromInitialServerRequest": "/"
+     }
+   </script>
+  */
+
   let document = Document::from(index_html);
   let maybe_nodes = document.select("script[id=initialProps]");
 
@@ -86,7 +83,7 @@ pub async fn get_user_info(req: GetUserInfoRequest) -> Result<GetUserInfoRespons
     Some(node) => node,
     None => {
       return Err(MidjourneyApiError::NoUserProps.into());
-    }
+    },
   };
 
   let inner_json = node.inner_html().to_string();
@@ -106,24 +103,16 @@ pub async fn get_user_info(req: GetUserInfoRequest) -> Result<GetUserInfoRespons
     initialAuthUser: Option<RawAuthUser>,
   }
 
-  let response : RawBody = serde_json::from_str(&inner_json)
-      .map_err(|err| MidjourneyApiError::DeserializationError(err))?;
-  
+  let response: RawBody = serde_json::from_str(&inner_json).map_err(|err| MidjourneyApiError::DeserializationError(err))?;
+
   let props = match response.initialAuthUser {
     Some(props) => props,
     None => {
       return Err(MidjourneyApiError::NoInitialAuthUser.into());
-    }
+    },
   };
 
-  Ok(GetUserInfoResponse {
-    user_id: props.id
-        .map(|id| MidjourneyUserId::from_string(id)),
-    email: props.email
-        .map(|email| email.to_string()),
-    websocket_token: props.websocketToken
-        .map(|email| email.to_string()),
-  })
+  Ok(GetUserInfoResponse { user_id: props.id.map(|id| MidjourneyUserId::from_string(id)), email: props.email.map(|email| email.to_string()), websocket_token: props.websocketToken.map(|email| email.to_string()) })
 }
 
 #[cfg(test)]
@@ -138,10 +127,7 @@ mod tests {
   async fn test() -> AnyhowResult<()> {
     let cookie_header = read_to_trimmed_string("/Users/bt/secrets/midjourney/cookie.txt")?;
 
-    let result = get_user_info(GetUserInfoRequest {
-      cookie_header,
-      hostname: MidjourneyHostname::Standard,
-    }).await?;
+    let result = get_user_info(GetUserInfoRequest { cookie_header, hostname: MidjourneyHostname::Standard }).await?;
 
     println!("Response: {:?}\n\n", result);
 
@@ -150,4 +136,3 @@ mod tests {
     Ok(())
   }
 }
-

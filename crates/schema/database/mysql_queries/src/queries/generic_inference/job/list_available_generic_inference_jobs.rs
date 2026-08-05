@@ -99,20 +99,12 @@ pub struct ListAvailableGenericInferenceJobArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn list_available_generic_inference_jobs(
-  args: ListAvailableGenericInferenceJobArgs<'_>,
-)
-  -> AnyhowResult<Vec<AvailableInferenceJob>>
-{
-  let query = if args.sort_by_priority {
-    list_sorted_by_priority(args).await
-  } else {
-    list_sorted_by_id(args).await
-  };
+pub async fn list_available_generic_inference_jobs(args: ListAvailableGenericInferenceJobArgs<'_>) -> AnyhowResult<Vec<AvailableInferenceJob>> {
+  let query = if args.sort_by_priority { list_sorted_by_priority(args).await } else { list_sorted_by_id(args).await };
 
   let job_records = query?;
 
-  let job_records : Vec<AvailableInferenceJob> = job_records.into_iter()
+  let job_records: Vec<AvailableInferenceJob> = job_records.into_iter()
       .map(|record : AvailableInferenceJobRawInternal| {
         let maybe_creator_user_token_typed = record.maybe_creator_user_token
             .as_deref()
@@ -184,34 +176,32 @@ async fn list_sorted_by_id(args: ListAvailableGenericInferenceJobArgs<'_>) -> Re
   // NB: Can't be type checked because of WHERE IN clause with dynamic contents
   let mut query = core_query(&args);
 
-  query.push_str(r#"
+  query.push_str(
+    r#"
     ORDER BY id ASC
     LIMIT ?
-  "#);
+  "#,
+  );
 
-  let query = sqlx::query_as::<_, AvailableInferenceJobRawInternal>(&query)
-      .bind(args.is_debug_worker)
-      .bind(args.num_records);
+  let query = sqlx::query_as::<_, AvailableInferenceJobRawInternal>(&query).bind(args.is_debug_worker).bind(args.num_records);
 
-  query.fetch_all(args.mysql_pool)
-      .await
+  query.fetch_all(args.mysql_pool).await
 }
 
 async fn list_sorted_by_priority(args: ListAvailableGenericInferenceJobArgs<'_>) -> Result<Vec<AvailableInferenceJobRawInternal>, sqlx::Error> {
   // NB: Can't be type checked because of WHERE IN clause with dynamic contents
   let mut query = core_query(&args);
 
-  query.push_str(r#"
+  query.push_str(
+    r#"
     ORDER BY priority_level DESC, id ASC
     LIMIT ?
-  "#);
+  "#,
+  );
 
-  let query = sqlx::query_as::<_, AvailableInferenceJobRawInternal>(&query)
-      .bind(args.is_debug_worker)
-      .bind(args.num_records);
+  let query = sqlx::query_as::<_, AvailableInferenceJobRawInternal>(&query).bind(args.is_debug_worker).bind(args.num_records);
 
-  query.fetch_all(args.mysql_pool)
-      .await
+  query.fetch_all(args.mysql_pool).await
 }
 
 // TODO(bt,2024-01-25): Make QueryBuilder
@@ -278,44 +268,53 @@ WHERE
   (
     is_debug_request = ?
   )
-"#.to_string();
+"#
+  .to_string();
 
   if let Some(job_types) = args.maybe_scope_by_job_type {
     if !job_types.is_empty() {
-      query.push_str(&format!(r#"
+      query.push_str(&format!(
+        r#"
       AND
       (
         job_type IN ({})
       )
-    "#, job_type_predicate(job_types)));
+    "#,
+        job_type_predicate(job_types)
+      ));
     }
   }
 
   if let Some(model_types) = args.maybe_scope_by_model_type {
     if !model_types.is_empty() {
-      query.push_str(&format!(r#"
+      query.push_str(&format!(
+        r#"
       AND
       (
         maybe_model_type IN ({})
       )
-    "#, model_type_predicate(model_types)));
+    "#,
+        model_type_predicate(model_types)
+      ));
     }
   }
 
   if let Some(inference_categories) = args.maybe_scope_by_job_category {
     if !inference_categories.is_empty() {
-      query.push_str(&format!(r#"
+      query.push_str(&format!(
+        r#"
       AND
       (
         inference_category IN ({})
       )
-    "#, inference_category_predicate(&inference_categories)));
+    "#,
+        inference_category_predicate(&inference_categories)
+      ));
     }
   }
 
   query
 }
-
 
 #[derive(Debug)]
 #[derive(sqlx::FromRow)]
@@ -378,10 +377,7 @@ struct AvailableInferenceJobRawInternal {
 /// Return a comma-separated predicate, since SQLx does not yet support WHERE IN(?) for Vec<T>, etc.
 /// Issue: https://github.com/launchbadge/sqlx/issues/875
 fn job_type_predicate(types: &BTreeSet<InferenceJobType>) -> String {
-  let mut vec = types.iter()
-      .map(|ty| ty.to_str())
-      .map(|ty| format!("\"{}\"", ty))
-      .collect::<Vec<String>>();
+  let mut vec = types.iter().map(|ty| ty.to_str()).map(|ty| format!("\"{}\"", ty)).collect::<Vec<String>>();
   vec.sort(); // NB: For the benefit of tests.
   vec.join(", ")
 }
@@ -389,10 +385,7 @@ fn job_type_predicate(types: &BTreeSet<InferenceJobType>) -> String {
 /// Return a comma-separated predicate, since SQLx does not yet support WHERE IN(?) for Vec<T>, etc.
 /// Issue: https://github.com/launchbadge/sqlx/issues/875
 fn model_type_predicate(types: &BTreeSet<InferenceModelType>) -> String {
-  let mut vec = types.iter()
-      .map(|ty| ty.to_str())
-      .map(|ty| format!("\"{}\"", ty))
-      .collect::<Vec<String>>();
+  let mut vec = types.iter().map(|ty| ty.to_str()).map(|ty| format!("\"{}\"", ty)).collect::<Vec<String>>();
   vec.sort(); // NB: For the benefit of tests.
   vec.join(", ")
 }
@@ -400,10 +393,7 @@ fn model_type_predicate(types: &BTreeSet<InferenceModelType>) -> String {
 /// Return a comma-separated predicate, since SQLx does not yet support WHERE IN(?) for Vec<T>, etc.
 /// Issue: https://github.com/launchbadge/sqlx/issues/875
 fn inference_category_predicate(categories: &BTreeSet<InferenceCategory>) -> String {
-  let mut vec = categories.iter()
-      .map(|ty| ty.to_str())
-      .map(|ty| format!("\"{}\"", ty))
-      .collect::<Vec<String>>();
+  let mut vec = categories.iter().map(|ty| ty.to_str()).map(|ty| format!("\"{}\"", ty)).collect::<Vec<String>>();
   vec.sort(); // NB: For the benefit of tests.
   vec.join(", ")
 }
@@ -425,20 +415,14 @@ mod tests {
     assert_eq!(job_type_predicate(&types), "".to_string());
 
     // One
-    let types = BTreeSet::from([
-      InferenceJobType::RvcV2,
-    ]);
+    let types = BTreeSet::from([InferenceJobType::RvcV2]);
 
     assert_eq!(job_type_predicate(&types), "\"rvc_v2\"".to_string());
 
     // Multiple
-    let types = BTreeSet::from([
-      InferenceJobType::MocapNet,
-      InferenceJobType::RvcV2,
-    ]);
+    let types = BTreeSet::from([InferenceJobType::MocapNet, InferenceJobType::RvcV2]);
     assert_eq!(job_type_predicate(&types), "\"mocap_net\", \"rvc_v2\"".to_string());
   }
-
 
   #[test]
   fn test_model_type_predicate() {
@@ -447,17 +431,12 @@ mod tests {
     assert_eq!(model_type_predicate(&types), "".to_string());
 
     // One
-    let types = BTreeSet::from([
-      InferenceModelType::RvcV2,
-    ]);
+    let types = BTreeSet::from([InferenceModelType::RvcV2]);
 
     assert_eq!(model_type_predicate(&types), "\"rvc_v2\"".to_string());
 
     // Multiple
-    let types = BTreeSet::from([
-      InferenceModelType::RvcV2,
-      InferenceModelType::SoVitsSvc,
-    ]);
+    let types = BTreeSet::from([InferenceModelType::RvcV2, InferenceModelType::SoVitsSvc]);
     assert_eq!(model_type_predicate(&types), "\"rvc_v2\", \"so_vits_svc\"".to_string());
   }
 
@@ -468,16 +447,11 @@ mod tests {
     assert_eq!(inference_category_predicate(&types), "".to_string());
 
     // Some
-    let types = BTreeSet::from([
-      InferenceCategory::VoiceConversion,
-    ]);
+    let types = BTreeSet::from([InferenceCategory::VoiceConversion]);
 
     assert_eq!(inference_category_predicate(&types), "\"voice_conversion\"".to_string());
     // All
-    let types = BTreeSet::from([
-      InferenceCategory::TextToSpeech,
-      InferenceCategory::VoiceConversion,
-    ]);
+    let types = BTreeSet::from([InferenceCategory::TextToSpeech, InferenceCategory::VoiceConversion]);
     assert_eq!(inference_category_predicate(&types), "\"text_to_speech\", \"voice_conversion\"".to_string());
   }
 }

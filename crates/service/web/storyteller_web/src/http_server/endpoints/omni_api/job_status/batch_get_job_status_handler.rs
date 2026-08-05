@@ -36,11 +36,7 @@ use crate::state::server_state::ServerState;
     OmniApiBatchGetJobStatusQueryParams
   )
 )]
-pub async fn omni_api_batch_get_job_status_handler(
-  http_request: HttpRequest,
-  query: Query<OmniApiBatchGetJobStatusQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<OmniApiBatchGetJobStatusSuccessResponse>, CommonWebError> {
+pub async fn omni_api_batch_get_job_status_handler(http_request: HttpRequest, query: Query<OmniApiBatchGetJobStatusQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<OmniApiBatchGetJobStatusSuccessResponse>, CommonWebError> {
   // ==================== API KEY USER ==================== //
 
   // API-key authentication (Authorization header) instead of a session cookie. Never cached, and a
@@ -59,28 +55,17 @@ pub async fn omni_api_batch_get_job_status_handler(
 
   if tokens.is_empty() {
     // NB: MediaDomain doesn't matter since it's an empty list.
-    return Ok(records_to_response(
-      Vec::new(),
-      server_state.server_environment,
-      MediaDomain::Storyteller,
-    ));
+    return Ok(records_to_response(Vec::new(), server_state.server_environment, MediaDomain::Storyteller));
   }
 
-  let records = batch_get_inference_job_status(
-    &tokens,
-    &server_state.mysql_pool,
-  ).await
-      .map_err(|err| {
-        warn!("Batch job query error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let records = batch_get_inference_job_status(&tokens, &server_state.mysql_pool).await.map_err(|err| {
+    warn!("Batch job query error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
   // TODO(bt,2024-04-22): Look up the extra redis statuses per item.
 
-  let keepalive_job_tokens = records.iter()
-      .filter(|record| record.is_keepalive_required)
-      .map(|record| record.job_token.as_str())
-      .collect::<Vec<_>>();
+  let keepalive_job_tokens = records.iter().filter(|record| record.is_keepalive_required).map(|record| record.job_token.as_str()).collect::<Vec<_>>();
 
   write_job_keepalives(&server_state.redis_pool, &keepalive_job_tokens);
 
@@ -89,15 +74,6 @@ pub async fn omni_api_batch_get_job_status_handler(
   Ok(records_to_response(records, server_state.server_environment, media_domain))
 }
 
-fn records_to_response(
-  records: Vec<GenericInferenceJobStatus>,
-  server_environment: ServerEnvironment,
-  media_domain: MediaDomain,
-) -> Json<OmniApiBatchGetJobStatusSuccessResponse> {
-  Json(OmniApiBatchGetJobStatusSuccessResponse {
-    success: true,
-    job_states: records.into_iter()
-        .map(|record| record_to_payload(record, server_environment, media_domain))
-        .collect::<Vec<_>>(),
-  })
+fn records_to_response(records: Vec<GenericInferenceJobStatus>, server_environment: ServerEnvironment, media_domain: MediaDomain) -> Json<OmniApiBatchGetJobStatusSuccessResponse> {
+  Json(OmniApiBatchGetJobStatusSuccessResponse { success: true, job_states: records.into_iter().map(|record| record_to_payload(record, server_environment, media_domain)).collect::<Vec<_>>() })
 }

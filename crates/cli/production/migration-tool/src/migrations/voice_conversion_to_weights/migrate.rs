@@ -17,14 +17,12 @@ use crate::migrations::voice_conversion_to_weights::copy_cloud_files::copy_cloud
 const PAGE_SIZE: u64 = 10;
 
 pub async fn migrate_voice_conversion_to_weights(deps: &Deps) -> AnyhowResult<()> {
-
   let mut cursor = 0;
 
   loop {
     info!("Querying {PAGE_SIZE} models at cursor = {cursor}");
 
-    let results
-        = list_whole_voice_conversion_models_using_cursor(&deps.mysql_production, PAGE_SIZE, cursor).await?;
+    let results = list_whole_voice_conversion_models_using_cursor(&deps.mysql_production, PAGE_SIZE, cursor).await?;
 
     if results.is_empty() {
       warn!("No more results found; exiting.");
@@ -54,11 +52,11 @@ async fn copy_model_record_and_bucket_files(record: &WholeVoiceConversionModelRe
       info!("Copying bucket files for record {:?} ...", record.token);
       let result = copy_cloud_files(record, &deps).await?;
       maybe_copied_data = Some(result);
-    }
+    },
     Some(token) => {
       info!("Existing migrated record; skipping cloud bucket copy...");
       maybe_copied_data = lookup_bucket_details_from_record(token, &deps).await?;
-    }
+    },
   }
 
   if let Some(copied_data) = &maybe_copied_data {
@@ -71,8 +69,7 @@ async fn copy_model_record_and_bucket_files(record: &WholeVoiceConversionModelRe
 
 /// Look up the bucket storage details from a previously-migrated record
 async fn lookup_bucket_details_from_record(model_weight_token: &ModelWeightToken, deps: &Deps) -> AnyhowResult<Option<CopiedFileData>> {
-  let maybe_model_weight_record =
-      get_weight_by_token(model_weight_token, true, &deps.mysql_production).await?;
+  let maybe_model_weight_record = get_weight_by_token(model_weight_token, true, &deps.mysql_production).await?;
 
   let model_weight_record = match maybe_model_weight_record {
     None => return Ok(None),
@@ -85,8 +82,5 @@ async fn lookup_bucket_details_from_record(model_weight_token: &ModelWeightToken
     _ => return Ok(None), // NB: Stable Diffusion, etc. aren't valid for migration
   };
 
-  Ok(Some(CopiedFileData {
-    bucket_path,
-    file_sha_hash: model_weight_record.file_checksum_sha2,
-  }))
+  Ok(Some(CopiedFileData { bucket_path, file_sha_hash: model_weight_record.file_checksum_sha2 }))
 }

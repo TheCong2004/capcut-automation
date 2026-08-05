@@ -24,22 +24,13 @@ use mysql_queries::queries::user_referral_codes::soft_delete_referral_code::soft
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn delete_referral_code_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  path: web::Path<DeleteReferralCodePathInfo>,
-) -> Result<Json<DeleteReferralCodeResponse>, CommonWebError> {
-  let mut mysql_connection = server_state.mysql_pool.acquire().await
-    .map_err(|e| CommonWebError::from(e))?;
+pub async fn delete_referral_code_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, path: web::Path<DeleteReferralCodePathInfo>) -> Result<Json<DeleteReferralCodeResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| CommonWebError::from(e))?;
 
-  let maybe_user_session = server_state
-    .session_checker
-    .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-    .await
-    .map_err(|e| {
-      warn!("Session checker error: {:?}", e);
-      CommonWebError::from(e)
-    })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) if !session.is_banned => session,
@@ -48,18 +39,11 @@ pub async fn delete_referral_code_handler(
 
   let user_token = &user_session.user_token;
 
-  let deleted = soft_delete_referral_code(
-    &path.token,
-    user_token,
-    &mut *mysql_connection,
-  ).await
-    .map_err(|e| CommonWebError::from(e))?;
+  let deleted = soft_delete_referral_code(&path.token, user_token, &mut *mysql_connection).await.map_err(|e| CommonWebError::from(e))?;
 
   if !deleted {
     return Err(CommonWebError::NotAuthorized);
   }
 
-  Ok(Json(DeleteReferralCodeResponse {
-    success: true,
-  }))
+  Ok(Json(DeleteReferralCodeResponse { success: true }))
 }

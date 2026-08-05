@@ -18,9 +18,7 @@ where
 /// (unlike `list_linked_tag_tokens_for_media_files`, which is scoped to
 /// one user's links). Used by media-file delete/undelete to know which
 /// tags need their `use_count` recounted.
-pub async fn list_tag_tokens_for_media_file<'e, 'c: 'e, E>(
-  args: ListTagTokensForMediaFileArgs<'e, 'c, E>,
-) -> Result<Vec<TagToken>, sqlx::Error>
+pub async fn list_tag_tokens_for_media_file<'e, 'c: 'e, E>(args: ListTagTokensForMediaFileArgs<'e, 'c, E>) -> Result<Vec<TagToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -32,8 +30,8 @@ WHERE media_file_token = ?
     "#,
     args.media_file_token.as_str(),
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows.into_iter().map(|r| r.tag_token).collect())
 }

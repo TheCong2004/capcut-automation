@@ -32,67 +32,42 @@ const BUCKET_FILE_PREFIX: &str = "fakeyou_";
 const BUCKET_FILE_EXTENSION: &str = ".wav";
 const MIME_TYPE: &str = "audio/wav";
 
-pub async fn process_single_seed_vc_inference_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
+pub async fn process_single_seed_vc_inference_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
+  let mut job_progress_reporter = job_dependencies.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let mut job_progress_reporter = job_dependencies
-    .clients
-    .job_progress_reporter
-    .new_generic_inference(job.inference_job_token.as_str())
-    .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
-
-  let seed_vc_deps = job_dependencies
-    .job
-    .job_specific_dependencies
-    .maybe_seed_vc_dependencies
-    .as_ref()
-    .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing Seed-VC dependencies".to_string())))?;
+  let seed_vc_deps = job_dependencies.job.job_specific_dependencies.maybe_seed_vc_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing Seed-VC dependencies".to_string())))?;
 
   let job_args = check_and_validate_job(job)?;
 
   let work_temp_dir = format!("temp_seed_vc_{}", job.id.0);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let work_temp_dir = job_dependencies
-    .fs
-    .scoped_temp_dir_creator_for_work
-    .new_tempdir(&work_temp_dir)
-    .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let work_temp_dir = job_dependencies.fs.scoped_temp_dir_creator_for_work.new_tempdir(&work_temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   let output_dir = work_temp_dir.path().join("output");
   let output_file_path = output_dir.join("vc_out.wav");
 
   if !output_dir.exists() {
-    std::fs::create_dir_all(&output_dir)
-      .map_err(|err| ProcessSingleJobError::IoError(err))?;
+    std::fs::create_dir_all(&output_dir).map_err(|err| ProcessSingleJobError::IoError(err))?;
   }
 
   if output_file_path.exists() {
-    std::fs::remove_file(&output_file_path)
-      .map_err(|err| ProcessSingleJobError::IoError(err))?;
+    std::fs::remove_file(&output_file_path).map_err(|err| ProcessSingleJobError::IoError(err))?;
   }
 
-  let source_media_token = job_args.source_inference_media
-    .as_str();
-  
-  let reference_media_token = job_args.reference_inference_media
-    .as_str();
+  let source_media_token = job_args.source_inference_media.as_str();
 
-  let source_media_token_type = job.maybe_input_source_token_type
-    .ok_or_else(|| ProcessSingleJobError::Other(anyhow!(
-        "no associated media token type for vc job: {:?}", job.inference_job_token)))?;
+  let reference_media_token = job_args.reference_inference_media.as_str();
 
-  let reference_media_token_type =
-    if reference_media_token.starts_with(MediaUploadToken::token_prefix()) {
-      InferenceInputSourceTokenType::MediaUpload
-    } else if reference_media_token.starts_with(MediaFileToken::token_prefix()) {
-      InferenceInputSourceTokenType::MediaFile
-    } else {
-      return Err(ProcessSingleJobError::from_anyhow_error(
-       anyhow!("reference token is not a media_upload or media_file token".to_string())));
-    };
+  let source_media_token_type = job.maybe_input_source_token_type.ok_or_else(|| ProcessSingleJobError::Other(anyhow!("no associated media token type for vc job: {:?}", job.inference_job_token)))?;
+
+  let reference_media_token_type = if reference_media_token.starts_with(MediaUploadToken::token_prefix()) {
+    InferenceInputSourceTokenType::MediaUpload
+  } else if reference_media_token.starts_with(MediaFileToken::token_prefix()) {
+    InferenceInputSourceTokenType::MediaFile
+  } else {
+    return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("reference token is not a media_upload or media_file token".to_string())));
+  };
 
   let source_inference_media = match source_media_token_type {
     InferenceInputSourceTokenType::MediaFile => {
@@ -104,38 +79,35 @@ pub async fn process_single_seed_vc_inference_job(
         Ok(Some(media_file)) => media_file,
         Ok(None) => {
           error!("no media file record found for token: {:?}", source_media_token);
-          return Err(ProcessSingleJobError::Other(
-            anyhow!("no media file record found for token: {:?}", source_media_token)));
-        }
+          return Err(ProcessSingleJobError::Other(anyhow!("no media file record found for token: {:?}", source_media_token)));
+        },
         Err(err) => {
           error!("error fetching media file record from db: {:?}", err);
           return Err(ProcessSingleJobError::Other(err));
-        }
+        },
       };
 
       MediaForInference::MediaFile(media_file)
-    }
+    },
     InferenceInputSourceTokenType::MediaUpload => {
       // media_uploads case
       let media_upload_token = MediaUploadToken::new_from_str(source_media_token);
-      let maybe_media_upload_result =
-        get_media_upload_for_inference(&media_upload_token, &job_dependencies.db.mysql_pool).await;
+      let maybe_media_upload_result = get_media_upload_for_inference(&media_upload_token, &job_dependencies.db.mysql_pool).await;
 
       let media_upload = match maybe_media_upload_result {
         Ok(Some(media_upload)) => media_upload,
         Ok(None) => {
           error!("no media upload record found for token: {:?}", source_media_token);
-          return Err(ProcessSingleJobError::Other(
-            anyhow!("no media upload record found for token: {:?}", source_media_token)));
-        }
+          return Err(ProcessSingleJobError::Other(anyhow!("no media upload record found for token: {:?}", source_media_token)));
+        },
         Err(err) => {
           error!("error fetching media upload record from db: {:?}", err);
           return Err(ProcessSingleJobError::Other(err));
-        }
+        },
       };
 
       MediaForInference::LegacyMediaUpload(media_upload)
-    }
+    },
   };
 
   let reference_inference_media = match reference_media_token_type {
@@ -148,38 +120,35 @@ pub async fn process_single_seed_vc_inference_job(
         Ok(Some(media_file)) => media_file,
         Ok(None) => {
           error!("no media file record found for token: {:?}", reference_media_token);
-          return Err(ProcessSingleJobError::Other(
-            anyhow!("no media file record found for token: {:?}", reference_media_token)));
-        }
+          return Err(ProcessSingleJobError::Other(anyhow!("no media file record found for token: {:?}", reference_media_token)));
+        },
         Err(err) => {
           error!("error fetching media file record from db: {:?}", err);
           return Err(ProcessSingleJobError::Other(err));
-        }
+        },
       };
 
       MediaForInference::MediaFile(media_file)
-    }
+    },
     InferenceInputSourceTokenType::MediaUpload => {
       // media_uploads case
       let media_upload_token = MediaUploadToken::new_from_str(reference_media_token);
-      let maybe_media_upload_result =
-        get_media_upload_for_inference(&media_upload_token, &job_dependencies.db.mysql_pool).await;
+      let maybe_media_upload_result = get_media_upload_for_inference(&media_upload_token, &job_dependencies.db.mysql_pool).await;
 
       let media_upload = match maybe_media_upload_result {
         Ok(Some(media_upload)) => media_upload,
         Ok(None) => {
           error!("no media upload record found for token: {:?}", reference_media_token);
-          return Err(ProcessSingleJobError::Other(
-            anyhow!("no media upload record found for token: {:?}", reference_media_token)));
-        }
+          return Err(ProcessSingleJobError::Other(anyhow!("no media upload record found for token: {:?}", reference_media_token)));
+        },
         Err(err) => {
           error!("error fetching media upload record from db: {:?}", err);
           return Err(ProcessSingleJobError::Other(err));
-        }
+        },
       };
 
       MediaForInference::LegacyMediaUpload(media_upload)
-    }
+    },
   };
 
   let original_source_media_upload_fs_path = {
@@ -189,21 +158,11 @@ pub async fn process_single_seed_vc_inference_job(
 
     info!("Downloading media from bucket path: {:?}", &bucket_object_path);
 
-    maybe_download_file_from_bucket(MaybeDownloadArgs {
-      name_or_description_of_file:  "media (original file)",
-      final_filesystem_file_path: &original_media_upload_fs_path,
-      bucket_object_path: &bucket_object_path,
-      bucket_client: &job_dependencies.buckets.public_bucket_client,
-      job_progress_reporter: &mut job_progress_reporter,
-      job_progress_update_description: "downloading",
-      job_id: job.id.0,
-      scoped_tempdir_creator: &job_dependencies.fs.scoped_temp_dir_creator_for_work,
-      maybe_existing_file_minimum_size_required: None,
-    }).await?;
+    maybe_download_file_from_bucket(MaybeDownloadArgs { name_or_description_of_file: "media (original file)", final_filesystem_file_path: &original_media_upload_fs_path, bucket_object_path: &bucket_object_path, bucket_client: &job_dependencies.buckets.public_bucket_client, job_progress_reporter: &mut job_progress_reporter, job_progress_update_description: "downloading", job_id: job.id.0, scoped_tempdir_creator: &job_dependencies.fs.scoped_temp_dir_creator_for_work, maybe_existing_file_minimum_size_required: None }).await?;
 
     original_media_upload_fs_path
   };
-  
+
   let original_reference_media_upload_fs_path = {
     let original_media_upload_fs_path = work_temp_dir.path().join("original_reference.bin");
 
@@ -211,17 +170,7 @@ pub async fn process_single_seed_vc_inference_job(
 
     info!("Downloading media from bucket path: {:?}", &bucket_object_path);
 
-    maybe_download_file_from_bucket(MaybeDownloadArgs {
-      name_or_description_of_file:  "media (original file)",
-      final_filesystem_file_path: &original_media_upload_fs_path,
-      bucket_object_path: &bucket_object_path,
-      bucket_client: &job_dependencies.buckets.public_bucket_client,
-      job_progress_reporter: &mut job_progress_reporter,
-      job_progress_update_description: "downloading",
-      job_id: job.id.0,
-      scoped_tempdir_creator: &job_dependencies.fs.scoped_temp_dir_creator_for_work,
-      maybe_existing_file_minimum_size_required: None,
-    }).await?;
+    maybe_download_file_from_bucket(MaybeDownloadArgs { name_or_description_of_file: "media (original file)", final_filesystem_file_path: &original_media_upload_fs_path, bucket_object_path: &bucket_object_path, bucket_client: &job_dependencies.buckets.public_bucket_client, job_progress_reporter: &mut job_progress_reporter, job_progress_update_description: "downloading", job_id: job.id.0, scoped_tempdir_creator: &job_dependencies.fs.scoped_temp_dir_creator_for_work, maybe_existing_file_minimum_size_required: None }).await?;
 
     original_media_upload_fs_path
   };
@@ -231,16 +180,7 @@ pub async fn process_single_seed_vc_inference_job(
 
   let inference_start_time = Instant::now();
 
-  let command_exit_status = seed_vc_deps
-    .inference_command
-    .execute_inference(InferenceArgs{
-      stderr_output_file: &stderr_output_file,
-      stdout_output_file: &stdout_output_file,
-      reference_audio_path: &original_reference_media_upload_fs_path,
-      input_audio_path: &original_source_media_upload_fs_path,
-      reference_transcript_path: None,
-      output_audio_directory: &output_dir,
-    });
+  let command_exit_status = seed_vc_deps.inference_command.execute_inference(InferenceArgs { stderr_output_file: &stderr_output_file, stdout_output_file: &stdout_output_file, reference_audio_path: &original_reference_media_upload_fs_path, input_audio_path: &original_source_media_upload_fs_path, reference_transcript_path: None, output_audio_directory: &output_dir });
 
   let inference_duration = Instant::now().duration_since(inference_start_time);
 
@@ -272,17 +212,7 @@ pub async fn process_single_seed_vc_inference_job(
     if truncate_seconds > 0 {
       let truncated_audio_output_path = output_dir.join("truncated.wav");
 
-      let command_exit_status = seed_vc_deps
-          .ffmpeg_command_runner
-          .run_with_subprocess(RunAsSubprocessArgs {
-            args: Box::new(&FfmpegAudioTruncateArgs {
-              input_audio_file: &output_file_path,
-              output_audio_file: &truncated_audio_output_path,
-              truncate_seconds: truncate_seconds as usize,
-            }),
-            stderr: StreamRedirection::Pipe,
-            stdout: StreamRedirection::Pipe,
-          });
+      let command_exit_status = seed_vc_deps.ffmpeg_command_runner.run_with_subprocess(RunAsSubprocessArgs { args: Box::new(&FfmpegAudioTruncateArgs { input_audio_file: &output_file_path, output_audio_file: &truncated_audio_output_path, truncate_seconds: truncate_seconds as usize }), stderr: StreamRedirection::Pipe, stdout: StreamRedirection::Pipe });
 
       if !command_exit_status.is_success() {
         warn!("Error truncating audio file. Exit status: {:?}", command_exit_status);
@@ -299,13 +229,12 @@ pub async fn process_single_seed_vc_inference_job(
 
   // ==================== DECODE AUDIO FILE ==================== //
 
-  let maybe_audio_info = decode_basic_audio_file_info(
-    &audio_for_upload_path, Some(MIME_TYPE), Some("wav"))
-      .map_err(|err| {
-        warn!("Error decoding audio info: {:?}", err);
-        err
-      })
-      .ok(); // Fail open
+  let maybe_audio_info = decode_basic_audio_file_info(&audio_for_upload_path, Some(MIME_TYPE), Some("wav"))
+    .map_err(|err| {
+      warn!("Error decoding audio info: {:?}", err);
+      err
+    })
+    .ok(); // Fail open
 
   let mut maybe_duration_millis = None;
   let mut maybe_audio_codec_name = None;
@@ -322,10 +251,7 @@ pub async fn process_single_seed_vc_inference_job(
 
   info!("Uploading media ...");
 
-  let result_bucket_location = MediaFileBucketPath::generate_new(
-    Some(BUCKET_FILE_PREFIX),
-    Some(BUCKET_FILE_EXTENSION)
-  );
+  let result_bucket_location = MediaFileBucketPath::generate_new(Some(BUCKET_FILE_PREFIX), Some(BUCKET_FILE_EXTENSION));
 
   let result_bucket_object_pathbuf = result_bucket_location.to_full_object_pathbuf();
 
@@ -333,26 +259,15 @@ pub async fn process_single_seed_vc_inference_job(
   info!("Upload File Path: {:?}", &audio_for_upload_path);
   info!("Upload Bucket Path: {:?}", result_bucket_object_pathbuf);
 
-  job_dependencies.buckets.public_bucket_client
-    .upload_filename_with_content_type(
-      &result_bucket_object_pathbuf,
-      &audio_for_upload_path,
-      &MIME_TYPE
-    )
-    .await
-    .map_err(|e| ProcessSingleJobError::Other(e))?;
-  
+  job_dependencies.buckets.public_bucket_client.upload_filename_with_content_type(&result_bucket_object_pathbuf, &audio_for_upload_path, &MIME_TYPE).await.map_err(|e| ProcessSingleJobError::Other(e))?;
+
   // ==================== UPLOAD AUDIO TO BUCKET ====================
 
   info!("Calculating sha256...");
 
-  let file_checksum = sha256_hash_file(&audio_for_upload_path).map_err(|err| {
-    ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-  })?;
+  let file_checksum = sha256_hash_file(&audio_for_upload_path).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
-  let file_size_bytes = file_size(&audio_for_upload_path).map_err(|err|
-    ProcessSingleJobError::Other(err)
-  )?;
+  let file_size_bytes = file_size(&audio_for_upload_path).map_err(|err| ProcessSingleJobError::Other(err))?;
 
   job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
@@ -372,18 +287,11 @@ pub async fn process_single_seed_vc_inference_job(
     is_on_prem: job_dependencies.job.info.container.is_on_prem,
     worker_hostname: &job_dependencies.job.info.container.hostname,
     worker_cluster: &job_dependencies.job.info.container.cluster_name,
-  }).await.map_err(|e| ProcessSingleJobError::Other(e))?;
-
-  info!(
-    "Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model token: {}",
-    job.id,
-    &media_file_token);
-
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::MediaFile,
-      entity_token: media_file_token.to_string(),
-    }),
-    inference_duration,
   })
+  .await
+  .map_err(|e| ProcessSingleJobError::Other(e))?;
+
+  info!("Job {:?} complete success! Downloaded, ran inference, and uploaded. Saved model token: {}", job.id, &media_file_token);
+
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::MediaFile, entity_token: media_file_token.to_string() }), inference_duration })
 }

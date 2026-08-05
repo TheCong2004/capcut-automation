@@ -27,17 +27,13 @@ pub struct BetaKey {
   pub maybe_redeemed_at: Option<DateTime<Utc>>,
 }
 
-pub async fn get_beta_key_by_value<'e, 'c, E>(
-  key_value: &'e str,
-  mysql_executor: E
-)
-  -> AnyhowResult<Option<BetaKey>>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn get_beta_key_by_value<'e, 'c, E>(key_value: &'e str, mysql_executor: E) -> AnyhowResult<Option<BetaKey>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-
   let maybe_results = sqlx::query_as!(
-      RawRecord,
-        r#"
+    RawRecord,
+    r#"
 SELECT
   b.token as `token: tokens::tokens::beta_keys::BetaKeyToken`,
 
@@ -68,31 +64,17 @@ LEFT OUTER JOIN users AS redeemer
 WHERE
     b.key_value = ?
         "#,
-      key_value
-    )
-      .fetch_one(mysql_executor)
-      .await;
+    key_value
+  )
+  .fetch_one(mysql_executor)
+  .await;
 
   match maybe_results {
-    Ok(record) => Ok(Some(BetaKey {
-      token: record.token,
-      product: record.product,
-      key_value: record.key_value,
-      maybe_referrer_user_token: record.maybe_referrer_user_token,
-      maybe_referrer_username: record.maybe_referrer_username,
-      maybe_referrer_display_name: record.maybe_referrer_display_name,
-      maybe_referrer_gravatar_hash: record.maybe_referrer_gravatar_hash,
-      maybe_redeemer_user_token: record.maybe_redeemer_user_token,
-      maybe_redeemer_username: record.maybe_redeemer_username,
-      maybe_redeemer_display_name: record.maybe_redeemer_display_name,
-      maybe_redeemer_gravatar_hash: record.maybe_redeemer_gravatar_hash,
-      created_at: record.created_at,
-      maybe_redeemed_at: record.maybe_redeemed_at,
-    })),
+    Ok(record) => Ok(Some(BetaKey { token: record.token, product: record.product, key_value: record.key_value, maybe_referrer_user_token: record.maybe_referrer_user_token, maybe_referrer_username: record.maybe_referrer_username, maybe_referrer_display_name: record.maybe_referrer_display_name, maybe_referrer_gravatar_hash: record.maybe_referrer_gravatar_hash, maybe_redeemer_user_token: record.maybe_redeemer_user_token, maybe_redeemer_username: record.maybe_redeemer_username, maybe_redeemer_display_name: record.maybe_redeemer_display_name, maybe_redeemer_gravatar_hash: record.maybe_redeemer_gravatar_hash, created_at: record.created_at, maybe_redeemed_at: record.maybe_redeemed_at })),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(None),
       _ => Err(anyhow!("Error querying: {:?}", err)),
-    }
+    },
   }
 }
 

@@ -68,30 +68,22 @@ impl fmt::Display for EnqueueGenericDownloadError {
   }
 }
 
-pub async fn enqueue_generic_download_handler(
-  http_request: HttpRequest,
-  request: Json<EnqueueGenericDownloadRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<EnqueueGenericDownloadSuccessResponse>, EnqueueGenericDownloadError>
-{
+pub async fn enqueue_generic_download_handler(http_request: HttpRequest, request: Json<EnqueueGenericDownloadRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<EnqueueGenericDownloadSuccessResponse>, EnqueueGenericDownloadError> {
   if let Err(_err) = server_state.redis_rate_limiters.model_upload.rate_limit_request(&http_request).await {
     return Err(EnqueueGenericDownloadError::RateLimited);
   }
 
-  let maybe_user_session = server_state
-    .session_checker
-    .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-    .await
-    .map_err(|e| {
-      warn!("Session checker error: {:?}", e);
-      EnqueueGenericDownloadError::ServerError
-    })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    EnqueueGenericDownloadError::ServerError
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(EnqueueGenericDownloadError::MustBeLoggedIn);
-    }
+    },
   };
 
   let ip_address = get_request_ip(&http_request);
@@ -99,8 +91,7 @@ pub async fn enqueue_generic_download_handler(
   let title = request.title.trim().to_string();
   let download_url = request.download_url.trim().to_string();
 
-  let creator_set_visibility = request.creator_set_visibility
-      .unwrap_or(Visibility::Public);
+  let creator_set_visibility = request.creator_set_visibility.unwrap_or(Visibility::Public);
 
   if let Err(reason) = validate_idempotency_token_format(&uuid) {
     return Err(EnqueueGenericDownloadError::BadInput(reason));
@@ -111,45 +102,29 @@ pub async fn enqueue_generic_download_handler(
   }
 
   match is_bad_tts_model_download_url(&download_url) {
-    Ok(false) => {} // Ok case
+    Ok(false) => {}, // Ok case
     Ok(true) => {
       return Err(EnqueueGenericDownloadError::BadInput("Bad model download URL".to_string()));
-    }
+    },
     Err(err) => {
       warn!("Error parsing url: {:?}", err);
       return Err(EnqueueGenericDownloadError::BadInput("Bad model download URL".to_string()));
-    }
+    },
   }
 
-  let (job_token, record_id) = insert_generic_download_job(InsertGenericDownloadJobArgs {
-    uuid_idempotency_token: &uuid,
-    download_type: request.generic_download_type,
-    download_url: &download_url,
-    title: &title,
-    creator_user_token: user_session.user_token.as_str(),
-    creator_ip_address: &ip_address,
-    creator_set_visibility,
-    mysql_pool: &server_state.mysql_pool,
-  })
-      .await
-      .map_err(|err| {
-        warn!("New generic download creation DB error: {:?}", err);
-        EnqueueGenericDownloadError::ServerError
-      })?;
+  let (job_token, record_id) = insert_generic_download_job(InsertGenericDownloadJobArgs { uuid_idempotency_token: &uuid, download_type: request.generic_download_type, download_url: &download_url, title: &title, creator_user_token: user_session.user_token.as_str(), creator_ip_address: &ip_address, creator_set_visibility, mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
+    warn!("New generic download creation DB error: {:?}", err);
+    EnqueueGenericDownloadError::ServerError
+  })?;
 
   info!("new generic download job id: {}, token: {}", record_id, job_token);
 
-  server_state.firehose_publisher.enqueue_generic_download(user_session.user_token.as_str(), job_token.as_str())
-      .await
-      .map_err(|e| {
-        warn!("error publishing event: {:?}", e);
-        EnqueueGenericDownloadError::ServerError
-      })?;
+  server_state.firehose_publisher.enqueue_generic_download(user_session.user_token.as_str(), job_token.as_str()).await.map_err(|e| {
+    warn!("error publishing event: {:?}", e);
+    EnqueueGenericDownloadError::ServerError
+  })?;
 
-  let response = EnqueueGenericDownloadSuccessResponse {
-    success: true,
-    job_token: job_token.to_string(),
-  };
+  let response = EnqueueGenericDownloadSuccessResponse { success: true, job_token: job_token.to_string() };
 
   Ok(Json(response))
 }

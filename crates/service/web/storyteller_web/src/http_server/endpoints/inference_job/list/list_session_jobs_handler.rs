@@ -51,16 +51,10 @@ use utoipa::IntoParams;
     ListSessionJobsQueryParams
   )
 )]
-pub async fn list_session_jobs_handler(
-  http_request: HttpRequest,
-  query: Query<ListSessionJobsQueryParams>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListSessionJobsSuccessResponse>, CommonWebError> {
-
+pub async fn list_session_jobs_handler(http_request: HttpRequest, query: Query<ListSessionJobsQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListSessionJobsSuccessResponse>, CommonWebError> {
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_avt_token = server_state.avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== USER SESSION ==================== //
 
@@ -68,22 +62,11 @@ pub async fn list_session_jobs_handler(
   //     and DB / cache errors to 500.
   // NB: The plain (non-extended) lookup is Redis-cached with a short TTL, which matters here:
   //     this is the hottest polling endpoint in the app, and it only needs the user token.
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await?;
 
-  let include_states = query.include_states
-      .as_deref()
-      .map(|s| s.split(",")
-          .filter_map(|status| JobStatusPlus::from_str(status).ok())
-          .collect::<HashSet<_>>());
+  let include_states = query.include_states.as_deref().map(|s| s.split(",").filter_map(|status| JobStatusPlus::from_str(status).ok()).collect::<HashSet<_>>());
 
-  let exclude_states = query.exclude_states
-      .as_deref()
-      .map(|s| s.split(",")
-          .filter_map(|status| JobStatusPlus::from_str(status).ok())
-          .collect::<HashSet<_>>());
+  let exclude_states = query.exclude_states.as_deref().map(|s| s.split(",").filter_map(|status| JobStatusPlus::from_str(status).ok()).collect::<HashSet<_>>());
 
   let user = match (maybe_user_session.as_ref(), maybe_avt_token.as_ref()) {
     (Some(session), _) => SessionUser::User(&session.user_token),
@@ -91,14 +74,10 @@ pub async fn list_session_jobs_handler(
     (None, None) => {
       // TODO(bt,2025-04-15): We should install an AVT cookie.
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
-  let args = ListSessionJobsForUserArgs {
-    user,
-    maybe_include_job_statuses: include_states.as_ref(),
-    maybe_exclude_job_statuses: exclude_states.as_ref(),
-  };
+  let args = ListSessionJobsForUserArgs { user, maybe_include_job_statuses: include_states.as_ref(), maybe_exclude_job_statuses: exclude_states.as_ref() };
 
   // NB: Since this is publicly exposed, we don't query sensitive data.
   let records = list_session_jobs_from_connection(args, &mut mysql_connection).await?;
@@ -109,10 +88,7 @@ pub async fn list_session_jobs_handler(
 
   // TODO(bt,2024-04-22): Look up the extra redis statuses per item.
 
-  let keepalive_job_tokens = records.iter()
-      .filter(|record| record.is_keepalive_required)
-      .map(|record| record.job_token.as_str())
-      .collect::<Vec<_>>();
+  let keepalive_job_tokens = records.iter().filter(|record| record.is_keepalive_required).map(|record| record.job_token.as_str()).collect::<Vec<_>>();
 
   write_job_keepalives(&server_state.redis_pool, &keepalive_job_tokens);
 
@@ -121,16 +97,8 @@ pub async fn list_session_jobs_handler(
   records_to_response(records, server_state.server_environment, media_domain)
 }
 
-fn records_to_response(
-  records: Vec<GenericInferenceJobStatus>,
-  server_environment: ServerEnvironment,
-  media_domain: MediaDomain,
-) -> Result<Json<ListSessionJobsSuccessResponse>, CommonWebError> {
-  let mut records = records.into_iter()
-      .map(|record| {
-        db_record_to_response_payload(record, None, server_environment, media_domain)
-      })
-      .collect::<Vec<_>>();
+fn records_to_response(records: Vec<GenericInferenceJobStatus>, server_environment: ServerEnvironment, media_domain: MediaDomain) -> Result<Json<ListSessionJobsSuccessResponse>, CommonWebError> {
+  let mut records = records.into_iter().map(|record| db_record_to_response_payload(record, None, server_environment, media_domain)).collect::<Vec<_>>();
 
   // NB: Having a lot of "success" entries that haven't been cleared can make the list
   // long, so we can downsample.
@@ -142,10 +110,7 @@ fn records_to_response(
     }
     match record.request.inference_category {
       // Show all audio results
-      InferenceCategory::TextToSpeech
-      | InferenceCategory::VoiceConversion
-      | InferenceCategory::SeedVc
-      | InferenceCategory::F5TTS => return true,
+      InferenceCategory::TextToSpeech | InferenceCategory::VoiceConversion | InferenceCategory::SeedVc | InferenceCategory::F5TTS => return true,
       // Fall through for everything else
       _ => {},
     }
@@ -153,24 +118,14 @@ fn records_to_response(
     success_count <= 3
   });
 
-  Ok(Json(ListSessionJobsSuccessResponse {
-    success: true,
-    jobs: records,
-  }))
+  Ok(Json(ListSessionJobsSuccessResponse { success: true, jobs: records }))
 }
 
-fn db_record_to_response_payload(
-  record: GenericInferenceJobStatus,
-  maybe_extra_status_description: Option<String>,
-  server_environment: ServerEnvironment,
-  media_domain: MediaDomain,
-) -> ListSessionJobsItem {
+fn db_record_to_response_payload(record: GenericInferenceJobStatus, maybe_extra_status_description: Option<String>, server_environment: ServerEnvironment, media_domain: MediaDomain) -> ListSessionJobsItem {
   let inference_category = record.request_details.inference_category;
 
   // NB: Fail open. We don't want to fail the request if we can't extract the args.
-  let maybe_polymorphic_args = extract_polymorphic_inference_args(&record)
-      .ok()
-      .flatten();
+  let maybe_polymorphic_args = extract_polymorphic_inference_args(&record).ok().flatten();
 
   let progress_percentage = estimate_job_progress(&record, maybe_polymorphic_args.as_ref());
 
@@ -182,121 +137,56 @@ fn db_record_to_response_payload(
       let now = Utc::now();
       let duration = now.signed_duration_since(record.updated_at);
       Some(i64_to_u64_zero_clamped(duration.num_seconds()))
-    }
+    },
     _ => None,
   };
 
   ListSessionJobsItem {
     job_token: record.job_token,
-    request: ListSessionRequestDetailsResponse {
-      inference_category: record.request_details.inference_category,
-      maybe_prompt_token: record.request_details.maybe_prompt_token,
-      maybe_model_type: maybe_filter_model_name(record.request_details.maybe_model_type.as_deref()),
-      maybe_model_token: record.request_details.maybe_model_token,
-      maybe_model_title: record.request_details.maybe_model_title,
-      maybe_raw_inference_text: record.request_details.maybe_raw_inference_text,
-      maybe_style_name: record.request_details.maybe_style_name,
-      maybe_live_portrait_details: maybe_polymorphic_args
-          .as_ref()
-          .and_then(|args| extract_live_portrait_details(args)),
-      maybe_lipsync_details: maybe_polymorphic_args
-          .as_ref()
-          .and_then(|args| extract_lipsync_details(args)),
-    },
-    status: ListSessionStatusDetailsResponse {
-      status: record.status,
-      maybe_extra_status_description,
-      maybe_assigned_worker: maybe_filter_model_name(record.maybe_assigned_worker.as_deref()),
-      maybe_assigned_cluster: record.maybe_assigned_cluster,
-      maybe_first_started_at: record.maybe_first_started_at,
-      attempt_count: record.attempt_count as u8,
-      requires_keepalive: record.is_keepalive_required,
-      maybe_failure_category: record
-          .maybe_frontend_failure_category
-          .and_then(|val| FrontendFailureCategoryForOldClients::try_from_db_enum(val)),
-      maybe_failure_category_updated: record
-          .maybe_frontend_failure_category
-          .map(|val| FrontendFailureCategoryForApiClients::from_db_enum(val)),
-      maybe_failure_message: record.failure_reason,
-      progress_percentage,
-      maybe_current_execution_duration_seconds,
-    },
+    request: ListSessionRequestDetailsResponse { inference_category: record.request_details.inference_category, maybe_prompt_token: record.request_details.maybe_prompt_token, maybe_model_type: maybe_filter_model_name(record.request_details.maybe_model_type.as_deref()), maybe_model_token: record.request_details.maybe_model_token, maybe_model_title: record.request_details.maybe_model_title, maybe_raw_inference_text: record.request_details.maybe_raw_inference_text, maybe_style_name: record.request_details.maybe_style_name, maybe_live_portrait_details: maybe_polymorphic_args.as_ref().and_then(|args| extract_live_portrait_details(args)), maybe_lipsync_details: maybe_polymorphic_args.as_ref().and_then(|args| extract_lipsync_details(args)) },
+    status: ListSessionStatusDetailsResponse { status: record.status, maybe_extra_status_description, maybe_assigned_worker: maybe_filter_model_name(record.maybe_assigned_worker.as_deref()), maybe_assigned_cluster: record.maybe_assigned_cluster, maybe_first_started_at: record.maybe_first_started_at, attempt_count: record.attempt_count as u8, requires_keepalive: record.is_keepalive_required, maybe_failure_category: record.maybe_frontend_failure_category.and_then(|val| FrontendFailureCategoryForOldClients::try_from_db_enum(val)), maybe_failure_category_updated: record.maybe_frontend_failure_category.map(|val| FrontendFailureCategoryForApiClients::from_db_enum(val)), maybe_failure_message: record.failure_reason, progress_percentage, maybe_current_execution_duration_seconds },
     maybe_result: record.maybe_result_details.map(|result_details| {
       // NB: Be careful here, because this varies based on the type of inference result.
       let public_bucket_media_path = match inference_category {
         // NB: Be careful here, because this varies based on the type of inference result.
-        InferenceCategory::TextToSpeech |
-        InferenceCategory::F5TTS => {
+        InferenceCategory::TextToSpeech | InferenceCategory::F5TTS => {
           match result_details.entity_type.as_str() {
             "media_file" => {
               // NB: We're migrating TTS to media_files.
               // Zero shot TTS uses media files.
               // Legacy TT2 uses old pathing.
-              MediaFileBucketPath::from_object_hash(
-                &result_details.public_bucket_location_or_hash,
-                result_details.maybe_media_file_public_bucket_prefix.as_deref(),
-                result_details.maybe_media_file_public_bucket_extension.as_deref())
-                  .get_full_object_path_str()
-                  .to_string()
-            }
+              MediaFileBucketPath::from_object_hash(&result_details.public_bucket_location_or_hash, result_details.maybe_media_file_public_bucket_prefix.as_deref(), result_details.maybe_media_file_public_bucket_extension.as_deref()).get_full_object_path_str().to_string()
+            },
             _ => {
               // NB: TTS results receive the legacy treatment where their table only reports the full bucket path
               result_details.public_bucket_location_or_hash
-            }
+            },
           }
-        }
+        },
         // NB: Voice conversion has to be special cased due to legacy behavior
         InferenceCategory::VoiceConversion | InferenceCategory::SeedVc => {
           match result_details.entity_type.as_str() {
             "media_file" => {
               // NB: We're migrating voice conversion to media_files.
-              MediaFileBucketPath::from_object_hash(
-                &result_details.public_bucket_location_or_hash,
-                result_details.maybe_media_file_public_bucket_prefix.as_deref(),
-                result_details.maybe_media_file_public_bucket_extension.as_deref())
-                  .get_full_object_path_str()
-                  .to_string()
-            }
+              MediaFileBucketPath::from_object_hash(&result_details.public_bucket_location_or_hash, result_details.maybe_media_file_public_bucket_prefix.as_deref(), result_details.maybe_media_file_public_bucket_extension.as_deref()).get_full_object_path_str().to_string()
+            },
             _ => {
               // NB: This is the old voice conversion result pathing.
-              VoiceConversionResultOriginalFilePath::from_object_hash(&result_details.public_bucket_location_or_hash)
-                  .get_full_object_path_str()
-                  .to_string()
-            }
+              VoiceConversionResultOriginalFilePath::from_object_hash(&result_details.public_bucket_location_or_hash).get_full_object_path_str().to_string()
+            },
           }
-        }
+        },
         // Unsupported media files.
-        InferenceCategory::FormatConversion |
-        InferenceCategory::ConvertBvhToWorkflow => {
-          "".to_string()
-        }
+        InferenceCategory::FormatConversion | InferenceCategory::ConvertBvhToWorkflow => "".to_string(),
         // Deprecated
         InferenceCategory::DeprecatedField => {
           "".to_string() // TODO(bt,2024-07-16): Read job type instead
-        }
+        },
         // The blessed path that modern media files use.
-        _ => {
-          MediaFileBucketPath::from_object_hash(
-            &result_details.public_bucket_location_or_hash,
-            result_details.maybe_media_file_public_bucket_prefix.as_deref(),
-            result_details.maybe_media_file_public_bucket_extension.as_deref())
-              .get_full_object_path_str()
-              .to_string()
-        }
+        _ => MediaFileBucketPath::from_object_hash(&result_details.public_bucket_location_or_hash, result_details.maybe_media_file_public_bucket_prefix.as_deref(), result_details.maybe_media_file_public_bucket_extension.as_deref()).get_full_object_path_str().to_string(),
       };
-     
-      ListSessionResultDetailsResponse {
-        entity_type: result_details.entity_type,
-        entity_token: result_details.entity_token,
-        maybe_batch_token: result_details.maybe_batch_token,
-        media_links: MediaLinksBuilder::from_rooted_path_and_env(
-          media_domain,
-          server_environment,
-          &public_bucket_media_path
-        ),
-        maybe_public_bucket_media_path: Some(public_bucket_media_path),
-        maybe_successfully_completed_at: result_details.maybe_successfully_completed_at,
-      }
+
+      ListSessionResultDetailsResponse { entity_type: result_details.entity_type, entity_token: result_details.entity_token, maybe_batch_token: result_details.maybe_batch_token, media_links: MediaLinksBuilder::from_rooted_path_and_env(media_domain, server_environment, &public_bucket_media_path), maybe_public_bucket_media_path: Some(public_bucket_media_path), maybe_successfully_completed_at: result_details.maybe_successfully_completed_at }
     }),
     created_at: record.created_at,
     updated_at: record.updated_at,

@@ -97,11 +97,7 @@ pub fn segment_script_to_captions(script: &str) -> Vec<CaptionSegment> {
     // Sanitize string for JSON / API escaping
     let escaped_text = sanitize_caption_text(&chunk_text);
 
-    segments.push(CaptionSegment {
-      text: escaped_text,
-      start,
-      end,
-    });
+    segments.push(CaptionSegment { text: escaped_text, start, end });
 
     current_time = end;
   }
@@ -111,13 +107,7 @@ pub fn segment_script_to_captions(script: &str) -> Vec<CaptionSegment> {
 
 /// Sanitize text for CapCut API payload stringification.
 pub fn sanitize_caption_text(input: &str) -> String {
-  input
-    .replace('\\', "\\\\")
-    .replace('"', "\\\"")
-    .replace('\r', "")
-    .replace('\n', " ")
-    .trim()
-    .to_string()
+  input.replace('\\', "\\\\").replace('"', "\\\"").replace('\r', "").replace('\n', " ").trim().to_string()
 }
 
 #[cfg(test)]

@@ -150,26 +150,16 @@ pub struct TtsModelModeratorFieldInfo {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn get_tts_model_handler(
-  http_request: HttpRequest,
-  path: Path<GetTtsModelPathInfo>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetTtsModelSuccessResponse>, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        warn!("Could not acquire DB pool: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn get_tts_model_handler(http_request: HttpRequest, path: Path<GetTtsModelPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetTtsModelSuccessResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    warn!("Could not acquire DB pool: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let mut show_deleted_models = false;
   let mut is_moderator = false;
@@ -180,8 +170,7 @@ pub async fn get_tts_model_handler(
     // Original creators cannot see them (unless they're moderators!)
     show_deleted_models = user_session.can_delete_other_users_tts_models;
     // Moderators get to see all the fields.
-    is_moderator = user_session.can_delete_other_users_tts_results
-        || user_session.can_edit_other_users_tts_models;
+    is_moderator = user_session.can_delete_other_users_tts_results || user_session.can_edit_other_users_tts_models;
   }
 
   let model_token = path.token.clone();
@@ -190,34 +179,25 @@ pub async fn get_tts_model_handler(
 
   let get_tts_model = move || {
     // NB: async closures are not yet stable in Rust, so we include an async block.
-    async move {
-      get_tts_model_info_migration(
-        &model_token,
-        &mut mysql_connection,
-        show_deleted_models,
-        switch_to_weights_flag,
-      ).await
-    }
+    async move { get_tts_model_info_migration(&model_token, &mut mysql_connection, show_deleted_models, switch_to_weights_flag).await }
   };
 
-  let model_query_result  = match server_state.redis_ttl_cache.get_connection() {
+  let model_query_result = match server_state.redis_ttl_cache.get_connection() {
     Err(err) => {
       warn!("Error loading Redis connection from TTL cache (calling DB instead): {:?}", err);
       get_tts_model().await
-    }
+    },
     Ok(mut redis_ttl_cache) => {
       let cache_key = RedisCacheKeys::get_tts_model_for_info_migration_endpoint(&path.token);
-      redis_ttl_cache.lazy_load_if_not_cached(&cache_key, move || {
-        get_tts_model()
-      }).await
-    }
+      redis_ttl_cache.lazy_load_if_not_cached(&cache_key, move || get_tts_model()).await
+    },
   };
 
   let model = match model_query_result {
     Err(e) => {
       warn!("query error: {:?}", e);
       return Err(CommonWebError::from_anyhow_error(e));
-    }
+    },
     Ok(None) => return Err(CommonWebError::NotFound),
     Ok(Some(model)) => model,
   };
@@ -240,27 +220,27 @@ pub async fn get_tts_model_handler(
   //  model.maybe_moderator_fields = None;
   //}
 
-  let text_pipeline_type = model.text_pipeline_type()
-      .as_deref()
-      .and_then(|pipeline_type| {
-        // If there's an error deserializing, turn it to None instead of 500ing. The column is
-        // nullable by default, and legacy records have no type.
-        TextPipelineType::from_str(pipeline_type).ok()
-      })
-      .map(|pipeline_type| {
-        // NB(bt, 2022-07-27): For now, we're being intentionally misleading and obscuring our text
-        //  pipelines so that UberDuck doesn't catch on about Espeak. Only uploaders and mods will
-        //  see the original value.
-        if is_moderator || is_original_author {
-          pipeline_type.to_api_variant_for_authors_and_mods()
-        } else {
-          pipeline_type.to_api_variant_for_anyone()
-        }
-      });
+  let text_pipeline_type = model
+    .text_pipeline_type()
+    .as_deref()
+    .and_then(|pipeline_type| {
+      // If there's an error deserializing, turn it to None instead of 500ing. The column is
+      // nullable by default, and legacy records have no type.
+      TextPipelineType::from_str(pipeline_type).ok()
+    })
+    .map(|pipeline_type| {
+      // NB(bt, 2022-07-27): For now, we're being intentionally misleading and obscuring our text
+      //  pipelines so that UberDuck doesn't catch on about Espeak. Only uploaders and mods will
+      //  see the original value.
+      if is_moderator || is_original_author {
+        pipeline_type.to_api_variant_for_authors_and_mods()
+      } else {
+        pipeline_type.to_api_variant_for_anyone()
+      }
+    });
 
   // TODO: Use language to infer as well.
-  let text_pipeline_type_guess =
-      guess_text_pipeline_heuristic(Some(*model.created_at()));
+  let text_pipeline_type_guess = guess_text_pipeline_heuristic(Some(*model.created_at()));
 
   // Map to public response type.
   let response = GetTtsModelSuccessResponse {
@@ -300,16 +280,11 @@ pub async fn get_tts_model_handler(
       is_front_page_featured: model.is_front_page_featured(),
       is_twitch_featured: model.is_twitch_featured(),
       maybe_suggested_unique_bot_command: model.maybe_suggested_unique_bot_command().map(|s| s.to_string()),
-      user_ratings: UserRatingsStats {
-        positive_count: model.user_ratings_positive_count(),
-        negative_count: model.user_ratings_negative_count(),
-        total_count: model.user_ratings_total_count(),
-      },
+      user_ratings: UserRatingsStats { positive_count: model.user_ratings_positive_count(), negative_count: model.user_ratings_negative_count(), total_count: model.user_ratings_total_count() },
       creator_set_visibility: model.creator_set_visibility(),
       is_locked_from_use: model.is_locked_from_use(),
       is_locked_from_user_modification: model.is_locked_from_user_modification(),
-      maybe_migration_new_model_weights_token: model.maybe_migration_new_model_weights_token()
-          .map(|t| t.clone()),
+      maybe_migration_new_model_weights_token: model.maybe_migration_new_model_weights_token().map(|t| t.clone()),
       created_at: *model.created_at(),
       updated_at: *model.updated_at(),
       maybe_moderator_fields: None,

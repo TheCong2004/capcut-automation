@@ -24,7 +24,6 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
@@ -38,4 +37,3 @@ pub use substituted_path::get_substituted_path;
 
 mod paths;
 mod substituted_path;
-

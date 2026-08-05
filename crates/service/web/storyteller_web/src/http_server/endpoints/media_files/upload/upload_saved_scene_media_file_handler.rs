@@ -83,39 +83,22 @@ pub struct UploadSavedSceneMediaFileSuccessResponse {
     ),
   )
 )]
-pub async fn upload_saved_scene_media_file_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(mut form): MultipartForm<UploadSavedSceneMediaFileForm>,
-  path: Path<UploadSavedSceneMediaFilePathInfo>,
-) -> Result<Json<UploadSavedSceneMediaFileSuccessResponse>, MediaFileUploadError> {
-
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+pub async fn upload_saved_scene_media_file_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(mut form): MultipartForm<UploadSavedSceneMediaFileForm>, path: Path<UploadSavedSceneMediaFilePathInfo>) -> Result<Json<UploadSavedSceneMediaFileSuccessResponse>, MediaFileUploadError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let maybe_user_token = maybe_user_session
-      .as_ref()
-      .map(|session| session.get_user_token());
+  let maybe_user_token = maybe_user_session.as_ref().map(|session| session.get_user_token());
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== BANNED USERS ==================== //
 
@@ -139,30 +122,22 @@ pub async fn upload_saved_scene_media_file_handler(
   // ==================== MAKE SURE USER OWNS FILE ==================== //
 
   // TODO(bt,2024-03-26): Don't use the mysql_pool, use the mysql_connection.
-  let media_file =
-      get_media_file(&path.token, false, &server_state.mysql_pool)
-          .await
-          .map_err(|err| {
-            error!("Error getting media file: {:?}", err);
-            MediaFileUploadError::ServerError
-          })?
-          .ok_or_else(|| MediaFileUploadError::NotFoundVerbose("media file not found with that token".to_string()))?;
+  let media_file = get_media_file(&path.token, false, &server_state.mysql_pool)
+    .await
+    .map_err(|err| {
+      error!("Error getting media file: {:?}", err);
+      MediaFileUploadError::ServerError
+    })?
+    .ok_or_else(|| MediaFileUploadError::NotFoundVerbose("media file not found with that token".to_string()))?;
 
-  let creator_check = check_creator_tokens(CheckCreatorTokenArgs {
-    maybe_creator_user_token: media_file.maybe_creator_user_token.as_ref(),
-    maybe_current_request_user_token: maybe_user_token,
-    maybe_creator_anonymous_visitor_token: media_file.maybe_creator_anonymous_visitor_token.as_ref(),
-    maybe_current_request_anonymous_visitor_token: maybe_avt_token.as_ref(),
-  });
+  let creator_check = check_creator_tokens(CheckCreatorTokenArgs { maybe_creator_user_token: media_file.maybe_creator_user_token.as_ref(), maybe_current_request_user_token: maybe_user_token, maybe_creator_anonymous_visitor_token: media_file.maybe_creator_anonymous_visitor_token.as_ref(), maybe_current_request_anonymous_visitor_token: maybe_avt_token.as_ref() });
 
   match creator_check {
-    CheckCreatorTokenResult::UserTokenMatch => {} // Allowed
-    CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMatch => {} // Allowed
-    CheckCreatorTokenResult::InsufficientInformation => {} // TODO(bt,2024-03-28): Temporary fallthrough. This should be a 401.
-    CheckCreatorTokenResult::UserTokenMismatch => return Err(MediaFileUploadError::NotAuthorizedVerbose(
-      "user tokens do not match".to_string())),
-    CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMismatch => return Err(MediaFileUploadError::NotAuthorizedVerbose(
-      "anonymous visitor tokens do not match".to_string())),
+    CheckCreatorTokenResult::UserTokenMatch => {},                   // Allowed
+    CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMatch => {}, // Allowed
+    CheckCreatorTokenResult::InsufficientInformation => {},          // TODO(bt,2024-03-28): Temporary fallthrough. This should be a 401.
+    CheckCreatorTokenResult::UserTokenMismatch => return Err(MediaFileUploadError::NotAuthorizedVerbose("user tokens do not match".to_string())),
+    CheckCreatorTokenResult::NoUserAnonymousVisitorTokenMismatch => return Err(MediaFileUploadError::NotAuthorizedVerbose("anonymous visitor tokens do not match".to_string())),
   }
 
   // ==================== HANDLE IDEMPOTENCY ==================== //
@@ -174,12 +149,10 @@ pub async fn upload_saved_scene_media_file_handler(
     return Err(MediaFileUploadError::BadInput(reason));
   }
 
-  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        MediaFileUploadError::BadInput("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    MediaFileUploadError::BadInput("invalid idempotency token".to_string())
+  })?;
 
   // ==================== UPLOAD METADATA ==================== //
 
@@ -194,29 +167,22 @@ pub async fn upload_saved_scene_media_file_handler(
 
   // ==================== FILE DATA ==================== //
 
-  let maybe_filename = form.file.file_name.as_deref()
-      .as_deref()
-      .map(|filename| PathBuf::from(filename));
+  let maybe_filename = form.file.file_name.as_deref().as_deref().map(|filename| PathBuf::from(filename));
 
-  let maybe_file_extension = maybe_filename
-      .as_ref()
-      .and_then(|filename| filename.extension())
-      .and_then(|ext| ext.to_str());
+  let maybe_file_extension = maybe_filename.as_ref().and_then(|filename| filename.extension()).and_then(|ext| ext.to_str());
 
   let mut file_bytes = Vec::new();
-  form.file.file.read_to_end(&mut file_bytes)
-      .map_err(|e| {
-        error!("Problem reading file: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  form.file.file.read_to_end(&mut file_bytes).map_err(|e| {
+    error!("Problem reading file: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
   let file_size_bytes = file_bytes.len();
 
-  let hash = sha256_hash_bytes(&file_bytes)
-      .map_err(|io_error| {
-        error!("Problem hashing bytes: {:?}", io_error);
-        MediaFileUploadError::ServerError
-      })?;
+  let hash = sha256_hash_bytes(&file_bytes).map_err(|io_error| {
+    error!("Problem hashing bytes: {:?}", io_error);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== UPLOAD AND SAVE ==================== //
 
@@ -226,44 +192,22 @@ pub async fn upload_saved_scene_media_file_handler(
   //  but we can move fast.
 
   const MIMETYPE: &str = "application/json";
-  const PREFIX : Option<&str> = Some("upload_");
+  const PREFIX: Option<&str> = Some("upload_");
   const SUFFIX: &str = ".scn.json";
 
   let public_upload_path = MediaFileBucketPath::generate_new(PREFIX, Some(SUFFIX));
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    file_bytes.as_ref(),
-    MIMETYPE)
-      .await
-      .map_err(|e| {
-        warn!("Upload media bytes to bucket error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), file_bytes.as_ref(), MIMETYPE).await.map_err(|e| {
+    warn!("Upload media bytes to bucket error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  updated_media_file_stored_cloud_contents(UpdateArgs {
-    media_file_token: &path.token,
-    media_class: MediaFileClass::Project,
-    maybe_project_type: Some(MediaFileProjectType::Scene3d),
-    public_bucket_directory_hash: public_upload_path.get_object_hash(),
-    maybe_public_bucket_prefix: PREFIX,
-    maybe_public_bucket_extension: Some(SUFFIX),
-    maybe_mime_type: Some(MIMETYPE),
-    file_size_bytes: file_size_bytes as u64,
-    sha256_checksum: &hash,
-    update_ip_address: &ip_address,
-    mysql_pool: &server_state.mysql_pool,
-  })
-      .await
-      .map_err(|err| {
-        warn!("Updated file creation DB error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  updated_media_file_stored_cloud_contents(UpdateArgs { media_file_token: &path.token, media_class: MediaFileClass::Project, maybe_project_type: Some(MediaFileProjectType::Scene3d), public_bucket_directory_hash: public_upload_path.get_object_hash(), maybe_public_bucket_prefix: PREFIX, maybe_public_bucket_extension: Some(SUFFIX), maybe_mime_type: Some(MIMETYPE), file_size_bytes: file_size_bytes as u64, sha256_checksum: &hash, update_ip_address: &ip_address, mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
+    warn!("Updated file creation DB error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
-  Ok(Json(UploadSavedSceneMediaFileSuccessResponse {
-    success: true,
-    media_file_token: path.token.clone(),
-  }))
+  Ok(Json(UploadSavedSceneMediaFileSuccessResponse { success: true, media_file_token: path.token.clone() }))
 }

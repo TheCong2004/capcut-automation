@@ -29,13 +29,7 @@ pub struct FalRequest<Params: Serialize, Response: DeserializeOwned> {
 
 impl<Params: Serialize, Response: DeserializeOwned> FalRequest<Params, Response> {
   pub fn new(endpoint: impl Into<String>, params: Params) -> Self {
-    Self {
-      client: reqwest::Client::new(),
-      endpoint: endpoint.into(),
-      params,
-      api_key: std::env::var("FAL_API_KEY").ok(),
-      phantom: PhantomData,
-    }
+    Self { client: reqwest::Client::new(), endpoint: endpoint.into(), params, api_key: std::env::var("FAL_API_KEY").ok(), phantom: PhantomData }
   }
 
   /// Use a specific Reqwest Client to make requests
@@ -52,22 +46,7 @@ impl<Params: Serialize, Response: DeserializeOwned> FalRequest<Params, Response>
 
   /// Send the request and wait for the response
   pub async fn send(self) -> Result<Response, FalError> {
-    let response = self
-      .client
-      .post(format!("https://fal.run/{}", self.endpoint))
-      .json(&self.params)
-      .header(
-        "Authorization",
-        format!(
-          "Key {}",
-          self.api_key.expect(
-            "No fal API key provided, and FAL_API_KEY environment variable is not set"
-          )
-        ),
-      )
-      .header("Content-Type", "application/json")
-      .send()
-      .await?;
+    let response = self.client.post(format!("https://fal.run/{}", self.endpoint)).json(&self.params).header("Authorization", format!("Key {}", self.api_key.expect("No fal API key provided, and FAL_API_KEY environment variable is not set"))).header("Content-Type", "application/json").send().await?;
 
     if response.status() != 200 {
       let error = response.text().await?;
@@ -79,18 +58,9 @@ impl<Params: Serialize, Response: DeserializeOwned> FalRequest<Params, Response>
 
   /// Submit the request to the Fal queue system.
   pub async fn queue(self) -> Result<Queue<Response>, FalError> {
-    let key = self
-      .api_key
-      .expect("No fal API key provided, and FAL_API_KEY environment variable is not set");
+    let key = self.api_key.expect("No fal API key provided, and FAL_API_KEY environment variable is not set");
 
-    let response = self
-      .client
-      .post(format!("https://queue.fal.run/{}", self.endpoint))
-      .json(&self.params)
-      .header("Authorization", format!("Key {}", &key))
-      .header("Content-Type", "application/json")
-      .send()
-      .await?;
+    let response = self.client.post(format!("https://queue.fal.run/{}", self.endpoint)).json(&self.params).header("Authorization", format!("Key {}", &key)).header("Content-Type", "application/json").send().await?;
 
     if response.status() != 200 {
       let error = response.text().await?;
@@ -104,9 +74,7 @@ impl<Params: Serialize, Response: DeserializeOwned> FalRequest<Params, Response>
 
   /// Submit the request to the Fal queue with a webhook callback URL.
   pub async fn queue_webhook<U: IntoUrl>(self, url: U) -> Result<WebhookResponse, FalError> {
-    let key = self
-      .api_key
-      .expect("No fal API key provided, and FAL_API_KEY environment variable is not set");
+    let key = self.api_key.expect("No fal API key provided, and FAL_API_KEY environment variable is not set");
 
     let url_encoded = url.into_url()?;
 
@@ -114,14 +82,7 @@ impl<Params: Serialize, Response: DeserializeOwned> FalRequest<Params, Response>
 
     info!("Sending request to FAL queue webhook: {}", request_url);
 
-    let response = self
-      .client
-      .post(request_url)
-      .json(&self.params)
-      .header("Authorization", format!("Key {}", &key))
-      .header("Content-Type", "application/json")
-      .send()
-      .await?;
+    let response = self.client.post(request_url).json(&self.params).header("Authorization", format!("Key {}", &key)).header("Content-Type", "application/json").send().await?;
 
     if response.status() != 200 {
       let error = response.text().await?;
@@ -135,18 +96,9 @@ impl<Params: Serialize, Response: DeserializeOwned> FalRequest<Params, Response>
 
   /// Submit the request to the Fal queue system.
   pub async fn queue_request(self) -> Result<QueueResponse, FalError> {
-    let key = self
-        .api_key
-        .expect("No fal API key provided, and FAL_API_KEY environment variable is not set");
+    let key = self.api_key.expect("No fal API key provided, and FAL_API_KEY environment variable is not set");
 
-    let response = self
-        .client
-        .post(format!("https://queue.fal.run/{}", self.endpoint))
-        .json(&self.params)
-        .header("Authorization", format!("Key {}", &key))
-        .header("Content-Type", "application/json")
-        .send()
-        .await?;
+    let response = self.client.post(format!("https://queue.fal.run/{}", self.endpoint)).json(&self.params).header("Authorization", format!("Key {}", &key)).header("Content-Type", "application/json").send().await?;
 
     if response.status() != 200 {
       let error = response.text().await?;

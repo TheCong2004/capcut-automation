@@ -36,14 +36,12 @@ pub fn write_workflow_prompt(args: WorkflowPromptArgs<'_>) -> Result<String, Pro
     let style_json_content = read_to_string(&style_path).map_err(|e| ProcessSingleJobError::Other(anyhow!("error reading style json: {:?}", e)))?;
     let style_json: Value = serde_json::from_str(&style_json_content).map_err(|e| ProcessSingleJobError::Other(anyhow!("error parsing style json: {:?}", e)))?;
 
-    let mapping_name = style_json.get("mapping_name").and_then(|v| v.as_str())
-        .ok_or(ProcessSingleJobError::Other(anyhow!("Failed to get or convert mapping_name from style.json")))?;
+    let mapping_name = style_json.get("mapping_name").and_then(|v| v.as_str()).ok_or(ProcessSingleJobError::Other(anyhow!("Failed to get or convert mapping_name from style.json")))?;
     let mapping_path = args.model_dependencies.inference_command.mappings_directory.join(mapping_name);
     let mapping_json_content = read_to_string(&mapping_path).map_err(|e| ProcessSingleJobError::Other(anyhow!("error reading mapping json: {:?}", e)))?;
     let mapping_json: Value = serde_json::from_str(&mapping_json_content).map_err(|e| ProcessSingleJobError::Other(anyhow!("error parsing mapping json: {:?}", e)))?;
 
-    let workflow_name = style_json.get("workflow_api_name").and_then(|v| v.as_str())
-        .ok_or(ProcessSingleJobError::Other(anyhow!("Failed to get or convert workflow_api_name from style.json")))?;
+    let workflow_name = style_json.get("workflow_api_name").and_then(|v| v.as_str()).ok_or(ProcessSingleJobError::Other(anyhow!("Failed to get or convert workflow_api_name from style.json")))?;
     let workflow_original_location = args.model_dependencies.inference_command.workflows_directory.join(workflow_name);
 
     std::fs::copy(&workflow_original_location, &workflow_path).map_err(|e| ProcessSingleJobError::Other(anyhow!("error copying workflow: {:?}", e)))?;
@@ -53,7 +51,6 @@ pub fn write_workflow_prompt(args: WorkflowPromptArgs<'_>) -> Result<String, Pro
     let maybe_negative_prompt = args.maybe_negative_prompt.as_deref();
 
     json_modifications = Some(get_style_modifications(style_modifications, &mapping_json, &positive_prompt, &maybe_negative_prompt));
-
   } else {
     return Err(ProcessSingleJobError::Other(anyhow!("No style nor json modifications provided")));
   }
@@ -64,7 +61,6 @@ pub fn write_workflow_prompt(args: WorkflowPromptArgs<'_>) -> Result<String, Pro
 }
 
 fn apply_jsonpath_modifications(modifications: HashMap<String, NewValue>, workflow_path: &str) -> AnyhowResult<String> {
-
   info!("Prompt modifications: #{:?}", modifications);
 
   // Load prompt.json
@@ -73,25 +69,19 @@ fn apply_jsonpath_modifications(modifications: HashMap<String, NewValue>, workfl
   let mut prompt_json: Value = serde_json::from_reader(prompt_file)?;
 
   // Modify json
-  for (path, new_value) in modifications
-      .iter()
-      .map(|(k, v)| (k.as_str(), v))
-  {
-    prompt_json = replace_json_value(prompt_json, path, new_value)
-        .map_err(|e| anyhow!("error replacing prompt json: {:?}", e))?;
+  for (path, new_value) in modifications.iter().map(|(k, v)| (k.as_str(), v)) {
+    prompt_json = replace_json_value(prompt_json, path, new_value).map_err(|e| anyhow!("error replacing prompt json: {:?}", e))?;
   }
 
   // Save prompt.json
   let workflow_parent_dir = Path::new(workflow_path).parent().unwrap();
   let prompt_filepath = workflow_parent_dir.join("prompt.json");
-  let prompt_file = File::create(&prompt_filepath)
-      .map_err(|e| anyhow!("error creating prompt file: {:?}", e))?;
+  let prompt_file = File::create(&prompt_filepath).map_err(|e| anyhow!("error creating prompt file: {:?}", e))?;
   info!("Saving prompt file: {:?}", prompt_file);
   serde_json::to_writer(prompt_file, &prompt_json)?;
 
   Ok(prompt_filepath.to_str().unwrap().to_string())
 }
-
 
 fn get_style_modifications(style_json: &Value, mapping_json: &Value, pos_in: &Option<&str>, neg_in: &Option<&str>) -> HashMap<String, NewValue> {
   let mut modifications = HashMap::new();
@@ -112,14 +102,16 @@ fn get_style_modifications(style_json: &Value, mapping_json: &Value, pos_in: &Op
   }
 
   if let Some(pos) = pos_in {
-    new_style_json["positive_prompt"] = Value::String(format!("{}, {}",pos, style_json["positive_prompt"].as_str().unwrap()));
+    new_style_json["positive_prompt"] = Value::String(format!("{}, {}", pos, style_json["positive_prompt"].as_str().unwrap()));
   }
   if let Some(neg) = neg_in {
-    new_style_json["negative_prompt"] = Value::String(format!("{}, {}",neg, style_json["negative_prompt"].as_str().unwrap()));
+    new_style_json["negative_prompt"] = Value::String(format!("{}, {}", neg, style_json["negative_prompt"].as_str().unwrap()));
   }
 
   for (key, value) in new_style_json.as_object().unwrap() {
-    if key == "loras" { continue; }
+    if key == "loras" {
+      continue;
+    }
 
     let mapping_key = format!("$.{}", key);
     if let Ok(mapping_values) = jsonpath_lib::select(mapping_json, &mapping_key) {
@@ -134,12 +126,9 @@ fn get_style_modifications(style_json: &Value, mapping_json: &Value, pos_in: &Op
   modifications
 }
 
-
 fn replace_json_value(json: Value, path: &str, new_value: &NewValue) -> AnyhowResult<Value> {
   // First, attempt to read the value at the specified path
-  let results = jsonpath_lib::select(&json, path).map_err(|err| {
-    anyhow!("Invalid jsonpath '{}': {:?}", path, err)
-  })?;
+  let results = jsonpath_lib::select(&json, path).map_err(|err| anyhow!("Invalid jsonpath '{}': {:?}", path, err))?;
 
   // If the path does not exist or returns no results, return an error
   if results.is_empty() {
@@ -157,7 +146,6 @@ fn replace_json_value(json: Value, path: &str, new_value: &NewValue) -> AnyhowRe
       NewValue::Int(i) => Some(Value::Number(serde_json::Number::from(*i))),
       NewValue::Bool(b) => Some(Value::Bool(*b)),
     }
-  }).map_err(|err| {
-    anyhow!("Failed to replace json value at path '{}': {:?}", path, err)
   })
+  .map_err(|err| anyhow!("Failed to replace json value at path '{}': {:?}", path, err))
 }

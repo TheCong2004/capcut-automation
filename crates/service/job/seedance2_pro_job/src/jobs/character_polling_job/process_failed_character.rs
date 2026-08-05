@@ -6,41 +6,17 @@ use seedance2pro_client::requests::poll_characters::poll_characters::CharacterSt
 
 use crate::job_dependencies::JobDependencies;
 
-pub async fn process_failed_character(
-  deps: &JobDependencies,
-  job: &PendingSeedance2ProCharacterJob,
-  character: &CharacterStatus,
-) {
-  let reason = character.fail_reason
-      .as_deref()
-      .unwrap_or("Failure may be content related; you might be able to try again.");
+pub async fn process_failed_character(deps: &JobDependencies, job: &PendingSeedance2ProCharacterJob, character: &CharacterStatus) {
+  let reason = character.fail_reason.as_deref().unwrap_or("Failure may be content related; you might be able to try again.");
 
   let failure_category = FrontendFailureCategory::RuleBansUserContent;
 
-  warn!(
-    "Character {} (job {}) failed: {}",
-    character.character_id, job.job_token.as_str(), reason,
-  );
+  warn!("Character {} (job {}) failed: {}", character.character_id, job.job_token.as_str(), reason,);
 
-  let internal_reason = format!(
-    "Kinovi character creation failed. character_id={}, raw_task_status={}, raw_asset_status={:?}, fail_reason={:?}",
-    character.character_id,
-    character.raw_task_status,
-    character.raw_asset_status,
-    character.fail_reason,
-  );
+  let internal_reason = format!("Kinovi character creation failed. character_id={}, raw_task_status={}, raw_asset_status={:?}, fail_reason={:?}", character.character_id, character.raw_task_status, character.raw_asset_status, character.fail_reason,);
 
-  if let Err(err) = mark_job_failed_by_token(MarkJobFailedByTokenArgs {
-    pool: &deps.mysql_pool,
-    job_token: &job.job_token,
-    maybe_public_failure_reason: Some(reason),
-    internal_debugging_failure_reason: &internal_reason,
-    maybe_frontend_failure_category: Some(failure_category),
-  }).await {
-    error!(
-      "Error marking character job {} as failed: {:?}",
-      job.job_token.as_str(), err,
-    );
+  if let Err(err) = mark_job_failed_by_token(MarkJobFailedByTokenArgs { pool: &deps.mysql_pool, job_token: &job.job_token, maybe_public_failure_reason: Some(reason), internal_debugging_failure_reason: &internal_reason, maybe_frontend_failure_category: Some(failure_category) }).await {
+    error!("Error marking character job {} as failed: {:?}", job.job_token.as_str(), err,);
   } else {
     info!("Marked character job {} as failed.", job.job_token.as_str());
   }

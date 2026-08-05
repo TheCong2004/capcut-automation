@@ -23,34 +23,14 @@ pub enum JobType<'a> {
   GenericInferenceJob(&'a AvailableInferenceJob),
 }
 
-pub async fn insert_tts_result<P: AsRef<Path>>(
-  pool: &MySqlPool,
-  job: JobType<'_>,
-  text_hash: &str,
-  maybe_pretrained_vocoder_used: Option<VocoderType>,
-  bucket_audio_results_path: P,
-  bucket_spectrogram_results_path: P,
-  file_size_bytes: u64,
-  duration_millis: u64,
-  is_on_prem: bool,
-  worker_hostname: &str,
-  is_debug_worker: bool,
-) -> AnyhowResult<(u64, String)>
-{
+pub async fn insert_tts_result<P: AsRef<Path>>(pool: &MySqlPool, job: JobType<'_>, text_hash: &str, maybe_pretrained_vocoder_used: Option<VocoderType>, bucket_audio_results_path: P, bucket_spectrogram_results_path: P, file_size_bytes: u64, duration_millis: u64, is_on_prem: bool, worker_hostname: &str, is_debug_worker: bool) -> AnyhowResult<(u64, String)> {
   let inference_result_token = TtsResultToken::generate().to_string();
 
-  let bucket_audio_result_path = &bucket_audio_results_path
-      .as_ref()
-      .display()
-      .to_string();
+  let bucket_audio_result_path = &bucket_audio_results_path.as_ref().display().to_string();
 
-  let bucket_spectrogram_result_path = &bucket_spectrogram_results_path
-      .as_ref()
-      .display()
-      .to_string();
+  let bucket_spectrogram_result_path = &bucket_spectrogram_results_path.as_ref().display().to_string();
 
-  let maybe_pretrained_vocoder_used = maybe_pretrained_vocoder_used
-      .map(|v| v.to_str());
+  let maybe_pretrained_vocoder_used = maybe_pretrained_vocoder_used.map(|v| v.to_str());
 
   let raw_inference_text;
   let maybe_creator_user_token;
@@ -65,29 +45,25 @@ pub async fn insert_tts_result<P: AsRef<Path>>(
       tts_model_token = tts_job.model_token.clone();
       creator_ip_address = tts_job.creator_ip_address.clone();
       creator_set_visibility = tts_job.creator_set_visibility;
-    }
+    },
     JobType::GenericInferenceJob(generic_job) => {
-      raw_inference_text = generic_job.maybe_raw_inference_text.as_deref()
-          .unwrap_or("")
-          .to_string();
+      raw_inference_text = generic_job.maybe_raw_inference_text.as_deref().unwrap_or("").to_string();
       maybe_creator_user_token = generic_job.maybe_creator_user_token.clone();
-      tts_model_token = generic_job.maybe_model_token.as_deref()
-          .unwrap_or("")
-          .to_string();
+      tts_model_token = generic_job.maybe_model_token.as_deref().unwrap_or("").to_string();
       creator_ip_address = generic_job.creator_ip_address.clone();
       creator_set_visibility = generic_job.creator_set_visibility;
-    }
+    },
   }
 
   let normalized_inference_text = raw_inference_text.clone(); // TODO
 
-  let mut maybe_creator_synthetic_id : Option<u64> = None;
+  let mut maybe_creator_synthetic_id: Option<u64> = None;
 
   let mut transaction = pool.begin().await?;
 
   if let Some(creator_user_token) = maybe_creator_user_token.as_deref() {
     let query_result = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO tts_result_synthetic_ids
 SET
   user_token = ?,
@@ -99,20 +75,20 @@ ON DUPLICATE KEY UPDATE
       creator_user_token,
       creator_user_token
     )
-        .execute(&mut *transaction)
-        .await;
+    .execute(&mut *transaction)
+    .await;
 
     match query_result {
       Ok(_) => {},
       Err(err) => {
         //transaction.rollback().await?;
         warn!("Transaction failure: {:?}", err);
-      }
+      },
     }
 
     let query_result = sqlx::query_as!(
-    SyntheticIdRecord,
-        r#"
+      SyntheticIdRecord,
+      r#"
 SELECT
   next_id
 FROM
@@ -123,16 +99,16 @@ LIMIT 1
         "#,
       creator_user_token,
     )
-        .fetch_one(&mut *transaction)
-        .await;
+    .fetch_one(&mut *transaction)
+    .await;
 
-    let record : SyntheticIdRecord = match query_result {
+    let record: SyntheticIdRecord = match query_result {
       Ok(record) => record,
       Err(err) => {
         warn!("Transaction failure: {:?}", err);
         transaction.rollback().await?;
         return Err(anyhow!("Transaction failure: {:?}", err));
-      }
+      },
     };
 
     let next_id = record.next_id as u64;
@@ -141,7 +117,7 @@ LIMIT 1
 
   let record_id = {
     let query_result = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO tts_results
 SET
   token = ?,
@@ -175,34 +151,28 @@ SET
       raw_inference_text,
       text_hash,
       normalized_inference_text,
-
       maybe_creator_user_token,
       maybe_creator_synthetic_id,
-
       creator_ip_address,
       creator_set_visibility.to_str(),
-
       bucket_audio_result_path,
       bucket_spectrogram_result_path,
-
       file_size_bytes,
       duration_millis,
       is_on_prem,
       worker_hostname,
       is_debug_worker,
     )
-        .execute(&mut *transaction)
-        .await;
+    .execute(&mut *transaction)
+    .await;
 
     let record_id = match query_result {
-      Ok(res) => {
-        res.last_insert_id()
-      },
+      Ok(res) => res.last_insert_id(),
       Err(err) => {
         // TODO: handle better
         //transaction.rollback().await?;
         return Err(anyhow!("Mysql error: {:?}", err));
-      }
+      },
     };
 
     record_id
@@ -212,4 +182,3 @@ SET
 
   Ok((record_id, inference_result_token.clone()))
 }
-

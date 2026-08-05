@@ -5,12 +5,8 @@ use actix_web::web::{Json, Query};
 use actix_web::{web, HttpRequest};
 use log::warn;
 
-use artcraft_api_defs::moderation::user_spend_summaries::get_summary::{
-  ModeratorGetUserSpendSummaryQueryParams, ModeratorGetUserSpendSummaryResponse, UserSpendSummaryView,
-};
-use mysql_queries::queries::user_spend_summaries::get_user_spend_summary::{
-  get_user_spend_summary, GetUserSpendSummaryArgs, UserSpendSummaryRecord,
-};
+use artcraft_api_defs::moderation::user_spend_summaries::get_summary::{ModeratorGetUserSpendSummaryQueryParams, ModeratorGetUserSpendSummaryResponse, UserSpendSummaryView};
+use mysql_queries::queries::user_spend_summaries::get_user_spend_summary::{get_user_spend_summary, GetUserSpendSummaryArgs, UserSpendSummaryRecord};
 use tokens::tokens::users::UserToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
@@ -33,33 +29,18 @@ use crate::state::server_state::ServerState;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn moderator_get_user_spend_summary_handler(
-  http_request: HttpRequest,
-  path: web::Path<String>,
-  query: Query<ModeratorGetUserSpendSummaryQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ModeratorGetUserSpendSummaryResponse>, CommonWebError> {
+pub async fn moderator_get_user_spend_summary_handler(http_request: HttpRequest, path: web::Path<String>, query: Query<ModeratorGetUserSpendSummaryQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModeratorGetUserSpendSummaryResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
   let user_token = UserToken(path.into_inner());
   let payments_namespace = resolve_payments_namespace(query.payments_namespace.as_deref())?;
 
-  let maybe_record = get_user_spend_summary(GetUserSpendSummaryArgs {
-    payments_namespace,
-    user_token: &user_token,
-    mysql_executor: &server_state.mysql_pool,
-    phantom: PhantomData,
-  })
-  .await
-  .map_err(|err| {
+  let maybe_record = get_user_spend_summary(GetUserSpendSummaryArgs { payments_namespace, user_token: &user_token, mysql_executor: &server_state.mysql_pool, phantom: PhantomData }).await.map_err(|err| {
     warn!("Failed to get user spend summary: {:?}", err);
     CommonWebError::from_error(err)
   })?;
 
-  Ok(Json(ModeratorGetUserSpendSummaryResponse {
-    success: true,
-    maybe_summary: maybe_record.map(to_view),
-  }))
+  Ok(Json(ModeratorGetUserSpendSummaryResponse { success: true, maybe_summary: maybe_record.map(to_view) }))
 }
 
 fn to_view(r: UserSpendSummaryRecord) -> UserSpendSummaryView {

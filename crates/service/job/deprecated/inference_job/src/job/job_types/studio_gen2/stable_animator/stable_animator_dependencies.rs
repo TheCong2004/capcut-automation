@@ -13,13 +13,6 @@ pub struct StableAnimatorDependencies {
 
 impl StableAnimatorDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      command: StableAnimatorCommand::new_from_env()?,
-
-      pretrained_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_PRETRAINED_MODEL_PATH")?,
-      posenet_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_POSENET_MODEL_PATH")?,
-      face_encoder_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_FACE_ENCODER_MODEL_PATH")?,
-      unet_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_UNET_MODEL_PATH")?,
-    })
+    Ok(Self { command: StableAnimatorCommand::new_from_env()?, pretrained_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_PRETRAINED_MODEL_PATH")?, posenet_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_POSENET_MODEL_PATH")?, face_encoder_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_FACE_ENCODER_MODEL_PATH")?, unet_model_name_or_path: easyenv::get_env_pathbuf_required("STABLE_ANIMATOR_UNET_MODEL_PATH")? })
   }
 }

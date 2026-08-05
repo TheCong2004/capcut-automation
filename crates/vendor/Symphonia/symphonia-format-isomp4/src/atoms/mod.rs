@@ -417,8 +417,7 @@ impl<B: ReadBytes> AtomIterator<B> {
 
         if cur_pos < self.next_atom_pos {
             self.reader.ignore_bytes(self.next_atom_pos - cur_pos)?;
-        }
-        else if cur_pos > self.next_atom_pos {
+        } else if cur_pos > self.next_atom_pos {
             // This is very bad, either the atom's length was incorrect or the demuxer erroroneously
             // overread an atom.
             return decode_error("isomp4: overread atom");
@@ -453,8 +452,7 @@ impl<B: ReadBytes> AtomIterator<B> {
     pub fn next_no_consume(&mut self) -> Result<Option<AtomHeader>> {
         if self.cur_atom.is_some() {
             Ok(self.cur_atom)
-        }
-        else {
+        } else {
             self.next()
         }
     }

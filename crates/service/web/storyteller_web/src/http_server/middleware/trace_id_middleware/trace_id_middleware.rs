@@ -83,10 +83,7 @@ where
       let mut response = fut.await?;
 
       if let Ok(header_value) = HeaderValue::from_str(response_trace_id.as_str()) {
-        response.headers_mut().insert(
-          HeaderName::from_static(TRACE_ID_HEADER),
-          header_value,
-        );
+        response.headers_mut().insert(HeaderName::from_static(TRACE_ID_HEADER), header_value);
       }
 
       Ok(response)

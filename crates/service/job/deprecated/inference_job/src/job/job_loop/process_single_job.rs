@@ -32,10 +32,7 @@ use crate::job::job_types::videofilter::process_single_vf_job::process_single_vf
 use crate::job::job_types::workflow::process_single_workflow_job::process_single_workflow_job;
 use crate::state::job_dependencies::JobDependencies;
 
-pub async fn process_single_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob,
-) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
+pub async fn process_single_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
   let mut force_execution = false;
 
   // Some jobs have "routing tags". These ensure that jobs only execute on certain hosts.
@@ -54,55 +51,35 @@ pub async fn process_single_job(
   }
 
   // TODO(bt,2023-07-23): Re-review the following. It looks sus.
-  let dependency_status = determine_dependency_status(job_dependencies, job)
-      .await?;
+  let dependency_status = determine_dependency_status(job_dependencies, job).await?;
 
-  if !force_execution
-      && !job_dependencies.job.system.always_allow_cold_filesystem_cache
-      && !dependency_status.models_already_on_filesystem
-  {
+  if !force_execution && !job_dependencies.job.system.always_allow_cold_filesystem_cache && !dependency_status.models_already_on_filesystem {
     match dependency_status.maybe_model_token {
-      None => {} // No model token, proceed
+      None => {}, // No model token, proceed
       Some(model_token) => {
-        let count = job_dependencies
-            .job
-            .info
-            .caches
-            .model_cache_counter
-            .increment_count(&model_token)
-            .map_err(|err| ProcessSingleJobError::Other(anyhow!("cache counter increment error: {:?}", err)))?;
+        let count = job_dependencies.job.info.caches.model_cache_counter.increment_count(&model_token).map_err(|err| ProcessSingleJobError::Other(anyhow!("cache counter increment error: {:?}", err)))?;
 
         if count < job_dependencies.job.system.cold_filesystem_cache_starvation_threshold {
-          warn!("model file is not present in the filesystem cache: {:?}, skipping iteration # {} (will continue after {})",
-            model_token, count, job_dependencies.job.system.cold_filesystem_cache_starvation_threshold);
+          warn!("model file is not present in the filesystem cache: {:?}, skipping iteration # {} (will continue after {})", model_token, count, job_dependencies.job.system.cold_filesystem_cache_starvation_threshold);
           return Ok(ProcessSingleJobSuccessCase::JobTemporarilySkippedFilesAbsent);
         }
-      }
+      },
     }
   }
 
   // ==================== ATTEMPT TO GRAB JOB LOCK ==================== //
 
-  let lock_acquired = mark_generic_inference_job_pending_and_grab_lock(
-    &job_dependencies.db.mysql_pool,
-    job.id,
-    &job_dependencies.job.info.container_db,
-  ).await
-      .map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
+  let lock_acquired = mark_generic_inference_job_pending_and_grab_lock(&job_dependencies.db.mysql_pool, job.id, &job_dependencies.job.info.container_db).await.map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
 
   if !lock_acquired {
     warn!("Could not acquire job lock for: {}", &job.id.0);
-    return Ok(ProcessSingleJobSuccessCase::LockNotObtained)
+    return Ok(ProcessSingleJobSuccessCase::LockNotObtained);
   }
 
   process_single_job_wrap_with_logs(job_dependencies, job).await
 }
 
-async fn process_single_job_wrap_with_logs(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob,
-) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
-
+async fn process_single_job_wrap_with_logs(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
   println!("\n  ----------------------------------------- JOB START -----------------------------------------  \n");
 
   info!("Lock acquired. Beginning work on job ({}): {:?}", job.id.0, job.inference_job_token);
@@ -117,19 +94,9 @@ async fn process_single_job_wrap_with_logs(
   result
 }
 
-async fn do_process_single_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob,
-) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
-
+async fn do_process_single_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
   // TODO(bt, 2023-07-23): Redis pool management probably belongs at near the outermost loop.
-  let mut maybe_keepalive_redis = job_dependencies
-      .db
-      .maybe_keepalive_redis_pool
-      .as_ref()
-      .map(|redis| redis.get())
-      .transpose()
-      .map_err(|err| ProcessSingleJobError::Other(anyhow!("redis pool error: {:?}", err)))?;
+  let mut maybe_keepalive_redis = job_dependencies.db.maybe_keepalive_redis_pool.as_ref().map(|redis| redis.get()).transpose().map_err(|err| ProcessSingleJobError::Other(anyhow!("redis pool error: {:?}", err)))?;
 
   // TODO(bt, 2023-01-11): Restore an optional status logger
   //let mut redis_logger = RedisJobStatusLogger::new_generic_download(&mut redis, job.download_job_token.as_str());
@@ -144,12 +111,11 @@ async fn do_process_single_job(
     match &mut maybe_keepalive_redis {
       None => {
         warn!("Keepalive is required for this job, but we do not have Redis configured to check!")
-      }
+      },
       Some(redis) => {
-        let keepalive_key =
-            RedisKeys::generic_inference_keepalive(job.inference_job_token.as_str());
+        let keepalive_key = RedisKeys::generic_inference_keepalive(job.inference_job_token.as_str());
 
-        let _ : Option<String> = match redis.get(&keepalive_key) {
+        let _: Option<String> = match redis.get(&keepalive_key) {
           Ok(None) => {
             // NB: There's a chance that we're racing the keepalive function.
             // As a second check, we'll compare the database clock versus the `created_at`.
@@ -162,7 +128,7 @@ async fn do_process_single_job(
               None // Allow it
             } else {
               warn!("Job keepalive elapsed: {:?}", job.inference_job_token);
-              return Err(ProcessSingleJobError::KeepAliveElapsed)
+              return Err(ProcessSingleJobError::KeepAliveElapsed);
             }
           },
           Ok(Some(value)) => Some(value),
@@ -171,36 +137,28 @@ async fn do_process_single_job(
             None // Fail open
           },
         };
-      }
+      },
     }
   }
 
-// NB(bt,2023-11-29): This looks dead, but hopefully isn't leaned on for downstream side effects.
-// I'll leave this commented out while dealing with the outage, but this can probably be removed
-// in a short while after we redeploy and verify all the jobs.
-//  // ==================== SETUP TEMP DIRS ==================== //
-//
-//  let temp_dir = format!("temp_{}", job.id.0);
-//  let temp_dir = job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads.new_tempdir(&temp_dir)
-//      .map_err(|err| ProcessSingleJobError::Other(anyhow!("filesystem error: {:?}", err)))?;
-//
-//  let _p = temp_dir.path(); // TODO: Just so the build doesn't complain about unused. Remove.
+  // NB(bt,2023-11-29): This looks dead, but hopefully isn't leaned on for downstream side effects.
+  // I'll leave this commented out while dealing with the outage, but this can probably be removed
+  // in a short while after we redeploy and verify all the jobs.
+  //  // ==================== SETUP TEMP DIRS ==================== //
+  //
+  //  let temp_dir = format!("temp_{}", job.id.0);
+  //  let temp_dir = job_dependencies.fs.scoped_temp_dir_creator_for_short_lived_downloads.new_tempdir(&temp_dir)
+  //      .map_err(|err| ProcessSingleJobError::Other(anyhow!("filesystem error: {:?}", err)))?;
+  //
+  //  let _p = temp_dir.path(); // TODO: Just so the build doesn't complain about unused. Remove.
 
   // ==================== HANDLE DIFFERENT INFERENCE TYPES ==================== //
 
-  let job_success_result = if can_use_new_dispatch(job) {
-    new_dispatch(job_dependencies, job).await?
-  } else {
-    old_dispatch(job_dependencies, job).await?
-  };
+  let job_success_result = if can_use_new_dispatch(job) { new_dispatch(job_dependencies, job).await? } else { old_dispatch(job_dependencies, job).await? };
 
-  let maybe_entity_type = job_success_result.maybe_result_entity
-      .as_ref()
-      .map(|result_entity| result_entity.entity_type);
+  let maybe_entity_type = job_success_result.maybe_result_entity.as_ref().map(|result_entity| result_entity.entity_type);
 
-  let maybe_entity_token = job_success_result.maybe_result_entity
-      .as_ref()
-      .map(|result_entity| result_entity.entity_token.as_str());
+  let maybe_entity_token = job_success_result.maybe_result_entity.as_ref().map(|result_entity| result_entity.entity_token.as_str());
 
   // =====================================================
 
@@ -212,29 +170,13 @@ async fn do_process_single_job(
 
   info!("Marking job complete...");
 
-  mark_generic_inference_job_successfully_done(
-    &job_dependencies.db.mysql_pool,
-    job,
-    maybe_entity_type,
-    maybe_entity_token,
-    job_duration,
-    inference_duration,
-  ).await
-      .map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
+  mark_generic_inference_job_successfully_done(&job_dependencies.db.mysql_pool, job, maybe_entity_type, maybe_entity_token, job_duration, inference_duration).await.map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
 
   info!("Saved model record: {} - {}", job.id.0, &job.inference_job_token);
 
-  let model_type_str = job.maybe_model_type
-      .as_ref()
-      .map(|model_type| model_type.to_str())
-      .unwrap_or("unknown");
+  let model_type_str = job.maybe_model_type.as_ref().map(|model_type| model_type.to_str()).unwrap_or("unknown");
 
-  job_dependencies.job_instruments.inference_command_execution_duration.record(inference_duration.as_millis() as u64, &[
-    OtelAttribute::new("job_user_is_premium", job.is_from_premium_user),
-    OtelAttribute::new("job_model", model_type_str),
-    OtelAttribute::new("job_status", "complete_success"),
-    OtelAttribute::new("job_inference_category", job.inference_category.to_str()),
-  ]);
+  job_dependencies.job_instruments.inference_command_execution_duration.record(inference_duration.as_millis() as u64, &[OtelAttribute::new("job_user_is_premium", job.is_from_premium_user), OtelAttribute::new("job_model", model_type_str), OtelAttribute::new("job_status", "complete_success"), OtelAttribute::new("job_inference_category", job.inference_category.to_str())]);
 
   // TODO(bt, 2023-01-11): Need to publish that the job finished.
   //  Publish the *correct type* of event.
@@ -270,104 +212,44 @@ fn can_use_new_dispatch(job: &AvailableInferenceJob) -> bool {
   }
 }
 
-async fn new_dispatch(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob,
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
-
+async fn new_dispatch(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
   let job_success_result = match job.job_type {
-    InferenceJobType::StudioGen2 => {
-      process_single_studio_gen2_job(job_dependencies, job).await?
-    },
-    InferenceJobType::VideoRender
-    | InferenceJobType::LivePortrait
-    | InferenceJobType::FaceFusion
-    | InferenceJobType::ComfyUi => {
+    InferenceJobType::StudioGen2 => process_single_studio_gen2_job(job_dependencies, job).await?,
+    InferenceJobType::VideoRender | InferenceJobType::LivePortrait | InferenceJobType::FaceFusion | InferenceJobType::ComfyUi => {
       // NB: These are all comfy workflow jobs too
       process_single_workflow_job(job_dependencies, job).await?
     },
-    InferenceJobType::GptSovits => {
-      process_single_gpt_sovits_job(job_dependencies, job).await?
-    },
-    InferenceJobType::F5TTS => {
-      process_single_f5_tts_job(job_dependencies, job).await?
-    },
-    InferenceJobType::SeedVc => {
-      process_single_seed_vc_job(job_dependencies, job).await?
-    },
-    InferenceJobType::RvcV2 => {
-      dispatch_rvc_v2_job(job_dependencies, job).await?
-    },
-    InferenceJobType::ImageGenApi => {
-      process_single_ig_job(job_dependencies, job).await?
-    }
+    InferenceJobType::GptSovits => process_single_gpt_sovits_job(job_dependencies, job).await?,
+    InferenceJobType::F5TTS => process_single_f5_tts_job(job_dependencies, job).await?,
+    InferenceJobType::SeedVc => process_single_seed_vc_job(job_dependencies, job).await?,
+    InferenceJobType::RvcV2 => dispatch_rvc_v2_job(job_dependencies, job).await?,
+    InferenceJobType::ImageGenApi => process_single_ig_job(job_dependencies, job).await?,
 
     // NB: Make sure to add the job to `can_use_new_dispatch`.
-    _ => {
-      return Err(ProcessSingleJobError::InvalidJob(
-        anyhow!("invalid job type for dispatch: {:?}", job.job_type)))
-    }
+    _ => return Err(ProcessSingleJobError::InvalidJob(anyhow!("invalid job type for dispatch: {:?}", job.job_type))),
   };
 
   Ok(job_success_result)
 }
 
-async fn old_dispatch(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob,
-) -> Result<JobSuccessResult, ProcessSingleJobError > {
-
+async fn old_dispatch(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
   let job_success_result = match job.inference_category {
-    InferenceCategory::LipsyncAnimation => {
-      process_single_lipsync_job(job_dependencies, job).await?
-    }
-    InferenceCategory::TextToSpeech => {
-      process_single_tts_job(job_dependencies, job).await?
-    }
-    InferenceCategory::F5TTS => {
-      process_single_f5_tts_job(job_dependencies, job).await?
-    }
-    InferenceCategory::VoiceConversion => {
-      process_single_vc_job(job_dependencies, job).await?
-    }
-    InferenceCategory::VideoFilter => {
-      process_single_vf_job(job_dependencies, job).await?
-    }
-    InferenceCategory::ImageGeneration => {
-      process_single_ig_job(job_dependencies, job).await?
-    }
-    InferenceCategory::Mocap => {
-      process_single_mc_job(job_dependencies, job).await?
-    }
-    InferenceCategory::FormatConversion => {
-      process_single_format_conversion_job(job_dependencies, job).await?
-    }
-    InferenceCategory::ConvertBvhToWorkflow => {
-      process_single_render_engine_scene_job(job_dependencies, job).await?
-    }
-    InferenceCategory::Workflow => {
-      process_single_workflow_job(job_dependencies, job).await?
-    }
-    InferenceCategory::LivePortrait => {
-      process_single_workflow_job(job_dependencies, job).await?
-    }
-    InferenceCategory::SeedVc => {
-      process_single_seed_vc_job(job_dependencies, job).await?
-    }
-    InferenceCategory::DeprecatedField => {
-      return Err(ProcessSingleJobError::InvalidJob(
-        anyhow!("invalid job category for dispatch: {:?}", job.inference_category)))
-    }
-    InferenceCategory::VideoGeneration 
-      | InferenceCategory::AudioGeneration
-      | InferenceCategory::BackgroundRemoval 
-      | InferenceCategory::ObjectGeneration
-      | InferenceCategory::SplatGeneration
-      | InferenceCategory::CharacterGeneration
-    => {
+    InferenceCategory::LipsyncAnimation => process_single_lipsync_job(job_dependencies, job).await?,
+    InferenceCategory::TextToSpeech => process_single_tts_job(job_dependencies, job).await?,
+    InferenceCategory::F5TTS => process_single_f5_tts_job(job_dependencies, job).await?,
+    InferenceCategory::VoiceConversion => process_single_vc_job(job_dependencies, job).await?,
+    InferenceCategory::VideoFilter => process_single_vf_job(job_dependencies, job).await?,
+    InferenceCategory::ImageGeneration => process_single_ig_job(job_dependencies, job).await?,
+    InferenceCategory::Mocap => process_single_mc_job(job_dependencies, job).await?,
+    InferenceCategory::FormatConversion => process_single_format_conversion_job(job_dependencies, job).await?,
+    InferenceCategory::ConvertBvhToWorkflow => process_single_render_engine_scene_job(job_dependencies, job).await?,
+    InferenceCategory::Workflow => process_single_workflow_job(job_dependencies, job).await?,
+    InferenceCategory::LivePortrait => process_single_workflow_job(job_dependencies, job).await?,
+    InferenceCategory::SeedVc => process_single_seed_vc_job(job_dependencies, job).await?,
+    InferenceCategory::DeprecatedField => return Err(ProcessSingleJobError::InvalidJob(anyhow!("invalid job category for dispatch: {:?}", job.inference_category))),
+    InferenceCategory::VideoGeneration | InferenceCategory::AudioGeneration | InferenceCategory::BackgroundRemoval | InferenceCategory::ObjectGeneration | InferenceCategory::SplatGeneration | InferenceCategory::CharacterGeneration => {
       // These are handled by the new dispatch
-      return Err(ProcessSingleJobError::InvalidJob(
-        anyhow!("these job types do not support the old-style dispatch: {:?}", job.inference_category)))
+      return Err(ProcessSingleJobError::InvalidJob(anyhow!("these job types do not support the old-style dispatch: {:?}", job.inference_category)));
     },
   };
 

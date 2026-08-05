@@ -17,16 +17,10 @@ use crate::http_server::endpoints::tts::search_tts_models_handler::search_tts_mo
 
 // ==================== TTS ROUTES ====================
 
-pub fn add_tts_routes<T, B> (app: App<T>) -> App<T>
+pub fn add_tts_routes<T, B>(app: App<T>) -> App<T>
 where
-    B: MessageBody,
-    T: ServiceFactory<
-      ServiceRequest,
-      Config = (),
-      Response = ServiceResponse<B>,
-      Error = Error,
-      InitError = (),
-    >,
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
   // NB(bt,2024-04-03): Newer /v1/tts/* routes don't have public use, but we'll start using it
   app.service(web::resource("/v1/tts/inference")
@@ -88,4 +82,3 @@ where
             )
       )
 }
-

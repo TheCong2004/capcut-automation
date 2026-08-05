@@ -17,17 +17,8 @@ pub struct StaticFeatureFlags {
 
 impl ServerState {
   pub fn build(args: &EnvArgs) -> Self {
-    let server_hostname = hostname::get()
-        .ok()
-        .and_then(|h| h.into_string().ok())
-        .unwrap_or("hostname-unknown".to_string());
+    let server_hostname = hostname::get().ok().and_then(|h| h.into_string().ok()).unwrap_or("hostname-unknown".to_string());
 
-    Self {
-      hostname: server_hostname,
-      flags: StaticFeatureFlags {
-        maybe_status_alert_category: args.maybe_status_alert_category.clone(),
-        maybe_status_alert_custom_message: args.maybe_status_alert_custom_message.clone(),
-      },
-    }
+    Self { hostname: server_hostname, flags: StaticFeatureFlags { maybe_status_alert_category: args.maybe_status_alert_category.clone(), maybe_status_alert_custom_message: args.maybe_status_alert_custom_message.clone() } }
   }
 }

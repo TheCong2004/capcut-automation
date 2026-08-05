@@ -31,16 +31,11 @@ pub fn remove_image_border(image: &DynamicImage) -> AnyhowResult<DynamicImage> {
     }
   }
 
-  for (x, y, pixel) in image.enumerate_pixels() {
-    
-  }
+  for (x, y, pixel) in image.enumerate_pixels() {}
 
   for (y, mut row) in image.enumerate_rows() {
-    for (x, y, pixel) in row {
-      
-    }
+    for (x, y, pixel) in row {}
   }
-
 
   let image = DynamicImage::ImageRgba8(image);
 

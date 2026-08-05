@@ -56,16 +56,10 @@ use crate::http_server::endpoints::moderation::user_daily_spends::moderator_user
 use crate::http_server::endpoints::moderation::top_spenders::moderator_list_top_spenders_handler::moderator_list_top_spenders_handler;
 use crate::http_server::endpoints::moderation::user_spend_events::moderator_list_user_spend_events_handler::moderator_list_user_spend_events_handler;
 
-pub fn add_moderator_routes<T, B> (app: App<T>) -> App<T>
-  where
-      B: MessageBody,
-      T: ServiceFactory<
-        ServiceRequest,
-        Config = (),
-        Response = ServiceResponse<B>,
-        Error = Error,
-        InitError = (),
-      >,
+pub fn add_moderator_routes<T, B>(app: App<T>) -> App<T>
+where
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
   app.service(web::scope("/v1/moderation")
         .service(web::scope("/user_spend_summaries")

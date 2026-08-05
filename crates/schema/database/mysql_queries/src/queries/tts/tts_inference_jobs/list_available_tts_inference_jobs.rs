@@ -50,21 +50,15 @@ pub struct AvailableTtsInferenceJob {
 /// Query jobs that are ready to run
 /// If sorting by priority, be careful not to starve lower priority jobs
 ///  (ie. if there's an issue with higher priorities.)
-pub async fn list_available_tts_inference_jobs(
-  pool: &MySqlPool,
-  sort_by_priority: bool,
-  num_records: u32,
-  is_debug_worker: bool
-) -> AnyhowResult<Vec<AvailableTtsInferenceJob>> {
-
+pub async fn list_available_tts_inference_jobs(pool: &MySqlPool, sort_by_priority: bool, num_records: u32, is_debug_worker: bool) -> AnyhowResult<Vec<AvailableTtsInferenceJob>> {
   // NB: This query is awkwardly written twice because this is the only way the
   // macro can statically type check the query, result types, and parameter bindings.
   //
   // The only difference here is the 'ORDER BY' clause !
-  let job_records : Vec<AvailableTtsInferenceJobRawInternal> = if sort_by_priority {
+  let job_records: Vec<AvailableTtsInferenceJobRawInternal> = if sort_by_priority {
     sqlx::query_as!(
       AvailableTtsInferenceJobRawInternal,
-        r#"
+      r#"
 SELECT
   id,
   token AS inference_job_token,
@@ -109,11 +103,13 @@ WHERE
         "#,
       is_debug_worker,
       num_records,
-    ).fetch_all(pool).await?
+    )
+    .fetch_all(pool)
+    .await?
   } else {
     sqlx::query_as!(
       AvailableTtsInferenceJobRawInternal,
-        r#"
+      r#"
 SELECT
   id,
   token AS inference_job_token,
@@ -157,55 +153,26 @@ WHERE
         "#,
       is_debug_worker,
       num_records,
-    ).fetch_all(pool).await?
+    )
+    .fetch_all(pool)
+    .await?
   };
 
-  let job_records = job_records.into_iter()
-      .map(|record : AvailableTtsInferenceJobRawInternal| {
-        AvailableTtsInferenceJob {
-          id: TtsInferenceJobId(record.id),
-          inference_job_token: record.inference_job_token,
-          uuid_idempotency_token: record.uuid_idempotency_token,
-          model_token: record.model_token,
-          raw_inference_text: record.raw_inference_text,
-          max_duration_seconds: record.max_duration_seconds,
-          creator_ip_address: record.creator_ip_address,
-          maybe_creator_user_token: record.maybe_creator_user_token,
-          creator_set_visibility: record.creator_set_visibility,
-          is_from_api: i8_to_bool(record.is_from_api),
-          is_for_twitch: i8_to_bool(record.is_for_twitch),
-          is_debug_request: i8_to_bool(record.is_debug_request),
-          status: record.status,
-          priority_level: record.priority_level,
-          attempt_count: record.attempt_count,
-          failure_reason: record.failure_reason,
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-          retry_at: record.retry_at,
-        }
-      })
-      .collect::<Vec<AvailableTtsInferenceJob>>();
+  let job_records = job_records.into_iter().map(|record: AvailableTtsInferenceJobRawInternal| AvailableTtsInferenceJob { id: TtsInferenceJobId(record.id), inference_job_token: record.inference_job_token, uuid_idempotency_token: record.uuid_idempotency_token, model_token: record.model_token, raw_inference_text: record.raw_inference_text, max_duration_seconds: record.max_duration_seconds, creator_ip_address: record.creator_ip_address, maybe_creator_user_token: record.maybe_creator_user_token, creator_set_visibility: record.creator_set_visibility, is_from_api: i8_to_bool(record.is_from_api), is_for_twitch: i8_to_bool(record.is_for_twitch), is_debug_request: i8_to_bool(record.is_debug_request), status: record.status, priority_level: record.priority_level, attempt_count: record.attempt_count, failure_reason: record.failure_reason, created_at: record.created_at, updated_at: record.updated_at, retry_at: record.retry_at }).collect::<Vec<AvailableTtsInferenceJob>>();
 
   Ok(job_records)
 }
 
 /// Query jobs that are ready to run
 /// Only find jobs with minimum priority
-pub async fn list_available_tts_inference_jobs_with_minimum_priority(
-  pool: &MySqlPool,
-  minimum_priority: u8,
-  num_records: u32,
-  is_debug_worker: bool
-) -> AnyhowResult<Vec<AvailableTtsInferenceJob>> {
-
+pub async fn list_available_tts_inference_jobs_with_minimum_priority(pool: &MySqlPool, minimum_priority: u8, num_records: u32, is_debug_worker: bool) -> AnyhowResult<Vec<AvailableTtsInferenceJob>> {
   // NB: This query is awkwardly written twice because this is the only way the
   // macro can statically type check the query, result types, and parameter bindings.
   //
   // The only difference here is the 'ORDER BY' clause !
-  let job_records : Vec<AvailableTtsInferenceJobRawInternal> =
-    sqlx::query_as!(
-      AvailableTtsInferenceJobRawInternal,
-        r#"
+  let job_records: Vec<AvailableTtsInferenceJobRawInternal> = sqlx::query_as!(
+    AvailableTtsInferenceJobRawInternal,
+    r#"
 SELECT
   id,
   token AS inference_job_token,
@@ -249,36 +216,14 @@ WHERE
   ORDER BY priority_level DESC, id ASC
   LIMIT ?
         "#,
-      minimum_priority,
-      is_debug_worker,
-      num_records,
-    ).fetch_all(pool).await?;
+    minimum_priority,
+    is_debug_worker,
+    num_records,
+  )
+  .fetch_all(pool)
+  .await?;
 
-  let job_records = job_records.into_iter()
-      .map(|record : AvailableTtsInferenceJobRawInternal| {
-        AvailableTtsInferenceJob {
-          id: TtsInferenceJobId(record.id),
-          inference_job_token: record.inference_job_token,
-          uuid_idempotency_token: record.uuid_idempotency_token,
-          model_token: record.model_token,
-          raw_inference_text: record.raw_inference_text,
-          max_duration_seconds: record.max_duration_seconds,
-          creator_ip_address: record.creator_ip_address,
-          maybe_creator_user_token: record.maybe_creator_user_token,
-          creator_set_visibility: record.creator_set_visibility,
-          is_from_api: i8_to_bool(record.is_from_api),
-          is_for_twitch: i8_to_bool(record.is_for_twitch),
-          is_debug_request: i8_to_bool(record.is_debug_request),
-          status: record.status,
-          priority_level: record.priority_level,
-          attempt_count: record.attempt_count,
-          failure_reason: record.failure_reason,
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-          retry_at: record.retry_at,
-        }
-      })
-      .collect::<Vec<AvailableTtsInferenceJob>>();
+  let job_records = job_records.into_iter().map(|record: AvailableTtsInferenceJobRawInternal| AvailableTtsInferenceJob { id: TtsInferenceJobId(record.id), inference_job_token: record.inference_job_token, uuid_idempotency_token: record.uuid_idempotency_token, model_token: record.model_token, raw_inference_text: record.raw_inference_text, max_duration_seconds: record.max_duration_seconds, creator_ip_address: record.creator_ip_address, maybe_creator_user_token: record.maybe_creator_user_token, creator_set_visibility: record.creator_set_visibility, is_from_api: i8_to_bool(record.is_from_api), is_for_twitch: i8_to_bool(record.is_for_twitch), is_debug_request: i8_to_bool(record.is_debug_request), status: record.status, priority_level: record.priority_level, attempt_count: record.attempt_count, failure_reason: record.failure_reason, created_at: record.created_at, updated_at: record.updated_at, retry_at: record.retry_at }).collect::<Vec<AvailableTtsInferenceJob>>();
 
   Ok(job_records)
 }
@@ -311,4 +256,3 @@ struct AvailableTtsInferenceJobRawInternal {
   pub updated_at: chrono::DateTime<Utc>,
   pub retry_at: Option<chrono::DateTime<Utc>>,
 }
-

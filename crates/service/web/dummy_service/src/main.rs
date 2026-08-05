@@ -32,8 +32,7 @@ pub const DEFAULT_RUST_LOG: &str = concat!(
   "http_server_common::request::get_request_ip=info," // Debug spams Rust logs
 );
 
-pub const LOG_FORMAT : &str =
-  "[dummy-service] [%{HOSTNAME}e] %{X-Forwarded-For}i \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
+pub const LOG_FORMAT: &str = "[dummy-service] [%{HOSTNAME}e] %{X-Forwarded-For}i \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
 #[actix_web::main]
 async fn main() -> AnyhowResult<()> {
@@ -53,57 +52,33 @@ async fn main() -> AnyhowResult<()> {
   //  I'm too tired to figure out the generic types though.
   if env_args.enable_gzip {
     HttpServer::new(move || {
-      let app = App::new()
-          .app_data(Data::new(Arc::new(server_state.clone())))
-          .wrap(build_cors_config(old_server_environment))
-          .wrap(Logger::new(LOG_FORMAT))
-          .wrap(DefaultHeaders::new()
-              .add(("X-Backend-Hostname", server_hostname.as_str())))
-          .wrap(Compress::default());
+      let app = App::new().app_data(Data::new(Arc::new(server_state.clone()))).wrap(build_cors_config(old_server_environment)).wrap(Logger::new(LOG_FORMAT)).wrap(DefaultHeaders::new().add(("X-Backend-Hostname", server_hostname.as_str()))).wrap(Compress::default());
 
       build_routes(app)
     })
-        .bind(&env_args.bind_address)?
-        .workers(env_args.num_workers)
-        .run()
-        .await?;
+    .bind(&env_args.bind_address)?
+    .workers(env_args.num_workers)
+    .run()
+    .await?;
   } else {
     HttpServer::new(move || {
-      let app = App::new()
-          .app_data(Data::new(Arc::new(server_state.clone())))
-          .wrap(build_cors_config(old_server_environment))
-          .wrap(Logger::new(LOG_FORMAT))
-          .wrap(DefaultHeaders::new()
-              .add(("X-Backend-Hostname", server_hostname.as_str())));
+      let app = App::new().app_data(Data::new(Arc::new(server_state.clone()))).wrap(build_cors_config(old_server_environment)).wrap(Logger::new(LOG_FORMAT)).wrap(DefaultHeaders::new().add(("X-Backend-Hostname", server_hostname.as_str())));
 
       build_routes(app)
     })
-        .bind(&env_args.bind_address)?
-        .workers(env_args.num_workers)
-        .run()
-        .await?;
+    .bind(&env_args.bind_address)?
+    .workers(env_args.num_workers)
+    .run()
+    .await?;
   }
 
   Ok(())
 }
 
-fn build_routes<T, B> (app: App<T>) -> App<T>
-  where
-      B: MessageBody,
-      T: ServiceFactory<
-        ServiceRequest,
-        Config = (),
-        Response = ServiceResponse<B>,
-        Error = Error,
-        InitError = (),
-      >,
+fn build_routes<T, B>(app: App<T>) -> App<T>
+where
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
-  RouteBuilder::from_app(app)
-      .add_get("/", root_handler)
-      .add_get("/_status", dummy_health_check_handler)
-      .add_get("/v1/app_state", dummy_app_state_handler)
-      .add_get("/v1/stats/queues", dummy_queue_stats_handler)
-      .add_get("/v1/status_alert_check", status_alert_handler)
-      .into_app()
-      .default_service(web::route().to(simple_pushback_handler))
+  RouteBuilder::from_app(app).add_get("/", root_handler).add_get("/_status", dummy_health_check_handler).add_get("/v1/app_state", dummy_app_state_handler).add_get("/v1/stats/queues", dummy_queue_stats_handler).add_get("/v1/status_alert_check", status_alert_handler).into_app().default_service(web::route().to(simple_pushback_handler))
 }

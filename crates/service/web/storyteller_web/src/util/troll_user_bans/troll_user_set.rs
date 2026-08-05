@@ -8,17 +8,12 @@ pub struct TrollUserSet {
 }
 
 impl TrollUserSet {
-
   pub fn new() -> Self {
-    Self {
-      user_token_set: HashSet::new(),
-    }
+    Self { user_token_set: HashSet::new() }
   }
 
   pub fn from_set(user_token_set: HashSet<String>) -> Self {
-    Self {
-      user_token_set,
-    }
+    Self { user_token_set }
   }
 
   pub fn replace_set(&mut self, user_token_set: HashSet<String>) {

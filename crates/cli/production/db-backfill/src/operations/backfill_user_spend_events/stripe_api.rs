@@ -117,23 +117,14 @@ pub struct Customer {
 
 impl StripeApi {
   pub fn new(secret_key: String) -> AnyhowResult<Self> {
-    let http = Client::builder()
-      .connect_timeout(Duration::from_secs(15))
-      .timeout(Duration::from_secs(30))
-      .build()
-      .map_err(|err| anyhow!("building reqwest client: {err}"))?;
+    let http = Client::builder().connect_timeout(Duration::from_secs(15)).timeout(Duration::from_secs(30)).build().map_err(|err| anyhow!("building reqwest client: {err}"))?;
     Ok(Self { http, secret_key })
   }
 
   /// One page of PaymentIntents created at/after `created_gte` (unix seconds).
-  pub async fn list_payment_intents(
-    &self,
-    created_gte: i64,
-    starting_after: Option<&str>,
-  ) -> AnyhowResult<StripeList<PaymentIntent>> {
+  pub async fn list_payment_intents(&self, created_gte: i64, starting_after: Option<&str>) -> AnyhowResult<StripeList<PaymentIntent>> {
     let created_gte = created_gte.to_string();
-    let mut query: Vec<(&str, &str)> =
-      vec![("created[gte]", &created_gte), ("limit", PAGE_LIMIT)];
+    let mut query: Vec<(&str, &str)> = vec![("created[gte]", &created_gte), ("limit", PAGE_LIMIT)];
     if let Some(after) = starting_after {
       query.push(("starting_after", after));
     }
@@ -141,14 +132,9 @@ impl StripeApi {
   }
 
   /// One page of PAID invoices created at/after `created_gte` (unix seconds).
-  pub async fn list_paid_invoices(
-    &self,
-    created_gte: i64,
-    starting_after: Option<&str>,
-  ) -> AnyhowResult<StripeList<Invoice>> {
+  pub async fn list_paid_invoices(&self, created_gte: i64, starting_after: Option<&str>) -> AnyhowResult<StripeList<Invoice>> {
     let created_gte = created_gte.to_string();
-    let mut query: Vec<(&str, &str)> =
-      vec![("created[gte]", &created_gte), ("status", "paid"), ("limit", PAGE_LIMIT)];
+    let mut query: Vec<(&str, &str)> = vec![("created[gte]", &created_gte), ("status", "paid"), ("limit", PAGE_LIMIT)];
     if let Some(after) = starting_after {
       query.push(("starting_after", after));
     }
@@ -157,13 +143,7 @@ impl StripeApi {
 
   pub async fn retrieve_customer(&self, customer_id: &str) -> AnyhowResult<Customer> {
     let url = format!("{STRIPE_API_BASE}/customers/{customer_id}");
-    let response = self
-      .http
-      .get(&url)
-      .bearer_auth(&self.secret_key)
-      .send()
-      .await
-      .map_err(|err| anyhow!("Stripe GET {url}: {err}"))?;
+    let response = self.http.get(&url).bearer_auth(&self.secret_key).send().await.map_err(|err| anyhow!("Stripe GET {url}: {err}"))?;
     let status = response.status();
     let body = response.text().await.map_err(|err| anyhow!("Stripe read body {url}: {err}"))?;
     if !status.is_success() {
@@ -172,20 +152,9 @@ impl StripeApi {
     serde_json::from_str::<Customer>(&body).map_err(|err| anyhow!("parsing customer {customer_id}: {err}"))
   }
 
-  async fn get_list<T: DeserializeOwned>(
-    &self,
-    path: &str,
-    query: &[(&str, &str)],
-  ) -> AnyhowResult<StripeList<T>> {
+  async fn get_list<T: DeserializeOwned>(&self, path: &str, query: &[(&str, &str)]) -> AnyhowResult<StripeList<T>> {
     let url = format!("{STRIPE_API_BASE}{path}");
-    let response = self
-      .http
-      .get(&url)
-      .query(query)
-      .bearer_auth(&self.secret_key)
-      .send()
-      .await
-      .map_err(|err| anyhow!("Stripe GET {url}: {err}"))?;
+    let response = self.http.get(&url).query(query).bearer_auth(&self.secret_key).send().await.map_err(|err| anyhow!("Stripe GET {url}: {err}"))?;
     let status = response.status();
     let body = response.text().await.map_err(|err| anyhow!("Stripe read body {url}: {err}"))?;
     if !status.is_success() {

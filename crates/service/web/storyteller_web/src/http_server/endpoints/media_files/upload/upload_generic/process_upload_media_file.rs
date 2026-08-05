@@ -28,15 +28,11 @@ use crate::state::server_state::ServerState;
 // TODO(bt,2023-12-20): THIS CODE NEEDS CLEANUP. This has been cargo culted three+ times.
 //  It's ridiculous and complicated.
 
-const GZIP_MIME_TYPE : &str = "application/gzip";
+const GZIP_MIME_TYPE: &str = "application/gzip";
 
 pub enum SuccessCase {
-  MediaAlreadyUploaded {
-    existing_media_file_token: MediaFileToken,
-  },
-  MediaSuccessfullyUploaded {
-    media_file_token: MediaFileToken,
-  }
+  MediaAlreadyUploaded { existing_media_file_token: MediaFileToken },
+  MediaSuccessfullyUploaded { media_file_token: MediaFileToken },
 }
 
 impl SuccessCase {
@@ -48,35 +44,20 @@ impl SuccessCase {
   }
 }
 
-pub async fn process_upload_media_file(
-  http_request: &HttpRequest,
-  server_state: &web::Data<Arc<ServerState>>,
-  mut multipart_payload: Multipart,
-  allowed_mimetypes: &HashSet<&'static str>,
-) -> Result<SuccessCase, MediaFileUploadError> {
-
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+pub async fn process_upload_media_file(http_request: &HttpRequest, server_state: &web::Data<Arc<ServerState>>, mut multipart_payload: Multipart, allowed_mimetypes: &HashSet<&'static str>) -> Result<SuccessCase, MediaFileUploadError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   // ==================== READ SESSION ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   // ==================== BANNED USERS ==================== //
 
@@ -99,15 +80,12 @@ pub async fn process_upload_media_file(
 
   // ==================== READ MULTIPART REQUEST ==================== //
 
-  let upload_media_request = drain_multipart_request(multipart_payload)
-      .await
-      .map_err(|e| {
-        // TODO: Error handling could be nicer.
-        MediaFileUploadError::BadInput("bad request".to_string())
-      })?;
+  let upload_media_request = drain_multipart_request(multipart_payload).await.map_err(|e| {
+    // TODO: Error handling could be nicer.
+    MediaFileUploadError::BadInput("bad request".to_string())
+  })?;
 
-  let uuid_idempotency_token = upload_media_request.uuid_idempotency_token
-      .ok_or(MediaFileUploadError::BadInput("no uuid".to_string()))?;
+  let uuid_idempotency_token = upload_media_request.uuid_idempotency_token.ok_or(MediaFileUploadError::BadInput("no uuid".to_string()))?;
 
   // ==================== HANDLE IDEMPOTENCY ==================== //
 
@@ -115,57 +93,44 @@ pub async fn process_upload_media_file(
     return Err(MediaFileUploadError::BadInput(reason));
   }
 
-  insert_idempotency_token(&uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        MediaFileUploadError::BadInput("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(&uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    MediaFileUploadError::BadInput("invalid idempotency token".to_string())
+  })?;
 
   // ==================== PROCESS REQUEST ==================== //
 
-  let creator_set_visibility = upload_media_request.visibility
-      .as_deref()
-      .map(|visibility| Visibility::from_str(visibility))
-      .transpose()
-      .map_err(|err| {
-        error!("Invalid visibility: {:?}", err);
-        MediaFileUploadError::BadInput("invalid visibility".to_string())
-      })?
-      .or_else(|| {
-        maybe_user_session
-            .as_ref()
-            .map(|user_session| user_session.preferred_tts_result_visibility)
-      })
-      .unwrap_or(Visibility::default());
+  let creator_set_visibility = upload_media_request
+    .visibility
+    .as_deref()
+    .map(|visibility| Visibility::from_str(visibility))
+    .transpose()
+    .map_err(|err| {
+      error!("Invalid visibility: {:?}", err);
+      MediaFileUploadError::BadInput("invalid visibility".to_string())
+    })?
+    .or_else(|| maybe_user_session.as_ref().map(|user_session| user_session.preferred_tts_result_visibility))
+    .unwrap_or(Visibility::default());
 
   let ip_address = get_request_ip(&http_request);
 
-  let maybe_user_token = maybe_user_session
-      .as_ref()
-      .map(|session| session.get_user_token());
+  let maybe_user_token = maybe_user_session.as_ref().map(|session| session.get_user_token());
 
-  let maybe_file_size_bytes = upload_media_request.file_bytes
-      .as_ref()
-      .map(|bytes| bytes.len());
+  let maybe_file_size_bytes = upload_media_request.file_bytes.as_ref().map(|bytes| bytes.len());
 
   info!("Upload maybe filesize: {:?}", maybe_file_size_bytes);
 
-  let mut maybe_mimetype = upload_media_request.file_bytes
-      .as_ref()
-      .map(|bytes| get_mimetype_for_bytes(bytes.as_ref()))
-      .flatten();
+  let mut maybe_mimetype = upload_media_request.file_bytes.as_ref().map(|bytes| get_mimetype_for_bytes(bytes.as_ref())).flatten();
 
   let bytes = match upload_media_request.file_bytes {
     None => return Err(MediaFileUploadError::BadInput("missing file contents".to_string())),
     Some(bytes) => bytes,
   };
 
-  let hash = sha256_hash_bytes(&bytes)
-      .map_err(|io_error| {
-        error!("Problem hashing bytes: {:?}", io_error);
-        MediaFileUploadError::ServerError
-      })?;
+  let hash = sha256_hash_bytes(&bytes).map_err(|io_error| {
+    error!("Problem hashing bytes: {:?}", io_error);
+    MediaFileUploadError::ServerError
+  })?;
 
   let file_size_bytes = bytes.len();
 
@@ -175,12 +140,8 @@ pub async fn process_upload_media_file(
   let mut is_spz = false;
 
   if let Some(mimetype) = maybe_mimetype.as_deref() {
-
     // `.spz` files are Gaussian splats
-    let is_spz_extension = upload_media_request.file_name
-        .as_deref()
-        .map(|filename| filename.trim().to_ascii_lowercase().ends_with(".spz"))
-        .unwrap_or(false);
+    let is_spz_extension = upload_media_request.file_name.as_deref().map(|filename| filename.trim().to_ascii_lowercase().ends_with(".spz")).unwrap_or(false);
 
     is_spz = mimetype == GZIP_MIME_TYPE && is_spz_extension;
 
@@ -188,11 +149,7 @@ pub async fn process_upload_media_file(
 
     if !allowed_mimetypes.contains(mimetype) && !is_allowed_mimetype_bypass {
       // NB: Don't let our error message inject malicious strings
-      let filtered_mimetype = mimetype
-          .chars()
-          .filter(|c| c.is_ascii())
-          .filter(|c| c.is_alphanumeric() || *c == '/')
-          .collect::<String>();
+      let filtered_mimetype = mimetype.chars().filter(|c| c.is_ascii()).filter(|c| c.is_alphanumeric() || *c == '/').collect::<String>();
       return Err(MediaFileUploadError::BadInput(format!("unpermitted mime type: {}", &filtered_mimetype)));
     }
 
@@ -206,8 +163,7 @@ pub async fn process_upload_media_file(
     // NB: mimetypes are gated by the `allowed_mimetypes` check above; this only
     // maps the already-permitted set to concrete media types.
     let maybe_upload_filename = upload_media_request.file_name.as_deref();
-    media_file_type = MediaFileType::try_from_mime_type(mimetype)
-        .or_else(|| maybe_upload_filename.and_then(MediaFileType::try_from_filename_or_extension));
+    media_file_type = MediaFileType::try_from_mime_type(mimetype).or_else(|| maybe_upload_filename.and_then(MediaFileType::try_from_filename_or_extension));
 
     let do_audio_decode = match mimetype {
       // TODO: Revisit when Safari can send us this metadata consistently
@@ -236,7 +192,7 @@ pub async fn process_upload_media_file(
         //     left: `Unknown`,
         //    right: `Ebml`: EBML element type must be checked before calling this function', /Users/bt/.cargo/git/checkouts/symphonia-8fbe6c90fc095688/e1a7009/symphonia-format-mkv/src/ebml.rs:335:9
         false
-      }
+      },
       // Also, don't decode images
       "image/jpeg" => false,
       "image/png" => false,
@@ -247,11 +203,7 @@ pub async fn process_upload_media_file(
     };
 
     if do_audio_decode && media_file_type.is_some() {
-      let basic_info = decode_basic_audio_bytes_info(
-        bytes.as_ref(),
-        Some(mimetype),
-        None
-      ).map_err(|e| {
+      let basic_info = decode_basic_audio_bytes_info(bytes.as_ref(), Some(mimetype), None).map_err(|e| {
         warn!("file decoding error: {:?}", e);
         MediaFileUploadError::BadInput("could not decode file".to_string())
       })?;
@@ -266,14 +218,14 @@ pub async fn process_upload_media_file(
 
   if media_file_type.is_none() && maybe_mimetype.is_none() {
     // https://research.cs.wisc.edu/graphics/Courses/cs-838-1999/Jeff/BVH.html
-    const BVH_HEADER : &[u8] = "HIERARCHY".as_bytes();
+    const BVH_HEADER: &[u8] = "HIERARCHY".as_bytes();
 
     // https://code.blender.org/2013/08/fbx-binary-file-format-specification/
-    const FBX_HEADER : &[u8] = "Kaydara FBX Binary".as_bytes();
+    const FBX_HEADER: &[u8] = "Kaydara FBX Binary".as_bytes();
 
     // https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_002_BasicGltfStructure.md
     // TODO(bt,2024-01-28): Fix this ASAP
-    const GLTF_CONTENTS_1 : &[u8] = "{".as_bytes();
+    const GLTF_CONTENTS_1: &[u8] = "{".as_bytes();
 
     if bytes.starts_with(BVH_HEADER) {
       media_file_type = Some(MediaFileType::Bvh);
@@ -292,7 +244,7 @@ pub async fn process_upload_media_file(
     Some(m) => m,
     None => {
       warn!("Invalid mimetype: {:?}", maybe_mimetype);
-      return Err(MediaFileUploadError::BadInput(format!("unknown mimetype: {:?}", maybe_mimetype)))
+      return Err(MediaFileUploadError::BadInput(format!("unknown mimetype: {:?}", maybe_mimetype)));
     },
   };
 
@@ -313,8 +265,7 @@ pub async fn process_upload_media_file(
     },
   };
 
-  let mut extension = mimetype_to_extension(mime_type)
-      .map(|extension| format!(".{extension}"));
+  let mut extension = mimetype_to_extension(mime_type).map(|extension| format!(".{extension}"));
 
   if extension.is_none() {
     extension = match media_file_type {
@@ -327,56 +278,27 @@ pub async fn process_upload_media_file(
   }
 
   // For WorldLabs spz files.
-  let is_world_labs_spz= upload_media_request.file_name
-      .as_deref()
-      .map(|filename| filename.trim().to_ascii_lowercase())
-      .filter(|filename| filename.contains("ceramic"))
-      .filter(|filename| filename.ends_with(".spz"))
-      .is_some();
+  let is_world_labs_spz = upload_media_request.file_name.as_deref().map(|filename| filename.trim().to_ascii_lowercase()).filter(|filename| filename.contains("ceramic")).filter(|filename| filename.ends_with(".spz")).is_some();
 
   if is_world_labs_spz {
     extension = Some(".ceramic.spz".to_string());
   }
 
-  const PREFIX : Option<&str> = Some("upload_");
+  const PREFIX: Option<&str> = Some("upload_");
 
   let public_upload_path = MediaFileBucketPath::generate_new(PREFIX, extension.as_deref());
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    bytes.as_ref(),
-    mime_type)
-      .await
-      .map_err(|e| {
-        warn!("Upload media bytes to bucket error: {:?}", e);
-        MediaFileUploadError::ServerError
-      })?;
+  server_state.public_bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), bytes.as_ref(), mime_type).await.map_err(|e| {
+    warn!("Upload media bytes to bucket error: {:?}", e);
+    MediaFileUploadError::ServerError
+  })?;
 
-  let media_token = MediaFileInsertBuilder::new()
-      .maybe_creator_user(maybe_user_token)
-      .maybe_creator_anonymous_visitor(maybe_avt_token.as_ref())
-      .creator_ip_address(&ip_address)
-      .public_bucket_directory_hash(&public_upload_path)
-      .media_file_class(media_file_class)
-      .media_file_type(media_file_type)
-      .media_file_origin_category(MediaFileOriginCategory::Upload)
-      .creator_set_visibility(creator_set_visibility)
-      .mime_type(mime_type)
-      .file_size_bytes(file_size_bytes as u64)
-      .maybe_duration_millis(maybe_duration_millis)
-      .checksum_sha2(&hash)
-      .maybe_title(upload_media_request.title.as_deref())
-      .maybe_origin_filename(upload_media_request.file_name.as_deref())
-      .maybe_generation_provider(upload_media_request.maybe_generation_provider)
-      .is_intermediate_system_file(false)
-      .insert_pool(&server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        warn!("New generic download creation DB error: {:?}", err);
-        MediaFileUploadError::ServerError
-      })?;
+  let media_token = MediaFileInsertBuilder::new().maybe_creator_user(maybe_user_token).maybe_creator_anonymous_visitor(maybe_avt_token.as_ref()).creator_ip_address(&ip_address).public_bucket_directory_hash(&public_upload_path).media_file_class(media_file_class).media_file_type(media_file_type).media_file_origin_category(MediaFileOriginCategory::Upload).creator_set_visibility(creator_set_visibility).mime_type(mime_type).file_size_bytes(file_size_bytes as u64).maybe_duration_millis(maybe_duration_millis).checksum_sha2(&hash).maybe_title(upload_media_request.title.as_deref()).maybe_origin_filename(upload_media_request.file_name.as_deref()).maybe_generation_provider(upload_media_request.maybe_generation_provider).is_intermediate_system_file(false).insert_pool(&server_state.mysql_pool).await.map_err(|err| {
+    warn!("New generic download creation DB error: {:?}", err);
+    MediaFileUploadError::ServerError
+  })?;
 
   //let (token, record_id) = insert_media_file_from_file_upload(InsertMediaFileFromUploadArgs {
   //  maybe_media_class: Some(media_file_class), // DONE
@@ -410,7 +332,5 @@ pub async fn process_upload_media_file(
 
   info!("new media file - token: {:?}", &media_token);
 
-  Ok(SuccessCase::MediaSuccessfullyUploaded {
-    media_file_token: media_token,
-  })
+  Ok(SuccessCase::MediaSuccessfullyUploaded { media_file_token: media_token })
 }

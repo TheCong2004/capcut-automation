@@ -35,19 +35,12 @@ pub struct AvailableDownloadJob {
   pub retry_at: Option<chrono::DateTime<Utc>>,
 }
 
-pub async fn list_available_generic_download_jobs(
-  pool: &MySqlPool,
-  num_records: u32,
-  maybe_scoped_download_types: Option<&BTreeSet<GenericDownloadType>>
-)
-  -> AnyhowResult<Vec<AvailableDownloadJob>>
-{
-  let download_types = maybe_scoped_download_types
-      .map(|types| types.clone())
-      .unwrap_or(GenericDownloadType::all_variants()); // NB: All model types
+pub async fn list_available_generic_download_jobs(pool: &MySqlPool, num_records: u32, maybe_scoped_download_types: Option<&BTreeSet<GenericDownloadType>>) -> AnyhowResult<Vec<AvailableDownloadJob>> {
+  let download_types = maybe_scoped_download_types.map(|types| types.clone()).unwrap_or(GenericDownloadType::all_variants()); // NB: All model types
 
   // NB/TODO(bt,2023-07-20): Non-statically typed SQL can't do type annotations AFAIK
-  let mut query = String::from(r#"
+  let mut query = String::from(
+    r#"
 SELECT
   id,
   token,
@@ -78,7 +71,8 @@ WHERE
     OR
     retry_at < CURRENT_TIMESTAMP
   )
-  "#);
+  "#,
+  );
 
   if let Some(clause) = download_type_clause(&download_types) {
     query.push_str(" AND ");
@@ -86,41 +80,40 @@ WHERE
     query.push_str(" ");
   }
 
-  query.push_str(&format!(r#"
+  query.push_str(&format!(
+    r#"
     ORDER BY id ASC
     LIMIT {}
-  "#, num_records));
+  "#,
+    num_records
+  ));
 
-  let job_records = sqlx::query_as::<_, AvailableDownloadJobRawInternal>(&query)
-      .fetch_all(pool)
-      .await?;
+  let job_records = sqlx::query_as::<_, AvailableDownloadJobRawInternal>(&query).fetch_all(pool).await?;
 
-  let job_records = job_records.into_iter()
-      .map(|record : AvailableDownloadJobRawInternal| {
-        AvailableDownloadJob {
-          id: GenericDownloadJobId(record.id),
-          download_job_token: DownloadJobToken::new(record.token),
-          creator_ip_address: record.creator_ip_address,
-          creator_user_token: UserToken::new_from_str(&record.creator_user_token),
-          // NB: Failure case for parsing visibility - default to private
-          creator_set_visibility: Visibility::from_str(&record.creator_set_visibility)
-              .unwrap_or(Visibility::Private),
-          // NB: Failure case for parsing download type - unhandled model type
-          download_type: GenericDownloadType::from_str(&record.download_type)
-              .unwrap_or(GenericDownloadType::RocketVc),
-          download_url: record.download_url,
-          title: record.title,
-          // NB: Failure case for parsing download type - dead job
-          status: JobStatus::from_str(&record.status)
-              .unwrap_or(JobStatus::Dead),
-          attempt_count: record.attempt_count,
-          failure_reason: record.failure_reason,
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-          retry_at: record.retry_at,
-        }
-      })
-      .collect::<Vec<AvailableDownloadJob>>();
+  let job_records = job_records
+    .into_iter()
+    .map(|record: AvailableDownloadJobRawInternal| {
+      AvailableDownloadJob {
+        id: GenericDownloadJobId(record.id),
+        download_job_token: DownloadJobToken::new(record.token),
+        creator_ip_address: record.creator_ip_address,
+        creator_user_token: UserToken::new_from_str(&record.creator_user_token),
+        // NB: Failure case for parsing visibility - default to private
+        creator_set_visibility: Visibility::from_str(&record.creator_set_visibility).unwrap_or(Visibility::Private),
+        // NB: Failure case for parsing download type - unhandled model type
+        download_type: GenericDownloadType::from_str(&record.download_type).unwrap_or(GenericDownloadType::RocketVc),
+        download_url: record.download_url,
+        title: record.title,
+        // NB: Failure case for parsing download type - dead job
+        status: JobStatus::from_str(&record.status).unwrap_or(JobStatus::Dead),
+        attempt_count: record.attempt_count,
+        failure_reason: record.failure_reason,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        retry_at: record.retry_at,
+      }
+    })
+    .collect::<Vec<AvailableDownloadJob>>();
 
   Ok(job_records)
 }
@@ -130,11 +123,7 @@ fn download_type_clause(download_types: &BTreeSet<GenericDownloadType>) -> Optio
     return None;
   }
 
-  let download_types = download_types.into_iter()
-      .map(|download_type| download_type.to_str())
-      .map(|download_type| format!("\"{}\"", download_type))
-      .collect::<Vec<_>>()
-      .join(", ");
+  let download_types = download_types.into_iter().map(|download_type| download_type.to_str()).map(|download_type| format!("\"{}\"", download_type)).collect::<Vec<_>>().join(", ");
 
   Some(format!("download_type IN ( {} )", download_types))
 }
@@ -160,7 +149,6 @@ struct AvailableDownloadJobRawInternal {
   pub updated_at: chrono::DateTime<Utc>,
   pub retry_at: Option<chrono::DateTime<Utc>>,
 }
-
 
 #[cfg(test)]
 mod tests {

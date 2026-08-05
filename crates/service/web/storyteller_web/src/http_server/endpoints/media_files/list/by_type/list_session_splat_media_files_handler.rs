@@ -23,22 +23,8 @@ use crate::state::server_state::ServerState;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn list_session_splat_media_files_handler(
-  http_request: HttpRequest,
-  query: Query<ListSessionMediaFilesByTypeQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListSessionSplatMediaFilesSuccessResponse>, CommonWebError> {
+pub async fn list_session_splat_media_files_handler(http_request: HttpRequest, query: Query<ListSessionMediaFilesByTypeQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListSessionSplatMediaFilesSuccessResponse>, CommonWebError> {
+  let (results, pagination) = list_session_media_files_of_class(&http_request, &query, &server_state, MediaFileClass::Splat).await?;
 
-  let (results, pagination) = list_session_media_files_of_class(
-    &http_request,
-    &query,
-    &server_state,
-    MediaFileClass::Splat,
-  ).await?;
-
-  Ok(Json(ListSessionSplatMediaFilesSuccessResponse {
-    success: true,
-    results,
-    pagination,
-  }))
+  Ok(Json(ListSessionSplatMediaFilesSuccessResponse { success: true, results, pagination }))
 }

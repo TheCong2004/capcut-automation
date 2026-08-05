@@ -17,38 +17,31 @@ pub fn extract_lipsync_details(args: &PolymorphicInferenceArgs) -> Option<JobDet
 }
 
 fn extract_face_fusion(args: &FaceFusionPayload) -> Option<JobDetailsLipsyncRequest> {
-  args.audio_media_file_token
-      .as_ref()
-      .zip(args.image_or_video_media_file_token.as_ref())
-      .map(|(audio, image_or_video)| {
-        JobDetailsLipsyncRequest {
-          audio_source_token: audio.clone(),
-          image_or_video_source_token: image_or_video.clone(),
-        }
-      })
+  args.audio_media_file_token.as_ref().zip(args.image_or_video_media_file_token.as_ref()).map(|(audio, image_or_video)| JobDetailsLipsyncRequest { audio_source_token: audio.clone(), image_or_video_source_token: image_or_video.clone() })
 }
 
 fn extract_sad_talker(args: &LipsyncArgs) -> Option<JobDetailsLipsyncRequest> {
-  args.maybe_audio_source
-      .as_ref()
-      .map(|polymorphic| match polymorphic {
-        // NB: We have enums over *old* record types: TTS results, Media Uploads, etc.
-        LipsyncAnimationAudioSource::F(token) => Some(MediaFileToken::new_from_str(token)),
-        _ => None,
-      })
-      .flatten()
-      .zip(args.maybe_image_source.as_ref()
-          .map(|polymorphic| match polymorphic {
-            // NB: We have enums over *old* record types: TTS results, Media Uploads, etc.
-            LipsyncAnimationImageSource::F(token) => Some(MediaFileToken::new_from_str(token)),
-            _ => None,
-          }).flatten())
-      .map(|(audio, image_or_video)| {
-        JobDetailsLipsyncRequest {
-          audio_source_token: audio,
-          image_or_video_source_token: image_or_video,
-        }
-      })
+  args
+    .maybe_audio_source
+    .as_ref()
+    .map(|polymorphic| match polymorphic {
+      // NB: We have enums over *old* record types: TTS results, Media Uploads, etc.
+      LipsyncAnimationAudioSource::F(token) => Some(MediaFileToken::new_from_str(token)),
+      _ => None,
+    })
+    .flatten()
+    .zip(
+      args
+        .maybe_image_source
+        .as_ref()
+        .map(|polymorphic| match polymorphic {
+          // NB: We have enums over *old* record types: TTS results, Media Uploads, etc.
+          LipsyncAnimationImageSource::F(token) => Some(MediaFileToken::new_from_str(token)),
+          _ => None,
+        })
+        .flatten(),
+    )
+    .map(|(audio, image_or_video)| JobDetailsLipsyncRequest { audio_source_token: audio, image_or_video_source_token: image_or_video })
 }
 
 #[cfg(test)]
@@ -61,16 +54,9 @@ mod tests {
 
   #[test]
   fn test_valid_args_with_tokens() {
-    let polymorphic_args = PolymorphicInferenceArgs::Ff(FaceFusionPayload{
-      audio_media_file_token: Some(MediaFileToken::new_from_str("audio")),
-      image_or_video_media_file_token: Some(MediaFileToken::new_from_str("image")),
-      crop: None,
-      watermark_type: None,
-      sleep_millis: None,
-    });
+    let polymorphic_args = PolymorphicInferenceArgs::Ff(FaceFusionPayload { audio_media_file_token: Some(MediaFileToken::new_from_str("audio")), image_or_video_media_file_token: Some(MediaFileToken::new_from_str("image")), crop: None, watermark_type: None, sleep_millis: None });
 
-    let details = extract_lipsync_details(&polymorphic_args)
-        .expect("should contain tokens");
+    let details = extract_lipsync_details(&polymorphic_args).expect("should contain tokens");
 
     assert_eq!(details.audio_source_token.as_str(), "audio");
     assert_eq!(details.image_or_video_source_token.as_str(), "image");

@@ -23,9 +23,7 @@ where
 /// `tag_value_lowercase`, the unique key rejects the rename — callers
 /// should map that duplicate-key `sqlx::Error` to a 400. Returns the
 /// number of rows updated (0 = not found / not owned / already deleted).
-pub async fn rename_tag<'e, 'c: 'e, E>(
-  args: RenameTagArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn rename_tag<'e, 'c: 'e, E>(args: RenameTagArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -43,8 +41,8 @@ WHERE token = ?
     args.tag_token.as_str(),
     args.creator_user_token.as_str(),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(result.rows_affected())
 }

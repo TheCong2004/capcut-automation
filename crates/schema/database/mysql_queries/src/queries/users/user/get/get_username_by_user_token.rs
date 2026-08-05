@@ -11,10 +11,7 @@ pub struct UsernameDetails {
   pub username_is_not_customized: bool,
 }
 
-pub async fn get_username_by_user_token(
-  user_token: &UserToken,
-  pool: &MySqlPool,
-) -> Result<Option<UsernameDetails>, SelectOptionalRecordError> {
+pub async fn get_username_by_user_token(user_token: &UserToken, pool: &MySqlPool) -> Result<Option<UsernameDetails>, SelectOptionalRecordError> {
   let result = sqlx::query_as!(
     UsernameDetails,
     r#"
@@ -32,14 +29,14 @@ LIMIT 1
     "#,
     user_token.as_str(),
   )
-    .fetch_optional(pool)
-    .await;
+  .fetch_optional(pool)
+  .await;
 
   match result {
     Ok(maybe_record) => Ok(maybe_record),
     Err(err) => {
       warn!("get_username_by_user_token query error: {:?}", err);
       Err(err.into())
-    }
+    },
   }
 }

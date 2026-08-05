@@ -24,11 +24,6 @@ use crate::state::server_state::ServerState;
     ("request" = SearchModelWeightsRequest, description = "Payload for Request"),
   )
 )]
-pub async fn search_model_weights_http_get_handler(
-  http_request: HttpRequest,
-  request: Query<SearchModelWeightsRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SearchModelWeightsSuccessResponse>, SearchModelWeightsError>
-{
+pub async fn search_model_weights_http_get_handler(http_request: HttpRequest, request: Query<SearchModelWeightsRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SearchModelWeightsSuccessResponse>, SearchModelWeightsError> {
   search_model_weights_impl(http_request, request.0, server_state).await
 }

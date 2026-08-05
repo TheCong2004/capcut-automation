@@ -17,7 +17,6 @@ pub struct InferenceStageDetails {
   pub frames: Vec<Url>,
 }
 
-
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct InferenceProgressDetailsResponse {
   pub expected_stages: u32,
@@ -32,29 +31,17 @@ pub struct InferenceProgressDetailsPayload {
 }
 
 impl InferenceProgressDetailsPayload {
-
   pub fn for_job_id(token: InferenceJobToken) -> Self {
     let key = StyleTransferProgressKey::new_for_job_id(token);
 
-    Self {
-      key,
-      maybe_payload: None,
-    }
+    Self { key, maybe_payload: None }
   }
-
 }
 
 impl InferenceStageDetails {
   pub fn new(stage_progress: u32, expected_frame_count: u32, stage_complete: bool, frames: Vec<Url>) -> Self {
-    Self {
-      stage_progress,
-      expected_frame_count,
-      stage_complete,
-      frames,
-    }
+    Self { stage_progress, expected_frame_count, stage_complete, frames }
   }
-
-
 
   fn to_redis_hkey_map(&self) -> HashMap<String, String> {
     let mut map = HashMap::new();
@@ -71,12 +58,7 @@ impl InferenceStageDetails {
     let expected_frame_count = map.get("expected_frame_count").ok_or_else(|| anyhow!("No expected_frame_count"))?.parse()?;
     let stage_complete = map.get("stage_complete").ok_or_else(|| anyhow!("No stage_complete"))?.parse()?;
     let frames = map.get("frames").ok_or_else(|| anyhow!("No frames"))?.split(",").map(|url| Url::parse(url).unwrap()).collect::<Vec<Url>>();
-    Ok(Self {
-      stage_progress,
-      expected_frame_count,
-      stage_complete,
-      frames,
-    })
+    Ok(Self { stage_progress, expected_frame_count, stage_complete, frames })
   }
 
   fn serialize_payload(&self) -> AnyhowResult<Vec<(String, String)>> {
@@ -89,5 +71,3 @@ impl InferenceStageDetails {
     Self::from_redis_hkey_map(map)
   }
 }
-
-

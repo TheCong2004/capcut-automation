@@ -29,28 +29,18 @@ pub struct DismissFinishedSessionJobsSuccessResponse {
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn dismiss_finished_session_jobs_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<DismissFinishedSessionJobsSuccessResponse>, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        error!("Could not acquire DB pool: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn dismiss_finished_session_jobs_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<DismissFinishedSessionJobsSuccessResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    error!("Could not acquire DB pool: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let user_session = require_user_session(&http_request, &server_state.session_checker, &mut *mysql_connection)
-      .await?;
+  let user_session = require_user_session(&http_request, &server_state.session_checker, &mut *mysql_connection).await?;
 
-  dismiss_finished_jobs_for_user(&mut mysql_connection, &user_session.user_token)
-      .await
-      .map_err(|err| {
-        error!("tts job query error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  dismiss_finished_jobs_for_user(&mut mysql_connection, &user_session.user_token).await.map_err(|err| {
+    error!("tts job query error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  Ok(Json(DismissFinishedSessionJobsSuccessResponse {
-    success: true,
-  }))
+  Ok(Json(DismissFinishedSessionJobsSuccessResponse { success: true }))
 }

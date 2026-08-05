@@ -3,9 +3,7 @@ use gmicloud_client::requests::api::video::seedance_2_0_260128::api::Seedance20R
 use crate::client::router_gmicloud_client::RouterGmiCloudClient;
 use crate::errors::artcraft_router_error::ArtcraftRouterError;
 use crate::errors::provider_error::ProviderError;
-use crate::generate::generate_video::generate_video_response::{
-  GenerateVideoResponse, GmiCloudVideoResponsePayload,
-};
+use crate::generate::generate_video::generate_video_response::{GenerateVideoResponse, GmiCloudVideoResponsePayload};
 
 #[derive(Clone, Debug)]
 pub struct GmiCloudSeedance2p0UltraRequestState {
@@ -14,13 +12,9 @@ pub struct GmiCloudSeedance2p0UltraRequestState {
 
 impl GmiCloudSeedance2p0UltraRequestState {
   pub async fn send(&self, client: &RouterGmiCloudClient) -> Result<GenerateVideoResponse, ArtcraftRouterError> {
-    let response = self.request.send_request(&client.api_key)
-      .await
-      .map_err(|err| ArtcraftRouterError::Provider(ProviderError::GmiCloud(err)))?;
+    let response = self.request.send_request(&client.api_key).await.map_err(|err| ArtcraftRouterError::Provider(ProviderError::GmiCloud(err)))?;
 
-    Ok(GenerateVideoResponse::GmiCloud(GmiCloudVideoResponsePayload {
-      request_id: response.request_id,
-    }))
+    Ok(GenerateVideoResponse::GmiCloud(GmiCloudVideoResponsePayload { request_id: response.request_id }))
   }
 }
 
@@ -42,41 +36,23 @@ mod tests {
   #[tokio::test]
   #[ignore] // requires real API key, incurs costs
   async fn test_text_to_video_720p() {
-    let response = run_pipeline(GenerateVideoRequestBuilder {
-      prompt: Some("A corgi running through a field of wildflowers at sunset.".to_string()),
-      aspect_ratio: Some(RouterAspectRatio::WideSixteenByNine),
-      resolution: Some(RouterResolution::SevenTwentyP),
-      duration_seconds: Some(5),
-      ..gmicloud_builder()
-    }).await;
+    let response = run_pipeline(GenerateVideoRequestBuilder { prompt: Some("A corgi running through a field of wildflowers at sunset.".to_string()), aspect_ratio: Some(RouterAspectRatio::WideSixteenByNine), resolution: Some(RouterResolution::SevenTwentyP), duration_seconds: Some(5), ..gmicloud_builder() }).await;
     assert!(matches!(response, GenerateVideoResponse::GmiCloud(_)));
   }
 
   #[tokio::test]
   #[ignore] // requires real API key, incurs costs
   async fn test_image_to_video_480p() {
-    let response = run_pipeline(GenerateVideoRequestBuilder {
-      prompt: Some("The dog starts running and splashing in the lake.".to_string()),
-      start_frame: Some(ImageRef::Url(JUNO_AT_LAKE_IMAGE_URL.to_string())),
-      resolution: Some(RouterResolution::FourEightyP),
-      duration_seconds: Some(5),
-      ..gmicloud_builder()
-    }).await;
+    let response = run_pipeline(GenerateVideoRequestBuilder { prompt: Some("The dog starts running and splashing in the lake.".to_string()), start_frame: Some(ImageRef::Url(JUNO_AT_LAKE_IMAGE_URL.to_string())), resolution: Some(RouterResolution::FourEightyP), duration_seconds: Some(5), ..gmicloud_builder() }).await;
     assert!(matches!(response, GenerateVideoResponse::GmiCloud(_)));
   }
 
   fn gmicloud_builder() -> GenerateVideoRequestBuilder {
-    GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Seedance2p0Ultra,
-      provider: RouterProvider::GmiCloud,
-      video_batch_count: Some(1),
-      ..Default::default()
-    }
+    GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0Ultra, provider: RouterProvider::GmiCloud, video_batch_count: Some(1), ..Default::default() }
   }
 
   fn get_gmicloud_client() -> RouterClient {
-    let secret = std::fs::read_to_string("/Users/bt/Artcraft/credentials/gmicloud_api_key.txt")
-      .expect("Failed to read GmiCloud API key");
+    let secret = std::fs::read_to_string("/Users/bt/Artcraft/credentials/gmicloud_api_key.txt").expect("Failed to read GmiCloud API key");
     let api_key = GmiCloudApiKey::from_str(&secret);
     RouterClient::GmiCloud(RouterGmiCloudClient::new(api_key))
   }

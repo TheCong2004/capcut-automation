@@ -17,10 +17,7 @@ pub(crate) fn get_test_api_key() -> Result<String, String> {
       return Ok(trimmed);
     }
   }
-  Err(format!(
-    "Could not locate Datadog API key. Tried: {}",
-    candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "),
-  ))
+  Err(format!("Could not locate Datadog API key. Tried: {}", candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "),))
 }
 
 /// Walk upward from the test's CWD looking for the key. Tests run from

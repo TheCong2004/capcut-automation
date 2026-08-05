@@ -31,39 +31,25 @@ impl Pager {
   }
 
   /// Create a Pager with a shared queue and shutdown handle (worker mode).
-  pub(crate) fn with_queue(
-    client: PagerClient,
-    queue: Arc<PagerWorkerMessageQueue>,
-    worker_shutdown: Arc<AtomicBool>,
-  ) -> Self {
-    Self {
-      client,
-      queue: Some(queue),
-      worker_shutdown: Some(worker_shutdown),
-    }
+  pub(crate) fn with_queue(client: PagerClient, queue: Arc<PagerWorkerMessageQueue>, worker_shutdown: Arc<AtomicBool>) -> Self {
+    Self { client, queue: Some(queue), worker_shutdown: Some(worker_shutdown) }
   }
 
   /// Send a page immediately, blocking until the API responds.
   /// Returns `Ok(None)` if the pager is configured as NoOp.
-  pub async fn send_page_immediately(
-    &self,
-    notification: NotificationDetails,
-  ) -> Result<Option<PageSentResult>, PagerError> {
+  pub async fn send_page_immediately(&self, notification: NotificationDetails) -> Result<Option<PageSentResult>, PagerError> {
     self.client.send_page(&notification).await
   }
 
   /// Send a page immediately. Logs errors but never fails.
   /// Returns `None` if the pager is NoOp or if sending failed.
-  pub async fn send_page_immediately_infallible(
-    &self,
-    notification: NotificationDetails,
-  ) -> Option<PageSentResult> {
+  pub async fn send_page_immediately_infallible(&self, notification: NotificationDetails) -> Option<PageSentResult> {
     match self.send_page_immediately(notification).await {
       Ok(result) => result,
       Err(err) => {
         warn!("Failure sending page: {:?}", err);
         None
-      }
+      },
     }
   }
 
@@ -72,17 +58,13 @@ impl Pager {
   /// Returns `Ok(())` immediately if the pager is NoOp.
   /// Returns an error if the worker is not configured (use `build_with_worker()`).
   /// If the queue is full, the oldest item is dropped.
-  pub fn enqueue_page(
-    &self,
-    notification: NotificationDetails,
-  ) -> Result<(), PagerError> {
+  pub fn enqueue_page(&self, notification: NotificationDetails) -> Result<(), PagerError> {
     if self.client.is_noop() {
       debug!("Pager no-op: would have enqueued page: {}", notification.title);
       return Ok(());
     }
 
-    let queue = self.queue.as_ref()
-      .ok_or(PagerSystemError::QueueNotConfigured)?;
+    let queue = self.queue.as_ref().ok_or(PagerSystemError::QueueNotConfigured)?;
 
     let dropped = queue.push(notification)?;
 

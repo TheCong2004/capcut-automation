@@ -2,9 +2,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 pub fn validate_profile_twitter_username(username: &str) -> Result<(), String> {
-  static TWITTER_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new("^@?[A-Za-z0-9_]{4,15}$").expect("should be valid regex")
-  });
+  static TWITTER_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^@?[A-Za-z0-9_]{4,15}$").expect("should be valid regex"));
 
   if username.starts_with("@") {
     if username.len() < 5 {

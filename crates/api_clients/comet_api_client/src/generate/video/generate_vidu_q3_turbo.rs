@@ -1,10 +1,7 @@
 use crate::creds::comet_api_key::CometApiKey;
 use crate::error::comet_client_error::CometClientError;
 use crate::error::comet_error::CometError;
-use crate::requests::create_video::create_video::{
-  create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize,
-  CreateVideoArgs, CreateVideoRequest,
-};
+use crate::requests::create_video::create_video::{create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize, CreateVideoArgs, CreateVideoRequest};
 use crate::requests::video_task_status::CometVideoTaskStatus;
 
 /// Vidu Q3 Turbo supports 1-16 second durations.
@@ -70,20 +67,12 @@ pub struct GenerateViduQ3TurboResponse {
 
 // ── Entry point ──
 
-pub async fn generate_vidu_q3_turbo(
-  args: GenerateViduQ3TurboArgs<'_>,
-) -> Result<GenerateViduQ3TurboResponse, CometError> {
+pub async fn generate_vidu_q3_turbo(args: GenerateViduQ3TurboArgs<'_>) -> Result<GenerateViduQ3TurboResponse, CometError> {
   let raw_request = args.request.to_create_video_request()?;
 
-  let result = create_video(CreateVideoArgs {
-    api_key: args.api_key,
-    request: raw_request,
-  }).await?;
+  let result = create_video(CreateVideoArgs { api_key: args.api_key, request: raw_request }).await?;
 
-  Ok(GenerateViduQ3TurboResponse {
-    task_id: result.task_id,
-    status: result.status,
-  })
+  Ok(GenerateViduQ3TurboResponse { task_id: result.task_id, status: result.status })
 }
 
 impl GenerateViduQ3TurboRequest {
@@ -91,21 +80,11 @@ impl GenerateViduQ3TurboRequest {
   pub fn to_create_video_request(&self) -> Result<CreateVideoRequest, CometClientError> {
     if let Some(seconds) = self.duration_seconds {
       if !(MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&seconds) {
-        return Err(CometClientError::InvalidRequestField {
-          field: "duration_seconds",
-          raw_value: seconds.to_string(),
-          reason: format!("Vidu Q3 Turbo supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations"),
-        });
+        return Err(CometClientError::InvalidRequestField { field: "duration_seconds", raw_value: seconds.to_string(), reason: format!("Vidu Q3 Turbo supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations") });
       }
     }
 
-    Ok(CreateVideoRequest {
-      model: CometVideoModelRaw::ViduQ3Turbo,
-      prompt: self.prompt.clone(),
-      maybe_seconds: self.duration_seconds,
-      maybe_size: self.size.map(map_size),
-      input_reference_images: self.input_reference_images.clone(),
-    })
+    Ok(CreateVideoRequest { model: CometVideoModelRaw::ViduQ3Turbo, prompt: self.prompt.clone(), maybe_seconds: self.duration_seconds, maybe_size: self.size.map(map_size), input_reference_images: self.input_reference_images.clone() })
   }
 }
 
@@ -126,20 +105,10 @@ mod tests {
 
   #[test]
   fn maps_to_wire_request() {
-    let request = GenerateViduQ3TurboRequest {
-      prompt: "raindrops on a window".to_string(),
-      duration_seconds: Some(1),
-      size: Some(ViduQ3TurboSize::Portrait9x16),
-      input_reference_images: vec![],
-    };
+    let request = GenerateViduQ3TurboRequest { prompt: "raindrops on a window".to_string(), duration_seconds: Some(1), size: Some(ViduQ3TurboSize::Portrait9x16), input_reference_images: vec![] };
 
     let raw = request.to_create_video_request().expect("should validate");
-    assert_eq!(raw.text_form_fields(), vec![
-      ("model", "viduq3-turbo".to_string()),
-      ("prompt", "raindrops on a window".to_string()),
-      ("seconds", "1".to_string()),
-      ("size", "9:16".to_string()),
-    ]);
+    assert_eq!(raw.text_form_fields(), vec![("model", "viduq3-turbo".to_string()), ("prompt", "raindrops on a window".to_string()), ("seconds", "1".to_string()), ("size", "9:16".to_string()),]);
   }
 
   #[test]
@@ -152,11 +121,6 @@ mod tests {
   }
 
   fn request_with_seconds(duration_seconds: Option<u8>) -> GenerateViduQ3TurboRequest {
-    GenerateViduQ3TurboRequest {
-      prompt: "ok".to_string(),
-      duration_seconds,
-      size: None,
-      input_reference_images: vec![],
-    }
+    GenerateViduQ3TurboRequest { prompt: "ok".to_string(), duration_seconds, size: None, input_reference_images: vec![] }
   }
 }

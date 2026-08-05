@@ -12,9 +12,7 @@ pub struct CreatePipelineJobArgs<'a> {
   pub maybe_input_payload: Option<&'a str>,
 }
 
-pub async fn create_pipeline_job(
-  args: CreatePipelineJobArgs<'_>,
-) -> Result<PipelineJobId, SqliteTasksError> {
+pub async fn create_pipeline_job(args: CreatePipelineJobArgs<'_>) -> Result<PipelineJobId, SqliteTasksError> {
   let pipeline_job_id = PipelineJobId::generate();
 
   let id = pipeline_job_id.as_str().to_string();
@@ -22,7 +20,8 @@ pub async fn create_pipeline_job(
   let current_stage = args.current_stage.to_str().to_string();
   let input_payload = args.maybe_input_payload.map(|s| s.to_string());
 
-  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(r#"
+  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
+    r#"
     INSERT INTO pipeline_jobs (
       id,
       status,
@@ -30,7 +29,8 @@ pub async fn create_pipeline_job(
       input_payload
     )
     VALUES (
-  "#);
+  "#,
+  );
 
   let mut separated = query_builder.separated(", ");
   separated.push_bind(id);

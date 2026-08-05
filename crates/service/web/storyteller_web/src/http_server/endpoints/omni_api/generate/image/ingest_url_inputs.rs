@@ -11,18 +11,11 @@ use crate::state::server_state::ServerState;
 ///
 /// `check_request` has already guaranteed the URL and media-token fields are
 /// mutually exclusive, so populating the token field here is always safe.
-pub async fn ingest_url_inputs(
-  request: &mut OmniApiImageGenerateRequest,
-  server_state: &ServerState,
-  user_token: &UserToken,
-  ip_address: &str,
-) -> Result<(), CommonWebError> {
+pub async fn ingest_url_inputs(request: &mut OmniApiImageGenerateRequest, server_state: &ServerState, user_token: &UserToken, ip_address: &str) -> Result<(), CommonWebError> {
   if let Some(urls) = request.image_urls.take() {
     let mut tokens = Vec::with_capacity(urls.len());
     for url in &urls {
-      tokens.push(
-        upload_url_to_media_file(server_state, user_token, ip_address, url, MediaUploadKind::Image).await?,
-      );
+      tokens.push(upload_url_to_media_file(server_state, user_token, ip_address, url, MediaUploadKind::Image).await?);
     }
     request.image_media_tokens = Some(tokens);
   }

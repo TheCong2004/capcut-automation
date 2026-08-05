@@ -5,8 +5,8 @@ use crockford::crockford_entropy_lower;
 use crate::legacy::typified_paths::public::public_path::PublicPath;
 use crate::legacy::typified_paths::public::voice_conversion_results::bucket_directory::VoiceConversionResultDirectory;
 
-const ORIGINAL_FILE_PREFIX : &str = "fakeyou_";
-const ORIGINAL_FILE_SUFFIX : &str = ".wav";
+const ORIGINAL_FILE_PREFIX: &str = "fakeyou_";
+const ORIGINAL_FILE_SUFFIX: &str = ".wav";
 
 // TODO: Generate these from a macro.
 
@@ -22,7 +22,6 @@ pub struct VoiceConversionResultOriginalFilePath {
 impl PublicPath for VoiceConversionResultOriginalFilePath {}
 
 impl VoiceConversionResultOriginalFilePath {
-
   pub fn generate_new() -> Self {
     let entropy = crockford_entropy_lower(32);
     Self::from_object_hash(&entropy)
@@ -33,11 +32,7 @@ impl VoiceConversionResultOriginalFilePath {
     let directory = VoiceConversionResultDirectory::from_public_bucket_directory_hash(hash);
     let basename = format!("{}{}{}", ORIGINAL_FILE_PREFIX, hash, ORIGINAL_FILE_SUFFIX);
     let full_object_path = format!("{}/{}{}{}", directory.get_directory_path_str(), ORIGINAL_FILE_PREFIX, hash, ORIGINAL_FILE_SUFFIX);
-    Self {
-      directory,
-      basename,
-      full_object_path,
-    }
+    Self { directory, basename, full_object_path }
   }
 
   pub fn get_full_object_path_str(&self) -> &str {

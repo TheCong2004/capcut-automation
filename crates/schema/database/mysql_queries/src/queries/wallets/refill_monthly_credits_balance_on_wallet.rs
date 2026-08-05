@@ -6,24 +6,15 @@ use num_traits::ToPrimitive;
 use sqlx::MySql;
 use tokens::tokens::wallets::WalletToken;
 
-pub async fn refill_monthly_credits_balance_on_wallet(
-  wallet_token: &WalletToken,
-  monthly_amount: u64,
-  maybe_ledger_ref: Option<&str>,
-  transaction: &mut sqlx::Transaction<'_, MySql>,
-) -> anyhow::Result<WalletUpdateSummary> {
-
+pub async fn refill_monthly_credits_balance_on_wallet(wallet_token: &WalletToken, monthly_amount: u64, maybe_ledger_ref: Option<&str>, transaction: &mut sqlx::Transaction<'_, MySql>) -> anyhow::Result<WalletUpdateSummary> {
   // NB: Transaction lock (!) Be careful (!!)
-  let wallet = internal_select_wallet_balance_for_update(
-    wallet_token,
-    transaction
-  ).await?;
+  let wallet = internal_select_wallet_balance_for_update(wallet_token, transaction).await?;
 
   let existing_monthly_balance = wallet.monthly_credits;
   let new_monthly_balance = monthly_amount;
 
   let result = sqlx::query!(
-        r#"
+    r#"
     UPDATE wallets
     SET
         monthly_credits = ?,
@@ -33,8 +24,9 @@ pub async fn refill_monthly_credits_balance_on_wallet(
         "#,
     new_monthly_balance,
     wallet_token.as_str(),
-  ).execute(&mut **transaction)
-      .await?;
+  )
+  .execute(&mut **transaction)
+  .await?;
 
   let record = InsertWalletLedgerEntry {
     wallet_token,
@@ -42,7 +34,7 @@ pub async fn refill_monthly_credits_balance_on_wallet(
     maybe_entity_ref: maybe_ledger_ref.map(|s| s.to_string()),
 
     credits_delta: monthly_amount.to_i64().unwrap_or(0),
-    
+
     monthly_credits_before: existing_monthly_balance,
     monthly_credits_after: new_monthly_balance,
 
@@ -52,7 +44,6 @@ pub async fn refill_monthly_credits_balance_on_wallet(
   };
 
   let wallet_ledger_entry_token = record.upsert_with_transaction(transaction).await?;
-
 
   Ok(WalletUpdateSummary {
     wallet_token: wallet.token,

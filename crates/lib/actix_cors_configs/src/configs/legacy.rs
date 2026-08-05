@@ -3,15 +3,9 @@ use actix_cors::Cors;
 pub fn add_power_stream(cors: Cors, is_production: bool) -> Cors {
   // TODO: Remove non-SSL "http://" from production in safe rollout
   if is_production {
-    cors
-        .allowed_origin("https://dash.power.stream")
-        .allowed_origin("https://power.stream")
+    cors.allowed_origin("https://dash.power.stream").allowed_origin("https://power.stream")
   } else {
-    cors
-        .allowed_origin("http://dev.dash.power.stream")
-        .allowed_origin("http://dev.power.stream")
-        .allowed_origin("https://dev.dash.power.stream")
-        .allowed_origin("https://dev.power.stream")
+    cors.allowed_origin("http://dev.dash.power.stream").allowed_origin("http://dev.power.stream").allowed_origin("https://dev.dash.power.stream").allowed_origin("https://dev.power.stream")
   }
 }
 
@@ -74,4 +68,3 @@ pub fn add_legacy_trumped(cors: Cors, is_production: bool) -> Cors {
         .allowed_origin("https://dev.trumped.com")
   }
 }
-

@@ -23,9 +23,7 @@ where
 /// layer, not the handler) and returned to the caller. The provided IP address
 /// is stamped on both the creation and update IP columns, and `created_at` is
 /// set to `NOW()`.
-pub async fn insert_api_key<'e, 'c: 'e, E>(
-  args: InsertApiKeyArgs<'e, 'c, E>,
-) -> Result<ApiKeyToken, sqlx::Error>
+pub async fn insert_api_key<'e, 'c: 'e, E>(args: InsertApiKeyArgs<'e, 'c, E>) -> Result<ApiKeyToken, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -52,8 +50,8 @@ SET
     args.ip_address,
     args.ip_address,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(token)
 }

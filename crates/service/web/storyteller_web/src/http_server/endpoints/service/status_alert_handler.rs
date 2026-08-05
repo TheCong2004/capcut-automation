@@ -66,36 +66,19 @@ pub enum StatusAlertCategory {
     (status = 500, description = "Server error", body = CommonWebError)
   ),
 )]
-pub async fn status_alert_handler(
-  _http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<StatusAlertResponse>, CommonWebError> {
-
+pub async fn status_alert_handler(_http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<StatusAlertResponse>, CommonWebError> {
   let maybe_alert = get_status_alert(&server_state);
 
-  let maybe_category = maybe_alert
-      .as_ref()
-      .map(|alert| alert.maybe_category)
-      .flatten()
-      .map(|category| match category {
-        AppStateStatusAlertCategory::DownForMaintenance => StatusAlertCategory::DownForMaintenance,
-      });
+  let maybe_category = maybe_alert.as_ref().map(|alert| alert.maybe_category).flatten().map(|category| match category {
+    AppStateStatusAlertCategory::DownForMaintenance => StatusAlertCategory::DownForMaintenance,
+  });
 
-  let maybe_message = maybe_alert
-      .map(|alert| alert.maybe_message)
-      .flatten();
+  let maybe_message = maybe_alert.map(|alert| alert.maybe_message).flatten();
 
   let maybe_alert = match (maybe_category, maybe_message) {
     (None, None) => None,
-    (category, message) => Some(StatusAlertInfo {
-      maybe_category: category,
-      maybe_message: message,
-    }),
+    (category, message) => Some(StatusAlertInfo { maybe_category: category, maybe_message: message }),
   };
 
-  Ok(Json(StatusAlertResponse {
-    success: true,
-    maybe_alert,
-    refresh_interval_millis: REFRESH_INTERVAL.as_millis(),
-  }))
+  Ok(Json(StatusAlertResponse { success: true, maybe_alert, refresh_interval_millis: REFRESH_INTERVAL.as_millis() }))
 }

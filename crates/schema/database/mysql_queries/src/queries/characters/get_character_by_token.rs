@@ -23,10 +23,7 @@ pub struct CharacterRecord {
 }
 
 /// Look up a character by token (excluding soft-deleted).
-pub async fn get_character_by_token(
-  character_token: &CharacterToken,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<Option<CharacterRecord>, sqlx::Error> {
+pub async fn get_character_by_token(character_token: &CharacterToken, connection: &mut PoolConnection<MySql>) -> Result<Option<CharacterRecord>, sqlx::Error> {
   sqlx::query_as!(
     CharacterRecord,
     r#"
@@ -49,6 +46,6 @@ WHERE token = ?
     "#,
     character_token.as_str(),
   )
-      .fetch_optional(&mut **connection)
-      .await
+  .fetch_optional(&mut **connection)
+  .await
 }

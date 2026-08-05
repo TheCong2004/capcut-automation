@@ -155,102 +155,79 @@ const DEFAULT_PERIOD_SECS: u64 = 60 * 60;
 /// [`count`]: #method.count
 #[derive(Clone, Debug)]
 pub struct Limiter {
-    /// The Redis client
-    client: Client,
-    /// The per-period limit
-    limit: usize,
-    /// The period duration
-    period: Duration,
+  /// The Redis client
+  client: Client,
+  /// The per-period limit
+  limit: usize,
+  /// The period duration
+  period: Duration,
 }
 
 impl Limiter {
-    /// Returns a builder for a `Limiter`.
-    ///
-    /// The [`finish`] method will build the final `Limiter` and perform a **synchronous**
-    /// connection test to the Redis backend.
-    ///
-    /// [`finish`]: struct.Builder.html#method.finish
-    pub fn build(redis_url: &str) -> Builder {
-        Builder {
-            redis_url,
-            limit: DEFAULT_LIMIT,
-            period: Duration::from_secs(DEFAULT_PERIOD_SECS),
-        }
-    }
+  /// Returns a builder for a `Limiter`.
+  ///
+  /// The [`finish`] method will build the final `Limiter` and perform a **synchronous**
+  /// connection test to the Redis backend.
+  ///
+  /// [`finish`]: struct.Builder.html#method.finish
+  pub fn build(redis_url: &str) -> Builder {
+    Builder { redis_url, limit: DEFAULT_LIMIT, period: Duration::from_secs(DEFAULT_PERIOD_SECS) }
+  }
 
-    /// Counts a request on a key over a period and returns a [`Status`].
-    ///
-    /// The `Status` type gives the caller a current state snapshot for the given key. If the limit
-    /// is exceeded a `Error::LimitExceeded` will be returned which also contains a `Status`.
-    /// Critically, the `Status` contains a time when the next period begins and the limit will
-    /// reset. The time is a "unix timestamp" in UTC time.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Err` if:
-    ///
-    /// - The limit has been exceeded in the current period
-    /// - A client error has occurred
-    /// - A time computation failed
-    ///
-    /// [`Status`]: struct.Status.html
-    pub async fn count<K: Into<String>>(&self, key: K) -> Result<Status, Error> {
-        let limit = self.limit;
+  /// Counts a request on a key over a period and returns a [`Status`].
+  ///
+  /// The `Status` type gives the caller a current state snapshot for the given key. If the limit
+  /// is exceeded a `Error::LimitExceeded` will be returned which also contains a `Status`.
+  /// Critically, the `Status` contains a time when the next period begins and the limit will
+  /// reset. The time is a "unix timestamp" in UTC time.
+  ///
+  /// # Errors
+  ///
+  /// Returns an `Err` if:
+  ///
+  /// - The limit has been exceeded in the current period
+  /// - A client error has occurred
+  /// - A time computation failed
+  ///
+  /// [`Status`]: struct.Status.html
+  pub async fn count<K: Into<String>>(&self, key: K) -> Result<Status, Error> {
+    let limit = self.limit;
 
-        self.track(key).await.and_then(move |(count, reset_epoch_utc)| {
-            let status = build_status(count, limit, reset_epoch_utc);
+    self.track(key).await.and_then(move |(count, reset_epoch_utc)| {
+      let status = build_status(count, limit, reset_epoch_utc);
 
-            if count > limit {
-                Err(Error::LimitExceeded(status))
-            } else {
-                Ok(status)
-            }
-        })
-    }
+      if count > limit {
+        Err(Error::LimitExceeded(status))
+      } else {
+        Ok(status)
+      }
+    })
+  }
 
-    /// Tracks the given key in a period and returns the count and TTL for the key in seconds.
-    async fn track<K: Into<String>>(&self, key: K) -> Result<(usize, usize), Error> {
-        let key = key.into();
-        let exipres = self.period.as_secs();
+  /// Tracks the given key in a period and returns the count and TTL for the key in seconds.
+  async fn track<K: Into<String>>(&self, key: K) -> Result<(usize, usize), Error> {
+    let key = key.into();
+    let exipres = self.period.as_secs();
 
-        let mut conn = self.client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(|err| Error::from(err))?;
-        
-        // The seed of this approach is outlined Atul R in a blog post about rate limiting
-        // using NodeJS and Redis. For more details, see
-        // https://blog.atulr.com/rate-limiter/
-        let mut pipe = redis::pipe();
-        pipe.atomic()
-            .cmd("SET")
-            .arg(&key)
-            .arg(0)
-            .arg("EX")
-            .arg(exipres)
-            .arg("NX")
-            .ignore()
-            .cmd("INCR")
-            .arg(&key)
-            .cmd("TTL")
-            .arg(&key);
+    let mut conn = self.client.get_multiplexed_async_connection().await.map_err(|err| Error::from(err))?;
 
-        //let result = pipe.query_async(&mut conn)
-        //    .await
-        //    .map_err(|err| Error::from(err))
-        //    .and_then(|(_, (count, ttl)): (_, (usize, u64))| {
-        //        Ok((count, epoch_utc_plus(Duration::from_secs(ttl))?))
-        //    })?;
+    // The seed of this approach is outlined Atul R in a blog post about rate limiting
+    // using NodeJS and Redis. For more details, see
+    // https://blog.atulr.com/rate-limiter/
+    let mut pipe = redis::pipe();
+    pipe.atomic().cmd("SET").arg(&key).arg(0).arg("EX").arg(exipres).arg("NX").ignore().cmd("INCR").arg(&key).cmd("TTL").arg(&key);
 
-        let result = pipe.query_async(&mut conn)
-            .await
-            .map_err(|err| Error::from(err))
-            .and_then(|(ignore, count, ttl): ((), usize, u64)| {
-                Ok((count, epoch_utc_plus(Duration::from_secs(ttl))?))
-            })?;
-        
-        Ok(result)
-    }
+    //let result = pipe.query_async(&mut conn)
+    //    .await
+    //    .map_err(|err| Error::from(err))
+    //    .and_then(|(_, (count, ttl)): (_, (usize, u64))| {
+    //        Ok((count, epoch_utc_plus(Duration::from_secs(ttl))?))
+    //    })?;
+
+    let result = pipe.query_async(&mut conn).await.map_err(|err| Error::from(err)).and_then(|(ignore, count, ttl): ((), usize, u64)| Ok((count, epoch_utc_plus(Duration::from_secs(ttl))?)))?;
+
+    Ok(result)
+  }
 }
 
 /// A report for a given key containing the limit status.
@@ -266,137 +243,124 @@ impl Limiter {
 /// [`reset_epoch_utc`]: #method.reset_epoch_utc
 #[derive(Clone, Debug)]
 pub struct Status {
-    limit: usize,
-    remaining: usize,
-    reset_epoch_utc: usize,
+  limit: usize,
+  remaining: usize,
+  reset_epoch_utc: usize,
 }
 
 impl Status {
-    /// Returns the maximum number of requests permitted in the current period.
-    pub fn limit(&self) -> usize {
-        self.limit
-    }
+  /// Returns the maximum number of requests permitted in the current period.
+  pub fn limit(&self) -> usize {
+    self.limit
+  }
 
-    /// Returns the number of requests remaining in the current period.
-    pub fn remaining(&self) -> usize {
-        self.remaining
-    }
+  /// Returns the number of requests remaining in the current period.
+  pub fn remaining(&self) -> usize {
+    self.remaining
+  }
 
-    /// Returns a UNIX timestamp in UTC approximately when the next period will begin.
-    pub fn reset_epoch_utc(&self) -> usize {
-        self.reset_epoch_utc
-    }
+  /// Returns a UNIX timestamp in UTC approximately when the next period will begin.
+  pub fn reset_epoch_utc(&self) -> usize {
+    self.reset_epoch_utc
+  }
 }
 
 /// A builder for a [`Limiter`].
 ///
 /// [`Limiter`]: struct.Limiter.html
 pub struct Builder<'a> {
-    redis_url: &'a str,
-    limit: usize,
-    period: Duration,
+  redis_url: &'a str,
+  limit: usize,
+  period: Duration,
 }
 
 impl Builder<'_> {
-    /// Sets a new maximum limit for the Limiter.
-    pub fn limit(&mut self, limit: usize) -> &mut Self {
-        self.limit = limit;
-        self
-    }
+  /// Sets a new maximum limit for the Limiter.
+  pub fn limit(&mut self, limit: usize) -> &mut Self {
+    self.limit = limit;
+    self
+  }
 
-    /// Sets a new period duration for the Limiter.
-    pub fn period(&mut self, period: Duration) -> &mut Self {
-        self.period = period;
-        self
-    }
+  /// Sets a new period duration for the Limiter.
+  pub fn period(&mut self, period: Duration) -> &mut Self {
+    self.period = period;
+    self
+  }
 
-    /// Finializes and returns a `Limiter`.
-    ///
-    /// Note that this method will connect to the Redis server to test its connection which is a
-    /// **synchronous** operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Err` if the Redis client fails to be created or fails to connect.
-    pub fn finish(&self) -> Result<Limiter, Error> {
-        Ok(Limiter {
-            client: Client::open(self.redis_url)?,
-            limit: self.limit,
-            period: self.period,
-        })
-    }
+  /// Finializes and returns a `Limiter`.
+  ///
+  /// Note that this method will connect to the Redis server to test its connection which is a
+  /// **synchronous** operation.
+  ///
+  /// # Errors
+  ///
+  /// Returns an `Err` if the Redis client fails to be created or fails to connect.
+  pub fn finish(&self) -> Result<Limiter, Error> {
+    Ok(Limiter { client: Client::open(self.redis_url)?, limit: self.limit, period: self.period })
+  }
 }
 
 /// Error type for this crate.
 #[derive(Debug)]
 pub enum Error {
-    /// The Redis client failed to connect or run a query.
-    Client(redis::RedisError),
-    /// The limit is exceeded for a key.
-    LimitExceeded(Status),
-    /// A time conversion failed.
-    Time(time::Error),
-    /// A time conversion failed (Chrono).
-    ChronoTime(chrono::OutOfRangeError),
+  /// The Redis client failed to connect or run a query.
+  Client(redis::RedisError),
+  /// The limit is exceeded for a key.
+  LimitExceeded(Status),
+  /// A time conversion failed.
+  Time(time::Error),
+  /// A time conversion failed (Chrono).
+  ChronoTime(chrono::OutOfRangeError),
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Error::Client(ref err) => write!(f, "client error ({})", err),
-            Error::LimitExceeded(ref status) => write!(f, "rate limit exceeded ({:?})", status),
-            Error::Time(ref err) => write!(f, "time conversion error ({})", err),
-            Error::ChronoTime(ref err) => write!(f, "time conversion error ({})", err),
-        }
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Error::Client(ref err) => write!(f, "client error ({})", err),
+      Error::LimitExceeded(ref status) => write!(f, "rate limit exceeded ({:?})", status),
+      Error::Time(ref err) => write!(f, "time conversion error ({})", err),
+      Error::ChronoTime(ref err) => write!(f, "time conversion error ({})", err),
     }
+  }
 }
 
 impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Error::Client(ref err) => err.source(),
-            Error::LimitExceeded(_) => None,
-            Error::Time(ref err) => err.source(),
-            Error::ChronoTime(ref err) => err.source(),
-        }
+  fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+    match self {
+      Error::Client(ref err) => err.source(),
+      Error::LimitExceeded(_) => None,
+      Error::Time(ref err) => err.source(),
+      Error::ChronoTime(ref err) => err.source(),
     }
+  }
 }
 
 impl From<redis::RedisError> for Error {
-    fn from(err: redis::RedisError) -> Self {
-        Error::Client(err)
-    }
+  fn from(err: redis::RedisError) -> Self {
+    Error::Client(err)
+  }
 }
 
 impl From<time::Error> for Error {
-    fn from(err: time::Error) -> Self {
-        Error::Time(err)
-    }
+  fn from(err: time::Error) -> Self {
+    Error::Time(err)
+  }
 }
 
 impl From<chrono::OutOfRangeError> for Error {
-    fn from(err: chrono::OutOfRangeError) -> Self {
-        Error::ChronoTime(err)
-    }
+  fn from(err: chrono::OutOfRangeError) -> Self {
+    Error::ChronoTime(err)
+  }
 }
 
 /// Builds a `Status`.
 fn build_status(count: usize, limit: usize, reset_epoch_utc: usize) -> Status {
-    let remaining = if count >= limit { 0 } else { limit - count };
+  let remaining = if count >= limit { 0 } else { limit - count };
 
-    Status {
-        limit,
-        remaining,
-        reset_epoch_utc,
-    }
+  Status { limit, remaining, reset_epoch_utc }
 }
 
 /// Calculates a timestamp for "now plus a duration".
 fn epoch_utc_plus(duration: Duration) -> Result<usize, chrono::OutOfRangeError> {
-    Ok(chrono::Utc::now()
-        .add(chrono::Duration::from_std(duration)?)
-        .round_subsecs(0)
-        .timestamp()
-        .try_into()
-        .unwrap_or(0))
+  Ok(chrono::Utc::now().add(chrono::Duration::from_std(duration)?).round_subsecs(0).timestamp().try_into().unwrap_or(0))
 }

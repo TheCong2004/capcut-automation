@@ -44,23 +44,17 @@ pub struct ModelWeightsCacheDirectory {
   pub maybe_job_progress_reporter: Option<Arc<dyn JobProgressReporter>>,
 }
 
-
 impl ModelWeightsCacheDirectory {
   /// Configure and try to create the directory if it doesn't exist.
-  pub fn setup_from_env_and_deps(
-    scoped_temp_dir_creator: &ScopedTempDirCreator,
-    public_bucket_client: &LegacyBucketClient,
-  ) -> AnyhowResult<Self> {
-    let directory = easyenv::get_env_pathbuf_or_default(
-      "MODEL_WEIGHTS_CACHE_DIR",
-      "/model_weights_cache");
+  pub fn setup_from_env_and_deps(scoped_temp_dir_creator: &ScopedTempDirCreator, public_bucket_client: &LegacyBucketClient) -> AnyhowResult<Self> {
+    let directory = easyenv::get_env_pathbuf_or_default("MODEL_WEIGHTS_CACHE_DIR", "/model_weights_cache");
 
     info!("Using model weights cache directory: {:?}", directory);
 
     let directory = ModelWeightsCacheDirectory {
       local_cache_directory: directory,
       maybe_cached_file_minimum_size_required: Some(1000), // TODO(bt,2024-02-11): Make configurable
-      maybe_job_progress_reporter: None, // TODO(bt,2024-02-11): Make Sync/Send to hold a copy
+      maybe_job_progress_reporter: None,                   // TODO(bt,2024-02-11): Make Sync/Send to hold a copy
       scoped_tempdir_creator: scoped_temp_dir_creator.clone(),
       public_bucket_client: public_bucket_client.clone(),
     };
@@ -70,7 +64,6 @@ impl ModelWeightsCacheDirectory {
     Ok(directory)
   }
 
-
   /// Try to create the directory if it doesn't exist.
   fn try_create_directory(&self) -> std::io::Result<()> {
     if !self.local_cache_directory.exists() {
@@ -79,20 +72,15 @@ impl ModelWeightsCacheDirectory {
     Ok(())
   }
 
-
   pub fn model_weight_cache_path(&self, model_weight: &RetrievedModelWeight) -> PathBuf {
     let filename = ModelWeightsCacheMapping::new_from_model(model_weight);
     let full_path = self.local_cache_directory.join(filename.to_path_buf());
     full_path
   }
 
-
   /// Download the model if we don't already have a copy.
   /// Return the path from the cache.
-  pub async fn get_model_weight_from_cache_or_bucket(
-    &self,
-    model_weight: &RetrievedModelWeight
-  ) -> Result<PathBuf, ProcessSingleJobError> {
+  pub async fn get_model_weight_from_cache_or_bucket(&self, model_weight: &RetrievedModelWeight) -> Result<PathBuf, ProcessSingleJobError> {
     let cache_filesystem_path = self.model_weight_cache_path(model_weight);
 
     if self.is_model_already_cached(model_weight, &cache_filesystem_path)? {
@@ -101,53 +89,41 @@ impl ModelWeightsCacheDirectory {
 
     self.report_progress(format!("downloading model {}", &model_weight.token)).await;
 
-    let bucket_object_path = WeightFileBucketPath::from_object_hash(
-      &model_weight.public_bucket_hash,
-      model_weight.maybe_public_bucket_prefix.as_deref(),
-      model_weight.maybe_public_bucket_extension.as_deref(),
-    );
+    let bucket_object_path = WeightFileBucketPath::from_object_hash(&model_weight.public_bucket_hash, model_weight.maybe_public_bucket_prefix.as_deref(), model_weight.maybe_public_bucket_extension.as_deref());
 
     let bucket_object_path = bucket_object_path.to_full_object_pathbuf();
 
-    info!("Downloading model weight (type {:?} token {:?}) from bucket object path {:?}",
-        &model_weight.weights_type,
-        &model_weight.token,
-        &bucket_object_path);
+    info!("Downloading model weight (type {:?} token {:?}) from bucket object path {:?}", &model_weight.weights_type, &model_weight.token, &bucket_object_path);
 
     // NB (1): Download to temp directory to stop concurrent writes and race conditions from other
     //         workers writing to a shared volume.
     // NB (2): TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-    let temp_dir = self.scoped_tempdir_creator.new_tempdir("model_weight_download")
-        .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+    let temp_dir = self.scoped_tempdir_creator.new_tempdir("model_weight_download").map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
     let temp_path = temp_dir.path().join("download.part");
 
-    self.public_bucket_client.download_file_to_disk(&bucket_object_path, &temp_path)
-        .await
-        .map_err(|e| {
-          safe_delete_directory(&temp_dir);
-          ProcessSingleJobError::Other(e)
-        })?;
+    self.public_bucket_client.download_file_to_disk(&bucket_object_path, &temp_path).await.map_err(|e| {
+      safe_delete_directory(&temp_dir);
+      ProcessSingleJobError::Other(e)
+    })?;
 
     info!("Downloaded successfully from bucket!");
 
-    let original_size = file_size(&temp_path)
-        .map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
+    let original_size = file_size(&temp_path).map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
 
     info!("File size of temp download file {:?} is {original_size}", &temp_path);
 
     info!("Renaming temp file from {:?} to {:?}!", &temp_path, &cache_filesystem_path);
 
-    rename_across_devices(&temp_path, &cache_filesystem_path)
-        .map_err(|err| {
-          error!("could not rename on disk: {:?}", err);
-          safe_delete_file(&temp_path);
-          safe_delete_directory(&temp_dir);
-          match err {
-            RenameError::StorageFull => ProcessSingleJobError::FilesystemFull,
-            RenameError::IoError(err) => ProcessSingleJobError::from_io_error(err),
-          }
-        })?;
+    rename_across_devices(&temp_path, &cache_filesystem_path).map_err(|err| {
+      error!("could not rename on disk: {:?}", err);
+      safe_delete_file(&temp_path);
+      safe_delete_directory(&temp_dir);
+      match err {
+        RenameError::StorageFull => ProcessSingleJobError::FilesystemFull,
+        RenameError::IoError(err) => ProcessSingleJobError::from_io_error(err),
+      }
+    })?;
 
     info!("Finished downloading and moving file to {:?}", &cache_filesystem_path);
 
@@ -157,25 +133,17 @@ impl ModelWeightsCacheDirectory {
     Ok(cache_filesystem_path)
   }
 
-
   fn is_model_already_cached(&self, model_weight: &RetrievedModelWeight, full_cache_filesystem_path: &PathBuf) -> Result<bool, ProcessSingleJobError> {
     if !full_cache_filesystem_path.exists() {
-      warn!("Model weight (type {:?} token {:?}) does not already exist at path {:?}",
-        &model_weight.weights_type,
-        &model_weight.token,
-        &full_cache_filesystem_path);
+      warn!("Model weight (type {:?} token {:?}) does not already exist at path {:?}", &model_weight.weights_type, &model_weight.token, &full_cache_filesystem_path);
 
       return Ok(false);
     }
 
-    info!("Model weight (type {:?} token {:?}) exists at path {:?}",
-      &model_weight.weights_type,
-      &model_weight.token,
-      &full_cache_filesystem_path);
+    info!("Model weight (type {:?} token {:?}) exists at path {:?}", &model_weight.weights_type, &model_weight.token, &full_cache_filesystem_path);
 
     if let Some(existing_file_minimum_size_required) = self.maybe_cached_file_minimum_size_required {
-      let size = file_size(full_cache_filesystem_path)
-          .map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
+      let size = file_size(full_cache_filesystem_path).map_err(|err| ProcessSingleJobError::from_anyhow_error(err))?;
 
       info!("Model weight has file size = {size}");
 
@@ -187,7 +155,6 @@ impl ModelWeightsCacheDirectory {
     // TODO(bt, 2022-07-15): Check signature of file as best proof of file validity
     Ok(true)
   }
-
 
   async fn report_progress(&self, _description: String) {
     if let Some(_job_progress_reporter) = &self.maybe_job_progress_reporter {

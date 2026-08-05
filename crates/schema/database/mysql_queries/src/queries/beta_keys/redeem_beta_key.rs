@@ -8,12 +8,11 @@ pub async fn redeem_beta_key<'a, 'b>(
   redeemer_user_token: &'a UserToken,
   //mysql_executor: E
   transaction: &'a mut Transaction<'b, MySql>,
-)
-  -> AnyhowResult<()>
-  //where E: 'e + Executor<'c, Database = MySql>
+) -> AnyhowResult<()>
+//where E: 'e + Executor<'c, Database = MySql>
 {
-      sqlx::query!(
-        r#"
+  sqlx::query!(
+    r#"
 UPDATE beta_keys
 SET
   maybe_redeemer_user_token = ?,
@@ -22,11 +21,11 @@ WHERE
   key_value = ?
 LIMIT 1
         "#,
-       redeemer_user_token.as_str(),
-       key_value
-      )
-      .execute(&mut **transaction)
-      .await?;
+    redeemer_user_token.as_str(),
+    key_value
+  )
+  .execute(&mut **transaction)
+  .await?;
 
   Ok(())
 }

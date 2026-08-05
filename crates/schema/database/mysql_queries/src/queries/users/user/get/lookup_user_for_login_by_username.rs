@@ -4,11 +4,10 @@ use crate::helpers::transform_optional_result::transform_optional_result;
 use crate::queries::users::user::get::lookup_user_for_login_result::{UserRecordForLogin, UserRecordForLoginRaw};
 use errors::AnyhowResult;
 
-pub async fn lookup_user_for_login_by_username(username: &str, pool: &MySqlPool) -> AnyhowResult<Option<UserRecordForLogin>>
-{
+pub async fn lookup_user_for_login_by_username(username: &str, pool: &MySqlPool) -> AnyhowResult<Option<UserRecordForLogin>> {
   let result = sqlx::query_as!(
     UserRecordForLoginRaw,
-        r#"
+    r#"
 SELECT
   token as `token: tokens::tokens::users::UserToken`,
   username,
@@ -23,12 +22,12 @@ FROM users
 WHERE username = ?
 LIMIT 1
         "#,
-        username,
-    )
-      .fetch_one(pool)
-      .await;
+    username,
+  )
+  .fetch_one(pool)
+  .await;
 
   let maybe_record = transform_optional_result(result)?;
 
-  Ok(maybe_record.map(|record|record.into()))
+  Ok(maybe_record.map(|record| record.into()))
 }

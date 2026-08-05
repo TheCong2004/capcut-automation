@@ -22,14 +22,7 @@ use crate::job_loop::job_results::JobResults;
 use crate::JobState;
 
 /// Returns the token of the entity.
-pub async fn process_tacotron_model<'a, 'b>(
-  job_state: &JobState,
-  job: &AvailableDownloadJob,
-  temp_dir: &TempDir,
-  download_filename: &str,
-  redis_logger: &'a mut RedisJobStatusLogger<'b>,
-) -> AnyhowResult<JobResults> {
-
+pub async fn process_tacotron_model<'a, 'b>(job_state: &JobState, job: &AvailableDownloadJob, temp_dir: &TempDir, download_filename: &str, redis_logger: &'a mut RedisJobStatusLogger<'b>) -> AnyhowResult<JobResults> {
   // ==================== RUN MODEL CHECK ==================== //
 
   info!("Checking that model is valid...");
@@ -40,11 +33,7 @@ pub async fn process_tacotron_model<'a, 'b>(
 
   let output_metadata_fs_path = temp_dir.path().join("metadata.json");
 
-  let model_check_result = job_state.sidecar_configs.tacotron_model_check_command.execute(
-    &file_path,
-    &output_metadata_fs_path,
-    false
-  );
+  let model_check_result = job_state.sidecar_configs.tacotron_model_check_command.execute(&file_path, &output_metadata_fs_path, false);
 
   if let Err(e) = model_check_result {
     safe_delete_file(&file_path);
@@ -65,7 +54,7 @@ pub async fn process_tacotron_model<'a, 'b>(
       safe_delete_file(&output_metadata_fs_path);
       safe_delete_directory(&temp_dir);
       return Err(e);
-    }
+    },
   };
 
   // ==================== UPLOAD MODEL FILE ==================== //
@@ -116,14 +105,13 @@ pub async fn process_tacotron_model<'a, 'b>(
     private_bucket_object_name: &model_bucket_path,
     maybe_model_token: None, // NB: This parameter is for internal testing only
     mysql_pool: &job_state.mysql_pool,
-  }).await?;
+  })
+  .await?;
 
-  job_state.badge_granter.maybe_grant_tts_model_uploads_badge(&job.creator_user_token)
-      .await
-      .map_err(|e| {
-        warn!("error maybe awarding badge: {:?}", e);
-        anyhow!("error maybe awarding badge")
-      })?;
+  job_state.badge_granter.maybe_grant_tts_model_uploads_badge(&job.creator_user_token).await.map_err(|e| {
+    warn!("error maybe awarding badge: {:?}", e);
+    anyhow!("error maybe awarding badge")
+  })?;
 
   Ok(JobResults {
     entity_token: Some(model_token.to_string()),
@@ -142,4 +130,3 @@ fn read_metadata_file(filename: &PathBuf) -> AnyhowResult<FileMetadata> {
   file.read_to_string(&mut buffer)?;
   Ok(serde_json::from_str(&buffer)?)
 }
-

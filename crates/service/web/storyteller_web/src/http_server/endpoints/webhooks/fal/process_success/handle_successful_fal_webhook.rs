@@ -21,47 +21,26 @@ use super::process_model_mesh_payload::{process_model_mesh_payload, process_mode
 use super::process_result_files_payload::process_result_files_payload;
 use super::process_video_payload::process_video_payload;
 
-pub async fn handle_successful_fal_webhook(
-  server_state: &ServerState,
-  mysql_connection: &mut PoolConnection<MySql>,
-  request_id: &str,
-  success_data: &WebhookSuccessData,
-  raw_body: &str,
-  pager: &Pager,
-) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
-
-  let db_result = get_inference_job_by_fal_id_from_connection(
-    request_id,
-    mysql_connection,
-  ).await;
+pub async fn handle_successful_fal_webhook(server_state: &ServerState, mysql_connection: &mut PoolConnection<MySql>, request_id: &str, success_data: &WebhookSuccessData, raw_body: &str, pager: &Pager) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
+  let db_result = get_inference_job_by_fal_id_from_connection(request_id, mysql_connection).await;
 
   let job = match db_result {
     Ok(Some(record)) => record,
     Ok(None) => {
       warn!("Could not find job record by fal request_id: {}", request_id);
-      return Err(CommonWebError::NotFound)
+      return Err(CommonWebError::NotFound);
     },
     Err(err) => {
       warn!("Error querying job record for request_id {}: {:?}", request_id, err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   info!("Fal webhook job record for request_id {}: {:?}", request_id, job);
 
   // Insert debug log for the webhook payload.
   if let Some(debug_log_event_token) = &job.maybe_debug_log_event_token {
-    if let Err(err) = insert_debug_log(InsertDebugLogArgs {
-      apriori_debug_log_event_token: Some(debug_log_event_token),
-      maybe_creator_user_token: job.maybe_creator_user_token.as_ref(),
-      debug_log_type: DebugLogType::FalWebhook,
-      maybe_log_level: Some(DebugLogLevel::Info),
-      maybe_ip_address: None,
-      maybe_url: None,
-      message: raw_body,
-      mysql_executor: &mut **mysql_connection,
-      phantom: Default::default(),
-    }).await {
+    if let Err(err) = insert_debug_log(InsertDebugLogArgs { apriori_debug_log_event_token: Some(debug_log_event_token), maybe_creator_user_token: job.maybe_creator_user_token.as_ref(), debug_log_type: DebugLogType::FalWebhook, maybe_log_level: Some(DebugLogLevel::Info), maybe_ip_address: None, maybe_url: None, message: raw_body, mysql_executor: &mut **mysql_connection, phantom: Default::default() }).await {
       warn!("Failed to insert Fal webhook debug log: {:?}", err);
     }
   }
@@ -111,24 +90,14 @@ pub async fn handle_successful_fal_webhook(
     // primary GLB is `model_glb`, falling back to `model_urls.glb` when the
     // top-level key is absent (Hunyuan 3D 3.0 sends both, usually the same
     // file).
-    let maybe_primary_glb = extracted.model_glb.as_ref()
-        .or_else(|| extracted.model_urls.as_ref().and_then(|urls| urls.glb.as_ref()));
+    let maybe_primary_glb = extracted.model_glb.as_ref().or_else(|| extracted.model_urls.as_ref().and_then(|urls| urls.glb.as_ref()));
 
     if let Some(model_glb_data) = maybe_primary_glb {
       info!("Handling model_glb payload for request_id {} / job {:?}", request_id, job.job_token);
       // The cover image arrives as `thumbnail` (Hunyuan) or `rendered_image`
       // (Tripo 3D); both have the same shape.
-      let maybe_cover_image = extracted.thumbnail.as_ref()
-          .or(extracted.rendered_image.as_ref());
-      let (token, batch_token) = process_model_glb_payload(
-        model_glb_data,
-        extracted.model_glb_pbr.as_ref(),
-        extracted.model_urls.as_ref(),
-        maybe_cover_image,
-        &job,
-        server_state,
-        pager,
-      ).await?;
+      let maybe_cover_image = extracted.thumbnail.as_ref().or(extracted.rendered_image.as_ref());
+      let (token, batch_token) = process_model_glb_payload(model_glb_data, extracted.model_glb_pbr.as_ref(), extracted.model_urls.as_ref(), maybe_cover_image, &job, server_state, pager).await?;
       if maybe_media_token.is_none() {
         maybe_media_token = Some(token);
       }
@@ -163,13 +132,7 @@ pub async fn handle_successful_fal_webhook(
 
   if let Some(media_token) = maybe_media_token {
     info!("Media file token for request_id {}: {:?}", request_id, media_token);
-    mark_fal_generic_inference_job_successfully_done(MarkJobArgs {
-      job_token: &job.job_token,
-      media_file_token: &media_token,
-      maybe_batch_token: maybe_batch_token.as_ref(),
-      mysql_executor: &mut **mysql_connection,
-      phantom: Default::default(),
-    }).await.map_err(|err| {
+    mark_fal_generic_inference_job_successfully_done(MarkJobArgs { job_token: &job.job_token, media_file_token: &media_token, maybe_batch_token: maybe_batch_token.as_ref(), mysql_executor: &mut **mysql_connection, phantom: Default::default() }).await.map_err(|err| {
       warn!("Error marking job as successfully done for request_id {}: {:?}", request_id, err);
       CommonWebError::from_anyhow_error(err)
     })?;

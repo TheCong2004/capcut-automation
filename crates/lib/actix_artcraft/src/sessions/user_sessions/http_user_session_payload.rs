@@ -13,20 +13,12 @@ pub struct HttpUserSessionPayload {
 }
 
 impl HttpUserSessionPayload {
-  pub fn from_map(
-    map: BTreeMap<String, String>,
-  ) -> Result<Self, HttpUserSessionPayloadError> {
-    let session_token = map
-        .get("session_token")
-        .ok_or(HttpUserSessionPayloadError::MissingField("session_token"))?
-        .clone();
+  pub fn from_map(map: BTreeMap<String, String>) -> Result<Self, HttpUserSessionPayloadError> {
+    let session_token = map.get("session_token").ok_or(HttpUserSessionPayloadError::MissingField("session_token"))?.clone();
 
     let maybe_user_token = map.get("user_token").map(|t| t.to_string());
 
-    Ok(Self {
-      session_token,
-      maybe_user_token,
-    })
+    Ok(Self { session_token, maybe_user_token })
   }
 }
 
@@ -40,11 +32,7 @@ mod tests {
 
   #[test]
   fn from_map_with_session_and_user_tokens() {
-    let payload = HttpUserSessionPayload::from_map(map_of(&[
-      ("session_token", "ex_session_token"),
-      ("user_token", "ex_user_token"),
-      ("version", "3"),
-    ])).unwrap();
+    let payload = HttpUserSessionPayload::from_map(map_of(&[("session_token", "ex_session_token"), ("user_token", "ex_user_token"), ("version", "3")])).unwrap();
 
     assert_eq!(payload.session_token, "ex_session_token");
     assert_eq!(payload.maybe_user_token.as_deref(), Some("ex_user_token"));
@@ -52,9 +40,7 @@ mod tests {
 
   #[test]
   fn from_map_without_user_token_is_ok() {
-    let payload = HttpUserSessionPayload::from_map(map_of(&[
-      ("session_token", "ex_session_token"),
-    ])).unwrap();
+    let payload = HttpUserSessionPayload::from_map(map_of(&[("session_token", "ex_session_token")])).unwrap();
 
     assert_eq!(payload.session_token, "ex_session_token");
     assert!(payload.maybe_user_token.is_none());
@@ -62,12 +48,10 @@ mod tests {
 
   #[test]
   fn from_map_missing_session_token_errors() {
-    let result = HttpUserSessionPayload::from_map(map_of(&[
-      ("user_token", "ex_user_token"),
-    ]));
+    let result = HttpUserSessionPayload::from_map(map_of(&[("user_token", "ex_user_token")]));
 
     match result.err().expect("expected error") {
-      HttpUserSessionPayloadError::MissingField("session_token") => {}
+      HttpUserSessionPayloadError::MissingField("session_token") => {},
       other => panic!("expected MissingField(session_token), got {:?}", other),
     }
   }

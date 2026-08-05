@@ -1,4 +1,3 @@
-
 /// The cookies payload is the entire cookie header (potentially many cookies).
 #[derive(Clone)]
 pub struct OpenArtCookies {

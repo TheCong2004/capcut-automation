@@ -3,7 +3,7 @@ use tokens::tokens::users::UserToken;
 pub struct WebhookEventLogSummary {
   /// This is the stripe customer ID, if it was associated with the event.
   pub maybe_stripe_customer_id: Option<String>,
-  
+
   /// If we recorded our own internal user ID as Stripe metadata, this passes it upstream.
   pub maybe_user_token: Option<UserToken>,
 

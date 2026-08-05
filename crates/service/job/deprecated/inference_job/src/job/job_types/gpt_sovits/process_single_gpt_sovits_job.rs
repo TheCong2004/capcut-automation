@@ -9,25 +9,18 @@ use crate::job::job_types::gpt_sovits::tts_inference::process_single_gpt_sovits_
 use crate::job::job_types::gpt_sovits::upload_model::process_gpt_sovits_upload_job::process_gpt_sovits_upload_job;
 use crate::state::job_dependencies::JobDependencies;
 
-pub async fn process_single_gpt_sovits_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableInferenceJob
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
+pub async fn process_single_gpt_sovits_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
   return match job.job_type {
-    InferenceJobType::GptSovits => {
-      match job.maybe_download_url {
-        Some(_) => {
-          let job_success_result = process_gpt_sovits_upload_job(job_dependencies, job).await?;
-          Ok(job_success_result)
-        }
-        None => {
-          let job_success_result = process_single_gpt_sovits_tts_job(job_dependencies, job).await?;
-          Ok(job_success_result)
-        }
-      }
-    }
-    _ => {
-      Err(ProcessSingleJobError::Other(anyhow!("job type not set")))
-    }
-  }
+    InferenceJobType::GptSovits => match job.maybe_download_url {
+      Some(_) => {
+        let job_success_result = process_gpt_sovits_upload_job(job_dependencies, job).await?;
+        Ok(job_success_result)
+      },
+      None => {
+        let job_success_result = process_single_gpt_sovits_tts_job(job_dependencies, job).await?;
+        Ok(job_success_result)
+      },
+    },
+    _ => Err(ProcessSingleJobError::Other(anyhow!("job type not set"))),
+  };
 }

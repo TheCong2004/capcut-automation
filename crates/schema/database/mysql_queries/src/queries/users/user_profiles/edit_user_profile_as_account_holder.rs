@@ -27,13 +27,9 @@ pub struct Args<'a> {
   pub ip_address: &'a str,
 }
 
-pub async fn edit_user_profile_as_account_holder(
-  mysql_pool: &MySqlPool,
-  args: Args<'_>,
-) -> AnyhowResult<()>
-{
+pub async fn edit_user_profile_as_account_holder(mysql_pool: &MySqlPool, args: Args<'_>) -> AnyhowResult<()> {
   let _result = sqlx::query!(
-        r#"
+    r#"
 UPDATE users
 SET
     profile_markdown = ?,
@@ -52,22 +48,21 @@ SET
 WHERE users.token = ?
 LIMIT 1
         "#,
-      args.profile_markdown,
-      args.profile_html,
-      args.preferred_tts_result_visibility,
-      args.preferred_w2l_result_visibility,
-      args.discord_username,
-      args.twitter_username,
-      args.twitch_username,
-      args.github_username,
-      args.cashapp_username,
-      args.website_url,
-      args.ip_address,
-      args.user_token,
-    )
-      .execute(mysql_pool)
-      .await?;
+    args.profile_markdown,
+    args.profile_html,
+    args.preferred_tts_result_visibility,
+    args.preferred_w2l_result_visibility,
+    args.discord_username,
+    args.twitter_username,
+    args.twitch_username,
+    args.github_username,
+    args.cashapp_username,
+    args.website_url,
+    args.ip_address,
+    args.user_token,
+  )
+  .execute(mysql_pool)
+  .await?;
 
   Ok(())
 }
-

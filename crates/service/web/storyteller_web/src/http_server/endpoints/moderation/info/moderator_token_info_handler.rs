@@ -55,79 +55,61 @@ pub struct ModeratorTokenInfoResponse {
     ("path" = ModeratorTokenInfoPath, description = "Path for Request")
   )
 )]
-pub async fn moderator_get_token_info_handler(
-  path: Path<ModeratorTokenInfoPath>,
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ModeratorTokenInfoResponse>, CommonWebError> {
-
+pub async fn moderator_get_token_info_handler(path: Path<ModeratorTokenInfoPath>, http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModeratorTokenInfoResponse>, CommonWebError> {
   let user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
   let token = path.token.trim();
-  let maybe_result = get_entity_from_token(&server_state.mysql_pool, &path.token)
-      .await
-      .map_err(|err| {
-        warn!("get tts pending count error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let maybe_result = get_entity_from_token(&server_state.mysql_pool, &path.token).await.map_err(|err| {
+    warn!("get tts pending count error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let response = ModeratorTokenInfoResponse {
-    success: true,
-    maybe_payload: maybe_result,
-  };
+  let response = ModeratorTokenInfoResponse { success: true, maybe_payload: maybe_result };
 
   Ok(Json(response))
 }
 
-const LEGACY_USER_TOKEN_PREFIX : &str = "U:";
+const LEGACY_USER_TOKEN_PREFIX: &str = "U:";
 
 async fn get_entity_from_token(mysql_pool: &MySqlPool, token: &str) -> AnyhowResult<Option<String>> {
-
   if token.starts_with(UserToken::token_prefix()) || token.starts_with(LEGACY_USER_TOKEN_PREFIX) {
     let typed_token = UserToken::new_from_str(token);
-    let maybe_result = get_user_profile_by_token(&typed_token, mysql_pool)
-        .await?;
+    let maybe_result = get_user_profile_by_token(&typed_token, mysql_pool).await?;
     return maybe_to_string(maybe_result);
   }
 
   if token.starts_with(MediaFileToken::token_prefix()) {
     let typed_token = MediaFileToken::new_from_str(token);
-    let maybe_result = get_media_file(&typed_token, true, mysql_pool)
-        .await?;
+    let maybe_result = get_media_file(&typed_token, true, mysql_pool).await?;
     return maybe_to_string(maybe_result);
   }
 
   if token.starts_with(ModelWeightToken::token_prefix()) {
     let typed_token = ModelWeightToken::new_from_str(token);
-    let maybe_result = get_weight_by_token(&typed_token, true, mysql_pool)
-        .await?;
+    let maybe_result = get_weight_by_token(&typed_token, true, mysql_pool).await?;
     return maybe_to_string(maybe_result);
   }
 
   if token.starts_with(InferenceJobToken::token_prefix()) {
     let typed_token = InferenceJobToken::new_from_str(token);
-    let maybe_result = get_inference_job_status(&typed_token, mysql_pool)
-        .await?;
+    let maybe_result = get_inference_job_status(&typed_token, mysql_pool).await?;
     return maybe_to_string(maybe_result);
   }
 
   if token.starts_with(PromptToken::token_prefix()) {
     let typed_token = PromptToken::new_from_str(token);
-    let maybe_result = get_prompt(&typed_token, mysql_pool)
-        .await?;
+    let maybe_result = get_prompt(&typed_token, mysql_pool).await?;
     return maybe_to_string(maybe_result);
   }
 
   // If nothing else works, try username lookup
   let username = token.to_lowercase();
-  let maybe_result = get_user_profile_by_username(&username, mysql_pool)
-      .await?;
+  let maybe_result = get_user_profile_by_username(&username, mysql_pool).await?;
 
   maybe_to_string(maybe_result)
 }
 
 fn maybe_to_string<T: Serialize>(maybe_data: Option<T>) -> AnyhowResult<Option<String>> {
-  let maybe_stringified = maybe_data.map(|data| serde_json::to_string(&data))
-      .transpose()?;
+  let maybe_stringified = maybe_data.map(|data| serde_json::to_string(&data)).transpose()?;
   Ok(maybe_stringified)
 }

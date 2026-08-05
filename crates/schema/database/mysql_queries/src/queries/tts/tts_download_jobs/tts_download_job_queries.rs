@@ -29,12 +29,10 @@ pub struct TtsUploadJobRecord {
   pub retry_at: Option<chrono::DateTime<Utc>>,
 }
 
-pub async fn query_tts_upload_job_records(pool: &MySqlPool, num_records: u32)
-  -> AnyhowResult<Vec<TtsUploadJobRecord>>
-{
+pub async fn query_tts_upload_job_records(pool: &MySqlPool, num_records: u32) -> AnyhowResult<Vec<TtsUploadJobRecord>> {
   let job_records = sqlx::query_as!(
-      TtsUploadJobRecord,
-        r#"
+    TtsUploadJobRecord,
+    r#"
 SELECT
   id,
   token,
@@ -65,10 +63,10 @@ WHERE
   )
   LIMIT ?
         "#,
-      num_records,
-    )
-    .fetch_all(pool)
-    .await?;
+    num_records,
+  )
+  .fetch_all(pool)
+  .await?;
 
   Ok(job_records)
 }
@@ -78,17 +76,13 @@ pub struct TtsUploadLockRecord {
   status: String,
 }
 
-pub async fn grab_job_lock_and_mark_pending(
-  pool: &MySqlPool,
-  job: &TtsUploadJobRecord
-) -> AnyhowResult<bool> {
-
+pub async fn grab_job_lock_and_mark_pending(pool: &MySqlPool, job: &TtsUploadJobRecord) -> AnyhowResult<bool> {
   // NB: We use transactions and "SELECT ... FOR UPDATE" to simulate mutexes.
   let mut transaction = pool.begin().await?;
 
   let maybe_record = sqlx::query_as!(
     TtsUploadLockRecord,
-        r#"
+    r#"
 SELECT
   id,
   status
@@ -96,33 +90,31 @@ FROM tts_model_upload_jobs
 WHERE id = ?
 FOR UPDATE
         "#,
-        job.id,
-    )
-      .fetch_one(&mut *transaction)
-      .await;
+    job.id,
+  )
+  .fetch_one(&mut *transaction)
+  .await;
 
-  let record : TtsUploadLockRecord = match maybe_record {
+  let record: TtsUploadLockRecord = match maybe_record {
     Ok(record) => record,
-    Err(err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          return Err(anyhow!("could not job"));
-        },
-        _ => {
-          return Err(anyhow!("query error"));
-        }
-      }
-    }
+    Err(err) => match err {
+      sqlx::Error::RowNotFound => {
+        return Err(anyhow!("could not job"));
+      },
+      _ => {
+        return Err(anyhow!("query error"));
+      },
+    },
   };
 
   let can_transact = match record.status.as_ref() {
-    "pending" => true, // It's okay for us to take the lock.
-    "attempt_failed" => true, // We can retry.
-    "started" => false, // Job in progress (another job beat us, and we can't take the lock)
+    "pending" => true,           // It's okay for us to take the lock.
+    "attempt_failed" => true,    // We can retry.
+    "started" => false,          // Job in progress (another job beat us, and we can't take the lock)
     "complete_success" => false, // Job already complete
     "complete_failure" => false, // Job already complete (permanently dead; no need to retry)
-    "dead" => false, // Job already complete (permanently dead; retries exhausted)
-    _ => false, // Future-proof
+    "dead" => false,             // Job already complete (permanently dead; retries exhausted)
+    _ => false,                  // Future-proof
   };
 
   if !can_transact {
@@ -131,7 +123,7 @@ FOR UPDATE
   }
 
   let _acquire_lock = sqlx::query!(
-        r#"
+    r#"
 UPDATE tts_model_upload_jobs
 SET
   status = 'started',
@@ -139,23 +131,17 @@ SET
   retry_at = NOW() + interval 2 minute
 WHERE id = ?
         "#,
-        job.id,
-    )
-      .execute(&mut *transaction)
-      .await?;
+    job.id,
+  )
+  .execute(&mut *transaction)
+  .await?;
 
   transaction.commit().await?;
 
   Ok(true)
 }
 
-pub async fn mark_tts_upload_job_failure(
-  pool: &MySqlPool,
-  job: &TtsUploadJobRecord,
-  failure_reason: &str,
-  max_attempts: i32
-) -> AnyhowResult<()> {
-
+pub async fn mark_tts_upload_job_failure(pool: &MySqlPool, job: &TtsUploadJobRecord, failure_reason: &str, max_attempts: i32) -> AnyhowResult<()> {
   // statuses: "attempt_failed", "complete_failure", "dead"
   let mut next_status = "attempt_failed";
 
@@ -165,7 +151,7 @@ pub async fn mark_tts_upload_job_failure(
   }
 
   let _query_result = sqlx::query!(
-        r#"
+    r#"
 UPDATE tts_model_upload_jobs
 SET
   status = ?,
@@ -173,27 +159,21 @@ SET
   retry_at = NOW() + interval 2 minute
 WHERE id = ?
         "#,
-        next_status,
-        failure_reason.to_string(),
-        job.id,
-    )
-    .execute(pool)
-    .await?;
+    next_status,
+    failure_reason.to_string(),
+    job.id,
+  )
+  .execute(pool)
+  .await?;
 
   Ok(())
 }
 
-pub async fn mark_tts_upload_job_done(
-  pool: &MySqlPool,
-  job: &TtsUploadJobRecord,
-  success: bool,
-  maybe_model_token: Option<&str>,
-) -> AnyhowResult<()>
-{
+pub async fn mark_tts_upload_job_done(pool: &MySqlPool, job: &TtsUploadJobRecord, success: bool, maybe_model_token: Option<&str>) -> AnyhowResult<()> {
   let status = if success { "complete_success" } else { "complete_failure" };
 
   let _query_result = sqlx::query!(
-        r#"
+    r#"
 UPDATE tts_model_upload_jobs
 SET
   status = ?,
@@ -202,33 +182,23 @@ SET
   retry_at = NULL
 WHERE id = ?
         "#,
-        status,
-        maybe_model_token,
-        job.id,
-    )
-    .execute(pool)
-    .await?;
+    status,
+    maybe_model_token,
+    job.id,
+  )
+  .execute(pool)
+  .await?;
 
   Ok(())
 }
 
-pub async fn insert_tts_model<P: AsRef<Path>>(
-  pool: &MySqlPool,
-  job: &TtsUploadJobRecord,
-  private_bucket_hash: &str,
-  private_bucket_object_name: P,
-  file_size_bytes: u64
-) -> AnyhowResult<(u64, String)> {
-
+pub async fn insert_tts_model<P: AsRef<Path>>(pool: &MySqlPool, job: &TtsUploadJobRecord, private_bucket_hash: &str, private_bucket_object_name: P, file_size_bytes: u64) -> AnyhowResult<(u64, String)> {
   let model_token = TtsModelToken::generate().to_string();
 
-  let private_bucket_object_name = &private_bucket_object_name
-      .as_ref()
-      .display()
-      .to_string();
+  let private_bucket_object_name = &private_bucket_object_name.as_ref().display().to_string();
 
   let query_result = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO tts_models
 SET
   token = ?,
@@ -244,27 +214,25 @@ SET
   private_bucket_object_name = ?,
   file_size_bytes = ?
         "#,
-      &model_token,
-      job.title.to_string(),
-      job.creator_user_token.as_str(),
-      job.creator_ip_address.clone(),
-      job.creator_ip_address.clone(),
-      job.download_url.clone(),
-      private_bucket_hash.to_string(),
-      private_bucket_object_name.to_string(),
-      file_size_bytes
-    )
-    .execute(pool)
-    .await;
+    &model_token,
+    job.title.to_string(),
+    job.creator_user_token.as_str(),
+    job.creator_ip_address.clone(),
+    job.creator_ip_address.clone(),
+    job.download_url.clone(),
+    private_bucket_hash.to_string(),
+    private_bucket_object_name.to_string(),
+    file_size_bytes
+  )
+  .execute(pool)
+  .await;
 
   let record_id = match query_result {
-    Ok(res) => {
-      res.last_insert_id()
-    },
+    Ok(res) => res.last_insert_id(),
     Err(err) => {
       // TODO: handle better
       return Err(anyhow!("Mysql error: {:?}", err));
-    }
+    },
   };
 
   Ok((record_id, model_token))

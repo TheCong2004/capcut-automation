@@ -12,11 +12,7 @@ pub struct UnsubscribeReasonInsertBuilder<'a> {
 
 impl<'a> UnsubscribeReasonInsertBuilder<'a> {
   pub fn new() -> Self {
-    Self {
-        unsubscribe_reason: "",
-        user_token: "",
-        ip_address: "",
-    }
+    Self { unsubscribe_reason: "", user_token: "", ip_address: "" }
   }
 
   pub fn set_unsubscribe_reason(mut self, value: &'a str) -> Self {
@@ -36,7 +32,7 @@ impl<'a> UnsubscribeReasonInsertBuilder<'a> {
 
   pub async fn insert(&mut self, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<()> {
     let query = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO unsubscribe_reason 
 SET 
     user_token = ?,
@@ -46,18 +42,15 @@ SET
       self.user_token,
       self.unsubscribe_reason,
       self.ip_address,
-      );
+    );
 
-    let query_result = query.execute(&mut **mysql_connection)
-        .await;
+    let query_result = query.execute(&mut **mysql_connection).await;
 
     let _record_id = match query_result {
-      Ok(res) => {
-        res.last_insert_id()
-      },
+      Ok(res) => res.last_insert_id(),
       Err(err) => {
         return Err(anyhow!("Unsubscribe reason insert DB error: {:?}", err));
-      }
+      },
     };
 
     Ok(())

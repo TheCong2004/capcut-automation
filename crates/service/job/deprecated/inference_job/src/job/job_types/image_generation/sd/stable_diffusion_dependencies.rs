@@ -16,13 +16,6 @@ pub struct StableDiffusionDependencies {
 
 impl StableDiffusionDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      downloaders: StableDiffusionDownloaders::build_all_from_env(),
-      inference_command: StableDiffusionInferenceCommand::from_env()?,
-      vae_bucket_path: easyenv::get_env_string_required("SD_VAE_BUCKET_PATH")?,
-      predefined_sd_weight_token: easyenv::get_env_string_required("SD_PREDEFINED_SD_WEIGHT_TOKEN")?,
-      predefined_sd_weight_bucket_path: easyenv::get_env_string_required("SD_PREDEFINED_SD_WEIGHT_BUCKET_PATH")?,
-      predefined_lora_weight_token: easyenv::get_env_string_required("SD_PREDEFINED_LORA_WEIGHT_TOKEN")?,
-    })
+    Ok(Self { downloaders: StableDiffusionDownloaders::build_all_from_env(), inference_command: StableDiffusionInferenceCommand::from_env()?, vae_bucket_path: easyenv::get_env_string_required("SD_VAE_BUCKET_PATH")?, predefined_sd_weight_token: easyenv::get_env_string_required("SD_PREDEFINED_SD_WEIGHT_TOKEN")?, predefined_sd_weight_bucket_path: easyenv::get_env_string_required("SD_PREDEFINED_SD_WEIGHT_BUCKET_PATH")?, predefined_lora_weight_token: easyenv::get_env_string_required("SD_PREDEFINED_LORA_WEIGHT_TOKEN")? })
   }
 }

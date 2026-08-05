@@ -21,22 +21,14 @@ use artcraft_api_defs::video_info::upload::VideoInfoUploadResponse;
 use bucket_client::UploadFileBytesArgs;
 use ffmpeg_utils::ffprobe::ffprobe_get_dimensions::ffprobe_get_dimensions;
 use http_server_common::request::get_request_ip::get_request_ip;
-use mysql_queries::queries::uploaded_videos::get_uploaded_video_by_sha1_checksum::{
-  get_uploaded_video_by_sha1_checksum, GetUploadedVideoBySha1ChecksumArgs,
-};
-use mysql_queries::queries::uploaded_videos::insert_uploaded_video::{
-  insert_uploaded_video, InsertUploadedVideoArgs,
-};
-use mysql_queries::queries::uploaded_videos::update_uploaded_video::{
-  update_uploaded_video, UpdateUploadedVideoArgs,
-};
+use mysql_queries::queries::uploaded_videos::get_uploaded_video_by_sha1_checksum::{get_uploaded_video_by_sha1_checksum, GetUploadedVideoBySha1ChecksumArgs};
+use mysql_queries::queries::uploaded_videos::insert_uploaded_video::{insert_uploaded_video, InsertUploadedVideoArgs};
+use mysql_queries::queries::uploaded_videos::update_uploaded_video::{update_uploaded_video, UpdateUploadedVideoArgs};
 use sha1_hash::sha1_hash_bytes_as_crockford;
 use video_info::VideoInfo;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
-use crate::http_server::endpoints::video_info::provenance::{
-  detect_model_family, detect_model_type, model_family_for_type, to_provenance,
-};
+use crate::http_server::endpoints::video_info::provenance::{detect_model_family, detect_model_type, model_family_for_type, to_provenance};
 use crate::http_server::web_utils::redis_rate_limiter::RateLimiterError;
 use crate::state::server_state::ServerState;
 
@@ -69,16 +61,12 @@ pub struct VideoInfoUploadForm {
     ("request" = VideoInfoUploadForm, description = "Multipart form with a single `file` video upload."),
   )
 )]
-pub async fn video_info_upload_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(mut form): MultipartForm<VideoInfoUploadForm>,
-) -> Result<Json<VideoInfoUploadResponse>, CommonWebError> {
+pub async fn video_info_upload_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(mut form): MultipartForm<VideoInfoUploadForm>) -> Result<Json<VideoInfoUploadResponse>, CommonWebError> {
   // IP-based rate limit (shared with the read-only endpoint). Fails open.
   match server_state.redis_rate_limiters.video_info_read_only.rate_limit_request(&http_request).await {
-    Ok(()) => {}
+    Ok(()) => {},
     Err(RateLimiterError::RateLimitExceededError) => return Err(CommonWebError::TooManyRequests),
-    Err(RateLimiterError::ClientError) => {} // fail open
+    Err(RateLimiterError::ClientError) => {}, // fail open
   }
 
   let mut bytes = Vec::new();
@@ -98,16 +86,9 @@ pub async fn video_info_upload_handler(
 
   // Prefer an explicit `maybe_filename` field; otherwise use the uploaded file's
   // own name. Trimmed; empty becomes absent.
-  let maybe_filename = form
-    .maybe_filename
-    .as_ref()
-    .map(|filename| filename.as_str().to_string())
-    .or_else(|| form.file.file_name.clone())
-    .map(|filename| filename.trim().to_string())
-    .filter(|filename| !filename.is_empty());
+  let maybe_filename = form.maybe_filename.as_ref().map(|filename| filename.as_str().to_string()).or_else(|| form.file.file_name.clone()).map(|filename| filename.trim().to_string()).filter(|filename| !filename.is_empty());
 
-  let sha1_checksum =
-    sha1_hash_bytes_as_crockford(&bytes).map_err(CommonWebError::from_error)?;
+  let sha1_checksum = sha1_hash_bytes_as_crockford(&bytes).map_err(CommonWebError::from_error)?;
 
   let parse_result = VideoInfo::from_bytes(&bytes);
   let maybe_encoder = video_info::encoder_tag(&bytes);
@@ -116,9 +97,7 @@ pub async fn video_info_upload_handler(
   let maybe_report = parse_result.as_ref().ok().map(|info| format!("{info:#?}"));
 
   let maybe_detected_model_type = detect_model_type(&parse_result);
-  let maybe_detected_model_family = maybe_detected_model_type
-    .map(model_family_for_type)
-    .or_else(|| detect_model_family(&parse_result));
+  let maybe_detected_model_family = maybe_detected_model_type.map(model_family_for_type).or_else(|| detect_model_family(&parse_result));
 
   let provenance = to_provenance(&parse_result, maybe_encoder);
 
@@ -127,14 +106,7 @@ pub async fn video_info_upload_handler(
   // connection. Fail-soft: a storage error must not fail provenance detection.
   if let Some(bucket) = server_state.seedance_video_bucket.as_ref() {
     let object_name = seedance_video_object_name(&sha1_checksum);
-    if let Err(err) = bucket
-      .upload_file_bytes(UploadFileBytesArgs {
-        object_name: object_name.as_str(),
-        bytes: &bytes,
-        content_type: Some("video/mp4"),
-      })
-      .await
-    {
+    if let Err(err) = bucket.upload_file_bytes(UploadFileBytesArgs { object_name: object_name.as_str(), bytes: &bytes, content_type: Some("video/mp4") }).await {
       warn!("seedance video bucket upload failed for {}: {:?}", object_name, err);
     }
   }
@@ -149,72 +121,27 @@ pub async fn video_info_upload_handler(
     Err(err) => {
       warn!("video_info upload: ffprobe task failed; storing without dimensions: {:?}", err);
       None
-    }
+    },
   };
   let maybe_width = maybe_dimensions.map(|(width, _)| width);
   let maybe_height = maybe_dimensions.map(|(_, height)| height);
-  let maybe_resolution = maybe_dimensions
-    .map(|(width, height)| classify_resolution(width, height).as_str().to_string());
+  let maybe_resolution = maybe_dimensions.map(|(width, height)| classify_resolution(width, height).as_str().to_string());
 
   // ── Persist (upsert by SHA-1) ──
 
   let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_existing = get_uploaded_video_by_sha1_checksum(GetUploadedVideoBySha1ChecksumArgs {
-    sha1_checksum: &sha1_checksum,
-    mysql_executor: &mut *mysql_connection,
-    phantom: PhantomData,
-  })
-  .await?;
+  let maybe_existing = get_uploaded_video_by_sha1_checksum(GetUploadedVideoBySha1ChecksumArgs { sha1_checksum: &sha1_checksum, mysql_executor: &mut *mysql_connection, phantom: PhantomData }).await?;
 
   let uploaded_video_token = match maybe_existing {
     Some(existing) => {
-      update_uploaded_video(UpdateUploadedVideoArgs {
-        token: &existing.token,
-        maybe_filename: maybe_filename.as_deref(),
-        maybe_width,
-        maybe_height,
-        maybe_resolution: maybe_resolution.as_deref(),
-        maybe_detected_model_family,
-        maybe_detected_model_type,
-        maybe_report: maybe_report.as_deref(),
-        maybe_updated_ip_address: Some(ip_address.as_str()),
-        mysql_executor: &mut *mysql_connection,
-        phantom: PhantomData,
-      })
-      .await?;
+      update_uploaded_video(UpdateUploadedVideoArgs { token: &existing.token, maybe_filename: maybe_filename.as_deref(), maybe_width, maybe_height, maybe_resolution: maybe_resolution.as_deref(), maybe_detected_model_family, maybe_detected_model_type, maybe_report: maybe_report.as_deref(), maybe_updated_ip_address: Some(ip_address.as_str()), mysql_executor: &mut *mysql_connection, phantom: PhantomData }).await?;
       existing.token
-    }
-    None => {
-      insert_uploaded_video(InsertUploadedVideoArgs {
-        sha1_checksum: &sha1_checksum,
-        filesize_bytes,
-        maybe_filename: maybe_filename.as_deref(),
-        maybe_width,
-        maybe_height,
-        maybe_resolution: maybe_resolution.as_deref(),
-        maybe_detected_model_family,
-        maybe_detected_model_type,
-        maybe_report: maybe_report.as_deref(),
-        upload_ip_address: &ip_address,
-        mysql_executor: &mut *mysql_connection,
-        phantom: PhantomData,
-      })
-      .await?
-    }
+    },
+    None => insert_uploaded_video(InsertUploadedVideoArgs { sha1_checksum: &sha1_checksum, filesize_bytes, maybe_filename: maybe_filename.as_deref(), maybe_width, maybe_height, maybe_resolution: maybe_resolution.as_deref(), maybe_detected_model_family, maybe_detected_model_type, maybe_report: maybe_report.as_deref(), upload_ip_address: &ip_address, mysql_executor: &mut *mysql_connection, phantom: PhantomData }).await?,
   };
 
-  Ok(Json(VideoInfoUploadResponse {
-    success: true,
-    uploaded_video_token,
-    kind: provenance.kind,
-    maybe_encoder: provenance.maybe_encoder,
-    maybe_seedance: provenance.maybe_seedance,
-    maybe_veo: provenance.maybe_veo,
-    maybe_sora: provenance.maybe_sora,
-    maybe_dreamina: provenance.maybe_dreamina,
-    maybe_kling: provenance.maybe_kling,
-  }))
+  Ok(Json(VideoInfoUploadResponse { success: true, uploaded_video_token, kind: provenance.kind, maybe_encoder: provenance.maybe_encoder, maybe_seedance: provenance.maybe_seedance, maybe_veo: provenance.maybe_veo, maybe_sora: provenance.maybe_sora, maybe_dreamina: provenance.maybe_dreamina, maybe_kling: provenance.maybe_kling }))
 }
 
 /// Object key for archiving an uploaded video, sharded into four directory
@@ -222,11 +149,7 @@ pub async fn video_info_upload_handler(
 /// `uploads/{c0}/{c1}/{c2}/{c3}/{checksum}.mp4`
 /// (e.g. checksum `f0a2cda0…` → `uploads/f/0/a/2/f0a2cda0….mp4`).
 fn seedance_video_object_name(sha1_checksum: &str) -> String {
-  let shard: String = sha1_checksum
-    .chars()
-    .take(4)
-    .map(|character| format!("{character}/"))
-    .collect();
+  let shard: String = sha1_checksum.chars().take(4).map(|character| format!("{character}/")).collect();
   format!("uploads/{shard}{sha1_checksum}.mp4")
 }
 
@@ -296,7 +219,7 @@ fn probe_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     Err(err) => {
       warn!("video_info upload: could not create temp file for ffprobe: {:?}", err);
       return None;
-    }
+    },
   };
 
   if let Err(err) = temp_file.write_all(bytes) {
@@ -312,7 +235,7 @@ fn probe_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     Err(err) => {
       warn!("video_info upload: ffprobe failed; storing without dimensions: {:?}", err);
       None
-    }
+    },
   }
 }
 
@@ -322,10 +245,7 @@ mod tests {
 
   #[test]
   fn shards_object_name_by_first_four_checksum_chars() {
-    assert_eq!(
-      seedance_video_object_name("f0a2cda0deadbeef"),
-      "uploads/f/0/a/2/f0a2cda0deadbeef.mp4"
-    );
+    assert_eq!(seedance_video_object_name("f0a2cda0deadbeef"), "uploads/f/0/a/2/f0a2cda0deadbeef.mp4");
   }
 
   #[test]
@@ -363,11 +283,7 @@ mod tests {
   #[test]
   fn resolution_class_is_orientation_independent() {
     for (w, h) in [(1920, 1080), (2048, 1080), (3840, 2160), (1280, 720)] {
-      assert_eq!(
-        classify_resolution(w, h),
-        classify_resolution(h, w),
-        "{w}x{h} should match its flip {h}x{w}",
-      );
+      assert_eq!(classify_resolution(w, h), classify_resolution(h, w), "{w}x{h} should match its flip {h}x{w}",);
     }
   }
 }

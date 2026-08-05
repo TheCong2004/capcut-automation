@@ -52,14 +52,7 @@ pub async fn order_polling_main_loop(job_dependencies: JobDependencies) {
     if elapsed > POLL_ALERT_THRESHOLD {
       warn!("Poll iteration took {:.1}s (threshold: {}s)", elapsed.as_secs_f64(), POLL_ALERT_THRESHOLD.as_secs());
 
-      let notification = NotificationDetailsBuilder::from_title(
-            "Kinovi poll iteration slow".to_string())
-          .set_description(Some(format!(
-            "Poll iteration took {:.1} seconds, exceeding the threshold.",
-            elapsed.as_secs_f64(),
-          )))
-          .set_urgency(Some(NotificationUrgency::Medium))
-          .build();
+      let notification = NotificationDetailsBuilder::from_title("Kinovi poll iteration slow".to_string()).set_description(Some(format!("Poll iteration took {:.1} seconds, exceeding the threshold.", elapsed.as_secs_f64(),))).set_urgency(Some(NotificationUrgency::Medium)).build();
 
       if let Err(pager_err) = job_dependencies.pager.enqueue_page(notification) {
         error!("Failed to enqueue slow iteration alert: {:?}", pager_err);
@@ -79,18 +72,9 @@ async fn run_poll_iteration(deps: &JobDependencies) -> anyhow::Result<()> {
   info!("Querying database jobs for type: {:?}", deps.kinovi_version);
 
   let (job_type, third_party) = match deps.kinovi_version {
-    KinoviVersion::Volcengine => (
-      InferenceJobType::Seedance2ProQueue,
-      InferenceJobExternalThirdParty::Seedance2Pro,
-    ),
-    KinoviVersion::BytePlus => (
-      InferenceJobType::Seedance2ProAltQueue,
-      InferenceJobExternalThirdParty::Seedance2ProAlt,
-    ),
-    KinoviVersion::BytePlusUltra => (
-      InferenceJobType::Seedance2ProBytePlusUltraQueue,
-      InferenceJobExternalThirdParty::Seedance2ProBytePlusUltra,
-    ),
+    KinoviVersion::Volcengine => (InferenceJobType::Seedance2ProQueue, InferenceJobExternalThirdParty::Seedance2Pro),
+    KinoviVersion::BytePlus => (InferenceJobType::Seedance2ProAltQueue, InferenceJobExternalThirdParty::Seedance2ProAlt),
+    KinoviVersion::BytePlusUltra => (InferenceJobType::Seedance2ProBytePlusUltraQueue, InferenceJobExternalThirdParty::Seedance2ProBytePlusUltra),
   };
 
   // 1. Query all (limit 25,000) non-terminal Seedance2Pro jobs from the DB.
@@ -99,7 +83,7 @@ async fn run_poll_iteration(deps: &JobDependencies) -> anyhow::Result<()> {
     Err(err) => {
       error!("Failed to list pending database jobs: {:?}", err);
       return alert_pager_and_return_err(&deps.pager, "Jobs DB query failed", err.into(), None);
-    }
+    },
   };
 
   if pending_jobs.is_empty() {
@@ -133,14 +117,8 @@ struct WalkResult {
 /// Walk Kinovi's order pages newest-first, staging finished orders that match a
 /// pending job. Periodically pauses the deep walk to re-scan the head pages so
 /// recent jobs are caught with lower latency than the long tail.
-async fn walk_orders(
-  deps: &JobDependencies,
-  pending_jobs: Vec<PendingSeedance2ProJob>,
-) -> anyhow::Result<WalkResult> {
-  let job_by_order_id: HashMap<String, PendingSeedance2ProJob> = pending_jobs
-      .into_iter()
-      .map(|job| (job.order_id.clone(), job))
-      .collect();
+async fn walk_orders(deps: &JobDependencies, pending_jobs: Vec<PendingSeedance2ProJob>) -> anyhow::Result<WalkResult> {
+  let job_by_order_id: HashMap<String, PendingSeedance2ProJob> = pending_jobs.into_iter().map(|job| (job.order_id.clone(), job)).collect();
 
   let pending_db_job_count = job_by_order_id.len();
   let oldest_pending_created_at = job_by_order_id.values().map(|job| job.created_at).min();
@@ -161,11 +139,7 @@ async fn walk_orders(
     let iteration_elapsed = iteration_start.elapsed();
 
     let pending_db_jobs_display = match oldest_pending_created_at {
-      Some(oldest) if pending_db_job_count > 0 => format!(
-        "{} (oldest: {} ago)",
-        pending_db_job_count,
-        format_duration_ago(Utc::now() - oldest),
-      ),
+      Some(oldest) if pending_db_job_count > 0 => format!("{} (oldest: {} ago)", pending_db_job_count, format_duration_ago(Utc::now() - oldest),),
       _ => pending_db_job_count.to_string(),
     };
 
@@ -194,18 +168,9 @@ async fn walk_orders(
     result.orders_seen += response.orders.len() as u32;
     result.orders_staged += page_summary.staged;
 
-    let maybe_oldest_created_at = response.orders
-        .iter()
-        .filter_map(|order| order.created_at_utc)
-        .last();
+    let maybe_oldest_created_at = response.orders.iter().filter_map(|order| order.created_at_utc).last();
 
-    info!(
-      "Polled Kinovi page {}: {} orders (oldest on page created at {:?}); {} finished orders staged from this page.",
-      result.pages_seen,
-      response.orders.len(),
-      maybe_oldest_created_at,
-      page_summary.staged,
-    );
+    info!("Polled Kinovi page {}: {} orders (oldest on page created at {:?}); {} finished orders staged from this page.", result.pages_seen, response.orders.len(), maybe_oldest_created_at, page_summary.staged,);
 
     cursor = response.next_cursor;
 
@@ -213,15 +178,12 @@ async fn walk_orders(
       (Some(max_age), Some(oldest)) => {
         let age = Utc::now() - oldest;
         if age > max_age {
-          info!(
-            "Oldest order on page {} is {} hours old (threshold {} hours). Stopping deep walk.",
-            result.pages_seen, age.num_hours(), max_age.num_hours(),
-          );
+          info!("Oldest order on page {} is {} hours old (threshold {} hours). Stopping deep walk.", result.pages_seen, age.num_hours(), max_age.num_hours(),);
           true
         } else {
           false
         }
-      }
+      },
       _ => false,
     };
 
@@ -246,10 +208,7 @@ async fn walk_orders(
 
 /// Re-scan the first [`HEAD_PAGE_COUNT`] pages (newest orders) and stage any
 /// finished matches. Used mid-walk to keep recent-job latency low.
-async fn recheck_head_pages(
-  deps: &JobDependencies,
-  job_by_order_id: &HashMap<String, PendingSeedance2ProJob>,
-) -> anyhow::Result<WalkResult> {
+async fn recheck_head_pages(deps: &JobDependencies, job_by_order_id: &HashMap<String, PendingSeedance2ProJob>) -> anyhow::Result<WalkResult> {
   info!("Re-checking the {} newest order page(s).", HEAD_PAGE_COUNT);
 
   let mut result = WalkResult::default();
@@ -284,11 +243,7 @@ struct PageStageSummary {
 /// Stage every finished (completed/failed) order on this page that matches a
 /// pending job. Orders still in progress are ignored — we'll see them again on
 /// a later poll. Staging is idempotent: the reconciler drops duplicates.
-fn stage_finished_orders(
-  deps: &JobDependencies,
-  orders: &[OrderStatus],
-  job_by_order_id: &HashMap<String, PendingSeedance2ProJob>,
-) -> PageStageSummary {
+fn stage_finished_orders(deps: &JobDependencies, orders: &[OrderStatus], job_by_order_id: &HashMap<String, PendingSeedance2ProJob>) -> PageStageSummary {
   let mut staged = 0u32;
 
   for order in orders {
@@ -301,18 +256,11 @@ fn stage_finished_orders(
       continue; // Still pending/processing — check again next poll.
     }
 
-    let newly_staged = deps.order_reconciler.push_order(
-      order.order_id.clone(),
-      order.clone(),
-      job.clone(),
-    );
+    let newly_staged = deps.order_reconciler.push_order(order.order_id.clone(), order.clone(), job.clone());
 
     if newly_staged {
       staged += 1;
-      info!(
-        "Staged finished order {} (status {:?}) for job {}.",
-        order.order_id, order.task_status, job.job_token.as_str(),
-      );
+      info!("Staged finished order {} (status {:?}) for job {}.", order.order_id, order.task_status, job.job_token.as_str(),);
     }
   }
 
@@ -333,44 +281,24 @@ fn format_duration_ago(elapsed: chrono::Duration) -> String {
 /// Poll orders from Kinovi with retries. On transient failures, waits with
 /// increasing delay (attempt × 2s, capped at `poll_retry_max_delay_millis`).
 /// After exhausting retries, alerts the pager and returns an error.
-async fn poll_orders_with_retry(
-  deps: &JobDependencies,
-  cursor: Option<u64>,
-) -> anyhow::Result<PollOrdersResponse> {
+async fn poll_orders_with_retry(deps: &JobDependencies, cursor: Option<u64>) -> anyhow::Result<PollOrdersResponse> {
   let max_retries = deps.poll_max_retries;
 
   for attempt in 1..=max_retries {
-    match poll_orders(PollOrdersArgs {
-      session: &deps.seedance2pro_session,
-      cursor,
-      host_override: None,
-    }).await {
+    match poll_orders(PollOrdersArgs { session: &deps.seedance2pro_session, cursor, host_override: None }).await {
       Ok(response) => return Ok(response),
       Err(err) => {
-        warn!(
-          "Error polling Kinovi orders (attempt {}/{}): {:?}",
-          attempt, max_retries, err
-        );
+        warn!("Error polling Kinovi orders (attempt {}/{}): {:?}", attempt, max_retries, err);
 
         if attempt >= max_retries {
-          return alert_pager_and_return_err(
-            &deps.pager,
-            "Kinovi API polling failed after retries",
-            anyhow::anyhow!("poll_orders failed after {} attempts: {:?}", attempt, err),
-            None,
-          );
+          return alert_pager_and_return_err(&deps.pager, "Kinovi API polling failed after retries", anyhow::anyhow!("poll_orders failed after {} attempts: {:?}", attempt, err), None);
         }
 
         let delay_millis = (attempt as u64 * 2_000).min(deps.poll_retry_max_delay_millis);
         tokio::time::sleep(Duration::from_millis(delay_millis)).await;
-      }
+      },
     }
   }
 
-  alert_pager_and_return_err(
-    &deps.pager,
-    "Kinovi API polling failed after max retries",
-    anyhow::anyhow!("poll_orders failed after {} attempts", max_retries),
-    None,
-  )
+  alert_pager_and_return_err(&deps.pager, "Kinovi API polling failed after max retries", anyhow::anyhow!("poll_orders failed after {} attempts", max_retries), None)
 }

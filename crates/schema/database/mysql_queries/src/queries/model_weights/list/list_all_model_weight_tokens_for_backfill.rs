@@ -16,11 +16,9 @@ pub struct UpdatedModelWeight {
 /// NB: This doesn't batch yet at our scale, but in the future we'll likely need/want to batch,
 /// and then we'll need another way to cursor in the event that batch_size < # records updated
 /// within a given time quantum.
-pub async fn list_all_model_weight_tokens_for_backfill<'e, 'c, E>(
-  mysql_executor: E,
-  since_date: &DateTime<Utc>,
-) -> AnyhowResult<Vec<UpdatedModelWeight>>
-    where E: 'e + Executor<'c, Database=MySql>
+pub async fn list_all_model_weight_tokens_for_backfill<'e, 'c, E>(mysql_executor: E, since_date: &DateTime<Utc>) -> AnyhowResult<Vec<UpdatedModelWeight>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let query = sqlx::query_as!(
     UpdatedModelWeightRaw,
@@ -39,14 +37,7 @@ pub async fn list_all_model_weight_tokens_for_backfill<'e, 'c, E>(
 
   let results = query.fetch_all(mysql_executor).await?;
 
-  let results = results.into_iter()
-      .map(|record| UpdatedModelWeight {
-        token: record.token,
-        weights_type: record.weights_type,
-        created_at: record.created_at,
-        updated_at: record.updated_at,
-      })
-      .collect();
+  let results = results.into_iter().map(|record| UpdatedModelWeight { token: record.token, weights_type: record.weights_type, created_at: record.created_at, updated_at: record.updated_at }).collect();
 
   Ok(results)
 }

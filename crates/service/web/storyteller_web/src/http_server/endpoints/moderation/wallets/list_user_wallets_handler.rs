@@ -4,11 +4,7 @@ use actix_web::web::{Json, Path};
 use actix_web::{web, HttpRequest};
 use log::warn;
 
-use artcraft_api_defs::moderation::wallets::list_user_wallets::{
-  ListUserWalletsEntry,
-  ListUserWalletsPathInfo,
-  ListUserWalletsResponse,
-};
+use artcraft_api_defs::moderation::wallets::list_user_wallets::{ListUserWalletsEntry, ListUserWalletsPathInfo, ListUserWalletsResponse};
 use mysql_queries::queries::wallets::list_user_wallets_for_moderation::list_user_wallets_for_moderation;
 
 use tokens::tokens::users::UserToken;
@@ -30,33 +26,15 @@ use crate::state::server_state::ServerState;
     ("user_token" = UserToken, Path, description = "User token to look up wallets for"),
   )
 )]
-pub async fn list_user_wallets_handler(
-  http_request: HttpRequest,
-  path: Path<ListUserWalletsPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListUserWalletsResponse>, CommonWebError> {
-
+pub async fn list_user_wallets_handler(http_request: HttpRequest, path: Path<ListUserWalletsPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListUserWalletsResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
-  let results = list_user_wallets_for_moderation(&path.user_token, &server_state.mysql_pool)
-    .await
-    .map_err(|err| {
-      warn!("list_user_wallets error: {:?}", err);
-      CommonWebError::from_anyhow_error(err)
-    })?;
+  let results = list_user_wallets_for_moderation(&path.user_token, &server_state.mysql_pool).await.map_err(|err| {
+    warn!("list_user_wallets error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let wallets = results.into_iter().map(|row| ListUserWalletsEntry {
-    token: row.token,
-    wallet_namespace: row.wallet_namespace,
-    banked_credits: row.banked_credits,
-    monthly_credits: row.monthly_credits,
-    version: row.version,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  }).collect();
+  let wallets = results.into_iter().map(|row| ListUserWalletsEntry { token: row.token, wallet_namespace: row.wallet_namespace, banked_credits: row.banked_credits, monthly_credits: row.monthly_credits, version: row.version, created_at: row.created_at, updated_at: row.updated_at }).collect();
 
-  Ok(Json(ListUserWalletsResponse {
-    success: true,
-    wallets,
-  }))
+  Ok(Json(ListUserWalletsResponse { success: true, wallets }))
 }

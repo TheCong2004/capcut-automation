@@ -8,8 +8,6 @@ pub struct VitsDependencies {
 
 impl VitsDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      inference_command: VitsInferenceCommand::from_env()?,
-    })
+    Ok(Self { inference_command: VitsInferenceCommand::from_env()? })
   }
 }

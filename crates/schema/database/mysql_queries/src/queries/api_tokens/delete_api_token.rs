@@ -3,15 +3,9 @@ use sqlx::MySqlPool;
 
 use errors::AnyhowResult;
 
-pub async fn delete_api_token(
-  user_token: &str,
-  api_token: &str,
-  ip_address_update: &str,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<bool> {
-
+pub async fn delete_api_token(user_token: &str, api_token: &str, ip_address_update: &str, mysql_pool: &MySqlPool) -> AnyhowResult<bool> {
   let query = sqlx::query!(
-        r#"
+    r#"
 UPDATE api_tokens
 SET
     deleted_at = CURRENT_TIMESTAMP,
@@ -21,10 +15,10 @@ WHERE
     AND api_token = ?
 LIMIT 1
         "#,
-      ip_address_update,
-      user_token,
-      api_token,
-    );
+    ip_address_update,
+    user_token,
+    api_token,
+  );
 
   let result = query.execute(mysql_pool).await;
 

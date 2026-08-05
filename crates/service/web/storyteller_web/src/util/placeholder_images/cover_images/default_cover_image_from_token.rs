@@ -8,7 +8,7 @@ use tokens::tokens::model_weights::ModelWeightToken;
 const NUMBER_OF_COVER_IMAGES: u64 = 25;
 
 /// Not that it matters, but this perturbs the hash.
-const SALT_LIKE_OFFSET : u8 = 21;
+const SALT_LIKE_OFFSET: u8 = 21;
 
 /// We return an index instead of a filename, that way the frontend can drive.
 /// The hash should be stable with respect to username.
@@ -60,7 +60,7 @@ mod tests {
     let mut distribution = HashSet::new();
     for _ in 0..1000 {
       let random_token = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
-      let random_token= ModelWeightToken::new_from_str(&random_token);
+      let random_token = ModelWeightToken::new_from_str(&random_token);
       let avatar_id = default_cover_image_from_token(&random_token);
       distribution.insert(avatar_id);
       assert!(avatar_id >= 0);

@@ -40,36 +40,23 @@ pub struct RenameMediaFileRequest {
     ("path" = MediaFileTokenPathInfo, description = "Path for Request")
   )
 )]
-pub async fn rename_media_file_handler(
-  http_request: HttpRequest,
-  path: Path<MediaFileTokenPathInfo>,
-  request: Json<RenameMediaFileRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError>{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn rename_media_file_handler(http_request: HttpRequest, path: Path<MediaFileTokenPathInfo>, request: Json<RenameMediaFileRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   let is_mod = user_session.can_ban_users;
 
-  let media_file_lookup_result = get_media_file(
-    &path.token,
-    is_mod,
-    &server_state.mysql_pool,
-  ).await;
+  let media_file_lookup_result = get_media_file(&path.token, is_mod, &server_state.mysql_pool).await;
 
   let media_file = match media_file_lookup_result {
     Ok(Some(media_file)) => media_file,
@@ -80,22 +67,17 @@ pub async fn rename_media_file_handler(
     Err(err) => {
       warn!("Error looking up media_file: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
-  let is_creator = media_file.maybe_creator_user_token
-      .is_some_and(|t| t.as_str() == user_session.user_token.as_str());
+  let is_creator = media_file.maybe_creator_user_token.is_some_and(|t| t.as_str() == user_session.user_token.as_str());
 
   if !is_creator && !is_mod {
     warn!("user is not allowed to delete this media_file: {:?}", user_session.user_token);
     return Err(CommonWebError::NotAuthorized);
   }
 
-  rename_media_file(
-    &path.token,
-    request.name.as_deref(),
-    &server_state.mysql_pool
-  ).await.map_err(|err| {
+  rename_media_file(&path.token, request.name.as_deref(), &server_state.mysql_pool).await.map_err(|err| {
     warn!("Error renaming media_file: {:?}", err);
     CommonWebError::from_anyhow_error(err)
   })?;

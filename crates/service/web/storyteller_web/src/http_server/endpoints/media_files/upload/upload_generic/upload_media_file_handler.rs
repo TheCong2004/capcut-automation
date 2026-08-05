@@ -18,7 +18,7 @@ pub struct UploadMediaSuccessResponse {
   pub media_file_token: MediaFileToken,
 }
 
-static ALLOWED_MIME_TYPES : Lazy<HashSet<&'static str>> = Lazy::new(|| {
+static ALLOWED_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
   HashSet::from([
     // Audio
     "audio/aac",
@@ -60,29 +60,14 @@ static ALLOWED_MIME_TYPES : Lazy<HashSet<&'static str>> = Lazy::new(|| {
     ("request" = (), description = "Ask Brandon. This is form-multipart."),
   )
 )]
-pub async fn upload_media_file_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  mut multipart_payload: Multipart,
-) -> Result<HttpResponse, MediaFileUploadError> {
-
-  let response = process_upload_media_file(
-    &http_request,
-    &server_state,
-    multipart_payload,
-    &ALLOWED_MIME_TYPES).await?;
+pub async fn upload_media_file_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, mut multipart_payload: Multipart) -> Result<HttpResponse, MediaFileUploadError> {
+  let response = process_upload_media_file(&http_request, &server_state, multipart_payload, &ALLOWED_MIME_TYPES).await?;
 
   let media_file_token = response.to_media_token();
 
-  let response = UploadMediaSuccessResponse {
-    success: true,
-    media_file_token,
-  };
+  let response = UploadMediaSuccessResponse { success: true, media_file_token };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|e| MediaFileUploadError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|e| MediaFileUploadError::ServerError)?;
 
-  return Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body));
+  return Ok(HttpResponse::Ok().content_type("application/json").body(body));
 }

@@ -43,47 +43,27 @@ pub struct CacheMissStrategizer<T: Hash + Eq> {
 
 impl CacheMissLog {
   fn new(first_miss: DateTime<Utc>) -> Self {
-    Self {
-      first_miss,
-      most_recent_miss: first_miss,
-    }
+    Self { first_miss, most_recent_miss: first_miss }
   }
 
   fn with_most_recent_miss(&self, most_recent_miss: DateTime<Utc>) -> Self {
-    Self {
-      first_miss: self.first_miss,
-      most_recent_miss,
-    }
+    Self { first_miss: self.first_miss, most_recent_miss }
   }
 }
 
-impl <T: Hash + Eq> CacheMissStrategizer<T> {
+impl<T: Hash + Eq> CacheMissStrategizer<T> {
   pub fn new(max_cold_duration: Duration, forget_duration: Duration) -> Self {
-    Self {
-      max_cold_duration,
-      forget_duration,
-      cache_miss_log: HashMap::new(),
-      get_time_function: Box::new(|| Utc::now()),
-    }
+    Self { max_cold_duration, forget_duration, cache_miss_log: HashMap::new(), get_time_function: Box::new(|| Utc::now()) }
   }
 
-  pub fn new_for_testing(
-    max_cold_duration: Duration,
-    forget_duration: Duration,
-    get_time_function: Box<dyn Fn() -> DateTime<Utc>>
-  ) -> Self {
-    Self {
-      max_cold_duration,
-      forget_duration,
-      cache_miss_log: HashMap::new(),
-      get_time_function,
-    }
+  pub fn new_for_testing(max_cold_duration: Duration, forget_duration: Duration, get_time_function: Box<dyn Fn() -> DateTime<Utc>>) -> Self {
+    Self { max_cold_duration, forget_duration, cache_miss_log: HashMap::new(), get_time_function }
   }
 
   // NB: Not threadsafe due to multiple operations against hashes!
   #[must_use]
   pub fn cache_miss(&mut self, id: T) -> CacheMissStrategy {
-    let now : DateTime<Utc> = (self.get_time_function)();
+    let now: DateTime<Utc> = (self.get_time_function)();
 
     if let Some((_id, cache_miss_log)) = self.cache_miss_log.get_key_value(&id) {
       let admit_duration = now.signed_duration_since(cache_miss_log.first_miss);
@@ -95,13 +75,11 @@ impl <T: Hash + Eq> CacheMissStrategizer<T> {
         let cache_miss_log = CacheMissLog::new(now);
         self.cache_miss_log.insert(id, cache_miss_log);
         CacheMissStrategy::WaitOrSkip
-      }
-      else if admit_duration > self.max_cold_duration {
+      } else if admit_duration > self.max_cold_duration {
         // We're done waiting. Do the work.
         self.cache_miss_log.remove(&id);
         CacheMissStrategy::Proceed
-      }
-      else {
+      } else {
         // Still waiting.
         let cache_miss_log = cache_miss_log.with_most_recent_miss(now);
         self.cache_miss_log.insert(id, cache_miss_log);
@@ -128,16 +106,13 @@ mod tests {
 
   fn get_date(datetime: &str) -> DateTime<Utc> {
     let datetime = DateTime::parse_from_rfc3339(datetime).unwrap();
-    let utc : DateTime<Utc> = DateTime::from(datetime);
+    let utc: DateTime<Utc> = DateTime::from(datetime);
     utc
   }
 
   #[test]
   fn cold_cache_cache_miss_algorithm() {
-    let mut cache_miss_strategizer = CacheMissStrategizer::new(
-      Duration::seconds(10),
-      Duration::seconds(60),
-    );
+    let mut cache_miss_strategizer = CacheMissStrategizer::new(Duration::seconds(10), Duration::seconds(60));
 
     // First invocation
     cache_miss_strategizer.set_time_function(Box::new(|| get_date("2021-07-01T13:00:00+00:00")));
@@ -179,7 +154,7 @@ mod tests {
     cache_miss_strategizer.set_time_function(Box::new(|| get_date("2021-07-01T13:04:00+00:00")));
     assert_eq!(cache_miss_strategizer.cache_miss(30), CacheMissStrategy::WaitOrSkip); // previously seen
     assert_eq!(cache_miss_strategizer.cache_miss(40), CacheMissStrategy::WaitOrSkip); // new
-    // We waited just long enough before expiry
+                                                                                      // We waited just long enough before expiry
     cache_miss_strategizer.set_time_function(Box::new(|| get_date("2021-07-01T13:04:59+00:00")));
     assert_eq!(cache_miss_strategizer.cache_miss(30), CacheMissStrategy::Proceed);
     assert_eq!(cache_miss_strategizer.cache_miss(40), CacheMissStrategy::Proceed);

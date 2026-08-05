@@ -47,44 +47,17 @@ pub struct CreateCheckoutSessionSuccessResponse {
     (status = 500, description = "Server error", body = CreateCheckoutSessionError),
   ),
 )]
-pub async fn stripe_create_checkout_session_json_handler(
-  http_request: HttpRequest,
-  request: Json<CreateCheckoutSessionRequest>,
-  stripe_config: web::Data<StripeConfig>,
-  stripe_client: web::Data<stripe::Client>,
-  server_environment: web::Data<ServerEnvironment>,
-  url_redirector: web::Data<ThirdPartyUrlRedirector>,
-  internal_product_to_stripe_lookup: web::Data<dyn InternalProductToStripeLookup>,
-  internal_user_lookup: web::Data<dyn InternalUserLookup>,
-  internal_session_cache_purge: web::Data<dyn InternalSessionCachePurge>,
-) -> Result<HttpResponse, CreateCheckoutSessionError>
-{
+pub async fn stripe_create_checkout_session_json_handler(http_request: HttpRequest, request: Json<CreateCheckoutSessionRequest>, stripe_config: web::Data<StripeConfig>, stripe_client: web::Data<stripe::Client>, server_environment: web::Data<ServerEnvironment>, url_redirector: web::Data<ThirdPartyUrlRedirector>, internal_product_to_stripe_lookup: web::Data<dyn InternalProductToStripeLookup>, internal_user_lookup: web::Data<dyn InternalUserLookup>, internal_session_cache_purge: web::Data<dyn InternalSessionCachePurge>) -> Result<HttpResponse, CreateCheckoutSessionError> {
   let maybe_internal_product_key = request.internal_plan_key.as_deref();
 
-  let url = stripe_create_checkout_session_shared(CreateStripeCheckoutSessionArgs {
-    maybe_internal_product_key,
-    http_request: &http_request,
-    stripe_config: &stripe_config,
-    server_environment: *server_environment.as_ref(),
-    stripe_client: &stripe_client,
-    url_redirector: &url_redirector,
-    internal_product_to_stripe_lookup: internal_product_to_stripe_lookup.get_ref(),
-    internal_user_lookup: internal_user_lookup.get_ref(),
-    maybe_tolt_referral: request.maybe_tolt_referral.as_deref()
-  }).await?;
+  let url = stripe_create_checkout_session_shared(CreateStripeCheckoutSessionArgs { maybe_internal_product_key, http_request: &http_request, stripe_config: &stripe_config, server_environment: *server_environment.as_ref(), stripe_client: &stripe_client, url_redirector: &url_redirector, internal_product_to_stripe_lookup: internal_product_to_stripe_lookup.get_ref(), internal_user_lookup: internal_user_lookup.get_ref(), maybe_tolt_referral: request.maybe_tolt_referral.as_deref() }).await?;
 
   // Best effort to delete Redis session cache
   internal_session_cache_purge.best_effort_purge_session_cache(&http_request);
 
-  let response = CreateCheckoutSessionSuccessResponse {
-    success: true,
-    stripe_checkout_redirect_url: url,
-  };
+  let response = CreateCheckoutSessionSuccessResponse { success: true, stripe_checkout_redirect_url: url };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|_e| CreateCheckoutSessionError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|_e| CreateCheckoutSessionError::ServerError)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

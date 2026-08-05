@@ -10,4 +10,3 @@ pub struct StripeArtcraftSubscriptionInfo {
   /// How many monthly credits this plan grants
   pub monthly_credits_amount: u64,
 }
-

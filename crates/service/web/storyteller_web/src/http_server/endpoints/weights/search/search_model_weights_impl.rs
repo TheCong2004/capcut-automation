@@ -91,7 +91,7 @@ pub struct ModelWeightSearchResult {
   /// Information about the cover image.
   pub cover_image: WeightsCoverImageDetails,
 
-  #[deprecated(note="switch to CoverImageDetails")]
+  #[deprecated(note = "switch to CoverImageDetails")]
   pub maybe_cover_image_public_bucket_path: Option<String>,
 
   // Whether the model weight is featured.
@@ -140,14 +140,6 @@ impl fmt::Display for SearchModelWeightsError {
 ///
 /// Always returns an empty result list (no Elasticsearch access) for the
 /// legacy clients that still call the search endpoints.
-pub async fn search_model_weights_impl(
-  _http_request: HttpRequest,
-  _request: SearchModelWeightsRequest,
-  _server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SearchModelWeightsSuccessResponse>, SearchModelWeightsError>
-{
-  Ok(Json(SearchModelWeightsSuccessResponse {
-    success: true,
-    weights: Vec::new(),
-  }))
+pub async fn search_model_weights_impl(_http_request: HttpRequest, _request: SearchModelWeightsRequest, _server_state: web::Data<Arc<ServerState>>) -> Result<Json<SearchModelWeightsSuccessResponse>, SearchModelWeightsError> {
+  Ok(Json(SearchModelWeightsSuccessResponse { success: true, weights: Vec::new() }))
 }

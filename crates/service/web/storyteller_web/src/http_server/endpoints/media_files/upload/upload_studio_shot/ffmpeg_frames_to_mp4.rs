@@ -29,19 +29,7 @@ pub fn ffmpeg_frames_to_mp4(frame_input_directory: &Path, frame_type: FrameType,
 
   // ffmpeg -framerate 30 -pattern_type glob -i '*.png' \
   // -c:v libx264 -pix_fmt yuv420p out.mp4
-  let output = Command::new("ffmpeg")
-      .arg("-framerate")
-      .arg(format!("{}", frame_rate))
-      .arg("-pattern_type")
-      .arg("glob")
-      .arg("-i")
-      .arg(glob_pattern)
-      .arg("-c:v")
-      .arg("libx264")
-      .arg("-pix_fmt")
-      .arg("yuv420p")
-      .arg(&output_file_path)
-      .output()?;
+  let output = Command::new("ffmpeg").arg("-framerate").arg(format!("{}", frame_rate)).arg("-pattern_type").arg("glob").arg("-i").arg(glob_pattern).arg("-c:v").arg("libx264").arg("-pix_fmt").arg("yuv420p").arg(&output_file_path).output()?;
 
   if !output.status.success() {
     error!("bad exit status: {}", output.status);
@@ -54,9 +42,5 @@ pub fn ffmpeg_frames_to_mp4(frame_input_directory: &Path, frame_type: FrameType,
 
   let info = ffprobe_get_info(&output_file_path)?;
 
-  Ok(OutputFile {
-    path: output_file_path,
-    duration: info.duration,
-    dimensions: info.dimensions,
-  })
+  Ok(OutputFile { path: output_file_path, duration: info.duration, dimensions: info.dimensions })
 }

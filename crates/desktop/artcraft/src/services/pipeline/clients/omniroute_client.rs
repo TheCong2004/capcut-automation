@@ -27,28 +27,19 @@ fn get_llm_api_key() -> Option<String> {
 }
 
 fn get_timeout() -> Duration {
-  let secs = env::var("REQUEST_TIMEOUT_SECONDS")
-    .ok()
-    .and_then(|s| s.parse::<u64>().ok())
-    .unwrap_or(DEFAULT_TIMEOUT_SECS);
+  let secs = env::var("REQUEST_TIMEOUT_SECONDS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(DEFAULT_TIMEOUT_SECS);
   Duration::from_secs(secs)
 }
 
 fn get_max_retries() -> u32 {
-  env::var("PIPELINE_MAX_RETRIES")
-    .ok()
-    .and_then(|s| s.parse::<u32>().ok())
-    .unwrap_or(DEFAULT_MAX_RETRIES)
+  env::var("PIPELINE_MAX_RETRIES").ok().and_then(|s| s.parse::<u32>().ok()).unwrap_or(DEFAULT_MAX_RETRIES)
 }
 
-/// Health check to verify LLM service reachability.
+/// Health check to verify LLM service reachability. Only 2xx HTTP response is considered ready.
 pub async fn health_check() -> Result<(), String> {
   let base_url = get_llm_base_url();
   let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
-  let client = Client::builder()
-    .timeout(Duration::from_secs(5))
-    .build()
-    .map_err(|e| format!("LLM_UNAVAILABLE: Failed to build HTTP client: {e}"))?;
+  let client = Client::builder().timeout(Duration::from_secs(5)).build().map_err(|e| format!("LLM_UNAVAILABLE: Failed to build HTTP client: {e}"))?;
 
   let mut req = client.get(&url);
   if let Some(key) = get_llm_api_key() {
@@ -58,19 +49,27 @@ pub async fn health_check() -> Result<(), String> {
   match req.send().await {
     Ok(res) => {
       let status = res.status();
-      if status.is_success() || status.as_u16() < 500 {
+      let code = status.as_u16();
+
+      if status.is_success() {
         Ok(())
+      } else if code == 401 {
+        Err("LLM_UNAUTHORIZED: Authentication failed (HTTP 401)".to_string())
+      } else if code == 403 {
+        Err("LLM_FORBIDDEN: Access forbidden (HTTP 403)".to_string())
+      } else if code == 404 {
+        Err("LLM_NOT_FOUND: Endpoint /v1/models not found (HTTP 404)".to_string())
       } else {
-        Err(format!("LLM_UNAVAILABLE: HTTP status {}", status.as_u16()))
+        Err(format!("LLM_UNAVAILABLE: HTTP status {code}"))
       }
-    }
+    },
     Err(err) => {
       if err.is_timeout() {
         Err("LLM_TIMEOUT: Health check request timed out".to_string())
       } else {
-        Err(format!("LLM_UNAVAILABLE: Connection failed: {err}"))
+        Err(format!("LLM_UNAVAILABLE: Connection failed to {url}: {err}"))
       }
-    }
+    },
   }
 }
 
@@ -104,10 +103,7 @@ pub async fn generate_script(prompt: &str) -> AnyhowResult<String> {
   loop {
     attempt += 1;
 
-    let mut req = client
-      .post(&url)
-      .header("Content-Type", "application/json")
-      .header("Accept", "application/json");
+    let mut req = client.post(&url).header("Content-Type", "application/json").header("Accept", "application/json");
 
     if let Some(key) = get_llm_api_key() {
       req = req.header("Authorization", format!("Bearer {key}"));
@@ -122,10 +118,19 @@ pub async fn generate_script(prompt: &str) -> AnyhowResult<String> {
         let status = response.status();
         let status_code = status.as_u16();
 
-        // Fail fast on non-retryable 4xx auth/client errors
-        if status_code == 401 || status_code == 403 {
-          error!("[LLM][AUTH_ERROR] HTTP {}", status_code);
-          return Err(anyhow::anyhow!("LLM_UNAUTHORIZED: Authentication failed (HTTP {})", status_code));
+        if status_code == 401 {
+          error!("[LLM][AUTH_ERROR] HTTP 401 Unauthorized");
+          return Err(anyhow::anyhow!("LLM_UNAUTHORIZED: Authentication failed (HTTP 401)"));
+        }
+
+        if status_code == 403 {
+          error!("[LLM][FORBIDDEN] HTTP 403 Forbidden");
+          return Err(anyhow::anyhow!("LLM_UNAUTHORIZED: Permission denied (HTTP 403)"));
+        }
+
+        if status_code == 404 {
+          error!("[LLM][NOT_FOUND] HTTP 404 Not Found");
+          return Err(anyhow::anyhow!("LLM_INVALID_RESPONSE: Endpoint not found (HTTP 404)"));
         }
 
         if status_code == 400 {
@@ -159,20 +164,13 @@ pub async fn generate_script(prompt: &str) -> AnyhowResult<String> {
           return Err(anyhow::anyhow!("LLM_UNAVAILABLE: Unexpected HTTP status {}", status_code));
         }
 
-        // Parse response
         let text = response.text().await?;
         let parsed: Value = match serde_json::from_str(&text) {
           Ok(v) => v,
           Err(e) => return Err(anyhow::anyhow!("LLM_INVALID_RESPONSE: JSON parse error: {}", e)),
         };
 
-        let content = parsed
-          .get("choices")
-          .and_then(|c| c.get(0))
-          .and_then(|c| c.get("message"))
-          .and_then(|m| m.get("content"))
-          .and_then(|v| v.as_str())
-          .ok_or_else(|| anyhow::anyhow!("LLM_INVALID_RESPONSE: Missing choices[0].message.content"))?;
+        let content = parsed.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("message")).and_then(|m| m.get("content")).and_then(|v| v.as_str()).ok_or_else(|| anyhow::anyhow!("LLM_INVALID_RESPONSE: Missing choices[0].message.content"))?;
 
         let trimmed = content.trim();
         if trimmed.is_empty() {
@@ -181,14 +179,10 @@ pub async fn generate_script(prompt: &str) -> AnyhowResult<String> {
 
         info!("[LLM][SUCCESS] Generated script ({} characters)", trimmed.len());
         return Ok(trimmed.to_string());
-      }
+      },
       Err(err) => {
         let is_timeout = err.is_timeout();
-        let err_msg = if is_timeout {
-          "LLM_TIMEOUT".to_string()
-        } else {
-          format!("LLM_UNAVAILABLE: {err}")
-        };
+        let err_msg = if is_timeout { "LLM_TIMEOUT".to_string() } else { format!("LLM_UNAVAILABLE: {err}") };
 
         if attempt < max_retries {
           warn!("[LLM][RETRY] Request failed ({err_msg}). Retrying {}/{}", attempt, max_retries);
@@ -196,7 +190,7 @@ pub async fn generate_script(prompt: &str) -> AnyhowResult<String> {
         } else {
           return Err(anyhow::anyhow!("{}", err_msg));
         }
-      }
+      },
     }
   }
 }

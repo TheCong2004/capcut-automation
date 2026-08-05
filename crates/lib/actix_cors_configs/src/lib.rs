@@ -14,7 +14,6 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
@@ -22,8 +21,8 @@
 pub mod cors;
 pub mod shared_array_buffer_cors;
 
-pub (crate) mod configs;
-pub (crate) mod util;
+pub(crate) mod configs;
+pub(crate) mod util;
 
 #[cfg(test)]
-pub (crate) mod testing;
+pub(crate) mod testing;

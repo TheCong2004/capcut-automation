@@ -16,7 +16,8 @@
 // Strict AF
 //#![forbid(warnings)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 use anyhow::anyhow;
 use log::{info, warn};
@@ -49,13 +50,7 @@ pub mod job_dependencies;
 
 #[actix_web::main]
 async fn main() -> AnyhowResult<()> {
-
-  let container_environment = bootstrap(BootstrapArgs {
-    app_name: "email-sender-job",
-    default_logging_override: Some(DEFAULT_RUST_LOG),
-    config_search_directories: &[".", "./config", "crates/service/job/deprecated/email_sender_job/config"],
-    ignore_legacy_dot_env_file: false,
-  })?;
+  let container_environment = bootstrap(BootstrapArgs { app_name: "email-sender-job", default_logging_override: Some(DEFAULT_RUST_LOG), config_search_directories: &[".", "./config", "crates/service/job/deprecated/email_sender_job/config"], ignore_legacy_dot_env_file: false })?;
 
   info!("Hostname: {}", &container_environment.hostname);
 
@@ -67,25 +62,16 @@ async fn main() -> AnyhowResult<()> {
 
   info!("Connecting to database...");
 
-  let mysql_pool = MySqlPoolOptions::new()
-      .max_connections(2)
-      .connect(&db_connection_string)
-      .await?;
+  let mysql_pool = MySqlPoolOptions::new().max_connections(2).connect(&db_connection_string).await?;
 
   let common_env = CommonEnv::read_from_env()?;
 
   // Set to "0" to always treat low priority the same as high priority
-  let low_priority_starvation_prevention_every_nth= easyenv::get_env_num(
-    "LOW_PRIORITY_STARVATION_PREVENTION_EVERY_NTH", 3)?;
+  let low_priority_starvation_prevention_every_nth = easyenv::get_env_num("LOW_PRIORITY_STARVATION_PREVENTION_EVERY_NTH", 3)?;
 
-  let server_environment = ServerEnvironment::from_str(&easyenv::get_env_string_required("SERVER_ENVIRONMENT")?)
-      .ok_or(anyhow!("invalid server environment"))?;
+  let server_environment = ServerEnvironment::from_str(&easyenv::get_env_string_required("SERVER_ENVIRONMENT")?).ok_or(anyhow!("invalid server environment"))?;
 
-  let email_sender = SmtpEmailSender::new(
-    &easyenv::get_env_string_required("SMTP_RELAY")?,
-    easyenv::get_env_string_required("SMTP_USERNAME")?,
-    easyenv::get_env_string_required("SMTP_PASSWORD")?,
-  )?;
+  let email_sender = SmtpEmailSender::new(&easyenv::get_env_string_required("SMTP_RELAY")?, easyenv::get_env_string_required("SMTP_USERNAME")?, easyenv::get_env_string_required("SMTP_PASSWORD")?)?;
 
   let is_debug_worker = easyenv::get_env_bool_or_default("IS_DEBUG_WORKER", false);
 
@@ -93,9 +79,7 @@ async fn main() -> AnyhowResult<()> {
 
   // Optionally report job progress to the user via Redis (for now)
   // We want to turn this off in the on-premises workers since we're not tunneling to the production Redis.
-  let job_progress_reporter : Box<dyn JobProgressReporterBuilder>
-      = match easyenv::get_env_string_optional("REDIS_FOR_JOB_PROGRESS")
-  {
+  let job_progress_reporter: Box<dyn JobProgressReporterBuilder> = match easyenv::get_env_string_optional("REDIS_FOR_JOB_PROGRESS") {
     None => {
       warn!("Redis for job progress status reports is DISABLED! Users will not see in-flight details of inference progress.");
       Box::new(NoOpJobProgressReporterBuilder {})
@@ -106,18 +90,17 @@ async fn main() -> AnyhowResult<()> {
       let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
 
       Box::new(RedisJobProgressReporterBuilder::from_redis_pool(redis_pool))
-    }
+    },
   };
 
-  let maybe_keepalive_redis_pool =
-      match easyenv::get_env_string_optional("REDIS_FOR_KEEPALIVE_URL") {
-        None => None,
-        Some(redis_url) => {
-          let redis_manager = RedisConnectionManager::new(redis_url)?;
-          let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
-          Some(redis_pool)
-        }
-      };
+  let maybe_keepalive_redis_pool = match easyenv::get_env_string_optional("REDIS_FOR_KEEPALIVE_URL") {
+    None => None,
+    Some(redis_url) => {
+      let redis_manager = RedisConnectionManager::new(redis_url)?;
+      let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
+      Some(redis_pool)
+    },
+  };
 
   // NB: Threading eats the Ctrl-C signal, so we're going to send application shutdown across
   // threads with an atomic bool.
@@ -125,23 +108,16 @@ async fn main() -> AnyhowResult<()> {
 
   let job_stats = JobStats::new();
 
-  let create_server_args = CreateServerArgs {
-    container_environment: container_environment.clone(),
-    job_stats: job_stats.clone(),
-  };
+  let create_server_args = CreateServerArgs { container_environment: container_environment.clone(), job_stats: job_stats.clone() };
 
   let job_dependencies = JobDependencies {
-    fs: FileSystemDetails {
-      maybe_pause_file: easyenv::get_env_pathbuf_optional("PAUSE_FILE"),
-    },
+    fs: FileSystemDetails { maybe_pause_file: easyenv::get_env_pathbuf_optional("PAUSE_FILE") },
     mysql_pool,
     maybe_redis_pool: None, // TODO(bt, 2023-01-11): See note in JobDependencies
     maybe_keepalive_redis_pool,
     job_progress_reporter,
     job_stats,
-    worker_details: JobWorkerDetails {
-      is_debug_worker,
-    },
+    worker_details: JobWorkerDetails { is_debug_worker },
     server_environment,
     email_sender,
     job_batch_wait_millis: common_env.job_batch_wait_millis,
@@ -150,10 +126,7 @@ async fn main() -> AnyhowResult<()> {
     no_op_logger_millis: common_env.no_op_logger_millis,
     low_priority_starvation_prevention_every_nth,
     container: container_environment.clone(),
-    container_db: ContainerEnvironmentArg {
-      hostname: container_environment.hostname,
-      cluster_name: container_environment.cluster_name,
-    },
+    container_db: ContainerEnvironmentArg { hostname: container_environment.hostname, cluster_name: container_environment.cluster_name },
     application_shutdown: application_shutdown.clone(),
   };
 
@@ -161,8 +134,7 @@ async fn main() -> AnyhowResult<()> {
     let actix_runtime = actix_web::rt::System::new();
     let http_server_handle = launch_http_server(create_server_args);
 
-    actix_runtime.block_on(http_server_handle)
-        .expect("HTTP server should not exit.");
+    actix_runtime.block_on(http_server_handle).expect("HTTP server should not exit.");
 
     warn!("Server thread is shut down.");
     application_shutdown.set(true);

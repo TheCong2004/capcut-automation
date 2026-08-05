@@ -31,20 +31,14 @@ use std::time::Duration;
 use tauri::AppHandle;
 use tokens::tokens::media_files::MediaFileToken;
 
-pub async fn handle_midjourney(
-  app: &AppHandle,
-  request: &EnqueueTextToImageRequest,
-  app_env_configs: &AppEnvConfigs,
-  mj_creds_manager: &MidjourneyCredentialManager,
-) -> Result<TaskEnqueueSuccess, GenerateError> {
-
+pub async fn handle_midjourney(app: &AppHandle, request: &EnqueueTextToImageRequest, app_env_configs: &AppEnvConfigs, mj_creds_manager: &MidjourneyCredentialManager) -> Result<TaskEnqueueSuccess, GenerateError> {
   let creds = match mj_creds_manager.maybe_copy_cookie_store() {
     Ok(Some(creds)) => creds,
     Ok(None) => {
       error!("Midjourney credentials not found.");
       ShowProviderLoginModalEvent::send_for_provider(GenerationProvider::Midjourney, &app);
       return Err(GenerateError::needs_midjourney_credentials());
-    }
+    },
     Err(err) => {
       error!("Error reading Midjourney credentials: {:?}", err);
       ShowProviderLoginModalEvent::send_for_provider(GenerationProvider::Midjourney, &app);
@@ -53,12 +47,12 @@ pub async fn handle_midjourney(
   };
 
   // TODO: We can request population of the user info if absent or expired.
-  
+
   let user_info = match mj_creds_manager.maybe_copy_user_info() {
     Ok(Some(user_info)) => user_info,
     Ok(None) => {
       return Err(GenerateError::MissingCredentials(MissingCredentialsReason::NeedsMidjourneyUserInfo));
-    }
+    },
     Err(err) => {
       error!("Error reading Midjourney user info: {:?}", err);
       return Err(GenerateError::MissingCredentials(MissingCredentialsReason::NeedsMidjourneyUserInfo));
@@ -70,74 +64,52 @@ pub async fn handle_midjourney(
     None => {
       error!("Midjourney user info does not contain a user ID.");
       return Err(GenerateError::MissingCredentials(MissingCredentialsReason::NeedsMidjourneyUserId));
-    }
+    },
   };
 
   info!("Calling midjourney ...");
 
   let cookie_header = creds.to_cookie_string();
 
-  let prompt = request.prompt
-      .as_deref()
-      .unwrap_or("");
+  let prompt = request.prompt.as_deref().unwrap_or("");
 
-  let result = text_to_image(TextToImageRequest {
-    prompt,
-    channel_id: &channel_id,
-    hostname: MidjourneyHostname::Standard,
-    cookie_header,
-  }).await;
+  let result = text_to_image(TextToImageRequest { prompt, channel_id: &channel_id, hostname: MidjourneyHostname::Standard, cookie_header }).await;
 
   let result = match result {
     Ok(result) => result,
     Err(err) => {
       error!("Failed to use MidJourney: {:?}", err);
       return Err(GenerateError::from(err));
-    }
+    },
   };
-  
+
   let job_id = match result.maybe_job_id {
     Some(job_id) => job_id,
     None => {
       error!("Failed to enqueue MidJourney: No job ID returned.");
       return handle_midjourney_errors(app, result.maybe_errors);
-    }
+    },
   };
 
   info!("Successfully enqueued MidJourney. Job token: {}", job_id);
 
-  Ok(TaskEnqueueSuccess {
-    provider: GenerationProvider::Midjourney,
-    model: Some(GenerationModel::Midjourney),
-    provider_job_id: Some(job_id),
-    task_type: TaskType::ImageGeneration,
-    maybe_queue_status_url: None,
-    maybe_prompt_token: None,
-    maybe_queue_response_url: None,
-  })
+  Ok(TaskEnqueueSuccess { provider: GenerationProvider::Midjourney, model: Some(GenerationModel::Midjourney), provider_job_id: Some(job_id), task_type: TaskType::ImageGeneration, maybe_queue_status_url: None, maybe_prompt_token: None, maybe_queue_response_url: None })
 }
 
-fn handle_midjourney_errors(
-  app: &AppHandle,
-  maybe_errors: Option<Vec<TextToImageError>>
-) -> Result<TaskEnqueueSuccess, GenerateError> {
+fn handle_midjourney_errors(app: &AppHandle, maybe_errors: Option<Vec<TextToImageError>>) -> Result<TaskEnqueueSuccess, GenerateError> {
   if let Some(errors) = maybe_errors {
     if !errors.is_empty() {
-      let messages: Vec<String> = errors.iter()
-          .map(|e| format!("{:?}", e))
-          .collect();
+      let messages: Vec<String> = errors.iter().map(|e| format!("{:?}", e)).collect();
 
       let combined_message = messages.join("; ");
 
-      let event = FlashUserInputErrorEvent {
-        message: format!("Midjourney Error: {}", combined_message),
-      };
+      let event = FlashUserInputErrorEvent { message: format!("Midjourney Error: {}", combined_message) };
 
       if let Err(err) = event.send(&app) {
         error!("Failed to send FlashUserInputErrorEvent: {:?}", err); // Fail open
       }
     }
   }
-  
+
   Err(GenerateError::ProviderFailure(ProviderFailureReason::MidjourneyJobEnqueueFailed))
 }

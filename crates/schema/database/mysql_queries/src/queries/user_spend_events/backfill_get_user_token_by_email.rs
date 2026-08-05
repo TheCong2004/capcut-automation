@@ -17,9 +17,7 @@ where
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn backfill_get_user_token_by_email<'e, 'c: 'e, E>(
-  args: BackfillGetUserTokenByEmailArgs<'e, 'c, E>,
-) -> Result<Option<UserToken>, sqlx::Error>
+pub async fn backfill_get_user_token_by_email<'e, 'c: 'e, E>(args: BackfillGetUserTokenByEmailArgs<'e, 'c, E>) -> Result<Option<UserToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -32,8 +30,8 @@ LIMIT 1
     "#,
     args.email_address,
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
   Ok(row.map(|r| r.token))
 }

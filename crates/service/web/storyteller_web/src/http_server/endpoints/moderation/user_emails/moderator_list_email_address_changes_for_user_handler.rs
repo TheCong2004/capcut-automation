@@ -8,10 +8,7 @@ use log::warn;
 use utoipa::{IntoParams, ToSchema};
 
 use mysql_queries::queries::users::user::get::get_user_token_by_username::get_user_token_by_username;
-use mysql_queries::queries::users::user_email_changes::list_user_email_changes_for_user::{
-  list_user_email_changes_for_user, ListUserEmailChangesForUserArgs, UserDisplay,
-  UserEmailChangeRow,
-};
+use mysql_queries::queries::users::user_email_changes::list_user_email_changes_for_user::{list_user_email_changes_for_user, ListUserEmailChangesForUserArgs, UserDisplay, UserEmailChangeRow};
 use tokens::tokens::users::UserToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
@@ -93,13 +90,7 @@ pub struct ModeratorUserEmailChangeUserSummary {
     (status = 500, description = "Server error", body = CommonWebError),
   ),
 )]
-pub async fn moderator_list_email_address_changes_for_user_handler(
-  http_request: HttpRequest,
-  path: Path<ModeratorListUserEmailChangesForUserPathInfo>,
-  query: Query<ModeratorListUserEmailChangesQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ModeratorListUserEmailChangesSuccessResponse>, CommonWebError> {
-
+pub async fn moderator_list_email_address_changes_for_user_handler(http_request: HttpRequest, path: Path<ModeratorListUserEmailChangesForUserPathInfo>, query: Query<ModeratorListUserEmailChangesQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModeratorListUserEmailChangesSuccessResponse>, CommonWebError> {
   // 1. Require moderator.
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
@@ -122,19 +113,11 @@ pub async fn moderator_list_email_address_changes_for_user_handler(
 
   let maybe_cursor_id = match &query.cursor {
     None => None,
-    Some(cursor_str) => {
-      Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?)
-    }
+    Some(cursor_str) => Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?),
   };
 
   // 4. Fetch the email-change history for that user.
-  let rows = list_user_email_changes_for_user(ListUserEmailChangesForUserArgs {
-    user_token: &user_token,
-    maybe_cursor_id,
-    limit,
-    mysql_executor: &server_state.mysql_pool,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let rows = list_user_email_changes_for_user(ListUserEmailChangesForUserArgs { user_token: &user_token, maybe_cursor_id, limit, mysql_executor: &server_state.mysql_pool, phantom: PhantomData }).await.map_err(|err| {
     warn!("Failed to list email changes for user {:?}: {:?}", username, err);
     CommonWebError::from_error(err)
   })?;
@@ -143,40 +126,17 @@ pub async fn moderator_list_email_address_changes_for_user_handler(
   // Only hand out a next-page cursor when this page was full. A short page
   // means the list is exhausted, and emitting a cursor anyway would make
   // clients fetch one guaranteed-empty trailing page.
-  let maybe_cursor = if rows.len() == limit as usize {
-    rows.last()
-        .map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.id))
-        .transpose()?
-  } else {
-    None
-  };
+  let maybe_cursor = if rows.len() == limit as usize { rows.last().map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.id)).transpose()? } else { None };
 
   let changes = rows.into_iter().map(to_response_item).collect();
 
-  Ok(Json(ModeratorListUserEmailChangesSuccessResponse {
-    success: true,
-    changes,
-    maybe_cursor,
-  }))
+  Ok(Json(ModeratorListUserEmailChangesSuccessResponse { success: true, changes, maybe_cursor }))
 }
 
 fn to_response_item(row: UserEmailChangeRow) -> ModeratorUserEmailChangeItem {
-  ModeratorUserEmailChangeItem {
-    id: row.id,
-    user: to_user_summary(row.user),
-    maybe_changed_by_user: row.maybe_changed_by_user.map(to_user_summary),
-    old_email: row.old_email,
-    new_email: row.new_email,
-    ip_address: row.ip_address,
-    created_at: row.created_at,
-  }
+  ModeratorUserEmailChangeItem { id: row.id, user: to_user_summary(row.user), maybe_changed_by_user: row.maybe_changed_by_user.map(to_user_summary), old_email: row.old_email, new_email: row.new_email, ip_address: row.ip_address, created_at: row.created_at }
 }
 
 fn to_user_summary(display: UserDisplay) -> ModeratorUserEmailChangeUserSummary {
-  ModeratorUserEmailChangeUserSummary {
-    user_token: display.token,
-    username: display.username,
-    display_name: display.display_name,
-    gravatar_hash: display.gravatar_hash,
-  }
+  ModeratorUserEmailChangeUserSummary { user_token: display.token, username: display.username, display_name: display.display_name, gravatar_hash: display.gravatar_hash }
 }

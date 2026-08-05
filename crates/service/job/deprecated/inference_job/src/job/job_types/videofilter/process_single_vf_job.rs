@@ -7,13 +7,12 @@ use crate::job::job_types::videofilter::rerender_a_video::process_job::RerenderP
 use crate::state::job_dependencies::JobDependencies;
 
 pub async fn process_single_vf_job(job_dependencies: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
-    let job_success_result = rerender_a_video::process_job::process_job(
-        RerenderProcessJobArgs {
-            job_dependencies,
-            job,
-            // media_file
-        }
-    ).await?;
+  let job_success_result = rerender_a_video::process_job::process_job(RerenderProcessJobArgs {
+    job_dependencies,
+    job,
+    // media_file
+  })
+  .await?;
 
-    Ok(job_success_result)
+  Ok(job_success_result)
 }

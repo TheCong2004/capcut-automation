@@ -39,36 +39,23 @@ use utoipa::ToSchema;
     ("request" = GenerateFlux1SchnellTextToImageRequest, description = "Payload for Request"),
   )
 )]
-pub async fn generate_flux_1_schnell_text_to_image_handler(
-  http_request: HttpRequest,
-  request: Json<GenerateFlux1SchnellTextToImageRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<GenerateFlux1SchnellTextToImageResponse>, CommonWebError> {
-
+pub async fn generate_flux_1_schnell_text_to_image_handler(http_request: HttpRequest, request: Json<GenerateFlux1SchnellTextToImageRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GenerateFlux1SchnellTextToImageResponse>, CommonWebError> {
   payments_error_test(&request.prompt.as_deref().unwrap_or(""))?;
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await?;
-  
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
+
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   let user_token = match maybe_user_session.as_ref() {
     Some(session) => &session.user_token,
     None => {
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: Limit usage for new accounts. Billing, free credits metering, etc.
@@ -85,12 +72,10 @@ pub async fn generate_flux_1_schnell_text_to_image_handler(
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
-      })?;
+  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
+  })?;
 
   // // TODO: This is test code
   // let credits = match request.num_images {
@@ -114,10 +99,10 @@ pub async fn generate_flux_1_schnell_text_to_image_handler(
   //   warn!("Temporary wallet deduction failed: {:?}", err); // Infallible for now.
   // }
 
-  const IS_MOD : bool = false;
+  const IS_MOD: bool = false;
 
   info!("Fal webhook URL: {}", server_state.inference_providers.fal.webhook_url);
-  
+
   let aspect_ratio = match request.aspect_ratio {
     Some(GenerateFlux1SchnellTextToImageAspectRatio::Square) => Flux1SchnellAspectRatio::Square,
     Some(GenerateFlux1SchnellTextToImageAspectRatio::SquareHd) => Flux1SchnellAspectRatio::SquareHd,
@@ -127,7 +112,7 @@ pub async fn generate_flux_1_schnell_text_to_image_handler(
     Some(GenerateFlux1SchnellTextToImageAspectRatio::PortraitNineBySixteen) => Flux1SchnellAspectRatio::PortraitNineBySixteen,
     None => Flux1SchnellAspectRatio::LandscapeSixteenByNine, // Default
   };
-  
+
   let num_images = match request.num_images {
     Some(GenerateFlux1SchnellTextToImageNumImages::One) => Flux1SchnellNumImages::One,
     Some(GenerateFlux1SchnellTextToImageNumImages::Two) => Flux1SchnellNumImages::Two,
@@ -136,40 +121,26 @@ pub async fn generate_flux_1_schnell_text_to_image_handler(
     None => Flux1SchnellNumImages::One, // Default
   };
 
-  let args = Flux1SchnellArgs {
-    request: Flux1SchnellRequest {
-      prompt: request.prompt.clone().unwrap_or_default(),
-      aspect_ratio,
-      num_images,
-    },
-    webhook_url: &server_state.inference_providers.fal.webhook_url,
-    api_key: &server_state.inference_providers.fal.api_key,
-  };
+  let args = Flux1SchnellArgs { request: Flux1SchnellRequest { prompt: request.prompt.clone().unwrap_or_default(), aspect_ratio, num_images }, webhook_url: &server_state.inference_providers.fal.webhook_url, api_key: &server_state.inference_providers.fal.api_key };
 
-  let fal_result = enqueue_flux_1_schnell_text_to_image_webhook(args)
-      .await
-      .map_err(|err| {
-        warn!("Error calling enqueue_flux_1_schnell_text_to_image_webhook: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let fal_result = enqueue_flux_1_schnell_text_to_image_webhook(args).await.map_err(|err| {
+    warn!("Error calling enqueue_flux_1_schnell_text_to_image_webhook: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let external_job_id = fal_result.request_id
-      .ok_or_else(|| {
-        warn!("Fal request_id is None");
-        CommonWebError::server_error_with_message("Fal request_id is None")
-      })?;
+  let external_job_id = fal_result.request_id.ok_or_else(|| {
+    warn!("Fal request_id is None");
+    CommonWebError::server_error_with_message("Fal request_id is None")
+  })?;
 
   info!("Fal request_id: {}", external_job_id);
 
   let ip_address = get_request_ip(&http_request);
-  
-  let mut transaction = mysql_connection
-      .begin()
-      .await
-      .map_err(|err| {
-        error!("Error starting MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("Error starting MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // NB: Don't fail the job if the query fails.
   let maybe_aspect_ratio = match request.aspect_ratio {
@@ -194,9 +165,7 @@ pub async fn generate_flux_1_schnell_text_to_image_handler(
     maybe_bitrate: None,
     maybe_apriori_prompt_token: None,
     prompt_type: PromptType::ArtcraftApp,
-    maybe_creator_user_token: maybe_user_session
-        .as_ref()
-        .map(|s| &s.user_token),
+    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
     maybe_model_type: Some(CommonModelType::Flux1Schnell),
     maybe_generation_provider: Some(GenerationProvider::Artcraft),
     maybe_positive_prompt: request.prompt.as_deref(),
@@ -211,50 +180,31 @@ pub async fn generate_flux_1_schnell_text_to_image_handler(
     creator_ip_address: &ip_address,
     mysql_executor: &mut *transaction,
     phantom: Default::default(),
-  }).await;
+  })
+  .await;
 
   let prompt_token = match prompt_result {
     Ok(token) => Some(token),
     Err(err) => {
       warn!("Error inserting prompt: {:?}", err);
       None // Don't fail the job if the prompt insertion fails.
-    }
+    },
   };
 
-  let db_result = insert_generic_inference_job_for_fal_queue(InsertGenericInferenceForFalArgs {
-    uuid_idempotency_token: &request.uuid_idempotency_token,
-    maybe_external_third_party_id: &external_job_id,
-    fal_category: FalCategory::ImageGeneration,
-    maybe_model_type: Some(CommonModelType::Flux1Schnell),
-    maybe_prompt_token: prompt_token.as_ref(),
-    maybe_inference_args: None,
-    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
-    maybe_avt_token: maybe_avt_token.as_ref(),
-    creator_ip_address: &ip_address,
-    creator_set_visibility: Visibility::Public,
-    maybe_platform_type: get_request_platform_type(&http_request),
-    mysql_executor: &mut *transaction,
-    phantom: Default::default(),
-  }).await;
+  let db_result = insert_generic_inference_job_for_fal_queue(InsertGenericInferenceForFalArgs { uuid_idempotency_token: &request.uuid_idempotency_token, maybe_external_third_party_id: &external_job_id, fal_category: FalCategory::ImageGeneration, maybe_model_type: Some(CommonModelType::Flux1Schnell), maybe_prompt_token: prompt_token.as_ref(), maybe_inference_args: None, maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token), maybe_avt_token: maybe_avt_token.as_ref(), creator_ip_address: &ip_address, creator_set_visibility: Visibility::Public, maybe_platform_type: get_request_platform_type(&http_request), mysql_executor: &mut *transaction, phantom: Default::default() }).await;
 
   let job_token = match db_result {
     Ok(token) => token,
     Err(err) => {
       warn!("Error inserting generic inference job for FAL queue: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
-  
-  let _r = transaction
-      .commit()
-      .await
-      .map_err(|err| {
-        error!("Error committing MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
 
-  Ok(Json(GenerateFlux1SchnellTextToImageResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  let _r = transaction.commit().await.map_err(|err| {
+    error!("Error committing MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
+
+  Ok(Json(GenerateFlux1SchnellTextToImageResponse { success: true, inference_job_token: job_token }))
 }

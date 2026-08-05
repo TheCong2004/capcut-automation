@@ -23,22 +23,8 @@ use crate::state::server_state::ServerState;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn list_session_mesh_media_files_handler(
-  http_request: HttpRequest,
-  query: Query<ListSessionMediaFilesByTypeQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListSessionMeshMediaFilesSuccessResponse>, CommonWebError> {
+pub async fn list_session_mesh_media_files_handler(http_request: HttpRequest, query: Query<ListSessionMediaFilesByTypeQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListSessionMeshMediaFilesSuccessResponse>, CommonWebError> {
+  let (results, pagination) = list_session_media_files_of_class(&http_request, &query, &server_state, MediaFileClass::Mesh).await?;
 
-  let (results, pagination) = list_session_media_files_of_class(
-    &http_request,
-    &query,
-    &server_state,
-    MediaFileClass::Mesh,
-  ).await?;
-
-  Ok(Json(ListSessionMeshMediaFilesSuccessResponse {
-    success: true,
-    results,
-    pagination,
-  }))
+  Ok(Json(ListSessionMeshMediaFilesSuccessResponse { success: true, results, pagination }))
 }

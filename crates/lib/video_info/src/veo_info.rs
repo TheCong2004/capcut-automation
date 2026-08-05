@@ -15,9 +15,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::VideoInfoError;
-use crate::scan::{
-  find, find_cert_serial, find_encoder_tag, find_prefixed_uuid, read_der_string, text_after_key,
-};
+use crate::scan::{find, find_cert_serial, find_encoder_tag, find_prefixed_uuid, read_der_string, text_after_key};
 
 // ── Detection markers ──
 
@@ -103,8 +101,7 @@ impl VeoInfo {
   /// Returns [`VideoInfoError::NotVeo`] if no Google generative C2PA manifest is
   /// present.
   pub fn from_bytes(data: &[u8]) -> Result<VeoInfo, VideoInfoError> {
-    let has_c2pa_manifest =
-      find(data, CREATED_BY_GOOGLE).is_some() || find(data, GOOGLE_C2PA_MARKER).is_some();
+    let has_c2pa_manifest = find(data, CREATED_BY_GOOGLE).is_some() || find(data, GOOGLE_C2PA_MARKER).is_some();
     let encoder = find_encoder_tag(data);
     let encoder_is_google = encoder.as_deref() == Some(GOOGLE_ENCODER);
     if !has_c2pa_manifest && !encoder_is_google {
@@ -116,35 +113,12 @@ impl VeoInfo {
     // by matching the leading text rather than positional assumptions.
     let created_description = find_description_containing(data, b"Created by");
     let synthid_description = find_description_containing(data, b"SynthID");
-    let has_synthid_watermark =
-      synthid_description.is_some() || find(data, SYNTHID_MARKER).is_some();
+    let has_synthid_watermark = synthid_description.is_some() || find(data, SYNTHID_MARKER).is_some();
 
-    let claim_generator = text_after_key(data, b"claim_generator_info")
-      .or_else(|| find(data, b"Google C2PA Core Generator Library").map(|_| {
-        "Google C2PA Core Generator Library".to_string()
-      }));
-    let claim_generator_version = find(data, b"Google C2PA Core Generator Library")
-      .and_then(|i| {
-        crate::scan::text_after_key_from(data, b"version", i + "Google C2PA Core Generator Library".len())
-      });
+    let claim_generator = text_after_key(data, b"claim_generator_info").or_else(|| find(data, b"Google C2PA Core Generator Library").map(|_| "Google C2PA Core Generator Library".to_string()));
+    let claim_generator_version = find(data, b"Google C2PA Core Generator Library").and_then(|i| crate::scan::text_after_key_from(data, b"version", i + "Google C2PA Core Generator Library".len()));
 
-    Ok(VeoInfo {
-      producer: "Google".to_string(),
-      has_c2pa_manifest,
-      encoder,
-      created_description,
-      has_synthid_watermark,
-      synthid_description,
-      digital_source_type: text_after_key(data, b"digitalSourceType"),
-      claim_generator,
-      claim_generator_version,
-      manifest_id: find_prefixed_uuid(data, b"urn:c2pa:"),
-      instance_id: text_after_key(data, b"instanceID"),
-      cert_serial: find_cert_serial(data),
-      signer_ca: read_der_string(data, SIGNER_CA_PREFIX),
-      is_timestamped: find(data, TIMESTAMP_CA_PREFIX).is_some(),
-      timestamp_authority: read_der_string(data, TIMESTAMP_CA_PREFIX),
-    })
+    Ok(VeoInfo { producer: "Google".to_string(), has_c2pa_manifest, encoder, created_description, has_synthid_watermark, synthid_description, digital_source_type: text_after_key(data, b"digitalSourceType"), claim_generator, claim_generator_version, manifest_id: find_prefixed_uuid(data, b"urn:c2pa:"), instance_id: text_after_key(data, b"instanceID"), cert_serial: find_cert_serial(data), signer_ca: read_der_string(data, SIGNER_CA_PREFIX), is_timestamped: find(data, TIMESTAMP_CA_PREFIX).is_some(), timestamp_authority: read_der_string(data, TIMESTAMP_CA_PREFIX) })
   }
 }
 

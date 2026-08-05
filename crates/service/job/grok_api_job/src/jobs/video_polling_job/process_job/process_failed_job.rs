@@ -15,19 +15,10 @@ use crate::job_dependencies::JobDependencies;
 ///
 /// Grok API video jobs are **non-refundable** — xAI's video generation is
 /// billed regardless of outcome, so we never issue a wallet refund here.
-pub async fn process_failed_status(
-  deps: &JobDependencies,
-  job: &PendingGrokApiJob,
-  reason: FailureReason,
-  maybe_code: Option<&str>,
-  maybe_error: Option<&str>,
-) {
+pub async fn process_failed_status(deps: &JobDependencies, job: &PendingGrokApiJob, reason: FailureReason, maybe_code: Option<&str>, maybe_error: Option<&str>) {
   let (reason_text, category) = describe_failed_status(reason, maybe_code, maybe_error);
 
-  info!(
-    "Grok request {} for job {} reported failed: {}.",
-    job.request_id, job.job_token.as_str(), reason_text,
-  );
+  info!("Grok request {} for job {} reported failed: {}.", job.request_id, job.job_token.as_str(), reason_text,);
 
   mark_job_failed_with_category(deps, job, &reason_text, category).await;
 }
@@ -39,82 +30,37 @@ pub async fn process_failed_status(
 /// Note: a true `status:"expired"` poll response comes back as
 /// `VideoStatus::Failed` and is handled by [`process_failed_status`], not
 /// here.
-pub async fn process_video_status_error(
-  deps: &JobDependencies,
-  job: &PendingGrokApiJob,
-  err: GrokError,
-) {
+pub async fn process_video_status_error(deps: &JobDependencies, job: &PendingGrokApiJob, err: GrokError) {
   match &err {
     GrokError::ApiSpecific(GrokSpecificApiError::NotFound { .. }) => {
       let reason_text = "Grok video job not found (likely expired)";
-      info!(
-        "Grok request {} for job {} not found. Marking job failed.",
-        job.request_id, job.job_token.as_str(),
-      );
-      mark_job_failed_with_category(
-        deps,
-        job,
-        reason_text,
-        FrontendFailureCategory::GenerationFailed,
-      ).await;
-    }
+      info!("Grok request {} for job {} not found. Marking job failed.", job.request_id, job.job_token.as_str(),);
+      mark_job_failed_with_category(deps, job, reason_text, FrontendFailureCategory::GenerationFailed).await;
+    },
     _ => {
-      warn!(
-        "Transient error polling Grok request {} for job {}: {:?}",
-        job.request_id, job.job_token.as_str(), err,
-      );
-    }
+      warn!("Transient error polling Grok request {} for job {}: {:?}", job.request_id, job.job_token.as_str(), err,);
+    },
   }
 }
 
-fn describe_failed_status(
-  reason: FailureReason,
-  maybe_code: Option<&str>,
-  maybe_error: Option<&str>,
-) -> (String, FrontendFailureCategory) {
+fn describe_failed_status(reason: FailureReason, maybe_code: Option<&str>, maybe_error: Option<&str>) -> (String, FrontendFailureCategory) {
   match reason {
-    FailureReason::ContentModerated => (
-      format!(
-        "Grok video content moderated: {}",
-        maybe_error.unwrap_or("no details"),
-      ),
-      FrontendFailureCategory::ModelRulesViolation,
-    ),
+    FailureReason::ContentModerated => (format!("Grok video content moderated: {}", maybe_error.unwrap_or("no details"),), FrontendFailureCategory::ModelRulesViolation),
     FailureReason::Unknown => {
       let code_part = maybe_code.unwrap_or("unknown");
       let error_part = maybe_error.unwrap_or("no details");
-      (
-        format!("Grok video failed ({}): {}", code_part, error_part),
-        FrontendFailureCategory::GenerationFailed,
-      )
-    }
+      (format!("Grok video failed ({}): {}", code_part, error_part), FrontendFailureCategory::GenerationFailed)
+    },
   }
 }
 
-async fn mark_job_failed_with_category(
-  deps: &JobDependencies,
-  job: &PendingGrokApiJob,
-  reason_text: &str,
-  category: FrontendFailureCategory,
-) {
-  warn!(
-    "Request for job {} failed: {}. Marking job failed.",
-    job.job_token.as_str(), reason_text,
-  );
+async fn mark_job_failed_with_category(deps: &JobDependencies, job: &PendingGrokApiJob, reason_text: &str, category: FrontendFailureCategory) {
+  warn!("Request for job {} failed: {}. Marking job failed.", job.job_token.as_str(), reason_text,);
 
-  let mark_failed_result = mark_job_failed_by_token(MarkJobFailedByTokenArgs {
-    pool: &deps.mysql_pool,
-    job_token: &job.job_token,
-    maybe_public_failure_reason: Some(reason_text),
-    internal_debugging_failure_reason: reason_text,
-    maybe_frontend_failure_category: Some(category),
-  }).await;
+  let mark_failed_result = mark_job_failed_by_token(MarkJobFailedByTokenArgs { pool: &deps.mysql_pool, job_token: &job.job_token, maybe_public_failure_reason: Some(reason_text), internal_debugging_failure_reason: reason_text, maybe_frontend_failure_category: Some(category) }).await;
 
   if let Err(err) = mark_failed_result {
-    error!(
-      "Error marking job {} as failed: {:?}",
-      job.job_token.as_str(), err,
-    );
+    error!("Error marking job {} as failed: {:?}", job.job_token.as_str(), err,);
   }
 
   let _ = deps.job_stats.increment_failure_count();

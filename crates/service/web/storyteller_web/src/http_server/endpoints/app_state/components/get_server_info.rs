@@ -14,13 +14,7 @@ pub struct AppStateServerInfo {
   pub hostname: String,
 }
 
-pub fn get_server_info(
-  server_state: &ServerState,
-) -> AppStateServerInfo {
+pub fn get_server_info(server_state: &ServerState) -> AppStateServerInfo {
   let short_sha = truncate_str(&server_state.server_info.build_sha, 8);
-  AppStateServerInfo {
-    build_sha: server_state.server_info.build_sha.clone(),
-    build_sha_short: short_sha.to_string(),
-    hostname: server_state.hostname.clone(),
-  }
+  AppStateServerInfo { build_sha: server_state.server_info.build_sha.clone(), build_sha_short: short_sha.to_string(), hostname: server_state.hostname.clone() }
 }

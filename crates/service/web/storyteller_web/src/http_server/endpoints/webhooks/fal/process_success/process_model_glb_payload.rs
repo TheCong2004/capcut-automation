@@ -70,31 +70,16 @@ use tokens::tokens::media_files::MediaFileToken;
 /// only distinct files are uploaded. All GLBs become mesh media files; when
 /// more than one is uploaded they share a batch generation token, with the
 /// standard GLB as the primary media file.
-pub async fn process_model_glb_payload(
-  model_glb_data: &ModelGlbData,
-  maybe_model_glb_pbr_data: Option<&ModelGlbData>,
-  maybe_model_urls_data: Option<&ModelUrlsData>,
-  maybe_thumbnail_data: Option<&ThumbnailData>,
-  job: &FalJobDetails,
-  server_state: &ServerState,
-  pager: &Pager,
-) -> Result<(MediaFileToken, Option<BatchGenerationToken>), CommonWebError> {
-  let mesh_url = model_glb_data.url
-      .as_deref()
-      .ok_or_else(|| {
-        warn!("No `url` in model glb payload");
-        CommonWebError::server_error_with_message("no `url` in model glb payload")
-      })?;
+pub async fn process_model_glb_payload(model_glb_data: &ModelGlbData, maybe_model_glb_pbr_data: Option<&ModelGlbData>, maybe_model_urls_data: Option<&ModelUrlsData>, maybe_thumbnail_data: Option<&ThumbnailData>, job: &FalJobDetails, server_state: &ServerState, pager: &Pager) -> Result<(MediaFileToken, Option<BatchGenerationToken>), CommonWebError> {
+  let mesh_url = model_glb_data.url.as_deref().ok_or_else(|| {
+    warn!("No `url` in model glb payload");
+    CommonWebError::server_error_with_message("no `url` in model glb payload")
+  })?;
 
   // Secondary GLB candidates. Slots frequently duplicate URLs — Hunyuan 3D
   // 3.0's `model_urls.glb` usually matches `model_glb`, and Tripo 3D's `glb`
   // and `pbr_model` match each other — so each distinct URL uploads once.
-  let candidates = [
-    ("model_glb_pbr", maybe_model_glb_pbr_data),
-    ("model_urls.glb", maybe_model_urls_data.and_then(|urls| urls.glb.as_ref())),
-    ("model_urls.base_model", maybe_model_urls_data.and_then(|urls| urls.base_model.as_ref())),
-    ("model_urls.pbr_model", maybe_model_urls_data.and_then(|urls| urls.pbr_model.as_ref())),
-  ];
+  let candidates = [("model_glb_pbr", maybe_model_glb_pbr_data), ("model_urls.glb", maybe_model_urls_data.and_then(|urls| urls.glb.as_ref())), ("model_urls.base_model", maybe_model_urls_data.and_then(|urls| urls.base_model.as_ref())), ("model_urls.pbr_model", maybe_model_urls_data.and_then(|urls| urls.pbr_model.as_ref()))];
 
   let mut seen_urls = vec![mesh_url];
   let mut secondary_glbs: Vec<(&str, &ModelGlbData)> = Vec::new();
@@ -116,17 +101,9 @@ pub async fn process_model_glb_payload(
 
   // NB: We don't create `batch_generations` table records. The foreign key
   // in `media_files` is enough to look up the rest of the batch.
-  let maybe_batch_token = (!secondary_glbs.is_empty())
-      .then(BatchGenerationToken::generate);
+  let maybe_batch_token = (!secondary_glbs.is_empty()).then(BatchGenerationToken::generate);
 
-  let media_token = upload_mesh_file(UploadMeshFileArgs {
-    mesh_url,
-    maybe_content_type: model_glb_data.content_type.as_deref(),
-    maybe_file_name: model_glb_data.file_name.as_deref(),
-    maybe_batch_token: maybe_batch_token.as_ref(),
-    job,
-    server_state,
-  }).await?;
+  let media_token = upload_mesh_file(UploadMeshFileArgs { mesh_url, maybe_content_type: model_glb_data.content_type.as_deref(), maybe_file_name: model_glb_data.file_name.as_deref(), maybe_batch_token: maybe_batch_token.as_ref(), job, server_state }).await?;
 
   info!("Glb media file uploaded with token: {}", media_token);
 
@@ -134,12 +111,7 @@ pub async fn process_model_glb_payload(
   // primary GLB is already uploaded, so page ourselves instead of failing
   // the job.
   for (label, glb_data) in secondary_glbs {
-    let result = upload_secondary_glb(
-      glb_data,
-      maybe_batch_token.as_ref(),
-      job,
-      server_state,
-    ).await;
+    let result = upload_secondary_glb(glb_data, maybe_batch_token.as_ref(), job, server_state).await;
 
     if let Err(err) = result {
       warn!("Failed to upload {} GLB variant: {:?}", label, err);
@@ -148,12 +120,7 @@ pub async fn process_model_glb_payload(
   }
 
   if let Some(thumbnail_data) = maybe_thumbnail_data {
-    let result = try_to_attach_thumbnail(
-      thumbnail_data,
-      job,
-      server_state,
-      &media_token,
-    ).await;
+    let result = try_to_attach_thumbnail(thumbnail_data, job, server_state, &media_token).await;
 
     // NB: Fail open
     if let Err(err) = result {
@@ -168,71 +135,44 @@ pub async fn process_model_glb_payload(
   Ok((media_token, maybe_batch_token))
 }
 
-async fn upload_secondary_glb(
-  glb_data: &ModelGlbData,
-  maybe_batch_token: Option<&BatchGenerationToken>,
-  job: &FalJobDetails,
-  server_state: &ServerState,
-) -> Result<MediaFileToken, CommonWebError> {
-  let glb_url = glb_data.url
-      .as_deref()
-      .ok_or_else(|| {
-        warn!("No `url` in secondary glb payload");
-        CommonWebError::server_error_with_message("no `url` in secondary glb payload")
-      })?;
+async fn upload_secondary_glb(glb_data: &ModelGlbData, maybe_batch_token: Option<&BatchGenerationToken>, job: &FalJobDetails, server_state: &ServerState) -> Result<MediaFileToken, CommonWebError> {
+  let glb_url = glb_data.url.as_deref().ok_or_else(|| {
+    warn!("No `url` in secondary glb payload");
+    CommonWebError::server_error_with_message("no `url` in secondary glb payload")
+  })?;
 
-  let media_token = upload_mesh_file(UploadMeshFileArgs {
-    mesh_url: glb_url,
-    maybe_content_type: glb_data.content_type.as_deref(),
-    maybe_file_name: glb_data.file_name.as_deref(),
-    maybe_batch_token,
-    job,
-    server_state,
-  }).await?;
+  let media_token = upload_mesh_file(UploadMeshFileArgs { mesh_url: glb_url, maybe_content_type: glb_data.content_type.as_deref(), maybe_file_name: glb_data.file_name.as_deref(), maybe_batch_token, job, server_state }).await?;
 
   info!("Secondary glb media file uploaded with token: {}", media_token);
 
   Ok(media_token)
 }
 
-async fn try_to_attach_thumbnail(
-  thumbnail_data: &ThumbnailData,
-  job: &FalJobDetails,
-  server_state: &ServerState,
-  glb_media_token: &MediaFileToken,
-) -> Result<(), CommonWebError> {
+async fn try_to_attach_thumbnail(thumbnail_data: &ThumbnailData, job: &FalJobDetails, server_state: &ServerState, glb_media_token: &MediaFileToken) -> Result<(), CommonWebError> {
   info!("Fal Thumbnail Data: {:?}", thumbnail_data);
 
-  let thumbnail_url = thumbnail_data.url
-      .as_deref()
-      .ok_or_else(|| {
-        warn!("No `url` in thumbnail payload");
-        CommonWebError::server_error_with_message("no `url` in thumbnail payload")
-      })?;
+  let thumbnail_url = thumbnail_data.url.as_deref().ok_or_else(|| {
+    warn!("No `url` in thumbnail payload");
+    CommonWebError::server_error_with_message("no `url` in thumbnail payload")
+  })?;
 
-  attach_cover_image(AttachCoverImageArgs {
-    image_url: thumbnail_url,
-    maybe_content_type: thumbnail_data.content_type.as_deref(),
-    maybe_origin_product_category: None,
-    target_media_token: glb_media_token,
-    job,
-    server_state,
-  }).await
+  attach_cover_image(AttachCoverImageArgs { image_url: thumbnail_url, maybe_content_type: thumbnail_data.content_type.as_deref(), maybe_origin_product_category: None, target_media_token: glb_media_token, job, server_state }).await
 }
 
 fn page_about_secondary_glb_failure(label: &str, err: CommonWebError, job: &FalJobDetails, pager: &Pager) {
   let notification = NotificationDetailsBuilder::from_boxed_error(err.into())
-      .set_title(format!("Failure to download {} GLB variant from FAL webhook", label))
-      .set_description(Some(format!(
-        "We uploaded the primary GLB and marked the job as a success, \
+    .set_title(format!("Failure to download {} GLB variant from FAL webhook", label))
+    .set_description(Some(format!(
+      "We uploaded the primary GLB and marked the job as a success, \
         but the {} variant failed and the user may need assistance.\n\
         **Internal Job Token**: {}\n\
         **Fal ID**: {}\n",
-        label,
-        job.job_token.as_str(),
-        job.external_third_party_id)))
-      .set_urgency(Some(NotificationUrgency::Medium))
-      .build();
+      label,
+      job.job_token.as_str(),
+      job.external_third_party_id
+    )))
+    .set_urgency(Some(NotificationUrgency::Medium))
+    .build();
 
   if let Err(pager_err) = pager.enqueue_page(notification) {
     warn!("Failed to enqueue {} GLB failure alert: {:?}", label, pager_err);

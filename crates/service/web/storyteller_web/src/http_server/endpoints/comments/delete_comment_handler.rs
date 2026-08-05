@@ -87,34 +87,22 @@ impl fmt::Display for DeleteCommentError {
     (status = 500, description = "Server error", body = DeleteCommentError),
   ),
 )]
-pub async fn delete_comment_handler(
-  http_request: HttpRequest,
-  path: Path<DeleteCommentPathInfo>,
-  request: Json<DeleteCommentRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SimpleGenericJsonSuccess>, DeleteCommentError> {
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        DeleteCommentError::ServerError
-      })?;
+pub async fn delete_comment_handler(http_request: HttpRequest, path: Path<DeleteCommentPathInfo>, request: Json<DeleteCommentRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, DeleteCommentError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    DeleteCommentError::ServerError
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        DeleteCommentError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    DeleteCommentError::ServerError
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       return Err(DeleteCommentError::NotAuthorized);
-    }
+    },
   };
 
   let mut maybe_delete_as = None;
@@ -124,12 +112,12 @@ pub async fn delete_comment_handler(
     maybe_delete_as = Some(DeleteCommentAs::Moderator);
   } else {
     let comment = get_comment(&path.comment_token, &mut *mysql_connection)
-        .await
-        .map_err(|err| {
-          error!("error with query: {:?}", err);
-          DeleteCommentError::ServerError
-        })?
-        .ok_or(DeleteCommentError::NotFound)?;
+      .await
+      .map_err(|err| {
+        error!("error with query: {:?}", err);
+        DeleteCommentError::ServerError
+      })?
+      .ok_or(DeleteCommentError::NotFound)?;
 
     // 2) Delete as author
     if comment.user_token == user_session.user_token {
@@ -152,18 +140,14 @@ pub async fn delete_comment_handler(
     None => return Err(DeleteCommentError::NotAuthorized),
   };
 
-  let query_result = delete_comment(
-    &path.comment_token,
-    delete_as,
-    &mut *mysql_connection
-  ).await;
+  let query_result = delete_comment(&path.comment_token, delete_as, &mut *mysql_connection).await;
 
   match query_result {
     Ok(_) => {},
     Err(err) => {
       warn!("Update tts mod approval status DB error: {:?}", err);
       return Err(DeleteCommentError::ServerError);
-    }
+    },
   };
 
   Ok(Json(SimpleGenericJsonSuccess { success: true }))

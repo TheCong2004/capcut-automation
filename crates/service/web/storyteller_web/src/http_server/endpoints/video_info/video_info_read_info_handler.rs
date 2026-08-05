@@ -48,16 +48,12 @@ pub struct VideoInfoReadOnlyForm {
     ("request" = VideoInfoReadOnlyForm, description = "Multipart form with a single `file` video upload."),
   )
 )]
-pub async fn video_info_read_info_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  MultipartForm(mut form): MultipartForm<VideoInfoReadOnlyForm>,
-) -> Result<Json<VideoInfoReadOnlyResponse>, CommonWebError> {
+pub async fn video_info_read_info_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, MultipartForm(mut form): MultipartForm<VideoInfoReadOnlyForm>) -> Result<Json<VideoInfoReadOnlyResponse>, CommonWebError> {
   // IP-based rate limit (1 req / 5s by default, configurable). Fails open.
   match server_state.redis_rate_limiters.video_info_read_only.rate_limit_request(&http_request).await {
-    Ok(()) => {}
+    Ok(()) => {},
     Err(RateLimiterError::RateLimitExceededError) => return Err(CommonWebError::TooManyRequests),
-    Err(RateLimiterError::ClientError) => {} // fail open
+    Err(RateLimiterError::ClientError) => {}, // fail open
   }
 
   let mut bytes = Vec::new();
@@ -73,14 +69,5 @@ pub async fn video_info_read_info_handler(
   let maybe_encoder = video_info::encoder_tag(&bytes);
   let provenance = to_provenance(&VideoInfo::from_bytes(&bytes), maybe_encoder);
 
-  Ok(Json(VideoInfoReadOnlyResponse {
-    success: true,
-    kind: provenance.kind,
-    maybe_encoder: provenance.maybe_encoder,
-    maybe_seedance: provenance.maybe_seedance,
-    maybe_veo: provenance.maybe_veo,
-    maybe_sora: provenance.maybe_sora,
-    maybe_dreamina: provenance.maybe_dreamina,
-    maybe_kling: provenance.maybe_kling,
-  }))
+  Ok(Json(VideoInfoReadOnlyResponse { success: true, kind: provenance.kind, maybe_encoder: provenance.maybe_encoder, maybe_seedance: provenance.maybe_seedance, maybe_veo: provenance.maybe_veo, maybe_sora: provenance.maybe_sora, maybe_dreamina: provenance.maybe_dreamina, maybe_kling: provenance.maybe_kling }))
 }

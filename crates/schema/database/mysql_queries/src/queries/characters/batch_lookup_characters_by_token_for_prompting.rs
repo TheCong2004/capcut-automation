@@ -16,10 +16,7 @@ pub struct CharacterPromptData {
 /// Look up multiple characters by their tokens, returning the data needed for prompting.
 ///
 /// Characters that are not found (or soft-deleted) are silently omitted from the results.
-pub async fn batch_lookup_characters_by_token_for_prompting(
-  tokens: &[CharacterToken],
-  connection: &mut PoolConnection<MySql>,
-) -> Result<Vec<CharacterPromptData>, sqlx::Error> {
+pub async fn batch_lookup_characters_by_token_for_prompting(tokens: &[CharacterToken], connection: &mut PoolConnection<MySql>) -> Result<Vec<CharacterPromptData>, sqlx::Error> {
   if tokens.is_empty() {
     return Ok(Vec::new());
   }
@@ -45,10 +42,7 @@ WHERE deleted_at IS NULL
 
   query_builder.push(")");
 
-  let results: Vec<CharacterPromptData> = query_builder
-      .build_query_as::<CharacterPromptData>()
-      .fetch_all(&mut **connection)
-      .await?;
+  let results: Vec<CharacterPromptData> = query_builder.build_query_as::<CharacterPromptData>().fetch_all(&mut **connection).await?;
 
   Ok(results)
 }

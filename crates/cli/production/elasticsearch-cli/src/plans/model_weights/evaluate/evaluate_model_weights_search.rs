@@ -16,4 +16,3 @@ pub async fn evaluate_model_weights_search(client: &Elasticsearch) -> AnyhowResu
 
   Ok(())
 }
-

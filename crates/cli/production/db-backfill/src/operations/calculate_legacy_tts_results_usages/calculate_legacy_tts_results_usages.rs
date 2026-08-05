@@ -51,14 +51,7 @@ pub async fn calculate_legacy_tts_result_usages(mysql: Pool<MySql>) -> AnyhowRes
 
       info!("Date: {} Token: {} Uses: {} (batch elapsed: {} seconds)", date, usage.token.as_str(), usage.record_count, start.elapsed().as_secs());
 
-      upsert_model_weight_usage_count_for_date(Args {
-        model_token: &usage.token,
-        date,
-        usage_count: usage.record_count,
-        insert_on_zero: false,
-        mysql_executor: &mut *connection,
-        phantom: Default::default(),
-      }).await?;
+      upsert_model_weight_usage_count_for_date(Args { model_token: &usage.token, date, usage_count: usage.record_count, insert_on_zero: false, mysql_executor: &mut *connection, phantom: Default::default() }).await?;
     }
   }
 

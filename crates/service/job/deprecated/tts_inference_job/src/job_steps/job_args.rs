@@ -107,14 +107,10 @@ pub struct JobHttpClients {
 }
 
 impl JobArgs {
-
   /// Get the best name for the worker.
   pub fn get_worker_name(&self) -> String {
     // Default to showing the k8s node (machine) name, if possible, as this benefits
     // debugging on-prem workloads.
-    self.worker_details.k8s_node_name.as_deref()
-        .or(self.worker_details.k8s_pod_name.as_deref())
-        .map(|name| name.to_string())
-        .unwrap_or_else(|| self.worker_details.worker_hostname.clone())
+    self.worker_details.k8s_node_name.as_deref().or(self.worker_details.k8s_pod_name.as_deref()).map(|name| name.to_string()).unwrap_or_else(|| self.worker_details.worker_hostname.clone())
   }
 }

@@ -10,16 +10,10 @@ use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::Error;
 use actix_web::App;
 
-pub fn add_user_bookmarks_routes<T, B> (app: App<T>) -> App<T>
+pub fn add_user_bookmarks_routes<T, B>(app: App<T>) -> App<T>
 where
-    B: MessageBody,
-    T: ServiceFactory<
-      ServiceRequest,
-      Config = (),
-      Response = ServiceResponse<B>,
-      Error = Error,
-      InitError = (),
-    >,
+  B: MessageBody,
+  T: ServiceFactory<ServiceRequest, Config = (), Response = ServiceResponse<B>, Error = Error, InitError = ()>,
 {
   RouteBuilder::from_app(app)
       .add_get("/v1/user_bookmarks/batch", batch_get_user_bookmarks_handler)
@@ -30,4 +24,3 @@ where
       .add_get("/v1/user_bookmarks/list/entity/{entity_type}/{entity_token}", list_user_bookmarks_for_entity_handler)
       .into_app()
 }
-

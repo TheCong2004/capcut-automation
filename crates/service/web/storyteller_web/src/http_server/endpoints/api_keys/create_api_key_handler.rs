@@ -34,11 +34,7 @@ const MAX_DESCRIPTION_LEN: usize = 512;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn create_api_key_handler(
-  http_request: HttpRequest,
-  request: Json<CreateApiKeyRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<CreateApiKeySuccessResponse>, CommonWebError> {
+pub async fn create_api_key_handler(http_request: HttpRequest, request: Json<CreateApiKeyRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<CreateApiKeySuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -62,16 +58,12 @@ pub async fn create_api_key_handler(
     return Err(CommonWebError::BadInputWithSimpleMessage("name is empty".to_string()));
   }
   if name.len() > MAX_NAME_LEN {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("name too long (max {} chars)", MAX_NAME_LEN),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage(format!("name too long (max {} chars)", MAX_NAME_LEN)));
   }
 
   if let Some(description) = &maybe_description {
     if description.len() > MAX_DESCRIPTION_LEN {
-      return Err(CommonWebError::BadInputWithSimpleMessage(
-        format!("description too long (max {} chars)", MAX_DESCRIPTION_LEN),
-      ));
+      return Err(CommonWebError::BadInputWithSimpleMessage(format!("description too long (max {} chars)", MAX_DESCRIPTION_LEN)));
     }
   }
 
@@ -80,15 +72,7 @@ pub async fn create_api_key_handler(
   // Generate the secret once. It is returned to the caller here and never again.
   let api_key = generate_api_key();
 
-  let token = insert_api_key(InsertApiKeyArgs {
-    owner_user_token: &user_session.user_token,
-    ip_address: &ip_address,
-    name: &name,
-    maybe_description: maybe_description.as_deref(),
-    api_key: &api_key,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let token = insert_api_key(InsertApiKeyArgs { owner_user_token: &user_session.user_token, ip_address: &ip_address, name: &name, maybe_description: maybe_description.as_deref(), api_key: &api_key, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("insert_api_key failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;

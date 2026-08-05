@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-static IP_ADDRESS_REGEX : Lazy<Regex> = Lazy::new(|| {
+static IP_ADDRESS_REGEX: Lazy<Regex> = Lazy::new(|| {
   // TODO: This doesn't require valid IP addresses. Just a number/dot format.
   Regex::new(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$").expect("should be valid regex")
 });

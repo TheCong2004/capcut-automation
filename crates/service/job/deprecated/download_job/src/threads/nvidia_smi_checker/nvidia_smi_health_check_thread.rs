@@ -7,10 +7,7 @@ use subprocess::{ExitStatus, Popen, PopenConfig, Redirection};
 
 use crate::threads::nvidia_smi_checker::nvidia_smi_health_check_status::NvidiaSmiHealthCheckStatus;
 
-pub async fn nvidia_smi_health_check_thread(
-  health_check_status: NvidiaSmiHealthCheckStatus,
-  check_duration: Duration,
-) {
+pub async fn nvidia_smi_health_check_thread(health_check_status: NvidiaSmiHealthCheckStatus, check_duration: Duration) {
   let mut consecutive_mystery_status_count = 0;
 
   loop {
@@ -30,7 +27,7 @@ pub async fn nvidia_smi_health_check_thread(
         // Mysterious exit codes (they might resolve)
         consecutive_mystery_status_count += 1;
         false
-      }
+      },
       // Unhealthy exits
       ExitStatus::Exited(1) => true,
       ExitStatus::Exited(_other_exit_code) => true,
@@ -48,12 +45,8 @@ pub async fn nvidia_smi_health_check_thread(
   error!("Should never happen: Nvidia SMI Health Checker Exits");
 }
 
-async fn run_nvidia_smi() ->ExitStatus {
-  let command_parts = [
-    "bash",
-    "-c",
-    "nvidia-smi",
-  ];
+async fn run_nvidia_smi() -> ExitStatus {
+  let command_parts = ["bash", "-c", "nvidia-smi"];
 
   let mut config = PopenConfig::default();
 
@@ -66,7 +59,7 @@ async fn run_nvidia_smi() ->ExitStatus {
     Ok(handle) => handle,
     Err(err) => {
       warn!("Error with running nvidia-smi: {:?}", err);
-      return ExitStatus::Undetermined
+      return ExitStatus::Undetermined;
     },
   };
 
@@ -77,7 +70,7 @@ async fn run_nvidia_smi() ->ExitStatus {
     Err(err) => {
       warn!("Error with waiting for nvidia-smi: {:?}", err);
       ExitStatus::Undetermined
-    }
+    },
   };
 
   debug!("nvidia-smi health check exit status: {:?}", exit_status);

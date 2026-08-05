@@ -10,11 +10,11 @@ pub fn get_artcraft_credits_pack_by_slug_and_env(slug: ArtcraftCreditsPackSlug, 
     (ServerEnvironment::Development, ArtcraftCreditsPackSlug::Artcraft2500) => ARTCRAFT_2500_SANDBOX,
 
     // NB: These four (4) are not dev plans, but were set up for temp/fake match branch completeness
-    (ServerEnvironment::Development, ArtcraftCreditsPackSlug::Artcraft5000) => ARTCRAFT_5000_PRODUCTION, // NB: INVALID PLAN FOR DEV
+    (ServerEnvironment::Development, ArtcraftCreditsPackSlug::Artcraft5000) => ARTCRAFT_5000_PRODUCTION,   // NB: INVALID PLAN FOR DEV
     (ServerEnvironment::Development, ArtcraftCreditsPackSlug::Artcraft10000) => ARTCRAFT_10000_PRODUCTION, // NB: INVALID PLAN FOR DEV
     (ServerEnvironment::Development, ArtcraftCreditsPackSlug::Artcraft25000) => ARTCRAFT_25000_PRODUCTION, // NB: INVALID PLAN FOR DEV
     (ServerEnvironment::Development, ArtcraftCreditsPackSlug::Artcraft50000) => ARTCRAFT_50000_PRODUCTION, // NB: INVALID PLAN FOR DEV
-    
+
     // Production
     (ServerEnvironment::Production, ArtcraftCreditsPackSlug::Artcraft1000) => ARTCRAFT_1000_PRODUCTION,
     (ServerEnvironment::Production, ArtcraftCreditsPackSlug::Artcraft2500) => ARTCRAFT_2500_PRODUCTION,

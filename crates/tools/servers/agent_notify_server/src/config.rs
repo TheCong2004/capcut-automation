@@ -6,8 +6,7 @@ use serde_derive::{Deserialize, Serialize};
 
 /// Default config location, resolved at compile time relative to the crate
 /// root so `cargo run` works regardless of CWD.
-pub const DEFAULT_CONFIG_PATH: &str =
-  concat!(env!("CARGO_MANIFEST_DIR"), "/config/notify_config.yaml");
+pub const DEFAULT_CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/config/notify_config.yaml");
 
 pub const DEFAULT_ESCALATE_WAIT_1_SECS: u64 = 15;
 pub const DEFAULT_ESCALATE_WAIT_2_SECS: u64 = 30;
@@ -70,24 +69,16 @@ impl NotifyConfig {
       Ok(c) => {
         log::info!("loaded notify config from {}", path.as_ref().display());
         c
-      }
+      },
       Err(e) => {
-        log::warn!(
-          "failed to load notify config from {}: {} — falling back to empty config",
-          path.as_ref().display(),
-          e
-        );
+        log::warn!("failed to load notify config from {}: {} — falling back to empty config", path.as_ref().display(), e);
         Self::default()
-      }
+      },
     }
   }
 
   pub fn escalate_waits_secs(&self) -> [u64; 3] {
-    [
-      self.escalate_wait_1.unwrap_or(DEFAULT_ESCALATE_WAIT_1_SECS),
-      self.escalate_wait_2.unwrap_or(DEFAULT_ESCALATE_WAIT_2_SECS),
-      self.escalate_wait_3.unwrap_or(DEFAULT_ESCALATE_WAIT_3_SECS),
-    ]
+    [self.escalate_wait_1.unwrap_or(DEFAULT_ESCALATE_WAIT_1_SECS), self.escalate_wait_2.unwrap_or(DEFAULT_ESCALATE_WAIT_2_SECS), self.escalate_wait_3.unwrap_or(DEFAULT_ESCALATE_WAIT_3_SECS)]
   }
 
   /// Per-stage gap (millis) between plays of a single voice. Each entry

@@ -10,26 +10,16 @@ use mysql_queries::queries::tts::tts_models::list_tts_models::{list_tts_models_w
 /// List TTS models
 /// This is for the tts model list page.
 /// Since we're listing, we have to use a flag to determine which query to perform.
-pub async fn list_tts_models_for_migration(
-  mysql_connection: &mut PoolConnection<MySql>,
-  use_weights_table: bool,
-) -> AnyhowResult<Vec<TtsModelForListMigrationWrapper>> {
+pub async fn list_tts_models_for_migration(mysql_connection: &mut PoolConnection<MySql>, use_weights_table: bool) -> AnyhowResult<Vec<TtsModelForListMigrationWrapper>> {
   // NB: This is temporary migration code as we switch from the `tts_models` table to the `model_weights` table.
   if use_weights_table {
-    let models = list_model_weights_for_text_to_speech(
-      mysql_connection).await?;
+    let models = list_model_weights_for_text_to_speech(mysql_connection).await?;
 
-    Ok(models.into_iter()
-        .map(|model| TtsModelForListMigrationWrapper::ModelWeight(model))
-        .collect())
-
+    Ok(models.into_iter().map(|model| TtsModelForListMigrationWrapper::ModelWeight(model)).collect())
   } else {
-    let models = list_tts_models_with_connection(
-      mysql_connection, None, false).await?;
+    let models = list_tts_models_with_connection(mysql_connection, None, false).await?;
 
-    Ok(models.into_iter()
-        .map(|model| TtsModelForListMigrationWrapper::LegacyTts(model))
-        .collect())
+    Ok(models.into_iter().map(|model| TtsModelForListMigrationWrapper::LegacyTts(model)).collect())
   }
 }
 
@@ -100,7 +90,7 @@ impl TtsModelForListMigrationWrapper {
     }
   }
 
-  pub fn creator_set_visibility(&self) -> Visibility{
+  pub fn creator_set_visibility(&self) -> Visibility {
     match self {
       TtsModelForListMigrationWrapper::LegacyTts(ref model) => model.creator_set_visibility,
       TtsModelForListMigrationWrapper::ModelWeight(ref model) => model.creator_set_visibility,

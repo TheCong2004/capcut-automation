@@ -25,11 +25,7 @@ impl PagerWorkerMessageQueue {
   }
 
   pub fn with_capacity(max_size: usize) -> Self {
-    Self {
-      inner: Mutex::new(VecDeque::with_capacity(max_size)),
-      condvar: Condvar::new(),
-      max_size,
-    }
+    Self { inner: Mutex::new(VecDeque::with_capacity(max_size)), condvar: Condvar::new(), max_size }
   }
 
   /// Push a notification onto the queue.
@@ -37,8 +33,7 @@ impl PagerWorkerMessageQueue {
   /// If the queue is full, the oldest item is dropped and a warning is logged.
   /// Returns `Ok(Some(notification))` if an old item was evicted, `Ok(None)` otherwise.
   pub fn push(&self, notification: NotificationDetails) -> Result<Option<NotificationDetails>, PagerError> {
-    let mut queue = self.inner.lock()
-      .map_err(|e| PagerSystemError::MutexPoisoned(format!("push: {}", e)))?;
+    let mut queue = self.inner.lock().map_err(|e| PagerSystemError::MutexPoisoned(format!("push: {}", e)))?;
 
     let dropped = if queue.len() >= self.max_size {
       let old = queue.pop_front();
@@ -59,12 +54,10 @@ impl PagerWorkerMessageQueue {
   ///
   /// Returns an error if the mutex is poisoned.
   pub fn wait_and_drain(&self) -> Result<Vec<NotificationDetails>, PagerError> {
-    let mut queue = self.inner.lock()
-      .map_err(|e| PagerSystemError::MutexPoisoned(format!("wait_and_drain lock: {}", e)))?;
+    let mut queue = self.inner.lock().map_err(|e| PagerSystemError::MutexPoisoned(format!("wait_and_drain lock: {}", e)))?;
 
     while queue.is_empty() {
-      queue = self.condvar.wait(queue)
-        .map_err(|e| PagerSystemError::MutexPoisoned(format!("wait_and_drain wait: {}", e)))?;
+      queue = self.condvar.wait(queue).map_err(|e| PagerSystemError::MutexPoisoned(format!("wait_and_drain wait: {}", e)))?;
     }
 
     let items: Vec<NotificationDetails> = queue.drain(..).collect();
@@ -73,8 +66,7 @@ impl PagerWorkerMessageQueue {
 
   /// Non-blocking drain of all currently queued items.
   pub fn drain_available(&self) -> Result<Vec<NotificationDetails>, PagerError> {
-    let mut queue = self.inner.lock()
-      .map_err(|e| PagerSystemError::MutexPoisoned(format!("drain_available: {}", e)))?;
+    let mut queue = self.inner.lock().map_err(|e| PagerSystemError::MutexPoisoned(format!("drain_available: {}", e)))?;
     Ok(queue.drain(..).collect())
   }
 
@@ -86,8 +78,7 @@ impl PagerWorkerMessageQueue {
   }
 
   pub fn len(&self) -> Result<usize, PagerError> {
-    let queue = self.inner.lock()
-      .map_err(|e| PagerSystemError::MutexPoisoned(format!("len: {}", e)))?;
+    let queue = self.inner.lock().map_err(|e| PagerSystemError::MutexPoisoned(format!("len: {}", e)))?;
     Ok(queue.len())
   }
 

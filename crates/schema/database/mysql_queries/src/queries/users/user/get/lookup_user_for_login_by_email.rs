@@ -8,7 +8,7 @@ pub async fn lookup_user_for_login_by_email(email: &str, pool: &MySqlPool) -> An
   // NB: Lookup failure is Err(RowNotFound).
   let result = sqlx::query_as!(
     UserRecordForLoginRaw,
-        r#"
+    r#"
 SELECT
   token as `token: tokens::tokens::users::UserToken`,
   username,
@@ -23,12 +23,12 @@ FROM users
 WHERE email_address = ?
 LIMIT 1
         "#,
-        email.to_string(),
-    )
-      .fetch_one(pool)
-      .await;
+    email.to_string(),
+  )
+  .fetch_one(pool)
+  .await;
 
   let maybe_record = transform_optional_result(result)?;
 
-  Ok(maybe_record.map(|record|record.into()))
+  Ok(maybe_record.map(|record| record.into()))
 }

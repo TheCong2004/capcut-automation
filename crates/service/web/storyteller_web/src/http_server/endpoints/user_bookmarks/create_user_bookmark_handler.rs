@@ -94,12 +94,7 @@ impl fmt::Display for CreateUserBookmarkError {
     (status = 400, body = CreateUserBookmarkError),
   )
 )]
-pub async fn create_user_bookmark_handler(
-  http_request: HttpRequest,
-  request: Json<CreateUserBookmarkRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<CreateUserBookmarkSuccessResponse>, CreateUserBookmarkError>
-{
+pub async fn create_user_bookmark_handler(http_request: HttpRequest, request: Json<CreateUserBookmarkRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<CreateUserBookmarkSuccessResponse>, CreateUserBookmarkError> {
   // NB(bt,2023-12-14): Kasisnu found that we're getting entity type mismatches in production. Apart from
   // querying the database for entity existence, this is the next best way to prevent incorrect comment
   // attachment. This is a bit of a bad process, though, since the token types are supposed to be opaque.
@@ -122,110 +117,75 @@ pub async fn create_user_bookmark_handler(
     return Err(CreateUserBookmarkError::BadInput("invalid token prefix".to_string()));
   }
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        CreateUserBookmarkError::ServerError
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CreateUserBookmarkError::ServerError
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CreateUserBookmarkError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CreateUserBookmarkError::ServerError
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CreateUserBookmarkError::NotAuthorized);
-    }
+    },
   };
 
-  let entity_token = UserBookmarkEntityToken::from_entity_type_and_token(
-    request.entity_type, &request.entity_token);
+  let entity_token = UserBookmarkEntityToken::from_entity_type_and_token(request.entity_type, &request.entity_token);
 
-  let mut transaction = mysql_connection.begin().await
-      .map_err(|err| {
-        error!("error creating transaction: {:?}", err);
-        CreateUserBookmarkError::ServerError
-      })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("error creating transaction: {:?}", err);
+    CreateUserBookmarkError::ServerError
+  })?;
 
-  let maybe_existing_user_bookmark = get_user_bookmark_transactional_locking(
-    BookmarkIdentifier::EntityTypeAndToken(&entity_token),
-    &mut *transaction
-  ).await
-      .map_err(|err| {
-        error!("error getting user bookmark: {:?}", err);
-        CreateUserBookmarkError::ServerError
-      })?;
+  let maybe_existing_user_bookmark = get_user_bookmark_transactional_locking(BookmarkIdentifier::EntityTypeAndToken(&entity_token), &mut *transaction).await.map_err(|err| {
+    error!("error getting user bookmark: {:?}", err);
+    CreateUserBookmarkError::ServerError
+  })?;
 
-  let upsert_result = upsert_user_bookmark(CreateUserBookmarkArgs {
-    entity_token: &entity_token,
-    user_token: &user_session.user_token,
-    mysql_executor: &mut *transaction,
-    phantom: Default::default(),
-  }).await;
+  let upsert_result = upsert_user_bookmark(CreateUserBookmarkArgs { entity_token: &entity_token, user_token: &user_session.user_token, mysql_executor: &mut *transaction, phantom: Default::default() }).await;
 
   let user_bookmark_token = match upsert_result {
     Ok(token) => token,
     Err(err) => {
       warn!("error upserting user_bookmark: {:?}", err);
       return Err(CreateUserBookmarkError::ServerError);
-    }
+    },
   };
 
   // Increment only if we're creating or undeleting a bookmark
-  let increment_bookmark_count =
-      maybe_existing_user_bookmark.is_none() ||
-          maybe_existing_user_bookmark.map(|bookmark| bookmark.maybe_deleted_at.is_some())
-              .unwrap_or(false);
+  let increment_bookmark_count = maybe_existing_user_bookmark.is_none() || maybe_existing_user_bookmark.map(|bookmark| bookmark.maybe_deleted_at.is_some()).unwrap_or(false);
 
   if increment_bookmark_count {
     // NB: Not all bookmarkable things have stats (eg. deprecated record types don't have stats).
-    let maybe_stats_entity_token =
-        StatsEntityToken::from_bookmark_entity_type_and_token(request.entity_type, &request.entity_token);
+    let maybe_stats_entity_token = StatsEntityToken::from_bookmark_entity_type_and_token(request.entity_type, &request.entity_token);
 
     if let Some(stats_entity_token) = maybe_stats_entity_token {
-      upsert_entity_stats_on_bookmark_event(UpsertEntityStatsArgs {
-        stats_entity_token: &stats_entity_token,
-        action: BookmarkAction::Add,
-        mysql_executor: &mut *transaction,
-        phantom: Default::default(),
-
-      }).await.map_err(|err| {
+      upsert_entity_stats_on_bookmark_event(UpsertEntityStatsArgs { stats_entity_token: &stats_entity_token, action: BookmarkAction::Add, mysql_executor: &mut *transaction, phantom: Default::default() }).await.map_err(|err| {
         error!("error recording stats: {:?}", err);
         CreateUserBookmarkError::ServerError
       })?;
     }
   }
 
-  transaction.commit().await
-      .map_err(|err| {
-        error!("error committing transaction: {:?}", err);
-        CreateUserBookmarkError::ServerError
-      })?;
+  transaction.commit().await.map_err(|err| {
+    error!("error committing transaction: {:?}", err);
+    CreateUserBookmarkError::ServerError
+  })?;
 
   // TODO(bt,2024-01-04): The methods of stats collection here differs.
   //  Update this to return directly from the stats table instead of doing a COUNT(*).
 
-  let count = get_total_bookmark_count_for_entity(&entity_token, &mut mysql_connection)
-      .await
-      .map_err(|err| {
-        warn!("error getting updated bookmark count: {:?}", err);
-        CreateUserBookmarkError::ServerError
-      })?;
+  let count = get_total_bookmark_count_for_entity(&entity_token, &mut mysql_connection).await.map_err(|err| {
+    warn!("error getting updated bookmark count: {:?}", err);
+    CreateUserBookmarkError::ServerError
+  })?;
 
-  let response = CreateUserBookmarkSuccessResponse {
-    success: true,
-    user_bookmark_token,
-    new_bookmark_count_for_entity: count.total_count,
-  };
+  let response = CreateUserBookmarkSuccessResponse { success: true, user_bookmark_token, new_bookmark_count_for_entity: count.total_count };
 
   Ok(Json(response))
 }

@@ -2,20 +2,14 @@ use std::collections::HashSet;
 
 use enums::by_table::media_files::media_file_class::MediaFileClass;
 
-pub fn get_scoped_media_classes(
-  maybe_query_param: Option<&str>
-) -> Option<HashSet<MediaFileClass>> {
-
+pub fn get_scoped_media_classes(maybe_query_param: Option<&str>) -> Option<HashSet<MediaFileClass>> {
   let classes = match maybe_query_param {
     None => return None,
     Some(classes) => classes,
   };
 
   // NB: This silently fails on invalid values. Probably not the best tactic.
-  let classes = classes.split(",")
-      .map(|ty| MediaFileClass::from_str(ty))
-      .flatten()
-      .collect::<HashSet<_>>();
+  let classes = classes.split(",").map(|ty| MediaFileClass::from_str(ty)).flatten().collect::<HashSet<_>>();
 
   if classes.is_empty() {
     return None;
@@ -61,8 +55,6 @@ mod test {
 
   #[test]
   fn valid_scope() {
-    assert_eq!(
-      get_scoped_media_classes(Some("image,video")),
-      Some(HashSet::from([MediaFileClass::Image, MediaFileClass::Video])));
+    assert_eq!(get_scoped_media_classes(Some("image,video")), Some(HashSet::from([MediaFileClass::Image, MediaFileClass::Video])));
   }
 }

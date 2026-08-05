@@ -28,9 +28,7 @@ where
 /// Intended to run inside the same transaction as the bulk add / remove /
 /// move that necessitated the recompute, so the cached columns and the
 /// real membership stay consistent under concurrent writers.
-pub async fn recompute_folder_last_media_files<'e, 'c: 'e, E>(
-  args: RecomputeFolderLastMediaFilesArgs<'e, 'c, E>,
-) -> Result<(), sqlx::Error>
+pub async fn recompute_folder_last_media_files<'e, 'c: 'e, E>(args: RecomputeFolderLastMediaFilesArgs<'e, 'c, E>) -> Result<(), sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -92,8 +90,8 @@ WHERE token = ?
     folder_token_str,
     folder_token_str,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(())
 }

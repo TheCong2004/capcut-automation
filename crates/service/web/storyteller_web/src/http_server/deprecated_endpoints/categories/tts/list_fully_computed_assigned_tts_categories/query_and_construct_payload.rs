@@ -45,7 +45,7 @@ pub struct TtsModelInfoLite {
 
 #[derive(Clone)]
 pub struct TtsModelTokenToCategoryTokenLight {
-  map: HashMap<TtsModelToken, HashSet<ModelCategoryToken>> // NB: Stronger types than the library we consume
+  map: HashMap<TtsModelToken, HashSet<ModelCategoryToken>>, // NB: Stronger types than the library we consume
 }
 
 pub type CategoryTokenToCategoryMap = HashMap<ModelCategoryToken, CategoryInfoLite>;
@@ -55,57 +55,37 @@ pub type ModelTokenToCategoryTokensMap = HashMap<TtsModelToken, HashSet<ModelCat
 // NB: We use BTree to maintain insertion order for our return type.
 pub type CategoryTokenToModelTokensMap = BTreeMap<ModelCategoryToken, BTreeSet<TtsModelToken>>;
 
-pub async fn query_and_construct_payload(
-  category_cache: &SingleItemTtlCache<CategoryList>,
-  mysql_pool: &MySqlPool
-) -> Result<ModelTokensByCategoryToken, ListFullyComputedAssignedTtsCategoriesError> {
-  let (
-    categories,
-    models,
-    model_category_map,
-    trending_models
-  ) = {
-    let mut mysql_connection = mysql_pool.acquire()
-        .await
-        .map_err(|e| {
-          error!("Could not acquire DB pool: {:?}", e);
-          ListFullyComputedAssignedTtsCategoriesError::ServerError
-        })?;
+pub async fn query_and_construct_payload(category_cache: &SingleItemTtlCache<CategoryList>, mysql_pool: &MySqlPool) -> Result<ModelTokensByCategoryToken, ListFullyComputedAssignedTtsCategoriesError> {
+  let (categories, models, model_category_map, trending_models) = {
+    let mut mysql_connection = mysql_pool.acquire().await.map_err(|e| {
+      error!("Could not acquire DB pool: {:?}", e);
+      ListFullyComputedAssignedTtsCategoriesError::ServerError
+    })?;
 
-    let models = list_tts_models(&mut mysql_connection)
-        .await
-        .map_err(|e| {
-          error!("Error querying models: {:?}", e);
-          ListFullyComputedAssignedTtsCategoriesError::ServerError
-        })?;
+    let models = list_tts_models(&mut mysql_connection).await.map_err(|e| {
+      error!("Error querying models: {:?}", e);
+      ListFullyComputedAssignedTtsCategoriesError::ServerError
+    })?;
 
-    let categories = list_tts_categories(category_cache, &mut mysql_connection)
-        .await
-        .map_err(|e| {
-          error!("Error querying categories: {:?}", e);
-          ListFullyComputedAssignedTtsCategoriesError::ServerError
-        })?;
+    let categories = list_tts_categories(category_cache, &mut mysql_connection).await.map_err(|e| {
+      error!("Error querying categories: {:?}", e);
+      ListFullyComputedAssignedTtsCategoriesError::ServerError
+    })?;
 
-    let model_category_map = build_model_categories_map(&mut mysql_connection)
-        .await
-        .map_err(|e| {
-          error!("Error querying and building model category map: {:?}", e);
-          ListFullyComputedAssignedTtsCategoriesError::ServerError
-        })?;
+    let model_category_map = build_model_categories_map(&mut mysql_connection).await.map_err(|e| {
+      error!("Error querying and building model category map: {:?}", e);
+      ListFullyComputedAssignedTtsCategoriesError::ServerError
+    })?;
 
-    let trending_models = list_trending_tts_models(&mut mysql_connection)
-        .await
-        .map_err(|e| {
-          error!("Error querying trending TTS models: {:?}", e);
-          ListFullyComputedAssignedTtsCategoriesError::ServerError
-        })?;
+    let trending_models = list_trending_tts_models(&mut mysql_connection).await.map_err(|e| {
+      error!("Error querying trending TTS models: {:?}", e);
+      ListFullyComputedAssignedTtsCategoriesError::ServerError
+    })?;
 
     (categories, models, model_category_map, trending_models)
   };
 
-  let mut recursive_category_to_model_map = recursive_category_to_model_map(
-    &model_category_map,
-    &categories);
+  let mut recursive_category_to_model_map = recursive_category_to_model_map(&model_category_map, &categories);
 
   // Add synthetic categories
   add_recent_models(&mut recursive_category_to_model_map, &models);
@@ -117,57 +97,40 @@ pub async fn query_and_construct_payload(
   // Sort all of the models within the categories
   let final_map = sort_models(&recursive_category_to_model_map, &models);
 
-  Ok(ModelTokensByCategoryToken {
-    recursive: final_map,
-  })
+  Ok(ModelTokensByCategoryToken { recursive: final_map })
 }
 
 // ========== Queries / model transformations ==========
 
-async fn list_tts_categories(
-  category_cache: &SingleItemTtlCache<CategoryList>,
-  mysql_connection: &mut PoolConnection<MySql>
-) -> AnyhowResult<Vec<CategoryInfoLite>> {
-
+async fn list_tts_categories(category_cache: &SingleItemTtlCache<CategoryList>, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<CategoryInfoLite>> {
   let categories = list_cached_tts_categories_for_public_dropdown(category_cache, mysql_connection).await?;
   let categories = categories.categories;
 
-  let mut categories = categories.into_iter()
-      .map(|c| CategoryInfoLite {
-        category_token: ModelCategoryToken::new(c.category_token),
-        maybe_parent_category_token: c.maybe_super_category_token.map(|t| ModelCategoryToken::new(t)),
-        // NB: This might produce weird sorting resorts relative to the "name" field,
-        // but the typical way this should be consumed is via dropdowns.
-        category_name_for_sorting: c.maybe_dropdown_name.unwrap_or(c.name),
-      })
-      .collect::<Vec<CategoryInfoLite>>();
+  let mut categories = categories
+    .into_iter()
+    .map(|c| CategoryInfoLite {
+      category_token: ModelCategoryToken::new(c.category_token),
+      maybe_parent_category_token: c.maybe_super_category_token.map(|t| ModelCategoryToken::new(t)),
+      // NB: This might produce weird sorting resorts relative to the "name" field,
+      // but the typical way this should be consumed is via dropdowns.
+      category_name_for_sorting: c.maybe_dropdown_name.unwrap_or(c.name),
+    })
+    .collect::<Vec<CategoryInfoLite>>();
 
   // NB: This might produce weird sorting resorts relative to the "name" field,
   // but the typical way this should be consumed is via dropdowns.
-  categories.sort_by(|c1, c2|
-      natural_lexical_cmp(&c1.category_name_for_sorting, &c2.category_name_for_sorting));
+  categories.sort_by(|c1, c2| natural_lexical_cmp(&c1.category_name_for_sorting, &c2.category_name_for_sorting));
 
   Ok(categories)
 }
 
 async fn list_tts_models(mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<TtsModelInfoLite>> {
-  let models = list_tts_models_with_connection(
-    mysql_connection,
-    None,
-    false
-  ).await?;
+  let models = list_tts_models_with_connection(mysql_connection, None, false).await?;
 
-  let mut models = models.into_iter()
-      .map(|m| TtsModelInfoLite {
-        model_token: TtsModelToken::new_from_str(&m.model_token),
-        title_for_sorting: m.title,
-        created_at: m.created_at,
-      })
-      .collect::<Vec<TtsModelInfoLite>>();
+  let mut models = models.into_iter().map(|m| TtsModelInfoLite { model_token: TtsModelToken::new_from_str(&m.model_token), title_for_sorting: m.title, created_at: m.created_at }).collect::<Vec<TtsModelInfoLite>>();
 
   // Make the list nice for human readers.
-  models.sort_by(|a, b|
-      natural_lexical_cmp(&a.title_for_sorting, &b.title_for_sorting));
+  models.sort_by(|a, b| natural_lexical_cmp(&a.title_for_sorting, &b.title_for_sorting));
 
   Ok(models)
 }
@@ -176,18 +139,18 @@ async fn build_model_categories_map(mysql_connection: &mut PoolConnection<MySql>
   // NB: It looks like the underlying code filters out TTS models if they're deleted or locked,
   // but it does no filtering (or joining!) to categories, which may result in spurious categories
   // being returned in the map.
-  let untyped_map  = fetch_and_build_tts_model_category_map_with_connection(mysql_connection).await?;
+  let untyped_map = fetch_and_build_tts_model_category_map_with_connection(mysql_connection).await?;
 
   // NB: Stronger types
-  let map = untyped_map.model_to_category_tokens.into_iter()
-      .map(|(model_token, category_tokens)| {
-        let model_token = TtsModelToken::new(model_token);
-        let category_tokens = category_tokens.into_iter()
-            .map(|category_token| ModelCategoryToken::new(category_token))
-            .collect::<HashSet<ModelCategoryToken>>();
-        (model_token, category_tokens)
-      })
-      .collect::<HashMap<TtsModelToken, HashSet<ModelCategoryToken>>>();
+  let map = untyped_map
+    .model_to_category_tokens
+    .into_iter()
+    .map(|(model_token, category_tokens)| {
+      let model_token = TtsModelToken::new(model_token);
+      let category_tokens = category_tokens.into_iter().map(|category_token| ModelCategoryToken::new(category_token)).collect::<HashSet<ModelCategoryToken>>();
+      (model_token, category_tokens)
+    })
+    .collect::<HashMap<TtsModelToken, HashSet<ModelCategoryToken>>>();
 
   Ok(map)
 }

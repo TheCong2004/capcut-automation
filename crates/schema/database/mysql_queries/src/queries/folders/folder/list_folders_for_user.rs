@@ -23,9 +23,7 @@ where
 /// derived `is_orphaned` flag computed by joining the table against itself
 /// on `maybe_parent_folder_token` — orphaned means the parent row is
 /// missing or soft-deleted.
-pub async fn list_folders_for_user<'e, 'c: 'e, E>(
-  args: ListFoldersForUserArgs<'e, 'c, E>,
-) -> Result<Vec<FolderRow>, sqlx::Error>
+pub async fn list_folders_for_user<'e, 'c: 'e, E>(args: ListFoldersForUserArgs<'e, 'c, E>) -> Result<Vec<FolderRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -36,9 +34,8 @@ where
   // exactly one arm at runtime — Rust permits this since the arms are
   // mutually exclusive.
   let rows = match args.maybe_cursor_id {
-    Some(cursor_id) => {
-      sqlx::query!(
-        r#"
+    Some(cursor_id) => sqlx::query!(
+      r#"
 SELECT
   f.id as `id: u64`,
   f.token as `token: FolderToken`,
@@ -67,35 +64,17 @@ WHERE f.owner_user_token = ?
 ORDER BY f.id DESC
 LIMIT ?
         "#,
-        args.owner_user_token.as_str(),
-        cursor_id,
-        limit,
-      )
-        .fetch_all(args.mysql_executor)
-        .await?
-        .into_iter()
-        .map(|r| FolderRow {
-          id: r.id,
-          token: r.token,
-          name: r.name,
-          owner_user_token: r.owner_user_token,
-          maybe_parent_folder_token: r.maybe_parent_folder_token,
-          maybe_last_media_file_token_1: r.maybe_last_media_file_token_1,
-          maybe_last_media_file_token_2: r.maybe_last_media_file_token_2,
-          maybe_last_media_file_token_3: r.maybe_last_media_file_token_3,
-          maybe_last_media_file_token_4: r.maybe_last_media_file_token_4,
-          maybe_cover_image_custom_media_token: r.maybe_cover_image_custom_media_token,
-          maybe_color_code: r.maybe_color_code,
-          has_star: r.has_star,
-          created_at: r.created_at,
-          updated_at: r.updated_at,
-          is_orphaned: r.is_orphaned,
-        })
-        .collect::<Vec<_>>()
-    }
-    None => {
-      sqlx::query!(
-        r#"
+      args.owner_user_token.as_str(),
+      cursor_id,
+      limit,
+    )
+    .fetch_all(args.mysql_executor)
+    .await?
+    .into_iter()
+    .map(|r| FolderRow { id: r.id, token: r.token, name: r.name, owner_user_token: r.owner_user_token, maybe_parent_folder_token: r.maybe_parent_folder_token, maybe_last_media_file_token_1: r.maybe_last_media_file_token_1, maybe_last_media_file_token_2: r.maybe_last_media_file_token_2, maybe_last_media_file_token_3: r.maybe_last_media_file_token_3, maybe_last_media_file_token_4: r.maybe_last_media_file_token_4, maybe_cover_image_custom_media_token: r.maybe_cover_image_custom_media_token, maybe_color_code: r.maybe_color_code, has_star: r.has_star, created_at: r.created_at, updated_at: r.updated_at, is_orphaned: r.is_orphaned })
+    .collect::<Vec<_>>(),
+    None => sqlx::query!(
+      r#"
 SELECT
   f.id as `id: u64`,
   f.token as `token: FolderToken`,
@@ -123,31 +102,14 @@ WHERE f.owner_user_token = ?
 ORDER BY f.id DESC
 LIMIT ?
         "#,
-        args.owner_user_token.as_str(),
-        limit,
-      )
-        .fetch_all(args.mysql_executor)
-        .await?
-        .into_iter()
-        .map(|r| FolderRow {
-          id: r.id,
-          token: r.token,
-          name: r.name,
-          owner_user_token: r.owner_user_token,
-          maybe_parent_folder_token: r.maybe_parent_folder_token,
-          maybe_last_media_file_token_1: r.maybe_last_media_file_token_1,
-          maybe_last_media_file_token_2: r.maybe_last_media_file_token_2,
-          maybe_last_media_file_token_3: r.maybe_last_media_file_token_3,
-          maybe_last_media_file_token_4: r.maybe_last_media_file_token_4,
-          maybe_cover_image_custom_media_token: r.maybe_cover_image_custom_media_token,
-          maybe_color_code: r.maybe_color_code,
-          has_star: r.has_star,
-          created_at: r.created_at,
-          updated_at: r.updated_at,
-          is_orphaned: r.is_orphaned,
-        })
-        .collect::<Vec<_>>()
-    }
+      args.owner_user_token.as_str(),
+      limit,
+    )
+    .fetch_all(args.mysql_executor)
+    .await?
+    .into_iter()
+    .map(|r| FolderRow { id: r.id, token: r.token, name: r.name, owner_user_token: r.owner_user_token, maybe_parent_folder_token: r.maybe_parent_folder_token, maybe_last_media_file_token_1: r.maybe_last_media_file_token_1, maybe_last_media_file_token_2: r.maybe_last_media_file_token_2, maybe_last_media_file_token_3: r.maybe_last_media_file_token_3, maybe_last_media_file_token_4: r.maybe_last_media_file_token_4, maybe_cover_image_custom_media_token: r.maybe_cover_image_custom_media_token, maybe_color_code: r.maybe_color_code, has_star: r.has_star, created_at: r.created_at, updated_at: r.updated_at, is_orphaned: r.is_orphaned })
+    .collect::<Vec<_>>(),
   };
 
   Ok(rows)

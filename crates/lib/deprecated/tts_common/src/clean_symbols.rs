@@ -16,128 +16,164 @@ fn to_owned(item: &(&str, &str)) -> (String, String) {
 
 // https://unicodelookup.com/#quo
 // http://www.geocities.ws/click2speak/unicode/chars_es.html
-static REPLACEMENTS : Lazy<HashMap<String, String>> = Lazy::new(|| {
+static REPLACEMENTS: Lazy<HashMap<String, String>> = Lazy::new(|| {
   let mut map = HashMap::new();
 
   // Latin characters such as àáâãäå
   map.extend(LATIN_TO_ASCII_CHARACTER_MAP.iter().map(&deref_to_owned));
 
   // Spacing character replacements
-  map.extend([
-    ("\u{00A0}", " "), // Non-break space (aka &nbsp;) \xa0
-    ("\u{2003}", " "), // Em Space
-    ("\u{2004}", " "), // Three-Per-Em Space
-    ("\u{2005}", " "), // Four-Per-Em Space
-    ("\u{2006}", " "), // Six-Per-Em Space
-    ("\u{2007}", " "), // Figure Space
-    ("\u{2008}", " "), // Punctuation Space
-    ("\u{2009}", " "), // Thin Space
-    ("\u{200A}", " "), // Hair Space
-    ("\u{200B}", " "), // Zero Width Space
-    ("\u{200C}", " "), // Zero Width Non-Joiner
-    ("\u{200D}", " "), // Zero Width Joiner
-    ("\u{2028}", " "), // Line Separator
-    ("\u{2029}", " "), // Paragraph Separator
-    ("\u{205F}", " "), // Medium Mathematical Space (MMSP)
-    ("\u{2588}", " "), // Full Block
-    ("\u{2800}", " "), // Braille Pattern Blank
-    ("\u{3000}", " "), // Ideographic Space
-    ("\u{3164}", " "), // Hangul Filler
-    ("\u{FEFF}", " "), // Zero Width No-Break Space
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{00A0}", " "), // Non-break space (aka &nbsp;) \xa0
+      ("\u{2003}", " "), // Em Space
+      ("\u{2004}", " "), // Three-Per-Em Space
+      ("\u{2005}", " "), // Four-Per-Em Space
+      ("\u{2006}", " "), // Six-Per-Em Space
+      ("\u{2007}", " "), // Figure Space
+      ("\u{2008}", " "), // Punctuation Space
+      ("\u{2009}", " "), // Thin Space
+      ("\u{200A}", " "), // Hair Space
+      ("\u{200B}", " "), // Zero Width Space
+      ("\u{200C}", " "), // Zero Width Non-Joiner
+      ("\u{200D}", " "), // Zero Width Joiner
+      ("\u{2028}", " "), // Line Separator
+      ("\u{2029}", " "), // Paragraph Separator
+      ("\u{205F}", " "), // Medium Mathematical Space (MMSP)
+      ("\u{2588}", " "), // Full Block
+      ("\u{2800}", " "), // Braille Pattern Blank
+      ("\u{3000}", " "), // Ideographic Space
+      ("\u{3164}", " "), // Hangul Filler
+      ("\u{FEFF}", " "), // Zero Width No-Break Space
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Punctuation that should turn into spaces
-  map.extend([
-    ("\u{b7}", " "), // · Middle Dot
-    ("\u{2022}", " "), // • Bullet
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{b7}", " "),   // · Middle Dot
+      ("\u{2022}", " "), // • Bullet
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Quotes (single)
-  map.extend([
-    ("\u{0060}", "'"), // Grave Accent
-    ("\u{00B4}", "'"), // Acute Accent
-    ("\u{2018}", "'"), // Left Single Quotation Mark
-    ("\u{2019}", "'"), // Right Single Quotation Mark
-    ("\u{201A}", "'"), // Single Low-9 Quotation Mark
-    ("\u{201B}", "'"), // Single High-Revered-9 Quotation Mark
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{0060}", "'"), // Grave Accent
+      ("\u{00B4}", "'"), // Acute Accent
+      ("\u{2018}", "'"), // Left Single Quotation Mark
+      ("\u{2019}", "'"), // Right Single Quotation Mark
+      ("\u{201A}", "'"), // Single Low-9 Quotation Mark
+      ("\u{201B}", "'"), // Single High-Revered-9 Quotation Mark
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Quotes (double)
-  map.extend([
-    ("\u{201C}", "\""), // Left Double Quotation Mark
-    ("\u{201D}", "\""), // Right Double Quotation Mark
-    ("\u{201E}", "\""), // Double Low-9 Quotation Mark
-    ("\u{201F}", "\""), // Double High-Reversed-9 Quotation Mark
-    ("\u{301D}", "\""), // Reversed Double Prime Quotation Mark
-    ("\u{301E}", "\""), // Double Prime Quotation Mark
-    ("\u{301F}", "\""), // Low Double Prime Quotation Mark
-    ("\u{FF02}", "\""), // Fullwidth Quotation Mark
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{201C}", "\""), // Left Double Quotation Mark
+      ("\u{201D}", "\""), // Right Double Quotation Mark
+      ("\u{201E}", "\""), // Double Low-9 Quotation Mark
+      ("\u{201F}", "\""), // Double High-Reversed-9 Quotation Mark
+      ("\u{301D}", "\""), // Reversed Double Prime Quotation Mark
+      ("\u{301E}", "\""), // Double Prime Quotation Mark
+      ("\u{301F}", "\""), // Low Double Prime Quotation Mark
+      ("\u{FF02}", "\""), // Fullwidth Quotation Mark
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Dashes
-  map.extend([
-    ("\u{00AD}", "-"), // ­ Soft Hyphen
-    ("\u{2010}", "-"), // ‐ Hyphen
-    ("\u{2011}", "-"), // ‑ Non-Breaking Hyphen
-    ("\u{2013}", "-"), // – En Dash
-    ("\u{2014}", "-"), // — Em Dash
-    ("\u{2015}", "-"), // ― Horizontal Bar
-    ("\u{2E3A}", "-"), // ⸺ Two-Em Dash
-    ("\u{2E3B}", "-"), // ⸻ Three-Em Dash
-    ("\u{FE58}", "-"), // ﹘ Small Em Dash
-    ("\u{FE63}", "-"), // ﹣ Small Hyphen-Minus
-    ("\u{FF0D}", "-"), // － Fullwidth Hyphen-Minus
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{00AD}", "-"), // ­ Soft Hyphen
+      ("\u{2010}", "-"), // ‐ Hyphen
+      ("\u{2011}", "-"), // ‑ Non-Breaking Hyphen
+      ("\u{2013}", "-"), // – En Dash
+      ("\u{2014}", "-"), // — Em Dash
+      ("\u{2015}", "-"), // ― Horizontal Bar
+      ("\u{2E3A}", "-"), // ⸺ Two-Em Dash
+      ("\u{2E3B}", "-"), // ⸻ Three-Em Dash
+      ("\u{FE58}", "-"), // ﹘ Small Em Dash
+      ("\u{FE63}", "-"), // ﹣ Small Hyphen-Minus
+      ("\u{FF0D}", "-"), // － Fullwidth Hyphen-Minus
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Close enough to existing allowed punctuation
-  map.extend([
-    ("\u{00A1}", "!"), // ¡ Inverted Exclamation Mark
-    ("\u{00A8}", "\""), // ¨ Diaeresis
-    ("\u{00BF}", "?"), // ¿ Inverted Question Mark
-    ("\u{2024}", "."), // ․ One Dot Leader
-    ("\u{2025}", ".."), // ‥ Two Dot Leader
-    ("\u{2026}", "..."), // … Horizontal Ellipsis
-    ("\u{203C}", "!!"), // ‼ Double Exclamation Mark Emoji
-    ("\u{203D}", "!?"), // ‽ Interrobang
-    ("\u{2588}", " "), // █ Full Block
-    ("\u{3001}", ","), // 、 Ideographic Comma
-    ("\u{3002}", "."), // 。 Ideographic Full Stop
-    ("\u{FF01}", "!"), // ！ Fullwidth Exclamation Mark
-    ("\u{FF0C}", ","), // ， Fullwidth Comma
-    ("\u{FF5E}", "~"), // ～ Fullwidth Tilde
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{00A1}", "!"),   // ¡ Inverted Exclamation Mark
+      ("\u{00A8}", "\""),  // ¨ Diaeresis
+      ("\u{00BF}", "?"),   // ¿ Inverted Question Mark
+      ("\u{2024}", "."),   // ․ One Dot Leader
+      ("\u{2025}", ".."),  // ‥ Two Dot Leader
+      ("\u{2026}", "..."), // … Horizontal Ellipsis
+      ("\u{203C}", "!!"),  // ‼ Double Exclamation Mark Emoji
+      ("\u{203D}", "!?"),  // ‽ Interrobang
+      ("\u{2588}", " "),   // █ Full Block
+      ("\u{3001}", ","),   // 、 Ideographic Comma
+      ("\u{3002}", "."),   // 。 Ideographic Full Stop
+      ("\u{FF01}", "!"),   // ！ Fullwidth Exclamation Mark
+      ("\u{FF0C}", ","),   // ， Fullwidth Comma
+      ("\u{FF5E}", "~"),   // ～ Fullwidth Tilde
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Spanish special characters
-  map.extend([
-    ("\u{AA}", "a"), // Feminine ordinal
-    ("\u{BA}", "o"), // Masculine ordinal
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{AA}", "a"), // Feminine ordinal
+      ("\u{BA}", "o"), // Masculine ordinal
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Symbols we can insert as words
-  map.extend([
-    ("\u{00A9}", " copyright "), // © Copyright Sign Emoji
-    ("\u{00B0}", " degrees "), // ° Degree Sign
-    ("\u{03C0}", " pie "), // greek small letter pi (TODO: Incorrect handling)
-    ("\u{2122}", " trademark "), // ™ Trade Mark Sign Emoji
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{00A9}", " copyright "), // © Copyright Sign Emoji
+      ("\u{00B0}", " degrees "),   // ° Degree Sign
+      ("\u{03C0}", " pie "),       // greek small letter pi (TODO: Incorrect handling)
+      ("\u{2122}", " trademark "), // ™ Trade Mark Sign Emoji
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   // Emoji we can insert as words
   // https://unicode-table.com/en/blocks/emoticons/
-  map.extend([
-    ("\u{1F33D}", " corn on the cobb "), // 🌽 Ear of Maize Emoji
-    ("\u{1F436}", " dog face "), // 🐶 Dog Face Emoji
-    ("\u{1F44C}", " okay "), // 👌 Ok Hand Sign Emoji
-    ("\u{1F4A6}", " splashing sweat "), // 💦 Splashing Sweat Symbol Emoji
-    ("\u{1F4A9}", " poop "), // 💩 Pile of Poo Emoji
-    ("\u{1F4AF}", " hundred points "), // 💯 Hundred Points Symbol Emoji
-    ("\u{1F525}", " fire "), // 🔥 Fire Emoji
-    ("\u{1F530}", " japanese symbol for beginner "), // 🔰 Japanese Symbol for Beginner Emoji
-    ("\u{1F602}", " face with tears of joy "), // 😂 Face with Tears of Joy Emoji
-    ("\u{1F60D}", " heart eyes "), // 😍 Smiling Face with Heart-Shaped Eyes Emoji
-    ("\u{1F62D}", " loudly crying face "), // 😭 Loudly Crying Face Emoji
-    ("\u{1F633}", " flushed face "), // 😳 Flushed Face Emoji
-    ("\u{1F923}", " rolling on the floor laughing "), // 🤣 Rolling On The Floor Laughing Emoji
-  ].iter().map(&to_owned));
+  map.extend(
+    [
+      ("\u{1F33D}", " corn on the cobb "),              // 🌽 Ear of Maize Emoji
+      ("\u{1F436}", " dog face "),                      // 🐶 Dog Face Emoji
+      ("\u{1F44C}", " okay "),                          // 👌 Ok Hand Sign Emoji
+      ("\u{1F4A6}", " splashing sweat "),               // 💦 Splashing Sweat Symbol Emoji
+      ("\u{1F4A9}", " poop "),                          // 💩 Pile of Poo Emoji
+      ("\u{1F4AF}", " hundred points "),                // 💯 Hundred Points Symbol Emoji
+      ("\u{1F525}", " fire "),                          // 🔥 Fire Emoji
+      ("\u{1F530}", " japanese symbol for beginner "),  // 🔰 Japanese Symbol for Beginner Emoji
+      ("\u{1F602}", " face with tears of joy "),        // 😂 Face with Tears of Joy Emoji
+      ("\u{1F60D}", " heart eyes "),                    // 😍 Smiling Face with Heart-Shaped Eyes Emoji
+      ("\u{1F62D}", " loudly crying face "),            // 😭 Loudly Crying Face Emoji
+      ("\u{1F633}", " flushed face "),                  // 😳 Flushed Face Emoji
+      ("\u{1F923}", " rolling on the floor laughing "), // 🤣 Rolling On The Floor Laughing Emoji
+    ]
+    .iter()
+    .map(&to_owned),
+  );
 
   map
 });
@@ -145,26 +181,27 @@ static REPLACEMENTS : Lazy<HashMap<String, String>> = Lazy::new(|| {
 /// Tacotron chokes on Unicode, latin characters, special punctuation, emoji, etc.
 /// We attempt to turn as much as possible into ASCII and a reduced set of symbols.
 pub fn clean_symbols(input_text: &str) -> String {
-  let segmented= UnicodeSegmentation::graphemes(input_text, true)
-      .map(|segment| {
-        if let Some(replace) = REPLACEMENTS.get(segment) {
-          return replace.as_str();
-        }
-        segment
-      })
-      .collect::<Vec<&str>>();
+  let segmented = UnicodeSegmentation::graphemes(input_text, true)
+    .map(|segment| {
+      if let Some(replace) = REPLACEMENTS.get(segment) {
+        return replace.as_str();
+      }
+      segment
+    })
+    .collect::<Vec<&str>>();
 
-  let before_clean : String = segmented.join("");
+  let before_clean: String = segmented.join("");
 
-  before_clean.chars()
-      .filter(|segment| {
-        match segment {
-          '\x00'..='\x7f' => true, // Full ASCII range
-          //'\x01'...'\x08' | '\u{10FFFE}'...'\u{10FFFF}' => true,
-          _ => false,
-        }
-      })
-      .collect::<String>()
+  before_clean
+    .chars()
+    .filter(|segment| {
+      match segment {
+        '\x00'..='\x7f' => true, // Full ASCII range
+        //'\x01'...'\x08' | '\u{10FFFE}'...'\u{10FFFF}' => true,
+        _ => false,
+      }
+    })
+    .collect::<String>()
 }
 
 #[cfg(test)]
@@ -175,11 +212,10 @@ mod tests {
 
   use crate::clean_symbols::clean_symbols;
 
-  const TIME_BOMB_EPOCH_STR : &str = "2025-04-01T00:00:00.00Z";
+  const TIME_BOMB_EPOCH_STR: &str = "2025-04-01T00:00:00.00Z";
 
   static TIME_BOMB_EPOCH: Lazy<DateTime<Utc>> = Lazy::new(|| {
-    let datetime = DateTime::parse_from_rfc3339(TIME_BOMB_EPOCH_STR)
-        .expect("date must parse statically.");
+    let datetime = DateTime::parse_from_rfc3339(TIME_BOMB_EPOCH_STR).expect("date must parse statically.");
 
     datetime.with_timezone(&Utc)
   });
@@ -214,8 +250,7 @@ mod tests {
 
   #[test]
   fn assert_ascii_retained() {
-    assert_converted("This, sentence. It\nhas\nnewlines.",
-                     "This, sentence. It\nhas\nnewlines.");
+    assert_converted("This, sentence. It\nhas\nnewlines.", "This, sentence. It\nhas\nnewlines.");
     assert_converted("12:34", "12:34");
     assert_converted("Punctuation!?.", "Punctuation!?.");
   }
@@ -257,8 +292,8 @@ mod tests {
 
   #[test]
   fn symbol_expansion() {
-    assert_eq!(clean_symbols("Pokémon™ is a popular video game series"),
-               "Pokemon trademark  is a popular video game series".to_string()); // NB: Extra space
+    assert_eq!(clean_symbols("Pokémon™ is a popular video game series"), "Pokemon trademark  is a popular video game series".to_string());
+    // NB: Extra space
   }
 
   #[test]
@@ -291,9 +326,7 @@ mod tests {
 
   #[test]
   fn actual_database_failures() {
-    assert_eq!(clean_symbols(
-      "Sabías que?,tu papá es el tercer planeta del sistema solar"),
-               "Sabias que?,tu papa es el tercer planeta del sistema solar".to_string());
+    assert_eq!(clean_symbols("Sabías que?,tu papá es el tercer planeta del sistema solar"), "Sabias que?,tu papa es el tercer planeta del sistema solar".to_string());
     assert_eq!(clean_symbols("señoras"), "senoras".to_string());
 
     // Most frequent according to partial histogram
@@ -419,7 +452,7 @@ mod tests {
     assert_converted("æ", "ae"); // b'\xe6' 3142
     assert_converted("¨", "\""); // b'\xa8' 3236
     assert_converted("ò", "o"); // b'\xf2' 3250
-    time_bomb_ignore(||assert_converted("đ", "d")); // b'\\u0111' 3420
+    time_bomb_ignore(|| assert_converted("đ", "d")); // b'\\u0111' 3420
     assert_converted("，", ","); // b'\\uff0c' 3487
     assert_converted("ô", "o"); // b'\xf4' 3568
     assert_converted("Á", "A"); // b'\xc1' 3779
@@ -454,7 +487,7 @@ mod tests {
     time_bomb_ignore(|| assert_converted("ι", "l")); // b'\\u03b9' 1559
     time_bomb_ignore(|| assert_converted("ε", "e")); // b'\\u03b5' 1575
     assert_converted("ă", "a"); // b'\\u0103' 1576
-    //assert_converted("😂", ""); // b'\\U0001f602' 1741
+                                //assert_converted("😂", ""); // b'\\U0001f602' 1741
     assert_converted("Ó", "O"); // b'\xd3' 1774
     assert_converted("ư", "u"); // b'\\u01b0' 1794
     assert_converted("•", " "); // b'\\u2022' 1948
@@ -463,21 +496,21 @@ mod tests {
   #[test]
   pub fn most_frequent_failures_1k_usages() {
     assert_converted("　", " "); // b'\\u3000' 1005
-    //assert_converted("🤣", " laugh "); // b'\\U0001f923' 1010
+                                 //assert_converted("🤣", " laugh "); // b'\\U0001f923' 1010
     assert_converted("ø", "o"); // b'\xf8' 1017
     assert_converted("！", "!"); // b'\\uff01' 1019
-    //assert_converted("¥", " yen "); // b'\xa5' 1033
-    //assert_converted("😭", "cry "); // b'\\U0001f62d' 1061
+                                 //assert_converted("¥", " yen "); // b'\xa5' 1033
+                                 //assert_converted("😭", "cry "); // b'\\U0001f62d' 1061
     assert_converted("Ü", "U"); // b'\xdc' 1062
     assert_converted("č", "c"); // b'\\u010d' 1092
     assert_converted("ν", "v"); // b'\\u03bd' 1096
     assert_converted("ż", "z"); // b'\\u017c' 1099
     assert_converted("⠀", " "); // b'\\u2800' 1166
     assert_converted("ą", "a"); // b'\\u0105' 1169
-    //assert_converted("£", " pounds "); // b'\xa3' 1186
+                                //assert_converted("£", " pounds "); // b'\xa3' 1186
     assert_converted("ë", "e"); // b'\xeb' 1189
     assert_converted("Ç", "C"); // b'\xc7' 1213
-    //assert_converted("τ", "t"); // b'\\u03c4' 1217
+                                //assert_converted("τ", "t"); // b'\\u03c4' 1217
     assert_converted("ẹ", "e"); // b'\\u1eb9' 1228
     assert_converted("î", "i"); // b'\xee' 1349
     assert_converted("ś", "s"); // b'\\u015b' 1402

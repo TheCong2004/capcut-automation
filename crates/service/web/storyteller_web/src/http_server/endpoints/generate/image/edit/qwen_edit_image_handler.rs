@@ -47,36 +47,23 @@ use utoipa::ToSchema;
     ("request" = QwenEditImageRequest, description = "Payload for Request"),
   )
 )]
-pub async fn qwen_edit_image_handler(
-  http_request: HttpRequest,
-  request: Json<QwenEditImageRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<QwenEditImageResponse>, CommonWebError> {
-  
+pub async fn qwen_edit_image_handler(http_request: HttpRequest, request: Json<QwenEditImageRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<QwenEditImageResponse>, CommonWebError> {
   payments_error_test(&request.prompt.as_deref().unwrap_or(""))?;
-  
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await?;
-  
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let mut mysql_connection = server_state.mysql_pool.acquire().await?;
+
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
+
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   let user_token = match maybe_user_session.as_ref() {
     Some(session) => &session.user_token,
     None => {
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if let Err(reason) = validate_idempotency_token_format(&request.uuid_idempotency_token) {
@@ -86,55 +73,40 @@ pub async fn qwen_edit_image_handler(
   const CAN_SEE_DELETED: bool = false;
 
   // TODO: Maybe don't use the batch endpoint.
-  let media_tokens = vec![
-    request.image_media_token.clone(),
-  ];
+  let media_tokens = vec![request.image_media_token.clone()];
 
-  let result = batch_get_media_files_by_tokens_with_connection(
-    &mut mysql_connection,
-    &media_tokens,
-    CAN_SEE_DELETED,
-  ).await;
+  let result = batch_get_media_files_by_tokens_with_connection(&mut mysql_connection, &media_tokens, CAN_SEE_DELETED).await;
 
   let media_files = match result {
     Ok(files) => files,
     Err(err) => {
       error!("Error getting media files by tokens: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   let image_media_file = match media_files.first() {
     Some(file) => file,
     None => {
       warn!("No media files found for tokens: {:?}", media_tokens);
-      return Err(CommonWebError::BadInputWithSimpleMessage(
-        "No media files found for provided tokens".to_string()));
-    }
+      return Err(CommonWebError::BadInputWithSimpleMessage("No media files found for provided tokens".to_string()));
+    },
   };
 
   let media_domain = get_media_domain(&http_request);
-  
-  let image_url = { 
-    let public_bucket_path = MediaFileBucketPath::from_object_hash(
-      &image_media_file.public_bucket_directory_hash, 
-      image_media_file.maybe_public_bucket_prefix.as_deref(), 
-      image_media_file.maybe_public_bucket_extension.as_deref());
-      
-      let media_links = MediaLinksBuilder::from_media_path_and_env(
-        media_domain, 
-        server_state.server_environment, 
-        &public_bucket_path);
-      
-      media_links.cdn_url.to_string()
+
+  let image_url = {
+    let public_bucket_path = MediaFileBucketPath::from_object_hash(&image_media_file.public_bucket_directory_hash, image_media_file.maybe_public_bucket_prefix.as_deref(), image_media_file.maybe_public_bucket_extension.as_deref());
+
+    let media_links = MediaLinksBuilder::from_media_path_and_env(media_domain, server_state.server_environment, &public_bucket_path);
+
+    media_links.cdn_url.to_string()
   };
 
-  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
-      })?;
+  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("repeated idempotency token".to_string())
+  })?;
 
   info!("Fal webhook URL: {}", server_state.inference_providers.fal.webhook_url);
 
@@ -147,61 +119,39 @@ pub async fn qwen_edit_image_handler(
     Some(QwenEditImageNumImages::Four) => QwenImageEditNumImages::Four,
     None => QwenImageEditNumImages::One, // Default to One
   };
-  
+
   let acceleration = request.acceleration.as_ref().map(|accel| match accel {
     QwenEditImageAcceleration::None => "none",
     QwenEditImageAcceleration::Regular => "regular",
     QwenEditImageAcceleration::High => "high",
   });
-  
-  let args = QwenImageEditArgs {
-    request: QwenImageEditRequest {
-      prompt: request.prompt.as_deref().unwrap_or("").to_string(),
-      image_url: image_url.to_string(),
-      num_images: Some(num_images),
-      image_size: None,
-      negative_prompt: request.negative_prompt.clone(),
-      acceleration: acceleration.map(|s| s.to_string()),
-    },
-    webhook_url: &server_state.inference_providers.fal.webhook_url,
-    api_key: &server_state.inference_providers.fal.api_key,
-  };
+
+  let args = QwenImageEditArgs { request: QwenImageEditRequest { prompt: request.prompt.as_deref().unwrap_or("").to_string(), image_url: image_url.to_string(), num_images: Some(num_images), image_size: None, negative_prompt: request.negative_prompt.clone(), acceleration: acceleration.map(|s| s.to_string()) }, webhook_url: &server_state.inference_providers.fal.webhook_url, api_key: &server_state.inference_providers.fal.api_key };
 
   let cost = args.request.calculate_cost_in_cents();
 
   info!("Charging wallet: {}", cost);
 
-  attempt_wallet_deduction_else_common_web_error(
-    user_token,
-    Some(apriori_job_token.as_str()),
-    cost,
-    &mut mysql_connection,
-  ).await?;
+  attempt_wallet_deduction_else_common_web_error(user_token, Some(apriori_job_token.as_str()), cost, &mut mysql_connection).await?;
 
-  let fal_result = enqueue_qwen_image_edit_webhook(args)
-      .await
-      .map_err(|err| {
-        warn!("Error calling enqueue_qwen_image_edit_webhook: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let fal_result = enqueue_qwen_image_edit_webhook(args).await.map_err(|err| {
+    warn!("Error calling enqueue_qwen_image_edit_webhook: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let external_job_id = fal_result.request_id
-      .ok_or_else(|| {
-        warn!("Fal request_id is None");
-        CommonWebError::server_error_with_message("Fal request_id is None")
-      })?;
+  let external_job_id = fal_result.request_id.ok_or_else(|| {
+    warn!("Fal request_id is None");
+    CommonWebError::server_error_with_message("Fal request_id is None")
+  })?;
 
   info!("Fal request_id: {}", external_job_id);
 
   let ip_address = get_request_ip(&http_request);
 
-  let mut transaction = mysql_connection
-      .begin()
-      .await
-      .map_err(|err| {
-        error!("Error starting MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("Error starting MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // NB: Don't fail the job if the query fails.
   let maybe_batch_count: Option<u8> = match request.num_images {
@@ -231,74 +181,40 @@ pub async fn qwen_edit_image_handler(
     creator_ip_address: &ip_address,
     mysql_executor: &mut *transaction,
     phantom: Default::default(),
-  }).await;
+  })
+  .await;
 
   let prompt_token = match prompt_result {
     Ok(token) => Some(token),
     Err(err) => {
       warn!("Error inserting prompt: {:?}", err);
       None // Don't fail the job if the prompt insertion fails.
-    }
+    },
   };
-  
+
   if let Some(token) = prompt_token.as_ref() {
-    let result = insert_batch_prompt_context_items(InsertBatchArgs {
-      prompt_token: token.clone(),
-      items: vec![
-        PromptContextItem {
-          media_token: image_media_file.token.clone(),
-          context_semantic_type: PromptContextSemanticType::Imgsrc,
-        }
-      ],
-      transaction: &mut transaction,
-    }).await;
-    
+    let result = insert_batch_prompt_context_items(InsertBatchArgs { prompt_token: token.clone(), items: vec![PromptContextItem { media_token: image_media_file.token.clone(), context_semantic_type: PromptContextSemanticType::Imgsrc }], transaction: &mut transaction }).await;
+
     if let Err(err) = result {
       // NB: Fail open.
       warn!("Error inserting batch prompt context items: {:?}", err);
     }
   }
 
-  let db_result = insert_generic_inference_job_for_fal_queue_with_apriori_job_token(InsertGenericInferenceForFalWithAprioriJobTokenArgs {
-    apriori_job_token: &apriori_job_token,
-    uuid_idempotency_token: &request.uuid_idempotency_token,
-    maybe_external_third_party_id: &external_job_id,
-    fal_category: FalCategory::ImageGeneration,
-    maybe_model_type: Some(CommonModelType::Qwen),
-    maybe_inference_args: None,
-    maybe_prompt_token: prompt_token.as_ref(),
-    maybe_creator_user_token: Some(&user_token),
-    maybe_avt_token: maybe_avt_token.as_ref(),
-    creator_ip_address: &ip_address,
-    creator_set_visibility: Visibility::Public,
-    maybe_platform_type: get_request_platform_type(&http_request),
-    maybe_cost_estimates: None,
-    mysql_executor: &mut *transaction,
-    starting_job_status_override: None,
-    maybe_frontend_failure_category: None,
-    maybe_failure_reason: None,
-      maybe_debug_log_event_token: None,
-    phantom: Default::default(),
-  }).await;
+  let db_result = insert_generic_inference_job_for_fal_queue_with_apriori_job_token(InsertGenericInferenceForFalWithAprioriJobTokenArgs { apriori_job_token: &apriori_job_token, uuid_idempotency_token: &request.uuid_idempotency_token, maybe_external_third_party_id: &external_job_id, fal_category: FalCategory::ImageGeneration, maybe_model_type: Some(CommonModelType::Qwen), maybe_inference_args: None, maybe_prompt_token: prompt_token.as_ref(), maybe_creator_user_token: Some(&user_token), maybe_avt_token: maybe_avt_token.as_ref(), creator_ip_address: &ip_address, creator_set_visibility: Visibility::Public, maybe_platform_type: get_request_platform_type(&http_request), maybe_cost_estimates: None, mysql_executor: &mut *transaction, starting_job_status_override: None, maybe_frontend_failure_category: None, maybe_failure_reason: None, maybe_debug_log_event_token: None, phantom: Default::default() }).await;
 
   let job_token = match db_result {
     Ok(token) => token,
     Err(err) => {
       warn!("Error inserting generic inference job for FAL queue: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
-  
-  let _r = transaction
-      .commit()
-      .await
-      .map_err(|err| {
-        error!("Error committing MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
 
-  Ok(Json(QwenEditImageResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  let _r = transaction.commit().await.map_err(|err| {
+    error!("Error committing MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
+
+  Ok(Json(QwenEditImageResponse { success: true, inference_job_token: job_token }))
 }

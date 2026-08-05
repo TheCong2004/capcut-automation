@@ -22,21 +22,12 @@ pub struct MediaFileLivePortraitDetails {
 impl MediaFileLivePortraitDetails {
   /// Extract from database JSON payload
   pub fn maybe_from_extra_info(info: &MediaFileExtraInfo) -> Option<Self> {
-    let lp =
-        if let MediaFileExtraInfo::L(live_portrait_args) = info {
-          live_portrait_args
-        } else {
-          return None;
-        };
+    let lp = if let MediaFileExtraInfo::L(live_portrait_args) = info {
+      live_portrait_args
+    } else {
+      return None;
+    };
 
-    lp.maybe_portrait_media_token
-        .as_ref()
-        .zip(lp.maybe_driver_video_media_token.as_ref())
-        .map(|(portrait, driver) | {
-          Self {
-            source_media_file_token: portrait.clone(),
-            face_driver_media_file_token: driver.clone(),
-          }
-        })
+    lp.maybe_portrait_media_token.as_ref().zip(lp.maybe_driver_video_media_token.as_ref()).map(|(portrait, driver)| Self { source_media_file_token: portrait.clone(), face_driver_media_file_token: driver.clone() })
   }
 }

@@ -13,7 +13,7 @@ use tokens::tokens::users::UserToken;
 
 pub struct UserSubscription {
   pub token: UserSubscriptionToken,
-  
+
   pub user_token: UserToken,
 
   pub subscription_namespace: PaymentsNamespace,
@@ -50,33 +50,18 @@ pub struct UserSubscription {
 /// Technically, there may be more than one subscription record.
 /// We sort the results and only return the first active artcraft subscription
 /// by numeric ID so we should have a consistent view.
-pub async fn find_subscription_for_owner_user_using_connection(
-  user_token: &UserToken,
-  namespace: PaymentsNamespace,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<Option<UserSubscription>, SelectOptionalRecordError> {
-
+pub async fn find_subscription_for_owner_user_using_connection(user_token: &UserToken, namespace: PaymentsNamespace, connection: &mut PoolConnection<MySql>) -> Result<Option<UserSubscription>, SelectOptionalRecordError> {
   let query = query(user_token, namespace);
 
-  let result = query
-      .fetch_optional(&mut **connection)
-      .await;
+  let result = query.fetch_optional(&mut **connection).await;
 
   map_result(result)
 }
 
-
-pub async fn find_subscription_for_owner_user_using_transaction(
-  user_token: &UserToken,
-  namespace: PaymentsNamespace,
-  transaction: &mut sqlx::Transaction<'_, MySql>,
-) -> Result<Option<UserSubscription>, SelectOptionalRecordError> {
-
+pub async fn find_subscription_for_owner_user_using_transaction(user_token: &UserToken, namespace: PaymentsNamespace, transaction: &mut sqlx::Transaction<'_, MySql>) -> Result<Option<UserSubscription>, SelectOptionalRecordError> {
   let query = query(user_token, namespace);
 
-  let result = query
-      .fetch_optional(&mut **transaction)
-      .await;
+  let result = query.fetch_optional(&mut **transaction).await;
 
   map_result(result)
 }
@@ -88,14 +73,10 @@ fn map_result(result: Result<Option<RawUserSubscription>, sqlx::Error>) -> Resul
       user_token: record.user_token,
       subscription_namespace: record.subscription_namespace,
       subscription_product_slug: record.subscription_product_slug,
-      stripe_customer_id: record.maybe_stripe_customer_id
-          .ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_customer_id"))?,
-      stripe_product_id: record.maybe_stripe_product_id
-          .ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_product_id"))?,
-      stripe_subscription_id: record.maybe_stripe_subscription_id
-          .ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_subscription_id"))?,
-      stripe_subscription_status: record.maybe_stripe_subscription_status
-          .ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_subscription_status"))?,
+      stripe_customer_id: record.maybe_stripe_customer_id.ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_customer_id"))?,
+      stripe_product_id: record.maybe_stripe_product_id.ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_product_id"))?,
+      stripe_subscription_id: record.maybe_stripe_subscription_id.ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_subscription_id"))?,
+      stripe_subscription_status: record.maybe_stripe_subscription_status.ok_or_else(|| SelectOptionalRecordError::RequiredFieldWasNull("maybe_stripe_subscription_status"))?,
       stripe_invoice_is_paid: nullable_i8_to_bool_default_false(record.maybe_stripe_invoice_is_paid),
       subscription_start_at: record.subscription_start_at,
       subscription_expires_at: record.subscription_expires_at,
@@ -108,9 +89,7 @@ fn map_result(result: Result<Option<RawUserSubscription>, sqlx::Error>) -> Resul
   }
 }
 
-fn query(user_token: &UserToken, namespace: PaymentsNamespace)
-  -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RawUserSubscription, sqlx::Error>>
-{
+fn query(user_token: &UserToken, namespace: PaymentsNamespace) -> QueryMap<impl Send + FnMut(MySqlRow) -> Result<RawUserSubscription, sqlx::Error>> {
   // NB: We want to eventually support multiple subscriptions per user (eg. company use case),
   // so we do not have a unique key on user token (but we do on stripe subscription id).
   // In the meantime, to ensure we use the same subscription each time, we order by id and
@@ -152,11 +131,10 @@ WHERE
   )
 }
 
-
 #[derive(sqlx::FromRow)]
 struct RawUserSubscription {
   token: UserSubscriptionToken,
-  
+
   user_token: UserToken,
 
   subscription_namespace: PaymentsNamespace,

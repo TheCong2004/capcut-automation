@@ -221,8 +221,7 @@ pub fn read_seek_table_block<B: ReadBytes>(
         // still be consumed.
         if sample != 0xffff_ffff_ffff_ffff {
             table.insert(sample, reader.read_be_u64()?, u32::from(reader.read_be_u16()?));
-        }
-        else {
+        } else {
             reader.ignore_bytes(10)?;
         }
     }

@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use crate::{get_storyteller_frontend_root, get_storyteller_ml_root, get_storyteller_root, get_storyteller_rust_root};
 
-const STORYTELLER_ROOT_REPLACEMENT : &str = "%storyteller_root%";
+const STORYTELLER_ROOT_REPLACEMENT: &str = "%storyteller_root%";
 
-const STORYTELLER_FRONTEND_REPLACEMENT : &str = "%storyteller_frontend%";
-const STORYTELLER_ML_REPLACEMENT : &str = "%storyteller_ml%";
-const STORYTELLER_RUST_REPLACEMENT : &str = "%storyteller_rust%";
+const STORYTELLER_FRONTEND_REPLACEMENT: &str = "%storyteller_frontend%";
+const STORYTELLER_ML_REPLACEMENT: &str = "%storyteller_ml%";
+const STORYTELLER_RUST_REPLACEMENT: &str = "%storyteller_rust%";
 
 /// Transform a given string path, substituting "magic" variables for the various storyteller
 /// project directories.
@@ -50,9 +50,7 @@ pub fn get_substituted_path(path: &str) -> PathBuf {
 
 fn type_juggle_path(path: PathBuf) -> String {
   // NB: The Path/PathBuf library does some silly stuff regarding non-UTF-8 paths.
-  path.to_str()
-      .map(|s| s.to_string())
-      .unwrap_or_else(|| path.to_string_lossy().to_string())
+  path.to_str().map(|s| s.to_string()).unwrap_or_else(|| path.to_string_lossy().to_string())
 }
 
 #[cfg(test)]

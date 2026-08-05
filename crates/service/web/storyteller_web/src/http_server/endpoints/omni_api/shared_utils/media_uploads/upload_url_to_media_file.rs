@@ -34,59 +34,41 @@ pub enum MediaUploadKind {
 ///
 /// NB: this performs a network download followed by an R2 upload — do NOT call
 /// it while holding a pooled MySQL connection (the insert acquires its own).
-pub async fn upload_url_to_media_file(
-  server_state: &ServerState,
-  user_token: &UserToken,
-  ip_address: &str,
-  url: &str,
-  kind: MediaUploadKind,
-) -> Result<MediaFileToken, CommonWebError> {
+pub async fn upload_url_to_media_file(server_state: &ServerState, user_token: &UserToken, ip_address: &str, url: &str, kind: MediaUploadKind) -> Result<MediaFileToken, CommonWebError> {
   // ==================== DOWNLOAD ==================== //
 
-  let file_bytes = http_download_url_to_bytes(url)
-    .await
-    .map_err(|err| {
-      warn!("Failed to download media URL {}: {:?}", url, err);
-      CommonWebError::BadInputWithSimpleMessage(format!("Failed to download URL: {}", url))
-    })?;
+  let file_bytes = http_download_url_to_bytes(url).await.map_err(|err| {
+    warn!("Failed to download media URL {}: {:?}", url, err);
+    CommonWebError::BadInputWithSimpleMessage(format!("Failed to download URL: {}", url))
+  })?;
 
   // ==================== MIME VALIDATION ==================== //
 
-  let mimetype = get_mimetype_for_bytes(file_bytes.as_ref())
-    .map(|mimetype| mimetype.to_string())
-    .ok_or_else(|| {
-      warn!("Could not determine mimetype for URL: {}", url);
-      CommonWebError::BadInputWithSimpleMessage(
-        format!("Could not determine file type for URL: {}", url))
-    })?;
+  let mimetype = get_mimetype_for_bytes(file_bytes.as_ref()).map(|mimetype| mimetype.to_string()).ok_or_else(|| {
+    warn!("Could not determine mimetype for URL: {}", url);
+    CommonWebError::BadInputWithSimpleMessage(format!("Could not determine file type for URL: {}", url))
+  })?;
 
   if !kind.allowed_mime_types().contains(mimetype.as_str()) {
     // NB: Don't let our error message echo back malicious strings.
-    let filtered_mimetype = mimetype
-      .chars()
-      .filter(|c| c.is_ascii())
-      .filter(|c| c.is_alphanumeric() || *c == '/')
-      .collect::<String>();
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("Unpermitted mime type for URL {}: {}", url, filtered_mimetype)));
+    let filtered_mimetype = mimetype.chars().filter(|c| c.is_ascii()).filter(|c| c.is_alphanumeric() || *c == '/').collect::<String>();
+    return Err(CommonWebError::BadInputWithSimpleMessage(format!("Unpermitted mime type for URL {}: {}", url, filtered_mimetype)));
   }
 
   // ==================== OTHER FILE METADATA ==================== //
 
-  let extension = mimetype_to_extension(&mimetype)
-    .ok_or_else(|| {
-      warn!("Could not determine file extension for mimetype: {}", &mimetype);
-      CommonWebError::server_error_with_message("Could not determine file extension")
-    })?;
+  let extension = mimetype_to_extension(&mimetype).ok_or_else(|| {
+    warn!("Could not determine file extension for mimetype: {}", &mimetype);
+    CommonWebError::server_error_with_message("Could not determine file extension")
+  })?;
   let extension = format!(".{extension}"); // NB: needs dot prefix
 
   let file_size_bytes = file_bytes.len() as u64;
 
-  let hash = sha256_hash_bytes(file_bytes.as_ref())
-    .map_err(|err| {
-      warn!("Problem hashing bytes for URL {}: {:?}", url, err);
-      CommonWebError::server_error_with_message("Could not hash downloaded file")
-    })?;
+  let hash = sha256_hash_bytes(file_bytes.as_ref()).map_err(|err| {
+    warn!("Problem hashing bytes for URL {}: {:?}", url, err);
+    CommonWebError::server_error_with_message("Could not hash downloaded file")
+  })?;
 
   // ==================== UPLOAD TO R2 ==================== //
 
@@ -95,16 +77,10 @@ pub async fn upload_url_to_media_file(
 
   info!("Uploading URL media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
-  server_state.public_bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    file_bytes.as_ref(),
-    &mimetype,
-  )
-    .await
-    .map_err(|err| {
-      warn!("Upload URL media bytes to bucket error: {:?}", err);
-      CommonWebError::server_error_with_message("Could not store downloaded file")
-    })?;
+  server_state.public_bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), file_bytes.as_ref(), &mimetype).await.map_err(|err| {
+    warn!("Upload URL media bytes to bucket error: {:?}", err);
+    CommonWebError::server_error_with_message("Could not store downloaded file")
+  })?;
 
   // ==================== INSERT MEDIA FILE ==================== //
 
@@ -136,46 +112,22 @@ pub async fn upload_url_to_media_file(
     maybe_public_bucket_extension: Some(&extension),
     pool: &server_state.mysql_pool,
   })
-    .await
-    .map_err(|err| {
-      warn!("Failed to insert media file from URL {}: {:?}", url, err);
-      CommonWebError::server_error_with_message("Could not save downloaded file")
-    })?;
+  .await
+  .map_err(|err| {
+    warn!("Failed to insert media file from URL {}: {:?}", url, err);
+    CommonWebError::server_error_with_message("Could not save downloaded file")
+  })?;
 
   info!("New media file from URL id: {} token: {:?}", record_id, &token);
 
   Ok(token)
 }
 
-static IMAGE_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-  ])
-});
+static IMAGE_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["image/jpeg", "image/png", "image/gif", "image/webp"]));
 
-static VIDEO_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "video/mp4",
-  ])
-});
+static VIDEO_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["video/mp4"]));
 
-static AUDIO_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "audio/aac",
-    "audio/m4a",
-    "audio/mpeg",
-    "audio/ogg",
-    "audio/opus",
-    "audio/x-flac",
-    "audio/x-wav",
-    "audio/mp4",
-    "video/mp4",
-    "video/webm",
-  ])
-});
+static AUDIO_MIME_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["audio/aac", "audio/m4a", "audio/mpeg", "audio/ogg", "audio/opus", "audio/x-flac", "audio/x-wav", "audio/mp4", "video/mp4", "video/webm"]));
 
 impl MediaUploadKind {
   fn allowed_mime_types(&self) -> &'static HashSet<&'static str> {
@@ -203,12 +155,11 @@ impl MediaUploadKind {
   }
 
   fn media_file_type(&self, mimetype: &str) -> MediaFileType {
-    MediaFileType::try_from_mime_type(mimetype)
-        .unwrap_or(match self {
-          // Coarse fallbacks for unrecognized mimes
-          MediaUploadKind::Image => MediaFileType::Image,
-          MediaUploadKind::Video => MediaFileType::Video,
-          MediaUploadKind::Audio => MediaFileType::Audio,
-        })
+    MediaFileType::try_from_mime_type(mimetype).unwrap_or(match self {
+      // Coarse fallbacks for unrecognized mimes
+      MediaUploadKind::Image => MediaFileType::Image,
+      MediaUploadKind::Video => MediaFileType::Video,
+      MediaUploadKind::Audio => MediaFileType::Audio,
+    })
   }
 }

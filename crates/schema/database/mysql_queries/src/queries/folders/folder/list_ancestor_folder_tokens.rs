@@ -30,9 +30,7 @@ where
 /// `maybe_parent_folder_token` chain. Order is nearest-ancestor first.
 /// Deleted folders are excluded — a soft-deleted parent terminates the
 /// chain. The walk is capped at [`MAX_ANCESTOR_DEPTH`] hops.
-pub async fn list_ancestor_folder_tokens<'e, 'c: 'e, E>(
-  args: ListAncestorFolderTokensArgs<'e, 'c, E>,
-) -> Result<Vec<FolderToken>, sqlx::Error>
+pub async fn list_ancestor_folder_tokens<'e, 'c: 'e, E>(args: ListAncestorFolderTokensArgs<'e, 'c, E>) -> Result<Vec<FolderToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -63,8 +61,8 @@ ORDER BY depth ASC
     args.owner_user_token.as_str(),
     MAX_ANCESTOR_DEPTH,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows.into_iter().map(|r| r.token).collect())
 }

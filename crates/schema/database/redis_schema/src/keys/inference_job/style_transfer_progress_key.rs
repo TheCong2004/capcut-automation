@@ -18,4 +18,3 @@ impl StyleTransferProgressKey {
     REDIS_KEY_TTL_DURATION
   }
 }
-

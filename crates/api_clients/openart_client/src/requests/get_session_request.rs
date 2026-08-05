@@ -8,7 +8,7 @@ use log::{debug, error, info};
 use reqwest::Client;
 use serde_derive::Deserialize;
 
-const SESSION_URL : &str = "https://openart.ai/api/auth/session";
+const SESSION_URL: &str = "https://openart.ai/api/auth/session";
 
 #[derive(Debug, Clone)]
 pub struct SessionDetails {
@@ -38,47 +38,33 @@ struct RawUser {
 }
 
 pub async fn get_session_request(creds: &OpenArtCredentials) -> Result<SessionDetails, OpenArtError> {
-
   let cookies = match creds.cookies.as_ref() {
     Some(cookies) => cookies,
     None => {
       error!("Failed to request session. No cookies in credentials.");
       return Err(ClientError::NoCookiesInCredentials.into());
-    }
+    },
   };
 
-  let client = Client::builder()
-      .gzip(true)
-      .build()
-      .map_err(|err| {
-        error!("Failed to create HTTP client: {}", err);
-        OpenArtError::Client(ClientError::ReqwestError(err))
-      })?;
+  let client = Client::builder().gzip(true).build().map_err(|err| {
+    error!("Failed to create HTTP client: {}", err);
+    OpenArtError::Client(ClientError::ReqwestError(err))
+  })?;
 
   info!("Getting session details from cookies... (cookie payload length: {})", cookies.as_str().len());
 
-  let mut http_request= client.get(SESSION_URL)
-      .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:137.0) Gecko/20100101 Firefox/137.0")
-      .header("Accept", "*/*")
-      .header("Accept-Encoding", "gzip, deflate, br")
-      .header("Accept-Language", "en-US,en;q=0.5")
-      .header("Cookie", cookies.as_str());
+  let mut http_request = client.get(SESSION_URL).header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:137.0) Gecko/20100101 Firefox/137.0").header("Accept", "*/*").header("Accept-Encoding", "gzip, deflate, br").header("Accept-Language", "en-US,en;q=0.5").header("Cookie", cookies.as_str());
 
-  let http_request = http_request.build()
-      .map_err(|err| ApiError::ReqwestError(err))?;
+  let http_request = http_request.build().map_err(|err| ApiError::ReqwestError(err))?;
 
-  let response = client.execute(http_request)
-      .await
-      .map_err(|err| ApiError::ReqwestError(err))?;
+  let response = client.execute(http_request).await.map_err(|err| ApiError::ReqwestError(err))?;
 
   let status = response.status();
 
-  let response_body = &response.text()
-      .await
-      .map_err(|err| {
-        error!("Error reading body while attempting to read session details: {:?}", err);
-        ApiError::ReqwestError(err)
-      })?;
+  let response_body = &response.text().await.map_err(|err| {
+    error!("Error reading body while attempting to read session details: {:?}", err);
+    ApiError::ReqwestError(err)
+  })?;
 
   if !status.is_success() {
     error!("Failed to get session details: {} ; body = {}", status, response_body);
@@ -87,24 +73,18 @@ pub async fn get_session_request(creds: &OpenArtCredentials) -> Result<SessionDe
   }
 
   debug!("Session info response was 200. Body: {}", response_body);
-  
+
   if response_body.is_empty() || response_body == "{}" {
     error!("Received empty response body when requesting session details.");
     return Err(OpenArtError::Api(ApiError::InvalidSession));
   }
 
-  let session : RawSession = serde_json::from_str(response_body)
-      .map_err(|err| { 
-        error!("Failed to parse session details: {} body: {}", err, response_body);
-        OpenArtError::Api(ApiError::CouldNotParseSession { error: err, body: response_body.to_string() } ) 
-      })?;
+  let session: RawSession = serde_json::from_str(response_body).map_err(|err| {
+    error!("Failed to parse session details: {} body: {}", err, response_body);
+    OpenArtError::Api(ApiError::CouldNotParseSession { error: err, body: response_body.to_string() })
+  })?;
 
-  Ok(SessionDetails {
-    sub: session.sub,
-    email: session.user.as_ref().and_then(|u| u.email.clone()),
-    name: session.user.as_ref().and_then(|u| u.name.clone()),
-    image: session.user.as_ref().and_then(|u| u.image.clone()),
-  })
+  Ok(SessionDetails { sub: session.sub, email: session.user.as_ref().and_then(|u| u.email.clone()), name: session.user.as_ref().and_then(|u| u.name.clone()), image: session.user.as_ref().and_then(|u| u.image.clone()) })
 }
 
 #[cfg(test)]
@@ -116,10 +96,7 @@ mod tests {
   #[tokio::test]
   #[ignore] // Do not run in CI. Run manully to test session retrieval.
   async fn invalid_session() {
-    let creds = OpenArtCredentials {
-      cookies: Some(OpenArtCookies::new("".to_string())),
-      session_info: None,
-    };
+    let creds = OpenArtCredentials { cookies: Some(OpenArtCookies::new("".to_string())), session_info: None };
 
     let result = get_session_request(&creds).await;
 
@@ -127,15 +104,12 @@ mod tests {
 
     assert!(result.is_err());
   }
-  
+
   #[tokio::test]
   #[ignore] // Do not run in CI. Run manully to test session retrieval.
   async fn valid_session() {
     let cookie = "";
-    let creds = OpenArtCredentials {
-      cookies: Some(OpenArtCookies::new(cookie.to_string())),
-      session_info: None,
-    };
+    let creds = OpenArtCredentials { cookies: Some(OpenArtCookies::new(cookie.to_string())), session_info: None };
 
     let result = get_session_request(&creds).await;
 

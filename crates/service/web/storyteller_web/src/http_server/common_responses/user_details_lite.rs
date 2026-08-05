@@ -26,66 +26,27 @@ pub struct UserDetailsLight {
 
   /// For users without a gravatar, we show one of our own avatars.
   pub default_avatar: UserDefaultAvatarInfo,
-
   // In the future, we'll also support user-uploaded avatars that we store on our servers.
 }
 
 impl UserDetailsLight {
-
-  pub fn from_db_fields(
-    user_token: &UserToken,
-    username: &str,
-    display_name: &str,
-    gravatar_hash: &str,
-  ) -> Self {
-    Self {
-      default_avatar: UserDefaultAvatarInfo::from_username(&username),
-      user_token: user_token.clone(),
-      username: username.to_string(),
-      display_name: display_name.to_string(),
-      gravatar_hash: gravatar_hash.to_string(),
-    }
+  pub fn from_db_fields(user_token: &UserToken, username: &str, display_name: &str, gravatar_hash: &str) -> Self {
+    Self { default_avatar: UserDefaultAvatarInfo::from_username(&username), user_token: user_token.clone(), username: username.to_string(), display_name: display_name.to_string(), gravatar_hash: gravatar_hash.to_string() }
   }
 
-  pub fn from_optional_db_fields(
-    maybe_user_token: Option<&UserToken>,
-    maybe_username: Option<&str>,
-    maybe_display_name: Option<&str>,
-    maybe_gravatar_hash: Option<&str>,
-  ) -> Option<Self> {
-    Self::from_optional_db_fields_owned(
-      maybe_user_token.map(|u| u.clone()),
-      maybe_username.map(|s|s.to_string()),
-      maybe_display_name.map(|s|s.to_string()),
-      maybe_gravatar_hash.map(|s|s.to_string()),
-    )
+  pub fn from_optional_db_fields(maybe_user_token: Option<&UserToken>, maybe_username: Option<&str>, maybe_display_name: Option<&str>, maybe_gravatar_hash: Option<&str>) -> Option<Self> {
+    Self::from_optional_db_fields_owned(maybe_user_token.map(|u| u.clone()), maybe_username.map(|s| s.to_string()), maybe_display_name.map(|s| s.to_string()), maybe_gravatar_hash.map(|s| s.to_string()))
   }
 
-  pub fn from_optional_db_fields_owned(
-    maybe_user_token: Option<UserToken>,
-    maybe_username: Option<String>,
-    maybe_display_name: Option<String>,
-    maybe_gravatar_hash: Option<String>,
-  ) -> Option<Self> {
+  pub fn from_optional_db_fields_owned(maybe_user_token: Option<UserToken>, maybe_username: Option<String>, maybe_display_name: Option<String>, maybe_gravatar_hash: Option<String>) -> Option<Self> {
     match (maybe_user_token, maybe_username, maybe_display_name, maybe_gravatar_hash) {
-      (Some(user_token), Some(username), Some(display_name), Some(gravatar_hash)) => {
-        Some(Self {
-          default_avatar: UserDefaultAvatarInfo::from_username(&username),
-          user_token,
-          username,
-          display_name,
-          gravatar_hash,
-        })
-      }
-      _ => {
-        None
-      }
+      (Some(user_token), Some(username), Some(display_name), Some(gravatar_hash)) => Some(Self { default_avatar: UserDefaultAvatarInfo::from_username(&username), user_token, username, display_name, gravatar_hash }),
+      _ => None,
     }
   }
 }
 
-
-#[derive(Clone, Serialize,ToSchema)]
+#[derive(Clone, Serialize, ToSchema)]
 pub struct UserDefaultAvatarInfo {
   pub image_index: u8,
   pub color_index: u8,
@@ -96,10 +57,7 @@ impl UserDefaultAvatarInfo {
   /// NB(bt,2023-08-23): I think the thinking here was that we'd always have the
   /// username on hand and that it was more entropic.
   pub fn from_username(username: &str) -> Self {
-    Self {
-      image_index: default_avatar_from_username(username),
-      color_index: default_avatar_color_from_username(username),
-    }
+    Self { image_index: default_avatar_from_username(username), color_index: default_avatar_color_from_username(username) }
   }
 }
 
@@ -114,14 +72,9 @@ mod tests {
     let user_token = UserToken::new_from_str("token");
     let username = "username";
     let display_name = "display_name";
-    let gravatar_hash= "adsf";
+    let gravatar_hash = "adsf";
 
-    let user_details = UserDetailsLight::from_optional_db_fields(
-      Some(&user_token),
-      Some(username),
-      Some(display_name),
-      Some(gravatar_hash)
-    );
+    let user_details = UserDetailsLight::from_optional_db_fields(Some(&user_token), Some(username), Some(display_name), Some(gravatar_hash));
 
     let user_details = user_details.expect("Should not be optional.");
 

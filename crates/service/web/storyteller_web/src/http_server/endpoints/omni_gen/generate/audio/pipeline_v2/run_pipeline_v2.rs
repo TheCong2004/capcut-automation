@@ -15,9 +15,7 @@ use tokens::tokens::users::UserToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
 use crate::http_server::endpoint_helpers::refund_wallet_after_api_failure::refund_wallet_after_api_failure;
-use crate::http_server::endpoints::generate::common::generation_debug_logs::{
-  insert_provider_request_debug_log, provider_request_debug_log_type, GenerationDebugLogContext,
-};
+use crate::http_server::endpoints::generate::common::generation_debug_logs::{insert_provider_request_debug_log, provider_request_debug_log_type, GenerationDebugLogContext};
 use crate::http_server::endpoints::omni_gen::generate::audio::helpers::pipeline_result::PipelineResult;
 use crate::http_server::endpoints::omni_gen::generate::audio::helpers::resolve_media_tokens_to_urls::resolve_media_tokens_to_urls;
 use crate::http_server::endpoints::omni_gen::generate::video::helpers::bill_wallet::bill_wallet;
@@ -44,15 +42,7 @@ pub struct RunPipelineV2Args<'a> {
 // short-lived connections only for the billing and (on failure) refund writes. Holding a pooled
 // connection across the external call is what starves the pool and causes `PoolTimedOut`.
 pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResult, CommonWebError> {
-  let RunPipelineV2Args {
-    router_builder,
-    server_state,
-    user_token,
-    media_file_to_url_map,
-    kinovi_account,
-    debug_log_context,
-    mut mysql_connection,
-  } = args;
+  let RunPipelineV2Args { router_builder, server_state, user_token, media_file_to_url_map, kinovi_account, debug_log_context, mut mysql_connection } = args;
 
   let router_builder = router_builder.clone();
 
@@ -74,11 +64,10 @@ pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResu
     resolve_media_tokens_to_urls(&mut exec_builder, media_file_to_url_map.as_ref());
   }
 
-  let draft_or_request = exec_builder.build2()
-      .map_err(|e| {
-        warn!("Failed to build2 for audio v2 pipeline: {}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let draft_or_request = exec_builder.build2().map_err(|e| {
+    warn!("Failed to build2 for audio v2 pipeline: {}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   // 2. Calculate cost.
   //    Swap provider to Artcraft so credits = cents.
@@ -86,7 +75,8 @@ pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResu
     let mut cost_builder = router_builder.clone();
     cost_builder.provider = RouterProvider::Artcraft;
 
-    cost_builder.build2()
+    cost_builder
+      .build2()
       .map_err(|e| {
         warn!("Failed to build2 audio cost estimate for v2: {}", e);
         CommonWebError::from_error(e)
@@ -107,21 +97,10 @@ pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResu
     Err(err) => {
       warn!("Failed to estimate provider cost for v2 audio: {}", err);
       None
-    }
+    },
   };
 
-  let cost_estimates = JobCostEstimates {
-    maybe_external_third_party_cost_credits: maybe_provider_cost_estimate.as_ref()
-      .and_then(|e| e.cost_in_credits)
-      .and_then(|v| u32::try_from(v).ok()),
-    maybe_external_third_party_cost_usd_cents: maybe_provider_cost_estimate.as_ref()
-      .and_then(|e| e.cost_in_usd_cents)
-      .and_then(|v| u32::try_from(v).ok()),
-    maybe_system_cost_credits: system_cost_estimate.cost_in_credits
-      .and_then(|v| u32::try_from(v).ok()),
-    maybe_system_cost_usd_cents: system_cost_estimate.cost_in_usd_cents
-      .and_then(|v| u32::try_from(v).ok()),
-  };
+  let cost_estimates = JobCostEstimates { maybe_external_third_party_cost_credits: maybe_provider_cost_estimate.as_ref().and_then(|e| e.cost_in_credits).and_then(|v| u32::try_from(v).ok()), maybe_external_third_party_cost_usd_cents: maybe_provider_cost_estimate.as_ref().and_then(|e| e.cost_in_usd_cents).and_then(|v| u32::try_from(v).ok()), maybe_system_cost_credits: system_cost_estimate.cost_in_credits.and_then(|v| u32::try_from(v).ok()), maybe_system_cost_usd_cents: system_cost_estimate.cost_in_usd_cents.and_then(|v| u32::try_from(v).ok()) };
 
   info!("v2 audio estimated cost: {} credits (estimates: {:?})", cost, cost_estimates);
 
@@ -132,12 +111,7 @@ pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResu
   // handler's connection — so the payload is captured even when the
   // upload/enqueue fails.
   if let Some(debug_log_type) = provider_request_debug_log_type(provider) {
-    insert_provider_request_debug_log(
-      debug_log_context,
-      debug_log_type,
-      &format!("{:#?}", draft_or_request),
-      &mut *mysql_connection,
-    ).await;
+    insert_provider_request_debug_log(debug_log_context, debug_log_type, &format!("{:#?}", draft_or_request), &mut *mysql_connection).await;
   }
 
   // NB: Done with pre-request DB writes. Release the pooled connection before
@@ -148,12 +122,7 @@ pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResu
   // 4. Upload media (if draft) and generate audio.
   //    The entire block is wrapped so Kinovi failures trigger a refund.
   //    NB: No pooled DB connection is held across this call.
-  let result = upload_and_generate(
-    draft_or_request,
-    server_state,
-    media_file_to_url_map.as_ref(),
-    kinovi_account,
-  ).await;
+  let result = upload_and_generate(draft_or_request, server_state, media_file_to_url_map.as_ref(), kinovi_account).await;
 
   // 5. On failure, refund wallet for Kinovi requests.
   if let Err(ref err) = result {
@@ -166,10 +135,10 @@ pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResu
             if let Err(refund_err) = refund_wallet_after_api_failure(ledger_entry_token, &mut refund_connection).await {
               error!("Failed to refund wallet after Kinovi v2 audio failure: {:?}", refund_err);
             }
-          }
+          },
           Err(acquire_err) => {
             error!("Failed to acquire MySQL connection to refund wallet after Kinovi v2 audio failure: {:?}", acquire_err);
-          }
+          },
         }
       }
     }
@@ -185,37 +154,24 @@ pub async fn run_pipeline_v2(args: RunPipelineV2Args<'_>) -> Result<PipelineResu
 /// Finalize the draft (uploading media if needed), then send the generation request.
 ///
 /// This is the block that gets refunded on failure for Kinovi providers.
-async fn upload_and_generate(
-  draft_or_request: AudioGenerationDraftOrRequest,
-  server_state: &ServerState,
-  media_file_urls_by_token: Option<&HashMap<MediaFileToken, String>>,
-  kinovi_account: KinoviAccount,
-) -> Result<GenerateAudioResponse, CommonWebError> {
-
+async fn upload_and_generate(draft_or_request: AudioGenerationDraftOrRequest, server_state: &ServerState, media_file_urls_by_token: Option<&HashMap<MediaFileToken, String>>, kinovi_account: KinoviAccount) -> Result<GenerateAudioResponse, CommonWebError> {
   let provider = draft_or_request.get_provider();
   let client = build_router_client(provider, server_state, kinovi_account)?;
 
   let audio_request = match draft_or_request {
     AudioGenerationDraftOrRequest::Request(request) => request,
     AudioGenerationDraftOrRequest::Draft(draft) => {
-      let draft_context = AudioGenerationDraftContext {
-        client: Some(&client),
-        media_file_to_artcraft_url_map: media_file_urls_by_token,
-      };
+      let draft_context = AudioGenerationDraftContext { client: Some(&client), media_file_to_artcraft_url_map: media_file_urls_by_token };
 
-      draft.finalize(draft_context)
-          .await
-          .map_err(|err| {
-            warn!("Failed to finalize v2 audio draft: {:?}", err);
-            map_router_error_to_web_error(err)
-          })?
-    }
+      draft.finalize(draft_context).await.map_err(|err| {
+        warn!("Failed to finalize v2 audio draft: {:?}", err);
+        map_router_error_to_web_error(err)
+      })?
+    },
   };
 
-  audio_request.send_request(&client)
-      .await
-      .map_err(|err| {
-        warn!("v2 audio generation failed: {:?}", err);
-        map_router_error_to_web_error(err)
-      })
+  audio_request.send_request(&client).await.map_err(|err| {
+    warn!("v2 audio generation failed: {:?}", err);
+    map_router_error_to_web_error(err)
+  })
 }

@@ -10,8 +10,7 @@ use serde_derive::Deserialize;
 pub fn jwk_to_public_key(json_web_key: &str) -> Result<KeyMap, GoogleSignInError> {
   let mut key_map = KeyMap::new();
 
-  let json_keys: JsonKeys = serde_json::from_str(json_web_key)
-    .map_err(GoogleSignInError::JwkJsonParseFailed)?;
+  let json_keys: JsonKeys = serde_json::from_str(json_web_key).map_err(GoogleSignInError::JwkJsonParseFailed)?;
 
   for key in json_keys.keys {
     if key.use_ != "sig" {
@@ -19,17 +18,13 @@ pub fn jwk_to_public_key(json_web_key: &str) -> Result<KeyMap, GoogleSignInError
     }
     match key.alg.as_ref() {
       "RS256" => {
-        let n_decoded = base64_decode_url(&key.n)
-          .map_err(GoogleSignInError::JwkBase64DecodeFailed)?;
-        let e_decoded = base64_decode_url(&key.e)
-          .map_err(GoogleSignInError::JwkBase64DecodeFailed)?;
+        let n_decoded = base64_decode_url(&key.n).map_err(GoogleSignInError::JwkBase64DecodeFailed)?;
+        let e_decoded = base64_decode_url(&key.e).map_err(GoogleSignInError::JwkBase64DecodeFailed)?;
 
-        let public_key = RS256PublicKey::from_components(&n_decoded, &e_decoded)
-          .map_err(|err| GoogleSignInError::JwkRsaKeyConstructionFailed(format!("{}", err)))?
-          .with_key_id(&key.kid);
+        let public_key = RS256PublicKey::from_components(&n_decoded, &e_decoded).map_err(|err| GoogleSignInError::JwkRsaKeyConstructionFailed(format!("{}", err)))?.with_key_id(&key.kid);
 
         key_map.insert(key.kid, public_key);
-      }
+      },
       _ => {},
     }
   }
@@ -83,14 +78,12 @@ mod tests {
     assert_eq!(key_map.len(), 2);
 
     // First key
-    let public_key = key_map.get("b2620d5e7f132b52afe8875cdf3776c064249d04")
-        .expect("key should exist");
+    let public_key = key_map.get("b2620d5e7f132b52afe8875cdf3776c064249d04").expect("key should exist");
 
     assert_eq!(public_key.sha1_thumbprint(), "JI3Z88BipRcyp0WRF1KN9aX_P3Y");
 
     // Second key
-    let public_key = key_map.get("5aaff47c21d06e266cce395b2145c7c6d4730ea5")
-        .expect("key should exist");
+    let public_key = key_map.get("5aaff47c21d06e266cce395b2145c7c6d4730ea5").expect("key should exist");
 
     assert_eq!(public_key.sha1_thumbprint(), "vYxSlxKNLmgo1FWPtm2eVMbCnRU");
 

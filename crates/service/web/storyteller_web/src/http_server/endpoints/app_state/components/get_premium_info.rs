@@ -32,36 +32,23 @@ pub struct AppStateSubscriptionProductKey {
   pub product_slug: String,
 }
 
-pub fn get_premium_info(
-  user_metadata: &UserSessionExtended,
-) -> AppStatePremiumInfo {
-
+pub fn get_premium_info(user_metadata: &UserSessionExtended) -> AppStatePremiumInfo {
   let active_subscriptions = user_metadata
-      .premium
-      .subscription_plans
-      .iter()
-      .map(|sub| AppStateSubscriptionProductKey {
-        // TODO: Is this correct? Should it be externally facing?
-        namespace: sub.subscription_namespace.to_string(),
-        product_slug: sub.subscription_product_slug.to_string(),
-      })
-      .collect::<Vec<_>>();
+    .premium
+    .subscription_plans
+    .iter()
+    .map(|sub| AppStateSubscriptionProductKey {
+      // TODO: Is this correct? Should it be externally facing?
+      namespace: sub.subscription_namespace.to_string(),
+      product_slug: sub.subscription_product_slug.to_string(),
+    })
+    .collect::<Vec<_>>();
 
-  let maybe_loyalty_program = user_metadata
-      .premium
-      .maybe_loyalty_program_key
-      .as_deref()
-      .map(|lp| lp.to_string());
+  let maybe_loyalty_program = user_metadata.premium.maybe_loyalty_program_key.as_deref().map(|lp| lp.to_string());
 
   let has_paid_premium = !active_subscriptions.is_empty();
   let has_free_premium = maybe_loyalty_program.is_some();
   let has_premium = has_paid_premium || has_free_premium;
 
-  AppStatePremiumInfo {
-    has_premium,
-    has_free_premium,
-    has_paid_premium,
-    active_subscriptions,
-    maybe_loyalty_program,
-  }
+  AppStatePremiumInfo { has_premium, has_free_premium, has_paid_premium, active_subscriptions, maybe_loyalty_program }
 }

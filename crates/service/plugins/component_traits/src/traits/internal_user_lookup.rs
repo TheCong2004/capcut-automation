@@ -23,13 +23,13 @@ impl Display for InternalUserLookupError {
     match self {
       InternalUserLookupError::NotAuthorizedError => {
         write!(f, "InternalUserLookupError::NotAuthorizedError")
-      }
+      },
       InternalUserLookupError::ServerError => {
         write!(f, "InternalUserLookupError::ServerError")
-      }
+      },
       InternalUserLookupError::UncategorizedError { description } => {
         write!(f, "InternalUserLookupError::UncategorizedError: {}", description)
-      }
+      },
     }
   }
 }
@@ -82,7 +82,6 @@ pub struct SubscriptionKey {
 //#[cfg_attr(test, automock)]
 #[async_trait(?Send)] // NB: Marking async_trait as not needing Sync/Send. Hopefully this doesn't blow up on us.
 pub trait InternalUserLookup {
-
   /// Lookup a user's session details from an HTTP request, then return the
   /// relevant pieces for the Stripe integration.
   async fn lookup_user_from_http_request(&self, http_request: &HttpRequest) -> Result<Option<UserMetadata>, InternalUserLookupError>;

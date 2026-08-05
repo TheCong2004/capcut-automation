@@ -80,21 +80,17 @@ impl fmt::Display for ListUserBookmarksError {
   }
 }
 
-#[deprecated(note="Removing from API 2024-09-19, can remove code after a while")]
-pub async fn list_user_bookmarks_for_session_handler(
-  http_request: HttpRequest,
-  query: Query<ListUserBookmarksQueryData>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListUserBookmarksSuccessResponse>, ListUserBookmarksError>
-{
-  let user_session = server_state.session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        ListUserBookmarksError::ServerError
-      })?
-      .ok_or(ListUserBookmarksError::NotAuthorizedError)?;
+#[deprecated(note = "Removing from API 2024-09-19, can remove code after a while")]
+pub async fn list_user_bookmarks_for_session_handler(http_request: HttpRequest, query: Query<ListUserBookmarksQueryData>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListUserBookmarksSuccessResponse>, ListUserBookmarksError> {
+  let user_session = server_state
+    .session_checker
+    .maybe_get_user_session(&http_request, &server_state.mysql_pool)
+    .await
+    .map_err(|e| {
+      warn!("Session checker error: {:?}", e);
+      ListUserBookmarksError::ServerError
+    })?
+    .ok_or(ListUserBookmarksError::NotAuthorizedError)?;
 
   // let query_results = match query.maybe_scoped_entity_type {
   //   None => list_user_bookmarks(&user_session.username, &server_state.mysql_pool).await,
@@ -103,11 +99,7 @@ pub async fn list_user_bookmarks_for_session_handler(
   //         .await,
   // };
 
-
-  let response = ListUserBookmarksSuccessResponse {
-    success: true,
-    user_bookmarks: Vec::new()
-  };
+  let response = ListUserBookmarksSuccessResponse { success: true, user_bookmarks: Vec::new() };
 
   Ok(Json(response))
 }

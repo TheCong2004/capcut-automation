@@ -1,10 +1,7 @@
 use crate::job::job_loop::process_single_job_error::ProcessSingleJobError;
 
 pub fn categorize_error(stderr_contents: &str) -> Option<ProcessSingleJobError> {
-  if stderr_contents.contains("Face not detected in source image") ||
-      stderr_contents.contains("can not detect the landmark from source image") ||
-      stderr_contents.contains("face3d/extract_kp_videos_safe.py") ||
-      stderr_contents.contains("cv2.error") {
+  if stderr_contents.contains("Face not detected in source image") || stderr_contents.contains("can not detect the landmark from source image") || stderr_contents.contains("face3d/extract_kp_videos_safe.py") || stderr_contents.contains("cv2.error") {
     return Some(ProcessSingleJobError::FaceDetectionFailure);
   }
   None

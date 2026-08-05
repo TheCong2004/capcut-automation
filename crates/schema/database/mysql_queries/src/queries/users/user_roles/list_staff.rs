@@ -15,8 +15,8 @@ pub struct StaffRecordForList {
 pub async fn list_staff(mysql_pool: &MySqlPool) -> AnyhowResult<Vec<StaffRecordForList>> {
   // NB: Lookup failure is Err(RowNotFound).
   let maybe_results = sqlx::query_as!(
-      StaffRecordForList,
-        r#"
+    StaffRecordForList,
+    r#"
 SELECT
     users.token as user_token,
     users.username,
@@ -30,15 +30,15 @@ JOIN user_roles
 WHERE
     user_roles.slug != 'user'
         "#,
-    )
-      .fetch_all(mysql_pool)
-      .await;
+  )
+  .fetch_all(mysql_pool)
+  .await;
 
   match maybe_results {
     Ok(results) => Ok(results),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(Vec::new()),
       _ => Err(anyhow!("Error with query: {:?}", err)),
-    }
+    },
   }
 }

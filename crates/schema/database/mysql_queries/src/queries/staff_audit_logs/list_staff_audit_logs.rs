@@ -25,10 +25,7 @@ pub struct ListStaffAuditLogsArgs<'a> {
   pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn list_staff_audit_logs(
-  args: ListStaffAuditLogsArgs<'_>,
-) -> Result<Vec<StaffAuditLogListItem>, sqlx::Error> {
-
+pub async fn list_staff_audit_logs(args: ListStaffAuditLogsArgs<'_>) -> Result<Vec<StaffAuditLogListItem>, sqlx::Error> {
   let limit = args.limit as i64;
 
   let items = match args.maybe_cursor_id {
@@ -59,9 +56,9 @@ LIMIT ?
         cursor_id as u64,
         limit,
       )
-        .fetch_all(args.mysql_pool)
-        .await?
-    }
+      .fetch_all(args.mysql_pool)
+      .await?
+    },
     None => {
       sqlx::query_as!(
         StaffAuditLogListItem,
@@ -87,9 +84,9 @@ LIMIT ?
         "#,
         limit,
       )
-        .fetch_all(args.mysql_pool)
-        .await?
-    }
+      .fetch_all(args.mysql_pool)
+      .await?
+    },
   };
 
   Ok(items)

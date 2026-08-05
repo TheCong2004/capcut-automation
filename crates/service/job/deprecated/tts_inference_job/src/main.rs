@@ -9,12 +9,12 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -65,20 +65,20 @@ pub mod job_steps;
 pub mod util;
 
 // Buckets (shared config)
-const ENV_ACCESS_KEY : &str = "ACCESS_KEY";
-const ENV_SECRET_KEY : &str = "SECRET_KEY";
-const ENV_REGION_NAME : &str = "REGION_NAME";
+const ENV_ACCESS_KEY: &str = "ACCESS_KEY";
+const ENV_SECRET_KEY: &str = "SECRET_KEY";
+const ENV_REGION_NAME: &str = "REGION_NAME";
 
 // Bucket names
-const ENV_PRIVATE_BUCKET_NAME : &str = "PRIVATE_BUCKET_NAME";
-const ENV_PUBLIC_BUCKET_NAME : &str = "PUBLIC_BUCKET_NAME";
+const ENV_PRIVATE_BUCKET_NAME: &str = "PRIVATE_BUCKET_NAME";
+const ENV_PUBLIC_BUCKET_NAME: &str = "PUBLIC_BUCKET_NAME";
 
 // Where models and other assets get downloaded to.
-const ENV_SEMIPERSISTENT_CACHE_DIR : &str = "SEMIPERSISTENT_CACHE_DIR";
+const ENV_SEMIPERSISTENT_CACHE_DIR: &str = "SEMIPERSISTENT_CACHE_DIR";
 
 // Python code
-const ENV_CODE_DIRECTORY : &str = "TTS_CODE_DIRECTORY";
-const ENV_INFERENCE_SCRIPT_NAME : &str = "TTS_INFERENCE_SCRIPT_NAME";
+const ENV_CODE_DIRECTORY: &str = "TTS_CODE_DIRECTORY";
+const ENV_INFERENCE_SCRIPT_NAME: &str = "TTS_INFERENCE_SCRIPT_NAME";
 
 // HTTP sidecar
 const ENV_TTS_INFERENCE_SIDECAR_HOSTNAME: &str = "TTS_INFERENCE_SIDECAR_HOSTNAME";
@@ -95,10 +95,7 @@ async fn main() -> AnyhowResult<()> {
 
   info!("Obtaining worker hostname...");
 
-  let server_hostname = hostname::get()
-      .ok()
-      .and_then(|h| h.into_string().ok())
-      .unwrap_or("tts-inference-job".to_string());
+  let server_hostname = hostname::get().ok().and_then(|h| h.into_string().ok()).unwrap_or("tts-inference-job".to_string());
 
   // NB: These are non-standard env vars we're injecting ourselves.
   let k8s_node_name = easyenv::get_env_string_optional("K8S_NODE_NAME");
@@ -120,46 +117,22 @@ async fn main() -> AnyhowResult<()> {
   let private_bucket_name = easyenv::get_env_string_required(ENV_PRIVATE_BUCKET_NAME)?;
   let public_bucket_name = easyenv::get_env_string_required(ENV_PUBLIC_BUCKET_NAME)?;
 
-  let s3_compatible_endpoint_url = easyenv::get_env_string_or_default(
-    "S3_COMPATIBLE_ENDPOINT_URL",
-    "https://storage.googleapis.com");
-  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS",
-    Duration::from_secs(60 * 5));
+  let s3_compatible_endpoint_url = easyenv::get_env_string_or_default("S3_COMPATIBLE_ENDPOINT_URL", "https://storage.googleapis.com");
+  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS", Duration::from_secs(60 * 5));
 
-  let private_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &private_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let private_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &private_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  let public_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &public_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let public_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &public_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  let sidecar_hostname =
-      easyenv::get_env_string_required(ENV_TTS_INFERENCE_SIDECAR_HOSTNAME)?;
+  let sidecar_hostname = easyenv::get_env_string_required(ENV_TTS_INFERENCE_SIDECAR_HOSTNAME)?;
 
   info!("Sidecar hostname: {:?}", sidecar_hostname);
 
-  let tts_inference_sidecar_client =
-      TtsInferenceSidecarClient::new(&sidecar_hostname);
+  let tts_inference_sidecar_client = TtsInferenceSidecarClient::new(&sidecar_hostname);
 
-  let tts_sidecar_health_check_client=
-      TtsSidecarHealthCheckClient::new(&sidecar_hostname)?;
+  let tts_sidecar_health_check_client = TtsSidecarHealthCheckClient::new(&sidecar_hostname)?;
 
-  let temp_directory = easyenv::get_env_string_or_default(
-    "DOWNLOAD_TEMP_DIR",
-    DEFAULT_TEMP_DIR);
+  let temp_directory = easyenv::get_env_string_or_default("DOWNLOAD_TEMP_DIR", DEFAULT_TEMP_DIR);
 
   let temp_directory = PathBuf::from(temp_directory);
 
@@ -169,20 +142,13 @@ async fn main() -> AnyhowResult<()> {
 
   info!("Connecting to database...");
 
-  let mysql_pool = MySqlPoolOptions::new()
-      .max_connections(2)
-      .connect(&db_connection_string)
-      .await?;
+  let mysql_pool = MySqlPoolOptions::new().max_connections(2).connect(&db_connection_string).await?;
 
   let common_env = CommonEnv::read_from_env()?;
 
+  let persistent_cache_path = easyenv::get_env_string_or_default(ENV_SEMIPERSISTENT_CACHE_DIR, "/tmp");
 
-  let persistent_cache_path = easyenv::get_env_string_or_default(
-    ENV_SEMIPERSISTENT_CACHE_DIR,
-    "/tmp");
-
-  let semi_persistent_cache =
-      SemiPersistentCacheDir::configured_root(&persistent_cache_path);
+  let semi_persistent_cache = SemiPersistentCacheDir::configured_root(&persistent_cache_path);
 
   info!("Creating pod semi-persistent cache dirs...");
   semi_persistent_cache.create_tts_synthesizer_model_path()?;
@@ -190,21 +156,16 @@ async fn main() -> AnyhowResult<()> {
   semi_persistent_cache.create_custom_vocoder_model_path()?;
   semi_persistent_cache.create_gpt_sovits_model_path()?;
 
-  let waveglow_vocoder_model_filename = easyenv::get_env_string_or_default(
-    "TTS_WAVEGLOW_VOCODER_MODEL_FILENAME", "waveglow.pth");
+  let waveglow_vocoder_model_filename = easyenv::get_env_string_or_default("TTS_WAVEGLOW_VOCODER_MODEL_FILENAME", "waveglow.pth");
 
-  let hifigan_vocoder_model_filename = easyenv::get_env_string_or_default(
-    "TTS_HIFIGAN_VOCODER_MODEL_FILENAME", "hifigan.pth");
+  let hifigan_vocoder_model_filename = easyenv::get_env_string_or_default("TTS_HIFIGAN_VOCODER_MODEL_FILENAME", "hifigan.pth");
 
-  let hifigan_superres_vocoder_model_filename = easyenv::get_env_string_or_default(
-    "TTS_HIFIGAN_SUPERRES_VOCODER_MODEL_FILENAME", "hifigan_superres.pth");
+  let hifigan_superres_vocoder_model_filename = easyenv::get_env_string_or_default("TTS_HIFIGAN_SUPERRES_VOCODER_MODEL_FILENAME", "hifigan_superres.pth");
 
-  let sidecar_max_synthesizer_models = easyenv::get_env_num(
-    "SIDECAR_MAX_SYNTHESIZER_MODELS", 3)?;
+  let sidecar_max_synthesizer_models = easyenv::get_env_num("SIDECAR_MAX_SYNTHESIZER_MODELS", 3)?;
 
   // Set to "0" to always treat low priority the same as high priority
-  let low_priority_starvation_prevention_every_nth= easyenv::get_env_num(
-    "LOW_PRIORITY_STARVATION_PREVENTION_EVERY_NTH", 3)?;
+  let low_priority_starvation_prevention_every_nth = easyenv::get_env_num("LOW_PRIORITY_STARVATION_PREVENTION_EVERY_NTH", 3)?;
 
   let firehose_publisher = FirehosePublisher {
     mysql_pool: mysql_pool.clone(), // NB: MySqlPool is clone/send/sync safe
@@ -213,39 +174,18 @@ async fn main() -> AnyhowResult<()> {
   let virtual_lfu_cache = SyncVirtualLfuCache::new(sidecar_max_synthesizer_models)?;
 
   let cache_miss_strategizers = {
-    let in_memory_strategizer = CacheMissStrategizer::new(
-      chrono::Duration::milliseconds(
-        easyenv::get_env_num("MEMORY_MAX_COLD_DURATION_MILLIS", 5_000)?,
-      ),
-      chrono::Duration::milliseconds(
-        easyenv::get_env_num("MEMORY_CACHE_FORGET_DURATION_MILLIS", 60_000)?,
-      ),
-    );
+    let in_memory_strategizer = CacheMissStrategizer::new(chrono::Duration::milliseconds(easyenv::get_env_num("MEMORY_MAX_COLD_DURATION_MILLIS", 5_000)?), chrono::Duration::milliseconds(easyenv::get_env_num("MEMORY_CACHE_FORGET_DURATION_MILLIS", 60_000)?));
 
-    let on_disk_strategizer = CacheMissStrategizer::new(
-      chrono::Duration::milliseconds(
-        easyenv::get_env_num("DISK_MAX_COLD_DURATION_MILLIS", 20_000)?,
-      ),
-      chrono::Duration::milliseconds(
-        easyenv::get_env_num("DISK_CACHE_FORGET_DURATION_MILLIS", 120_000)?,
-      ),
-    );
+    let on_disk_strategizer = CacheMissStrategizer::new(chrono::Duration::milliseconds(easyenv::get_env_num("DISK_MAX_COLD_DURATION_MILLIS", 20_000)?), chrono::Duration::milliseconds(easyenv::get_env_num("DISK_CACHE_FORGET_DURATION_MILLIS", 120_000)?));
 
-    SyncMultiCacheMissStrategizer::new(
-      in_memory_strategizer,
-      on_disk_strategizer,
-    )
+    SyncMultiCacheMissStrategizer::new(in_memory_strategizer, on_disk_strategizer)
   };
 
   let model_cache_duration = std::time::Duration::from_millis(
     easyenv::get_env_num("TTS_MODEL_RECORD_CACHE_MILLIS", 300_000)?, // Five minutes
   );
 
-  let maybe_minimum_priority = easyenv::get_env_string_optional("MAYBE_MINIMUM_PRIORITY")
-      .map(|priority_string| {
-        priority_string.parse::<u8>()
-      })
-      .transpose()?;
+  let maybe_minimum_priority = easyenv::get_env_string_optional("MAYBE_MINIMUM_PRIORITY").map(|priority_string| priority_string.parse::<u8>()).transpose()?;
 
   info!("Using 'MAYBE_MINIMUM_PRIORITY' of {:?}", maybe_minimum_priority);
 
@@ -255,9 +195,7 @@ async fn main() -> AnyhowResult<()> {
 
   // Optionally report job progress to the user via Redis (for now)
   // We want to turn this off in the on-premises workers since we're not tunneling to the production Redis.
-  let job_progress_reporter : Box<dyn JobProgressReporterBuilder> =
-      match easyenv::get_env_string_optional("REDIS_FOR_JOB_PROGRESS")
-  {
+  let job_progress_reporter: Box<dyn JobProgressReporterBuilder> = match easyenv::get_env_string_optional("REDIS_FOR_JOB_PROGRESS") {
     None => {
       warn!("Redis for job progress status reports is DISABLED! Users will not see in-flight details of inference progress.");
       Box::new(NoOpJobProgressReporterBuilder {})
@@ -268,7 +206,7 @@ async fn main() -> AnyhowResult<()> {
       let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
 
       Box::new(RedisJobProgressReporterBuilder::from_redis_pool(redis_pool))
-    }
+    },
   };
 
   let inferencer = JobArgs {
@@ -278,21 +216,10 @@ async fn main() -> AnyhowResult<()> {
     job_progress_reporter,
     public_bucket_client,
     private_bucket_client,
-    http_clients: JobHttpClients {
-      tts_inference_sidecar_client,
-      tts_sidecar_health_check_client,
-    },
+    http_clients: JobHttpClients { tts_inference_sidecar_client, tts_sidecar_health_check_client },
     job_stats: JobStats::new(),
-    worker_details: JobWorkerDetails {
-      is_on_prem,
-      worker_hostname: server_hostname.clone(),
-      k8s_node_name,
-      k8s_pod_name,
-      is_debug_worker,
-    },
-    caches: JobCaches {
-      tts_model_record_cache: MultiItemTtlCache::create_with_duration(model_cache_duration),
-    },
+    worker_details: JobWorkerDetails { is_on_prem, worker_hostname: server_hostname.clone(), k8s_node_name, k8s_pod_name, is_debug_worker },
+    caches: JobCaches { tts_model_record_cache: MultiItemTtlCache::create_with_duration(model_cache_duration) },
     virtual_model_lfu: virtual_lfu_cache,
     cache_miss_strategizers,
     bucket_path_unifier: BucketPathUnifier::default_paths(),
@@ -316,8 +243,8 @@ async fn main() -> AnyhowResult<()> {
 }
 
 // Job runner timeouts (guards MySQL)
-const START_TIMEOUT_MILLIS : u64 = 500;
-const INCREASE_TIMEOUT_MILLIS : u64 = 1000;
+const START_TIMEOUT_MILLIS: u64 = 500;
+const INCREASE_TIMEOUT_MILLIS: u64 = 1000;
 
 async fn main_loop(job_args: JobArgs) {
   let mut error_timeout_millis = START_TIMEOUT_MILLIS;
@@ -338,24 +265,13 @@ async fn main_loop(job_args: JobArgs) {
       sort_by_priority = false;
     }
 
-    let maybe_available_jobs =
-        if let Some(minimum_priority) = job_args.maybe_minimum_priority {
-          // Special high-priority workers
-          list_available_tts_inference_jobs_with_minimum_priority(
-            &job_args.mysql_pool,
-            minimum_priority,
-            num_records,
-            job_args.worker_details.is_debug_worker
-          ).await
-        } else {
-          // Normal path
-          list_available_tts_inference_jobs(
-            &job_args.mysql_pool,
-            sort_by_priority,
-            num_records,
-            job_args.worker_details.is_debug_worker
-          ).await
-        };
+    let maybe_available_jobs = if let Some(minimum_priority) = job_args.maybe_minimum_priority {
+      // Special high-priority workers
+      list_available_tts_inference_jobs_with_minimum_priority(&job_args.mysql_pool, minimum_priority, num_records, job_args.worker_details.is_debug_worker).await
+    } else {
+      // Normal path
+      list_available_tts_inference_jobs(&job_args.mysql_pool, sort_by_priority, num_records, job_args.worker_details.is_debug_worker).await
+    };
 
     sort_by_priority = true;
     sort_by_priority_count += 1;
@@ -367,7 +283,7 @@ async fn main_loop(job_args: JobArgs) {
         std::thread::sleep(Duration::from_millis(error_timeout_millis));
         error_timeout_millis += INCREASE_TIMEOUT_MILLIS;
         continue;
-      }
+      },
     };
 
     if jobs.is_empty() {
@@ -379,11 +295,7 @@ async fn main_loop(job_args: JobArgs) {
 
     info!("Queried {} jobs from database", jobs.len());
 
-    let batch_result = process_jobs(
-      &job_args,
-      jobs,
-      needs_health_check_at_start,
-    ).await;
+    let batch_result = process_jobs(&job_args, jobs, needs_health_check_at_start).await;
 
     if needs_health_check_at_start {
       needs_health_check_at_start = false;
@@ -403,12 +315,7 @@ async fn main_loop(job_args: JobArgs) {
 }
 
 /// Process a batch of jobs, returning the count of cold-cache skipped jobs.
-async fn process_jobs(
-  inferencer: &JobArgs,
-  jobs: Vec<AvailableTtsInferenceJob>,
-  needs_health_check_at_start: bool,
-) -> AnyhowResult<()> {
-
+async fn process_jobs(inferencer: &JobArgs, jobs: Vec<AvailableTtsInferenceJob>, needs_health_check_at_start: bool) -> AnyhowResult<()> {
   if needs_health_check_at_start {
     maybe_block_on_sidecar_health_check(&inferencer.http_clients.tts_sidecar_health_check_client).await;
   }
@@ -416,13 +323,7 @@ async fn process_jobs(
   let mut maybe_sidecar_health_issue = false;
 
   for job in jobs.into_iter() {
-    let model_state_result = ModelState::query_model_and_check_filesystem(
-      &job,
-      &inferencer.mysql_pool,
-      &inferencer.caches.tts_model_record_cache,
-      &inferencer.semi_persistent_cache,
-      &inferencer.virtual_model_lfu,
-    ).await;
+    let model_state_result = ModelState::query_model_and_check_filesystem(&job, &inferencer.mysql_pool, &inferencer.caches.tts_model_record_cache, &inferencer.semi_persistent_cache, &inferencer.virtual_model_lfu).await;
 
     let model_state = match model_state_result {
       Ok(model_state) => model_state,
@@ -438,48 +339,26 @@ async fn process_jobs(
 
         let internal_debugging_failure_reason = format!("model error: {:?}", e);
 
-        let mut job_progress_reporter = inferencer
-            .job_progress_reporter
-            .new_tts_inference(&job.inference_job_token)?;
+        let mut job_progress_reporter = inferencer.job_progress_reporter.new_tts_inference(&job.inference_job_token)?;
 
         job_progress_reporter.log_status(failure_reason)?;
 
         if permanent_failure {
           warn!("Marking job permanently dead: {} because: {:?}", job.inference_job_token, &e);
 
-          let _r = mark_tts_inference_job_permanently_dead(
-            &inferencer.mysql_pool,
-            job.id,
-            failure_reason,
-            &internal_debugging_failure_reason,
-            &inferencer.get_worker_name(),
-          ).await;
+          let _r = mark_tts_inference_job_permanently_dead(&inferencer.mysql_pool, job.id, failure_reason, &internal_debugging_failure_reason, &inferencer.get_worker_name()).await;
         } else {
-          let _r = mark_tts_inference_job_failure(
-            &inferencer.mysql_pool,
-            &job,
-            failure_reason,
-            &internal_debugging_failure_reason,
-            inferencer.job_max_attempts,
-            &inferencer.get_worker_name(),
-          ).await;
+          let _r = mark_tts_inference_job_failure(&inferencer.mysql_pool, &job, failure_reason, &internal_debugging_failure_reason, inferencer.job_max_attempts, &inferencer.get_worker_name()).await;
         }
 
         continue;
-      }
+      },
     };
 
     if !model_state.is_downloaded_to_filesystem || !model_state.is_in_memory_cache {
-      warn!("Model isn't ready: {} (downloaded = {}), (in memory = {})",
-        &model_state.model_record.model_token,
-        model_state.is_downloaded_to_filesystem,
-        model_state.is_in_memory_cache);
+      warn!("Model isn't ready: {} (downloaded = {}), (in memory = {})", &model_state.model_record.model_token, model_state.is_downloaded_to_filesystem, model_state.is_in_memory_cache);
 
-      let maybe_strategy = if !model_state.is_downloaded_to_filesystem {
-        inferencer.cache_miss_strategizers.disk_cache_miss(&model_state.model_record.model_token)
-      } else {
-        inferencer.cache_miss_strategizers.memory_cache_miss(&model_state.model_record.model_token)
-      };
+      let maybe_strategy = if !model_state.is_downloaded_to_filesystem { inferencer.cache_miss_strategizers.disk_cache_miss(&model_state.model_record.model_token) } else { inferencer.cache_miss_strategizers.memory_cache_miss(&model_state.model_record.model_token) };
 
       match maybe_strategy {
         Err(err) => {
@@ -488,22 +367,13 @@ async fn process_jobs(
           let failure_reason = "cache error";
           let internal_debugging_failure_reason = format!("cache error: {:?}", err);
 
-          let _r = mark_tts_inference_job_failure(
-            &inferencer.mysql_pool,
-            &job,
-            failure_reason,
-            &internal_debugging_failure_reason,
-            inferencer.job_max_attempts,
-            &inferencer.get_worker_name(),
-          ).await;
+          let _r = mark_tts_inference_job_failure(&inferencer.mysql_pool, &job, failure_reason, &internal_debugging_failure_reason, inferencer.job_max_attempts, &inferencer.get_worker_name()).await;
           continue;
         },
         Ok(CacheMissStrategy::WaitOrSkip) => {
           // We're going to skip this for now.
           // Maybe another worker has a warm cache and can continue.
-          warn!("Skipping TTS due to cold cache: {} ({})",
-            model_state.model_record.model_token,
-            model_state.model_record.title);
+          warn!("Skipping TTS due to cold cache: {} ({})", model_state.model_record.model_token, model_state.model_record.title);
           continue;
         },
         Ok(CacheMissStrategy::Proceed) => {}, // We're going to go ahead...
@@ -529,23 +399,16 @@ async fn process_jobs(
       let failure_reason = "failure processing job";
       let internal_debugging_failure_reason = format!("job error: {:?}", e);
 
-      let _r = mark_tts_inference_job_failure(
-        &inferencer.mysql_pool,
-        &job,
-        failure_reason,
-        &internal_debugging_failure_reason,
-        inferencer.job_max_attempts,
-        &inferencer.get_worker_name(),
-      ).await;
+      let _r = mark_tts_inference_job_failure(&inferencer.mysql_pool, &job, failure_reason, &internal_debugging_failure_reason, inferencer.job_max_attempts, &inferencer.get_worker_name()).await;
 
       match e {
-        ProcessSingleJobError::Other(_) => {} // No-op
+        ProcessSingleJobError::Other(_) => {}, // No-op
         ProcessSingleJobError::FilesystemFull => {
           // TODO: Refactor - we should stop processing all of these jobs as we'll lose out
           //  on this entire batch by attempting to clear the filesystem. This should be handled
           //  in the calling code.
           delete_tts_synthesizers_from_cache(&inferencer.semi_persistent_cache)?;
-        }
+        },
       }
     }
   }
@@ -559,7 +422,7 @@ fn record_failure_and_maybe_slow_down(job_stats: &JobStats) {
     Err(e) => {
       warn!("Error recording stats and reacting to repeated failures: {:?}", e);
       return; // Can't really do anything.
-    }
+    },
   };
 
   let seconds_timeout = match stats.consecutive_failure_count {
@@ -571,9 +434,7 @@ fn record_failure_and_maybe_slow_down(job_stats: &JobStats) {
     _ => return, // No timeout
   };
 
-  info!("Slowing down {} seconds due to significant repeated failures: {:?}",
-    seconds_timeout,
-    stats);
+  info!("Slowing down {} seconds due to significant repeated failures: {:?}", seconds_timeout, stats);
 
   std::thread::sleep(Duration::from_secs(seconds_timeout));
 }
@@ -587,9 +448,7 @@ fn delete_tts_synthesizers_from_cache(cache_dir: &SemiPersistentCacheDir) -> Any
   let tts_synthesizer_dir = cache_dir.tts_synthesizer_model_directory();
 
   // TODO: When this is no longer sufficient, delete other types of locally-cached data.
-  let paths = std::fs::read_dir(tts_synthesizer_dir)?
-      .map(|res| res.map(|e| e.path()))
-      .collect::<Result<Vec<_>, std::io::Error>>()?;
+  let paths = std::fs::read_dir(tts_synthesizer_dir)?.map(|res| res.map(|e| e.path())).collect::<Result<Vec<_>, std::io::Error>>()?;
 
   let models_to_delete = multiple_random_from_vec(&paths, 35);
 
@@ -624,8 +483,8 @@ impl std::fmt::Display for ModelStateError {
     match self {
       ModelStateError::ModelNotFound => write!(f, "ModelNotFound"),
       ModelStateError::ModelDeleted => write!(f, "ModelDeleted"),
-      ModelStateError::CacheError { reason} => write!(f, "Cache error: {:?}", reason),
-      ModelStateError::DatabaseError { reason} => write!(f, "Database error: {:?}", reason),
+      ModelStateError::CacheError { reason } => write!(f, "Cache error: {:?}", reason),
+      ModelStateError::DatabaseError { reason } => write!(f, "Database error: {:?}", reason),
     }
   }
 }
@@ -635,7 +494,7 @@ impl From<TtsModelForInferenceError> for ModelStateError {
     match error {
       TtsModelForInferenceError::ModelNotFound => ModelStateError::ModelNotFound,
       TtsModelForInferenceError::ModelDeleted => ModelStateError::ModelDeleted,
-      TtsModelForInferenceError::DatabaseError { reason } => ModelStateError::DatabaseError { reason }
+      TtsModelForInferenceError::DatabaseError { reason } => ModelStateError::DatabaseError { reason },
     }
   }
 }
@@ -644,54 +503,32 @@ impl std::error::Error for ModelStateError {}
 
 impl ModelState {
   /// Query the model details and see if the model file is on the filesystem in one go.
-  pub async fn query_model_and_check_filesystem(
-    job: &AvailableTtsInferenceJob,
-    mysql_pool: &MySqlPool,
-    tts_model_record_cache: &MultiItemTtlCache<String, TtsModelForInferenceRecord>,
-    semi_persistent_cache: &SemiPersistentCacheDir,
-    virtual_cache: &SyncVirtualLfuCache,
-  ) -> Result<Self, ModelStateError> {
+  pub async fn query_model_and_check_filesystem(job: &AvailableTtsInferenceJob, mysql_pool: &MySqlPool, tts_model_record_cache: &MultiItemTtlCache<String, TtsModelForInferenceRecord>, semi_persistent_cache: &SemiPersistentCacheDir, virtual_cache: &SyncVirtualLfuCache) -> Result<Self, ModelStateError> {
     // Many workers will be querying models constantly (n-many per batch).
     // We can save on a lot of DB query volume by caching model records.
-    let maybe_cached_tts_model =
-        tts_model_record_cache.copy_without_bump_if_unexpired(job.model_token.clone())
-            .ok()
-            .flatten();
+    let maybe_cached_tts_model = tts_model_record_cache.copy_without_bump_if_unexpired(job.model_token.clone()).ok().flatten();
 
     let tts_model = match maybe_cached_tts_model {
       Some(tts_model) => tts_model,
       None => {
         info!("Looking up TTS model record by token: {}", &job.model_token);
 
-        let tts_model = get_tts_model_for_inference(
-          &mysql_pool,
-          &job.model_token
-        ).await?;
+        let tts_model = get_tts_model_for_inference(&mysql_pool, &job.model_token).await?;
 
         tts_model_record_cache.store_copy(&job.model_token, &tts_model).ok();
 
         tts_model
-      }
+      },
     };
 
-    let tts_synthesizer_fs_path = semi_persistent_cache.tts_synthesizer_model_path(
-      &tts_model.model_token);
+    let tts_synthesizer_fs_path = semi_persistent_cache.tts_synthesizer_model_path(&tts_model.model_token);
 
     let is_downloaded_to_filesystem = tts_synthesizer_fs_path.exists();
 
-    let path = tts_synthesizer_fs_path
-        .to_str()
-        .ok_or(ModelStateError::CacheError { reason: "could not make path".to_string() })?
-        .to_string();
+    let path = tts_synthesizer_fs_path.to_str().ok_or(ModelStateError::CacheError { reason: "could not make path".to_string() })?.to_string();
 
-    let is_in_memory_cache = virtual_cache.in_cache(&path)
-        .map_err(|e| ModelStateError::CacheError { reason: format!("Model cache error: {:?}", e) })?;
+    let is_in_memory_cache = virtual_cache.in_cache(&path).map_err(|e| ModelStateError::CacheError { reason: format!("Model cache error: {:?}", e) })?;
 
-    Ok(Self {
-      model_record: tts_model,
-      is_downloaded_to_filesystem,
-      is_in_memory_cache,
-    })
+    Ok(Self { model_record: tts_model, is_downloaded_to_filesystem, is_in_memory_cache })
   }
 }
-

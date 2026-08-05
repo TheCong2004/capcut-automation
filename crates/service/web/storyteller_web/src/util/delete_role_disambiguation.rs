@@ -9,18 +9,18 @@ pub enum DeleteRole {
   AsMod,
 }
 
-pub fn delete_role_disambiguation(
-  user_is_mod: bool,
-  user_is_author: bool,
-  as_mod_flag: Option<bool>
-) -> DeleteRole {
+pub fn delete_role_disambiguation(user_is_mod: bool, user_is_author: bool, as_mod_flag: Option<bool>) -> DeleteRole {
   if !user_is_mod && !user_is_author {
     return DeleteRole::ErrorDoNotDelete;
   }
   // NB: Explored this with a truth table.
   let as_mod_flag_value = as_mod_flag.unwrap_or(false);
   let delete_as_mod = user_is_mod && !(user_is_author && as_mod_flag.is_some() && !as_mod_flag_value);
-  if delete_as_mod { DeleteRole::AsMod } else { DeleteRole::AsUser }
+  if delete_as_mod {
+    DeleteRole::AsMod
+  } else {
+    DeleteRole::AsUser
+  }
 }
 
 #[cfg(test)]

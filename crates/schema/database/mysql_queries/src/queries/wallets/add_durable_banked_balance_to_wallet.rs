@@ -6,25 +6,15 @@ use num_traits::ToPrimitive;
 use sqlx::MySql;
 use tokens::tokens::wallets::WalletToken;
 
-pub async fn add_durable_banked_balance_to_wallet(
-  wallet_token: &WalletToken,
-  amount_to_add: u64,
-  maybe_ledger_ref: Option<&str>,
-  wallet_ledger_entry_type_override: Option<WalletLedgerEntryType>,
-  transaction: &mut sqlx::Transaction<'_, MySql>,
-) -> anyhow::Result<WalletUpdateSummary> {
-
+pub async fn add_durable_banked_balance_to_wallet(wallet_token: &WalletToken, amount_to_add: u64, maybe_ledger_ref: Option<&str>, wallet_ledger_entry_type_override: Option<WalletLedgerEntryType>, transaction: &mut sqlx::Transaction<'_, MySql>) -> anyhow::Result<WalletUpdateSummary> {
   // NB: Transaction lock (!) Be careful (!!)
-  let wallet = internal_select_wallet_balance_for_update(
-    wallet_token,
-    transaction
-  ).await?;
+  let wallet = internal_select_wallet_balance_for_update(wallet_token, transaction).await?;
 
   let existing_banked_balance = wallet.banked_credits;
   let new_banked_balance = existing_banked_balance.saturating_add(amount_to_add);
 
   let result = sqlx::query!(
-        r#"
+    r#"
     UPDATE wallets
     SET
         banked_credits = ?,
@@ -34,8 +24,9 @@ pub async fn add_durable_banked_balance_to_wallet(
         "#,
     new_banked_balance,
     wallet_token.as_str(),
-  ).execute(&mut **transaction)
-      .await?;
+  )
+  .execute(&mut **transaction)
+  .await?;
 
   let record = InsertWalletLedgerEntry {
     wallet_token,
@@ -43,7 +34,7 @@ pub async fn add_durable_banked_balance_to_wallet(
     maybe_entity_ref: maybe_ledger_ref.map(|t| t.to_string()),
 
     credits_delta: amount_to_add.to_i64().unwrap_or(0),
-    
+
     // Updated banked credits
     banked_credits_before: existing_banked_balance,
     banked_credits_after: new_banked_balance,

@@ -35,16 +35,12 @@ pub struct CommentForListModFields {
   pub maybe_object_owner_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn list_comments_for_entity(
-  comment_entity_token: CommentEntityToken,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Vec<CommentForList>> {
-
+pub async fn list_comments_for_entity(comment_entity_token: CommentEntityToken, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<CommentForList>> {
   let (entity_type, entity_token) = comment_entity_token.get_composite_keys();
 
-  let maybe_results= sqlx::query_as!(
-      RawCommentForList,
-        r#"
+  let maybe_results = sqlx::query_as!(
+    RawCommentForList,
+    r#"
 SELECT
     c.token as `token: tokens::tokens::comments::CommentToken`,
     c.user_token as `user_token: tokens::tokens::users::UserToken`,
@@ -78,11 +74,11 @@ WHERE
 ORDER BY c.id DESC
 LIMIT 50
         "#,
-      entity_type,
-      entity_token
-    )
-      .fetch_all(mysql_pool)
-      .await;
+    entity_type,
+    entity_token
+  )
+  .fetch_all(mysql_pool)
+  .await;
 
   match maybe_results {
     Err(err) => match err {
@@ -90,29 +86,9 @@ LIMIT 50
       _ => {
         warn!("list ip bans db error: {:?}", err);
         Err(anyhow!("error with query: {:?}", err))
-      }
+      },
     },
-    Ok(results) => Ok(results.into_iter()
-        .map(|comment| CommentForList {
-          token: comment.token,
-          user_token: comment.user_token,
-          username: comment.username,
-          user_display_name: comment.user_display_name,
-          user_gravatar_hash: comment.user_gravatar_hash,
-          comment_markdown: comment.comment_markdown,
-          comment_rendered_html: comment.comment_rendered_html,
-          mod_fields: CommentForListModFields {
-            creator_ip_address: comment.creator_ip_address,
-            editor_ip_address: comment.editor_ip_address,
-            maybe_user_deleted_at: comment.user_deleted_at,
-            maybe_mod_deleted_at: comment.mod_deleted_at,
-            maybe_object_owner_deleted_at: comment.object_owner_deleted_at,
-          },
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          maybe_edited_at: None,
-        })
-        .collect()),
+    Ok(results) => Ok(results.into_iter().map(|comment| CommentForList { token: comment.token, user_token: comment.user_token, username: comment.username, user_display_name: comment.user_display_name, user_gravatar_hash: comment.user_gravatar_hash, comment_markdown: comment.comment_markdown, comment_rendered_html: comment.comment_rendered_html, mod_fields: CommentForListModFields { creator_ip_address: comment.creator_ip_address, editor_ip_address: comment.editor_ip_address, maybe_user_deleted_at: comment.user_deleted_at, maybe_mod_deleted_at: comment.mod_deleted_at, maybe_object_owner_deleted_at: comment.object_owner_deleted_at }, created_at: comment.created_at, updated_at: comment.updated_at, maybe_edited_at: None }).collect()),
   }
 }
 

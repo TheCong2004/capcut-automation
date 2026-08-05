@@ -57,7 +57,7 @@ pub struct PinnedModelWeightForList {
 
   /// Cover images are small descriptive images that can be set for any model.
   /// If a cover image is set, this is the path to the asset.
-  #[deprecated(note="switch to CoverImageDetails")]
+  #[deprecated(note = "switch to CoverImageDetails")]
   pub maybe_cover_image_public_bucket_path: Option<String>,
 
   /// Statistics about the weights
@@ -72,7 +72,7 @@ pub struct PinnedModelWeightForList {
 }
 
 /// The key we store pinned weights tokens under
-const REDIS_KEY : &str = "pinned_weights_list";
+const REDIS_KEY: &str = "pinned_weights_list";
 
 #[derive(Debug, ToSchema)]
 pub enum ListPinnedWeightsError {
@@ -106,46 +106,32 @@ impl ResponseError for ListPinnedWeightsError {
     (status = 500, description = "Server error", body = ListPinnedWeightsError),
   ),
 )]
-pub async fn list_pinned_weights_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<ListPinnedWeightsSuccessResponse>, impl ResponseError> {
+pub async fn list_pinned_weights_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListPinnedWeightsSuccessResponse>, impl ResponseError> {
+  let mut redis = server_state.redis_pool.get().map_err(|err| {
+    error!("Could not obtain redis: {err}");
+    ListPinnedWeightsError::ServerError
+  })?;
 
-  let mut redis = server_state.redis_pool.get()
-      .map_err(|err| {
-        error!("Could not obtain redis: {err}");
-        ListPinnedWeightsError::ServerError
-      })?;
+  let token_list: Option<String> = redis.get(REDIS_KEY).map_err(|err| {
+    error!("Could not get redis result: {err}");
+    ListPinnedWeightsError::ServerError
+  })?;
 
-  let token_list : Option<String> = redis.get(REDIS_KEY)
-      .map_err(|err| {
-        error!("Could not get redis result: {err}");
-        ListPinnedWeightsError::ServerError
-      })?;
-
-  let weight_tokens = token_list
-      .unwrap_or_else(|| "".to_string())
-      .split(",")
-      .into_iter()
-      .map(|item: &str| item.trim())
-      .filter(|item| !item.is_empty())
-      .map(|item| ModelWeightToken::new_from_str(item))
-      .collect::<Vec<ModelWeightToken>>();
+  let weight_tokens = token_list.unwrap_or_else(|| "".to_string()).split(",").into_iter().map(|item: &str| item.trim()).filter(|item| !item.is_empty()).map(|item| ModelWeightToken::new_from_str(item)).collect::<Vec<ModelWeightToken>>();
 
   debug!("Weight tokens from Redis: {:?}", weight_tokens);
 
   let mut weights = Vec::new();
 
   if !weight_tokens.is_empty() {
-    let query_results =
-        list_weights_by_tokens(&server_state.mysql_pool, &weight_tokens, false).await;
+    let query_results = list_weights_by_tokens(&server_state.mysql_pool, &weight_tokens, false).await;
 
     weights = match query_results {
       Ok(weights) => weights,
       Err(e) => {
         warn!("Query error: {:?}", e);
         return Err(ListPinnedWeightsError::ServerError);
-      }
+      },
     };
   }
 
@@ -153,53 +139,16 @@ pub async fn list_pinned_weights_handler(
 
   let response = ListPinnedWeightsSuccessResponse {
     success: true,
-    results: weights.into_iter()
-        .map(|w| {
-          let cover_image_details = WeightsCoverImageDetails::from_optional_db_fields(
-            media_domain,
-            server_state.server_environment,
-            &w.token,
-            w.maybe_cover_image_public_bucket_hash.as_deref(),
-            w.maybe_cover_image_public_bucket_prefix.as_deref(),
-            w.maybe_cover_image_public_bucket_extension.as_deref(),
-          );
+    results: weights
+      .into_iter()
+      .map(|w| {
+        let cover_image_details = WeightsCoverImageDetails::from_optional_db_fields(media_domain, server_state.server_environment, &w.token, w.maybe_cover_image_public_bucket_hash.as_deref(), w.maybe_cover_image_public_bucket_prefix.as_deref(), w.maybe_cover_image_public_bucket_extension.as_deref());
 
-          let maybe_cover_image = w.maybe_cover_image_public_bucket_hash
-              .as_deref()
-              .map(|hash| {
-                MediaFileBucketPath::from_object_hash(
-                  hash,
-                  w.maybe_cover_image_public_bucket_prefix.as_deref(),
-                  w.maybe_cover_image_public_bucket_extension.as_deref())
-                    .get_full_object_path_str()
-                    .to_string()
-              });
+        let maybe_cover_image = w.maybe_cover_image_public_bucket_hash.as_deref().map(|hash| MediaFileBucketPath::from_object_hash(hash, w.maybe_cover_image_public_bucket_prefix.as_deref(), w.maybe_cover_image_public_bucket_extension.as_deref()).get_full_object_path_str().to_string());
 
-          PinnedModelWeightForList {
-            weight_token: w.token,
-            maybe_url_slug: title_to_url_slug(&w.title),
-            title: w.title,
-            maybe_ietf_language_tag: w.maybe_ietf_language_tag,
-            maybe_ietf_primary_language_subtag: w.maybe_ietf_primary_language_subtag,
-            weight_type: w.weights_type,
-            weight_category: w.weights_category,
-            cover_image: cover_image_details,
-            maybe_cover_image_public_bucket_path: maybe_cover_image,
-            creator: UserDetailsLight::from_db_fields(
-              &w.creator_user_token,
-              &w.creator_username,
-              &w.creator_display_name,
-              &w.creator_email_gravatar_hash
-            ),
-            stats: SimpleEntityStats {
-              positive_rating_count: w.maybe_ratings_positive_count.unwrap_or(0),
-              bookmark_count: w.maybe_bookmark_count.unwrap_or(0),
-            },
-            usage_count: u64_to_u32_saturating(w.cached_usage_count),
-            created_at: w.created_at,
-            updated_at: w.updated_at,
-          }
-        }).collect::<Vec<_>>(),
+        PinnedModelWeightForList { weight_token: w.token, maybe_url_slug: title_to_url_slug(&w.title), title: w.title, maybe_ietf_language_tag: w.maybe_ietf_language_tag, maybe_ietf_primary_language_subtag: w.maybe_ietf_primary_language_subtag, weight_type: w.weights_type, weight_category: w.weights_category, cover_image: cover_image_details, maybe_cover_image_public_bucket_path: maybe_cover_image, creator: UserDetailsLight::from_db_fields(&w.creator_user_token, &w.creator_username, &w.creator_display_name, &w.creator_email_gravatar_hash), stats: SimpleEntityStats { positive_rating_count: w.maybe_ratings_positive_count.unwrap_or(0), bookmark_count: w.maybe_bookmark_count.unwrap_or(0) }, usage_count: u64_to_u32_saturating(w.cached_usage_count), created_at: w.created_at, updated_at: w.updated_at }
+      })
+      .collect::<Vec<_>>(),
   };
 
   Ok(Json(response))

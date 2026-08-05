@@ -19,23 +19,13 @@ impl HttpUserSessionPayloadError {
   pub fn is_server_error(&self) -> bool {
     match self {
       // Client HTTP header errors → 400 bad input.
-      HttpUserSessionPayloadError::HttpSessionHeaderError(_) => {
-        false
-      }
+      HttpUserSessionPayloadError::HttpSessionHeaderError(_) => false,
       // JWT verify errors (eg. forged cookies) → 400 bad input.
-      HttpUserSessionPayloadError::JwtSigner(JwtSignerError::JwtVerifyError(_)) => {
-        false
-      }
+      HttpUserSessionPayloadError::JwtSigner(JwtSignerError::JwtVerifyError(_)) => false,
       // Server-side JWT signer failures (bad HMAC config, signing failure) → 500.
-      HttpUserSessionPayloadError::JwtSigner(
-        JwtSignerError::JwtInvalidKeyLength | JwtSignerError::JwtSignError(_)
-      ) => {
-        true
-      },
+      HttpUserSessionPayloadError::JwtSigner(JwtSignerError::JwtInvalidKeyLength | JwtSignerError::JwtSignError(_)) => true,
       // Missing field in a verified JWT — how did this make it into the wild!? → 500
-      HttpUserSessionPayloadError::MissingField(_) => {
-        true
-      }
+      HttpUserSessionPayloadError::MissingField(_) => true,
     }
   }
 }

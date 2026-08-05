@@ -6,29 +6,13 @@ use bucket_paths::legacy::typified_paths::public::weight_files::bucket_file_path
 
 pub const SUFFIX: &str = ".bin";
 
-static ALLOWED_TYPES_GPT : Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "ckpt",
-  ])
-});
+static ALLOWED_TYPES_GPT: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["ckpt"]));
 
-static ALLOWED_TYPES_SOVITS : Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "pth",
-  ])
-});
+static ALLOWED_TYPES_SOVITS: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["pth"]));
 
-static ALLOWED_TYPES_REF_AUDIO : Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "wav",
-  ])
-});
+static ALLOWED_TYPES_REF_AUDIO: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["wav"]));
 
-static ALLOWED_TYPES_REF_TRANSCRIPT : Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "txt",
-  ])
-});
+static ALLOWED_TYPES_REF_TRANSCRIPT: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["txt"]));
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub enum GptSovitsPackageFileType {
@@ -62,16 +46,10 @@ impl GptSovitsPackageFileType {
     }
   }
 
-
   pub fn all_variants() -> BTreeSet<Self> {
     // NB: BTreeSet is sorted
     // NB: BTreeSet::from() isn't const, but not worth using LazyStatic, etc.
-    BTreeSet::from([
-      Self::GptModel,
-      Self::SovitsCheckpoint,
-      Self::ReferenceAudio,
-      Self::ReferenceTranscript,
-    ])
+    BTreeSet::from([Self::GptModel, Self::SovitsCheckpoint, Self::ReferenceAudio, Self::ReferenceTranscript])
   }
 
   pub fn package_identifier(&self) -> &str {
@@ -113,4 +91,3 @@ pub struct GptSovitsPackageDetails {
   pub reference_audio: GptSovitsPackageFile,
   pub reference_transcript: GptSovitsPackageFile,
 }
-

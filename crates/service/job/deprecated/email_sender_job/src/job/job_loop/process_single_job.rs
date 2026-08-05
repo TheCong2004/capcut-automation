@@ -13,10 +13,7 @@ use crate::job::job_loop::process_single_job_error::ProcessSingleJobError;
 use crate::job::job_loop::process_single_job_success_case::ProcessSingleJobSuccessCase;
 use crate::job_dependencies::JobDependencies;
 
-pub async fn process_single_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableEmailSenderJob,
-) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
+pub async fn process_single_job(job_dependencies: &JobDependencies, job: &AvailableEmailSenderJob) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
   //let mut force_execution = false;
 
   // Some jobs have "routing tags". These ensure that jobs only execute on certain hosts.
@@ -36,26 +33,17 @@ pub async fn process_single_job(
 
   // ==================== ATTEMPT TO GRAB JOB LOCK ==================== //
 
-  let lock_acquired = mark_email_sender_job_pending_and_grab_lock(
-    &job_dependencies.mysql_pool,
-    job.id,
-    &job_dependencies.container_db,
-  ).await
-      .map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
+  let lock_acquired = mark_email_sender_job_pending_and_grab_lock(&job_dependencies.mysql_pool, job.id, &job_dependencies.container_db).await.map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
 
   if !lock_acquired {
     warn!("Could not acquire job lock for: {}", &job.id.0);
-    return Ok(ProcessSingleJobSuccessCase::LockNotObtained)
+    return Ok(ProcessSingleJobSuccessCase::LockNotObtained);
   }
 
   process_single_job_wrap_with_logs(job_dependencies, job).await
 }
 
-async fn process_single_job_wrap_with_logs(
-  job_dependencies: &JobDependencies,
-  job: &AvailableEmailSenderJob,
-) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
-
+async fn process_single_job_wrap_with_logs(job_dependencies: &JobDependencies, job: &AvailableEmailSenderJob) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
   println!("\n  ----------------------------------------- JOB START -----------------------------------------  \n");
 
   info!("Beginning work on job ({}): {:?}", job.id.0, job.token);
@@ -67,11 +55,7 @@ async fn process_single_job_wrap_with_logs(
   result
 }
 
-async fn do_process_single_job(
-  job_dependencies: &JobDependencies,
-  job: &AvailableEmailSenderJob,
-) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
-
+async fn do_process_single_job(job_dependencies: &JobDependencies, job: &AvailableEmailSenderJob) -> Result<ProcessSingleJobSuccessCase, ProcessSingleJobError> {
   let job_start_time = Instant::now();
 
   // ==================== HANDLE DIFFERENT INFERENCE TYPES ==================== //
@@ -79,10 +63,10 @@ async fn do_process_single_job(
   match job.email_category {
     EmailCategory::Welcome => {
       return Err(ProcessSingleJobError::NotYetImplemented);
-    }
+    },
     EmailCategory::PasswordReset => {
       let _r = password_reset_email_sender(job, job_dependencies).await?;
-    }
+    },
   };
 
   // =====================================================
@@ -93,11 +77,7 @@ async fn do_process_single_job(
 
   info!("Marking job complete...");
 
-  mark_email_sender_job_successfully_done(
-    &job_dependencies.mysql_pool,
-    job,
-  ).await
-      .map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
+  mark_email_sender_job_successfully_done(&job_dependencies.mysql_pool, job).await.map_err(|err| ProcessSingleJobError::Other(anyhow!("database error: {:?}", err)))?;
 
   info!("Job done: {} : {:?}", job.id.0, job.token);
 

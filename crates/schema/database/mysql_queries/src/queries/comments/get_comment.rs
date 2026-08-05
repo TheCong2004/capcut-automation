@@ -36,17 +36,13 @@ pub struct CommentForListModFields {
   pub maybe_object_owner_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn get_comment<'e, 'c, E>(
-  comment_token: &'e CommentToken,
-  mysql_executor: E
-)
-  -> AnyhowResult<Option<Comment>>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn get_comment<'e, 'c, E>(comment_token: &'e CommentToken, mysql_executor: E) -> AnyhowResult<Option<Comment>>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-
   let maybe_results = sqlx::query_as!(
-      RawComment,
-        r#"
+    RawComment,
+    r#"
 SELECT
     c.token as `token: tokens::tokens::comments::CommentToken`,
 
@@ -78,37 +74,17 @@ JOIN users AS u
 WHERE
     c.token = ?
         "#,
-      comment_token
-    )
-      .fetch_one(mysql_executor)
-      .await;
+    comment_token
+  )
+  .fetch_one(mysql_executor)
+  .await;
 
   match maybe_results {
-    Ok(comment) => Ok(Some(Comment {
-      token: comment.token,
-      entity_type: comment.entity_type,
-      entity_token: comment.entity_token,
-      user_token: comment.user_token,
-      username: comment.username,
-      user_display_name: comment.user_display_name,
-      user_gravatar_hash: comment.user_gravatar_hash,
-      comment_markdown: comment.comment_markdown,
-      comment_rendered_html: comment.comment_rendered_html,
-      mod_fields: CommentForListModFields {
-        creator_ip_address: comment.creator_ip_address,
-        editor_ip_address: comment.editor_ip_address,
-        maybe_user_deleted_at: comment.user_deleted_at,
-        maybe_mod_deleted_at: comment.mod_deleted_at,
-        maybe_object_owner_deleted_at: comment.object_owner_deleted_at,
-      },
-      created_at: comment.created_at,
-      updated_at: comment.updated_at,
-      maybe_edited_at: None,
-    })),
+    Ok(comment) => Ok(Some(Comment { token: comment.token, entity_type: comment.entity_type, entity_token: comment.entity_token, user_token: comment.user_token, username: comment.username, user_display_name: comment.user_display_name, user_gravatar_hash: comment.user_gravatar_hash, comment_markdown: comment.comment_markdown, comment_rendered_html: comment.comment_rendered_html, mod_fields: CommentForListModFields { creator_ip_address: comment.creator_ip_address, editor_ip_address: comment.editor_ip_address, maybe_user_deleted_at: comment.user_deleted_at, maybe_mod_deleted_at: comment.mod_deleted_at, maybe_object_owner_deleted_at: comment.object_owner_deleted_at }, created_at: comment.created_at, updated_at: comment.updated_at, maybe_edited_at: None })),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(None),
       _ => Err(anyhow!("Error querying for IP ban: {:?}", err)),
-    }
+    },
   }
 }
 

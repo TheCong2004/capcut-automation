@@ -21,8 +21,8 @@ pub async fn list_public_event_feed_items(mysql_pool: &MySqlPool) -> AnyhowResul
   // NB: Lookup failure is Err(RowNotFound).
   // NB: Since this is publicly exposed, we don't query sensitive data.
   let maybe_events = sqlx::query_as!(
-      EventRecord,
-        r#"
+    EventRecord,
+    r#"
 SELECT
     events.token as event_token,
     events.event_type,
@@ -39,17 +39,15 @@ ON events.maybe_target_user_token = users.token
 ORDER BY events.id DESC
 LIMIT 25
         "#,
-    )
-      .fetch_all(mysql_pool)
-      .await;
+  )
+  .fetch_all(mysql_pool)
+  .await;
 
   match maybe_events {
     Ok(events) => Ok(events),
     Err(err) => match err {
       sqlx::Error::RowNotFound => Ok(Vec::new()),
-      _ => {
-        Err(anyhow!("error querying for events: {:?}", err))
-      }
-    }
+      _ => Err(anyhow!("error querying for events: {:?}", err)),
+    },
   }
 }

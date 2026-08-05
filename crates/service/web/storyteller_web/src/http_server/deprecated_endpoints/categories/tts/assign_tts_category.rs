@@ -68,35 +68,24 @@ impl fmt::Display for AssignTtsCategoryError {
 
 // =============== Handler ===============
 
-pub async fn assign_tts_category_handler(
-  http_request: HttpRequest,
-  request: web::Json<AssignTtsCategoryRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, AssignTtsCategoryError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        AssignTtsCategoryError::ServerError
-      })?;
+pub async fn assign_tts_category_handler(http_request: HttpRequest, request: web::Json<AssignTtsCategoryRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<HttpResponse, AssignTtsCategoryError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    AssignTtsCategoryError::ServerError
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(AssignTtsCategoryError::NotAuthorized);
-    }
+    },
   };
 
-  let category_lookup_result
-      = get_category_by_token(&request.category_token, &server_state.mysql_pool).await;
+  let category_lookup_result = get_category_by_token(&request.category_token, &server_state.mysql_pool).await;
 
   let category = match category_lookup_result {
-    Ok(Some(result)) => {
-      result
-    },
+    Ok(Some(result)) => result,
     Ok(None) => {
       warn!("could not find category");
       return Err(AssignTtsCategoryError::CategoryNotFound);
@@ -109,7 +98,7 @@ pub async fn assign_tts_category_handler(
 
   // NB: First permission check.
   // TODO: We don't have proper category permissions yet, so this is a proxy.
-  let is_category_mod= user_session.can_delete_other_users_tts_models;
+  let is_category_mod = user_session.can_delete_other_users_tts_models;
 
   // If category is exclusively for mods
   if !is_category_mod {
@@ -118,8 +107,7 @@ pub async fn assign_tts_category_handler(
       return Err(AssignTtsCategoryError::NotAuthorized);
     }
 
-    if category.deleted_at.is_some() ||
-        !category.is_mod_approved.unwrap_or(false) {
+    if category.deleted_at.is_some() || !category.is_mod_approved.unwrap_or(false) {
       warn!("user is not allowed to see this category: {:?}", user_session.user_token);
       return Err(AssignTtsCategoryError::ModelNotFound);
     }
@@ -134,15 +122,10 @@ pub async fn assign_tts_category_handler(
   // Only mods should see deleted models (both user_* and mod_* deleted).
   let is_mod_that_can_see_deleted = user_session.can_delete_other_users_tts_models;
 
-  let model_lookup_result = get_tts_model_by_token(
-    &request.tts_model_token,
-    is_mod_that_can_see_deleted,
-    &server_state.mysql_pool).await;
+  let model_lookup_result = get_tts_model_by_token(&request.tts_model_token, is_mod_that_can_see_deleted, &server_state.mysql_pool).await;
 
   let model_record = match model_lookup_result {
-    Ok(Some(result)) => {
-      result
-    },
+    Ok(Some(result)) => result,
     Ok(None) => {
       warn!("could not find model");
       return Err(AssignTtsCategoryError::ModelNotFound);
@@ -155,7 +138,7 @@ pub async fn assign_tts_category_handler(
 
   // NB: Third set of permission checks
   let is_author = &model_record.creator_user_token == user_session.user_token.as_str();
-  let is_mod = user_session.can_edit_other_users_tts_models ;
+  let is_mod = user_session.can_edit_other_users_tts_models;
 
   if !is_author && !is_mod {
     warn!("user is not allowed to add categories to model: {:?}", user_session.user_token);
@@ -170,27 +153,14 @@ pub async fn assign_tts_category_handler(
 
   let ip_address = get_request_ip(&http_request);
 
-  assign_tts_category(AssignTtsCategoryArgs {
-    tts_model_token: &request.tts_model_token,
-    tts_category_token: &request.category_token,
-    editor_user_token: user_session.user_token.as_str(),
-    editor_ip_address: &ip_address,
-    action: if request.assign { AssignOrDeleteAction::CreateAssignment } else { AssignOrDeleteAction::DeleteAssignment },
-    mysql_pool: &server_state.mysql_pool,
-  }).await
-      .map_err(|err| {
-        error!("Assign category edit DB error: {:?}", err);
-        AssignTtsCategoryError::ServerError
-      })?;
+  assign_tts_category(AssignTtsCategoryArgs { tts_model_token: &request.tts_model_token, tts_category_token: &request.category_token, editor_user_token: user_session.user_token.as_str(), editor_ip_address: &ip_address, action: if request.assign { AssignOrDeleteAction::CreateAssignment } else { AssignOrDeleteAction::DeleteAssignment }, mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
+    error!("Assign category edit DB error: {:?}", err);
+    AssignTtsCategoryError::ServerError
+  })?;
 
-  let response = AssignTtsCategoryResponse {
-    success: true,
-  };
+  let response = AssignTtsCategoryResponse { success: true };
 
-  let body = serde_json::to_string(&response)
-      .map_err(|e| AssignTtsCategoryError::ServerError)?;
+  let body = serde_json::to_string(&response).map_err(|e| AssignTtsCategoryError::ServerError)?;
 
-  Ok(HttpResponse::Ok()
-      .content_type("application/json")
-      .body(body))
+  Ok(HttpResponse::Ok().content_type("application/json").body(body))
 }

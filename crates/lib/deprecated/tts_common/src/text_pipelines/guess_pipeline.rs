@@ -4,12 +4,11 @@ use once_cell::sync::Lazy;
 use crate::text_pipelines::text_pipeline_type::TextPipelineType;
 
 // TODO: This is not yet popularized
-const ENGLISH_V1_EPOCH_STR : &str = "2023-01-01T00:00:00.00Z";
+const ENGLISH_V1_EPOCH_STR: &str = "2023-01-01T00:00:00.00Z";
 
 /// Date we consider to switch models to "english_v1" instead of "legacy_fakeyou"
-static ENGLISH_V1_EPOCH : Lazy<DateTime<Utc>> = Lazy::new(|| {
-  let datetime = DateTime::parse_from_rfc3339(ENGLISH_V1_EPOCH_STR)
-      .expect("ENGLISH_V1_EPOCH must parse statically.");
+static ENGLISH_V1_EPOCH: Lazy<DateTime<Utc>> = Lazy::new(|| {
+  let datetime = DateTime::parse_from_rfc3339(ENGLISH_V1_EPOCH_STR).expect("ENGLISH_V1_EPOCH must parse statically.");
 
   datetime.with_timezone(&Utc)
 });
@@ -22,7 +21,6 @@ static ENGLISH_V1_EPOCH : Lazy<DateTime<Utc>> = Lazy::new(|| {
 ///
 ///   maybe_model_created_at - `created_at` timestamp from database
 pub fn guess_text_pipeline_heuristic(maybe_model_created_at: Option<DateTime<Utc>>) -> TextPipelineType {
-
   // TODO: Use language to infer as well.
 
   if let Some(created_at) = maybe_model_created_at {
@@ -48,17 +46,13 @@ mod tests {
 
   #[test]
   fn newish_models_use_english_v1() {
-    let datetime = DateTime::parse_from_rfc3339("2023-07-01T00:00:00.00Z")
-        .expect("should parse")
-        .with_timezone(&Utc);
+    let datetime = DateTime::parse_from_rfc3339("2023-07-01T00:00:00.00Z").expect("should parse").with_timezone(&Utc);
     assert_eq!(guess_text_pipeline_heuristic(Some(datetime)), TextPipelineType::EnglishV1);
   }
 
   #[test]
   fn older_models_use_legacy_fakeyou() {
-    let datetime = DateTime::parse_from_rfc3339("2022-01-01T00:00:00.00Z")
-        .expect("should parse")
-        .with_timezone(&Utc);
+    let datetime = DateTime::parse_from_rfc3339("2022-01-01T00:00:00.00Z").expect("should parse").with_timezone(&Utc);
     assert_eq!(guess_text_pipeline_heuristic(Some(datetime)), TextPipelineType::LegacyFakeYou);
   }
 }

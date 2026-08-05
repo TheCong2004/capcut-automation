@@ -10,6 +10,6 @@ pub async fn classify_http_error_response(response: reqwest::Response) -> OpenAr
     Ok(text) => text,
     Err(err) => return OpenArtError::Api(ApiError::ReqwestError(err)),
   };
-  
+
   classify_http_error_status_code_and_body(status, &message).await
 }

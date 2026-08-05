@@ -39,8 +39,7 @@ pub async fn with_database_main_loop(updated_at_cursor: &mut DateTime<Utc>, job_
   loop {
     info!("Querying tokens updated since: {:?}", &updated_at_cursor);
 
-    let mut maybe_tokens =
-        list_model_weight_tokens_updated_since(&mut *mysql_connection, &updated_at_cursor).await?;
+    let mut maybe_tokens = list_model_weight_tokens_updated_since(&mut *mysql_connection, &updated_at_cursor).await?;
 
     if maybe_tokens.is_empty() {
       info!("No records updated since {:?}", &updated_at_cursor);
@@ -55,13 +54,9 @@ pub async fn with_database_main_loop(updated_at_cursor: &mut DateTime<Utc>, job_
     while !maybe_tokens.is_empty() {
       // NB: This list might be very large if we query from (1) the epoch, or (2) there was a large series of updates
       let last = 50.min(maybe_tokens.len());
-      let drained_tokens = maybe_tokens.drain(0..last)
-          .into_iter()
-          .map(|record| record.token)
-          .collect::<Vec<_>>();
+      let drained_tokens = maybe_tokens.drain(0..last).into_iter().map(|record| record.token).collect::<Vec<_>>();
 
-      let records
-          = batch_get_model_weights_for_elastic_search_backfill(&mut *mysql_connection, &drained_tokens).await?;
+      let records = batch_get_model_weights_for_elastic_search_backfill(&mut *mysql_connection, &drained_tokens).await?;
 
       for record in records {
         let updated_at = record.updated_at.clone();

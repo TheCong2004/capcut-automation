@@ -32,11 +32,7 @@ use crate::state::server_state::ServerState;
     (status = 500),
   ),
 )]
-pub async fn omni_api_get_job_status_handler(
-  http_request: HttpRequest,
-  path: Path<OmniApiGetJobStatusPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<OmniApiGetJobStatusSuccessResponse>, CommonWebError> {
+pub async fn omni_api_get_job_status_handler(http_request: HttpRequest, path: Path<OmniApiGetJobStatusPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<OmniApiGetJobStatusSuccessResponse>, CommonWebError> {
   // ==================== API KEY USER ==================== //
 
   // API-key authentication (Authorization header) instead of a session cookie. Never cached, and a
@@ -51,10 +47,7 @@ pub async fn omni_api_get_job_status_handler(
     return Err(CommonWebError::NotFound);
   }
 
-  let maybe_status = get_inference_job_status(
-    &path.token,
-    &server_state.mysql_pool,
-  ).await;
+  let maybe_status = get_inference_job_status(&path.token, &server_state.mysql_pool).await;
 
   let record = match maybe_status {
     Ok(Some(record)) => record,
@@ -62,7 +55,7 @@ pub async fn omni_api_get_job_status_handler(
     Err(err) => {
       warn!("Job query error for token {}: {:?}", path.token.as_str(), err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
 
   if record.is_keepalive_required {
@@ -73,14 +66,7 @@ pub async fn omni_api_get_job_status_handler(
 
   let media_domain = get_media_domain(&http_request);
 
-  let state = record_to_payload(
-    record,
-    server_state.server_environment,
-    media_domain,
-  );
+  let state = record_to_payload(record, server_state.server_environment, media_domain);
 
-  Ok(Json(OmniApiGetJobStatusSuccessResponse {
-    success: true,
-    state,
-  }))
+  Ok(Json(OmniApiGetJobStatusSuccessResponse { success: true, state }))
 }

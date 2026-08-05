@@ -13,30 +13,18 @@ use sqlite_tasks::queries::list_tasks_by_provider_and_tokens::{list_tasks_by_pro
 use std::time::Instant;
 use tokens::tokens::app_session::AppSessionToken;
 
-const CLIENT_NAME : &str = "artcraft";
+const CLIENT_NAME: &str = "artcraft";
 
-const ERROR_SLEEP_MILLIS : u64 = 1_000 * 60 * 3; // 3 minutes;
+const ERROR_SLEEP_MILLIS: u64 = 1_000 * 60 * 3; // 3 minutes;
 
-pub async fn storyteller_activity_thread(
-  app_env_configs: AppEnvConfigs,
-  artcraft_platform_info: ArtcraftPlatformInfo,
-  artcraft_usage_tracker: ArtcraftUsageTracker,
-  storyteller_creds_manager: StorytellerCredentialManager,
-) -> ! {
+pub async fn storyteller_activity_thread(app_env_configs: AppEnvConfigs, artcraft_platform_info: ArtcraftPlatformInfo, artcraft_usage_tracker: ArtcraftUsageTracker, storyteller_creds_manager: StorytellerCredentialManager) -> ! {
   let startup = Instant::now();
   let app_session_token = AppSessionToken::generate();
 
   info!("Session started at {:?} with token: {:?}", startup, app_session_token);
 
   loop {
-    let res = polling_loop(
-      &app_env_configs,
-      &artcraft_usage_tracker,
-      &storyteller_creds_manager,
-      startup,
-      &artcraft_platform_info,
-      &app_session_token,
-    ).await;
+    let res = polling_loop(&app_env_configs, &artcraft_usage_tracker, &storyteller_creds_manager, startup, &artcraft_platform_info, &app_session_token).await;
     if let Err(err) = res {
       error!("An error occurred: {:?}", err);
     }
@@ -45,14 +33,7 @@ pub async fn storyteller_activity_thread(
   }
 }
 
-async fn polling_loop(
-  app_env_configs: &AppEnvConfigs,
-  artcraft_usage_tracker: &ArtcraftUsageTracker,
-  storyteller_creds_manager: &StorytellerCredentialManager,
-  startup: Instant,
-  artcraft_platform_info: &ArtcraftPlatformInfo,
-  app_session_token: &AppSessionToken,
-) -> AnyhowResult<()> {
+async fn polling_loop(app_env_configs: &AppEnvConfigs, artcraft_usage_tracker: &ArtcraftUsageTracker, storyteller_creds_manager: &StorytellerCredentialManager, startup: Instant, artcraft_platform_info: &ArtcraftPlatformInfo, app_session_token: &AppSessionToken) -> AnyhowResult<()> {
   loop {
     let creds = storyteller_creds_manager.get_credentials()?;
 
@@ -60,7 +41,7 @@ async fn polling_loop(
       None => {
         tokio::time::sleep(std::time::Duration::from_millis(5_000)).await;
         continue;
-      }
+      },
       Some(creds) => {
         if creds.is_empty() {
           tokio::time::sleep(std::time::Duration::from_millis(5_000)).await;
@@ -71,7 +52,7 @@ async fn polling_loop(
     };
 
     let usage_data = artcraft_usage_tracker.get()?;
-    
+
     let time_since_startup = Instant::now().duration_since(startup);
 
     let request = LogAppActiveUserRequest {
@@ -101,11 +82,7 @@ async fn polling_loop(
 
     debug!("Logging active user with storyteller.");
 
-    let result = log_active_user_v2(
-      &app_env_configs.storyteller_host,
-      Some(&creds),
-      request,
-    ).await;
+    let result = log_active_user_v2(&app_env_configs.storyteller_host, Some(&creds), request).await;
 
     let wait_millis = match result {
       Ok(result) => result.wait_for_retry_millis,
@@ -115,11 +92,11 @@ async fn polling_loop(
             error!("Too many requests (sleeping): {:?}", message);
             tokio::time::sleep(std::time::Duration::from_millis(ERROR_SLEEP_MILLIS)).await;
             continue;
-          }
-          _ => {}
+          },
+          _ => {},
         }
         return Err(anyhow!(err));
-      }
+      },
     };
 
     // Wait at least a minute, no matter what the server tells us.

@@ -18,9 +18,7 @@ where
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn list_user_tokens_with_spend_activity<'e, 'c: 'e, E>(
-  args: ListUserTokensWithSpendActivityArgs<'e, 'c, E>,
-) -> Result<Vec<UserToken>, sqlx::Error>
+pub async fn list_user_tokens_with_spend_activity<'e, 'c: 'e, E>(args: ListUserTokensWithSpendActivityArgs<'e, 'c, E>) -> Result<Vec<UserToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -39,8 +37,8 @@ LIMIT ?
     args.after_user_token,
     args.limit,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

@@ -29,23 +29,19 @@ pub struct CreateVoiceArgs<'a> {
 
   pub creator_ip_address: &'a str,
   pub creator_set_visibility: Visibility,
-  pub mysql_pool: &'a MySqlPool
+  pub mysql_pool: &'a MySqlPool,
 }
 
-pub async fn create_voice(args: CreateVoiceArgs<'_>) -> AnyhowResult<ZsVoiceToken>{
+pub async fn create_voice(args: CreateVoiceArgs<'_>) -> AnyhowResult<ZsVoiceToken> {
   let voice_token = ZsVoiceToken::generate();
 
   // TODO: enforce checks for idempotency token
-  let mut maybe_creator_synthetic_id : Option<u64> = None;
+  let mut maybe_creator_synthetic_id: Option<u64> = None;
 
   let mut transaction = args.mysql_pool.begin().await?;
 
   if let Some(creator_user_token) = args.maybe_creator_user_token.as_deref() {
-    let next_zs_dataset_synthetic_id = transactional_increment_generic_synthetic_id(
-      creator_user_token,
-      IdCategory::ZeroShotVoiceEmbedding,
-      &mut transaction
-    ).await?;
+    let next_zs_dataset_synthetic_id = transactional_increment_generic_synthetic_id(creator_user_token, IdCategory::ZeroShotVoiceEmbedding, &mut transaction).await?;
 
     maybe_creator_synthetic_id = Some(next_zs_dataset_synthetic_id);
   }
@@ -77,7 +73,9 @@ pub async fn create_voice(args: CreateVoiceArgs<'_>) -> AnyhowResult<ZsVoiceToke
     args.creator_ip_address,
     args.creator_set_visibility.to_str(),
     maybe_creator_synthetic_id
-  ).execute(args.mysql_pool).await;
+  )
+  .execute(args.mysql_pool)
+  .await;
 
   // TODO(Kasisnu): This should probably rollback
   transaction.commit().await?;

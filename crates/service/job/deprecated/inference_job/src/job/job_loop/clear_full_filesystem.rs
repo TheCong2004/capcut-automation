@@ -19,9 +19,7 @@ pub fn clear_full_filesystem(cache_dir: &SemiPersistentCacheDir) -> AnyhowResult
 
 fn decimate_directory(path: &Path) -> AnyhowResult<()> {
   // TODO: When this is no longer sufficient, delete other types of locally-cached data.
-  let paths = std::fs::read_dir(path)?
-      .map(|res| res.map(|e| e.path()))
-      .collect::<Result<Vec<_>, std::io::Error>>()?;
+  let paths = std::fs::read_dir(path)?.map(|res| res.map(|e| e.path())).collect::<Result<Vec<_>, std::io::Error>>()?;
 
   let quarter = paths.len() / 4;
 

@@ -20,9 +20,7 @@ where
 /// soft-deleted, and whose tags the requester may see: any non-private
 /// file (public and hidden files are viewable by anyone with the URL),
 /// or the requester's own files.
-pub async fn filter_visible_media_file_tokens<'e, 'c: 'e, E>(
-  args: FilterVisibleMediaFileTokensArgs<'e, 'c, E>,
-) -> Result<Vec<MediaFileToken>, sqlx::Error>
+pub async fn filter_visible_media_file_tokens<'e, 'c: 'e, E>(args: FilterVisibleMediaFileTokensArgs<'e, 'c, E>) -> Result<Vec<MediaFileToken>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -49,7 +47,5 @@ where
 
   let rows = builder.build().fetch_all(args.mysql_executor).await?;
 
-  Ok(rows.into_iter()
-    .map(|row| MediaFileToken::new(row.get::<String, _>(0)))
-    .collect())
+  Ok(rows.into_iter().map(|row| MediaFileToken::new(row.get::<String, _>(0))).collect())
 }

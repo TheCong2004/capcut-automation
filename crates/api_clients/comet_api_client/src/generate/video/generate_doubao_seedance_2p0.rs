@@ -1,10 +1,7 @@
 use crate::creds::comet_api_key::CometApiKey;
 use crate::error::comet_client_error::CometClientError;
 use crate::error::comet_error::CometError;
-use crate::requests::create_video::create_video::{
-  create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize,
-  CreateVideoArgs, CreateVideoRequest,
-};
+use crate::requests::create_video::create_video::{create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize, CreateVideoArgs, CreateVideoRequest};
 use crate::requests::video_task_status::CometVideoTaskStatus;
 
 /// Seedance 2.0 supports 4-15 second durations.
@@ -96,20 +93,12 @@ pub struct GenerateDoubaoSeedance2p0Response {
 
 // ── Entry point ──
 
-pub async fn generate_doubao_seedance_2p0(
-  args: GenerateDoubaoSeedance2p0Args<'_>,
-) -> Result<GenerateDoubaoSeedance2p0Response, CometError> {
+pub async fn generate_doubao_seedance_2p0(args: GenerateDoubaoSeedance2p0Args<'_>) -> Result<GenerateDoubaoSeedance2p0Response, CometError> {
   let raw_request = args.request.to_create_video_request()?;
 
-  let result = create_video(CreateVideoArgs {
-    api_key: args.api_key,
-    request: raw_request,
-  }).await?;
+  let result = create_video(CreateVideoArgs { api_key: args.api_key, request: raw_request }).await?;
 
-  Ok(GenerateDoubaoSeedance2p0Response {
-    task_id: result.task_id,
-    status: result.status,
-  })
+  Ok(GenerateDoubaoSeedance2p0Response { task_id: result.task_id, status: result.status })
 }
 
 impl GenerateDoubaoSeedance2p0Request {
@@ -117,21 +106,11 @@ impl GenerateDoubaoSeedance2p0Request {
   pub fn to_create_video_request(&self) -> Result<CreateVideoRequest, CometClientError> {
     if let Some(seconds) = self.duration_seconds {
       if !(MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&seconds) {
-        return Err(CometClientError::InvalidRequestField {
-          field: "duration_seconds",
-          raw_value: seconds.to_string(),
-          reason: format!("Seedance 2.0 supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations"),
-        });
+        return Err(CometClientError::InvalidRequestField { field: "duration_seconds", raw_value: seconds.to_string(), reason: format!("Seedance 2.0 supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations") });
       }
     }
 
-    Ok(CreateVideoRequest {
-      model: CometVideoModelRaw::DoubaoSeedance2p0,
-      prompt: self.prompt.clone(),
-      maybe_seconds: self.duration_seconds,
-      maybe_size: self.resolve_size(),
-      input_reference_images: self.input_reference_images.clone(),
-    })
+    Ok(CreateVideoRequest { model: CometVideoModelRaw::DoubaoSeedance2p0, prompt: self.prompt.clone(), maybe_seconds: self.duration_seconds, maybe_size: self.resolve_size(), input_reference_images: self.input_reference_images.clone() })
   }
 
   /// The wire `size` is a single exact-dimensions field determined by the
@@ -185,53 +164,22 @@ mod tests {
 
   #[test]
   fn maps_to_wire_request() {
-    let request = GenerateDoubaoSeedance2p0Request {
-      prompt: "animate [Image 1]".to_string(),
-      duration_seconds: Some(8),
-      aspect_ratio: Some(Ratio::UltraWide21x9),
-      resolution: Some(Res::TenEightyP),
-      input_reference_images: vec![],
-    };
+    let request = GenerateDoubaoSeedance2p0Request { prompt: "animate [Image 1]".to_string(), duration_seconds: Some(8), aspect_ratio: Some(Ratio::UltraWide21x9), resolution: Some(Res::TenEightyP), input_reference_images: vec![] };
 
     let raw = request.to_create_video_request().expect("should validate");
-    assert_eq!(raw.text_form_fields(), vec![
-      ("model", "doubao-seedance-2-0".to_string()),
-      ("prompt", "animate [Image 1]".to_string()),
-      ("seconds", "8".to_string()),
-      ("size", "2206x946".to_string()),
-    ]);
+    assert_eq!(raw.text_form_fields(), vec![("model", "doubao-seedance-2-0".to_string()), ("prompt", "animate [Image 1]".to_string()), ("seconds", "8".to_string()), ("size", "2206x946".to_string()),]);
   }
 
   #[test]
   fn size_matrix_matches_cometapi_playground() {
     // (resolution, ratio) -> exact size, as offered by CometAPI's own
     // playground dropdown for doubao-seedance-2-0.
-    let cases = [
-      (Res::FourEightyP, Ratio::Landscape16x9, "864x496"),
-      (Res::FourEightyP, Ratio::Standard4x3, "752x560"),
-      (Res::FourEightyP, Ratio::Square1x1, "640x640"),
-      (Res::FourEightyP, Ratio::Portrait3x4, "560x752"),
-      (Res::FourEightyP, Ratio::Portrait9x16, "496x864"),
-      (Res::FourEightyP, Ratio::UltraWide21x9, "992x432"),
-      (Res::SevenTwentyP, Ratio::Landscape16x9, "1280x720"),
-      (Res::SevenTwentyP, Ratio::Standard4x3, "1112x834"),
-      (Res::SevenTwentyP, Ratio::Square1x1, "960x960"),
-      (Res::SevenTwentyP, Ratio::Portrait3x4, "834x1112"),
-      (Res::SevenTwentyP, Ratio::Portrait9x16, "720x1280"),
-      (Res::SevenTwentyP, Ratio::UltraWide21x9, "1470x630"),
-      (Res::TenEightyP, Ratio::Landscape16x9, "1920x1080"),
-      (Res::TenEightyP, Ratio::Standard4x3, "1664x1248"),
-      (Res::TenEightyP, Ratio::Square1x1, "1440x1440"),
-      (Res::TenEightyP, Ratio::Portrait3x4, "1248x1664"),
-      (Res::TenEightyP, Ratio::Portrait9x16, "1080x1920"),
-      (Res::TenEightyP, Ratio::UltraWide21x9, "2206x946"),
-    ];
+    let cases = [(Res::FourEightyP, Ratio::Landscape16x9, "864x496"), (Res::FourEightyP, Ratio::Standard4x3, "752x560"), (Res::FourEightyP, Ratio::Square1x1, "640x640"), (Res::FourEightyP, Ratio::Portrait3x4, "560x752"), (Res::FourEightyP, Ratio::Portrait9x16, "496x864"), (Res::FourEightyP, Ratio::UltraWide21x9, "992x432"), (Res::SevenTwentyP, Ratio::Landscape16x9, "1280x720"), (Res::SevenTwentyP, Ratio::Standard4x3, "1112x834"), (Res::SevenTwentyP, Ratio::Square1x1, "960x960"), (Res::SevenTwentyP, Ratio::Portrait3x4, "834x1112"), (Res::SevenTwentyP, Ratio::Portrait9x16, "720x1280"), (Res::SevenTwentyP, Ratio::UltraWide21x9, "1470x630"), (Res::TenEightyP, Ratio::Landscape16x9, "1920x1080"), (Res::TenEightyP, Ratio::Standard4x3, "1664x1248"), (Res::TenEightyP, Ratio::Square1x1, "1440x1440"), (Res::TenEightyP, Ratio::Portrait3x4, "1248x1664"), (Res::TenEightyP, Ratio::Portrait9x16, "1080x1920"), (Res::TenEightyP, Ratio::UltraWide21x9, "2206x946")];
 
     for (resolution, aspect_ratio, expected) in cases {
       let request = base_request(Some(aspect_ratio), Some(resolution));
       let size = request.resolve_size().expect("should resolve");
-      assert_eq!(size.as_api_string(), expected,
-        "({resolution:?}, {aspect_ratio:?}) should map to {expected}");
+      assert_eq!(size.as_api_string(), expected, "({resolution:?}, {aspect_ratio:?}) should map to {expected}");
     }
   }
 
@@ -276,17 +224,8 @@ mod tests {
     assert_eq!(request.estimate_cost_in_usd_cents(), 68);
   }
 
-  fn base_request(
-    aspect_ratio: Option<DoubaoSeedance2p0AspectRatio>,
-    resolution: Option<DoubaoSeedance2p0Resolution>,
-  ) -> GenerateDoubaoSeedance2p0Request {
-    GenerateDoubaoSeedance2p0Request {
-      prompt: "ok".to_string(),
-      duration_seconds: None,
-      aspect_ratio,
-      resolution,
-      input_reference_images: vec![],
-    }
+  fn base_request(aspect_ratio: Option<DoubaoSeedance2p0AspectRatio>, resolution: Option<DoubaoSeedance2p0Resolution>) -> GenerateDoubaoSeedance2p0Request {
+    GenerateDoubaoSeedance2p0Request { prompt: "ok".to_string(), duration_seconds: None, aspect_ratio, resolution, input_reference_images: vec![] }
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -308,20 +247,7 @@ mod tests {
   mod live_tests {
     use std::time::Duration;
 
-    use test_data::web::image_urls::{
-      ERNEST_GHOST_TREX_IMAGE_URL,
-      FOREST_BACKDROP_IMAGE_URL,
-      GHOST_IMAGE_URL,
-      GRASSY_HILL_TRANSPARENT_IMAGE_URL,
-      JUNO_AT_LAKE_IMAGE_URL,
-      MOUNTAIN_TREE_IMAGE_URL,
-      SUPER_WIDE_FALL_MOUNTAINS_IMAGE_URL,
-      TALL_CORGI_SHIBA_TREASURE_OCEAN_URL,
-      TALL_MOCHI_WITH_GLASSES_IMAGE_URL,
-      TREX_SKELETON_IMAGE_URL,
-      WHITE_HOUSE_SUNSET_IMAGE_URL,
-      WIDE_CORGI_SHIBA_TREASURE_OCEAN_URL,
-    };
+    use test_data::web::image_urls::{ERNEST_GHOST_TREX_IMAGE_URL, FOREST_BACKDROP_IMAGE_URL, GHOST_IMAGE_URL, GRASSY_HILL_TRANSPARENT_IMAGE_URL, JUNO_AT_LAKE_IMAGE_URL, MOUNTAIN_TREE_IMAGE_URL, SUPER_WIDE_FALL_MOUNTAINS_IMAGE_URL, TALL_CORGI_SHIBA_TREASURE_OCEAN_URL, TALL_MOCHI_WITH_GLASSES_IMAGE_URL, TREX_SKELETON_IMAGE_URL, WHITE_HOUSE_SUNSET_IMAGE_URL, WIDE_CORGI_SHIBA_TREASURE_OCEAN_URL};
 
     use super::*;
     use crate::requests::get_video_task::get_video_task::{get_video_task, GetVideoTaskArgs};
@@ -331,12 +257,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn live_generate_480p_with_references() {
-      let input_reference_images = download_reference_images(&[
-        ERNEST_GHOST_TREX_IMAGE_URL,
-        GHOST_IMAGE_URL,
-        TREX_SKELETON_IMAGE_URL,
-        FOREST_BACKDROP_IMAGE_URL,
-      ]).await;
+      let input_reference_images = download_reference_images(&[ERNEST_GHOST_TREX_IMAGE_URL, GHOST_IMAGE_URL, TREX_SKELETON_IMAGE_URL, FOREST_BACKDROP_IMAGE_URL]).await;
 
       run_generation_to_completion(GenerateDoubaoSeedance2p0Request {
         prompt: "The frightened man from [Image 1] runs through the dark forest \
@@ -348,19 +269,15 @@ mod tests {
         aspect_ratio: Some(DoubaoSeedance2p0AspectRatio::Landscape16x9),
         resolution: Some(DoubaoSeedance2p0Resolution::FourEightyP),
         input_reference_images,
-      }).await;
+      })
+      .await;
     }
 
     /// ⚠️ EXPENSIVE: real 10s 720p generation (~$1.37) + a long poll.
     #[ignore]
     #[tokio::test]
     async fn live_generate_720p_with_references() {
-      let input_reference_images = download_reference_images(&[
-        JUNO_AT_LAKE_IMAGE_URL,
-        TALL_MOCHI_WITH_GLASSES_IMAGE_URL,
-        TALL_CORGI_SHIBA_TREASURE_OCEAN_URL,
-        WIDE_CORGI_SHIBA_TREASURE_OCEAN_URL,
-      ]).await;
+      let input_reference_images = download_reference_images(&[JUNO_AT_LAKE_IMAGE_URL, TALL_MOCHI_WITH_GLASSES_IMAGE_URL, TALL_CORGI_SHIBA_TREASURE_OCEAN_URL, WIDE_CORGI_SHIBA_TREASURE_OCEAN_URL]).await;
 
       run_generation_to_completion(GenerateDoubaoSeedance2p0Request {
         prompt: "The dog from [Image 1] and the bespectacled dog from [Image 2] \
@@ -372,19 +289,15 @@ mod tests {
         aspect_ratio: Some(DoubaoSeedance2p0AspectRatio::Landscape16x9),
         resolution: Some(DoubaoSeedance2p0Resolution::SevenTwentyP),
         input_reference_images,
-      }).await;
+      })
+      .await;
     }
 
     /// ⚠️ EXPENSIVE: real 10s 1080p generation (~$3.37) + a long poll.
     #[ignore]
     #[tokio::test]
     async fn live_generate_1080p_with_references() {
-      let input_reference_images = download_reference_images(&[
-        GRASSY_HILL_TRANSPARENT_IMAGE_URL,
-        MOUNTAIN_TREE_IMAGE_URL,
-        SUPER_WIDE_FALL_MOUNTAINS_IMAGE_URL,
-        WHITE_HOUSE_SUNSET_IMAGE_URL,
-      ]).await;
+      let input_reference_images = download_reference_images(&[GRASSY_HILL_TRANSPARENT_IMAGE_URL, MOUNTAIN_TREE_IMAGE_URL, SUPER_WIDE_FALL_MOUNTAINS_IMAGE_URL, WHITE_HOUSE_SUNSET_IMAGE_URL]).await;
 
       run_generation_to_completion(GenerateDoubaoSeedance2p0Request {
         prompt: "A cinematic drone shot glides over the grassy hill from \
@@ -397,7 +310,8 @@ mod tests {
         aspect_ratio: Some(DoubaoSeedance2p0AspectRatio::Landscape16x9),
         resolution: Some(DoubaoSeedance2p0Resolution::TenEightyP),
         input_reference_images,
-      }).await;
+      })
+      .await;
     }
 
     // ── Helpers ──
@@ -415,20 +329,12 @@ mod tests {
       assert!(response.status().is_success(), "image download failed: {} ({})", url, response.status());
 
       let filename = url.rsplit('/').next().expect("url should have a path").to_string();
-      let maybe_content_type = if filename.ends_with(".png") {
-        Some("image/png".to_string())
-      } else {
-        Some("image/jpeg".to_string())
-      };
+      let maybe_content_type = if filename.ends_with(".png") { Some("image/png".to_string()) } else { Some("image/jpeg".to_string()) };
       let file_bytes = response.bytes().await.expect("image body should download").to_vec();
 
       println!("Downloaded reference: {} ({} bytes)", filename, file_bytes.len());
 
-      CometInputReferenceImage {
-        file_bytes,
-        filename,
-        maybe_content_type,
-      }
+      CometInputReferenceImage { file_bytes, filename, maybe_content_type }
     }
 
     /// Enqueue the generation, poll until terminal, and assert success.
@@ -440,20 +346,14 @@ mod tests {
       let api_key = load_api_key();
       println!("Estimated cost: {}¢", request.estimate_cost_in_usd_cents());
 
-      let created = generate_doubao_seedance_2p0(GenerateDoubaoSeedance2p0Args {
-        request,
-        api_key: &api_key,
-      }).await.expect("generate_doubao_seedance_2p0 should succeed");
+      let created = generate_doubao_seedance_2p0(GenerateDoubaoSeedance2p0Args { request, api_key: &api_key }).await.expect("generate_doubao_seedance_2p0 should succeed");
 
       println!("Enqueued task: {} (status: {})", created.task_id, created.status);
 
       for poll in 1..=MAX_POLLS {
         tokio::time::sleep(POLL_INTERVAL).await;
 
-        let task = get_video_task(GetVideoTaskArgs {
-          api_key: &api_key,
-          task_id: &created.task_id,
-        }).await.expect("get_video_task should succeed");
+        let task = get_video_task(GetVideoTaskArgs { api_key: &api_key, task_id: &created.task_id }).await.expect("get_video_task should succeed");
 
         println!("Poll {}: status {} (progress: {:?})", poll, task.status, task.maybe_progress);
 

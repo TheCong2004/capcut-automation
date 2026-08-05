@@ -29,27 +29,15 @@ const CLIENT_WAIT_FOR_RETRY_MILLIS: u64 = 1_000 * 60 * 1; // Every minute
     ("request" = LogAppActiveUserRequest, description = "Payload for Request"),
   )
 )]
-pub async fn log_app_active_user_handler(
-  http_request: HttpRequest,
-  request: Query<LogAppActiveUserRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<LogAppActiveUserResponse>, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await?;
+pub async fn log_app_active_user_handler(http_request: HttpRequest, request: Query<LogAppActiveUserRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<LogAppActiveUserResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await?;
 
-  let user_token = maybe_user_session
-      .ok_or(CommonWebError::NotAuthorized)?
-      .user_token;
+  let user_token = maybe_user_session.ok_or(CommonWebError::NotAuthorized)?.user_token;
 
   let ip_address = get_request_ip(&http_request);
-  
+
   info!("Logging active user: {:?}", request);
 
   let app_version = {
@@ -61,10 +49,7 @@ pub async fn log_app_active_user_handler(
       maybe_recorded_version = Some(user_agent.to_string());
     };
 
-    let pair = (
-      request.maybe_app_name.as_deref(),
-      request.maybe_app_version.as_deref(),
-    );
+    let pair = (request.maybe_app_name.as_deref(), request.maybe_app_version.as_deref());
 
     match pair {
       (Some(name), Some(version)) => {
@@ -86,61 +71,25 @@ pub async fn log_app_active_user_handler(
           maybe_recorded_version = Some(version);
         }
       },
-      _ => {}
+      _ => {},
     }
 
     maybe_recorded_version
   };
 
-  let upsert = UpsertAnalyticsAppActiveUser {
-    namespace: PaymentsNamespace::Artcraft,
-    user_token: &user_token,
-    ip_address: &ip_address,
-    app_version: app_version.as_deref(),
-    os_platform: request.maybe_os_platform.as_deref(),
-    os_version: request.maybe_os_version.as_deref(),
-    session_duration_seconds: request.maybe_session_duration_seconds,
-  };
+  let upsert = UpsertAnalyticsAppActiveUser { namespace: PaymentsNamespace::Artcraft, user_token: &user_token, ip_address: &ip_address, app_version: app_version.as_deref(), os_platform: request.maybe_os_platform.as_deref(), os_version: request.maybe_os_version.as_deref(), session_duration_seconds: request.maybe_session_duration_seconds };
 
   upsert.upsert_with_connection(&mut mysql_connection).await?;
-  
+
   if let Some(token) = request.maybe_app_session_token.as_ref() {
     validate_app_session_token_format(token)?;
-    
-    let upsert = UpsertAnalyticsAppSession{
-      app_session_token: token,
-      namespace: PaymentsNamespace::Artcraft,
-      user_token: &user_token,
-      ip_address: &ip_address,
-      app_version: app_version.as_deref(),
-      os_platform: request.maybe_os_platform.as_deref(),
-      os_version: request.maybe_os_version.as_deref(),
-      session_duration_seconds: request.maybe_session_duration_seconds,
-      total_generation_count: 0,
-      image_generation_count: 0,
-      video_generation_count: 0,
-      object_generation_count: 0,
-      text_to_image_count: 0,
-      image_to_image_count: 0,
-      text_to_video_count: 0,
-      image_to_video_count: 0,
-      text_to_object_count: 0,
-      image_to_object_count: 0,
-      image_page_prompt_count: 0,
-      video_page_prompt_count: 0,
-      edit_page_prompt_count: 0,
-      stage_page_prompt_count: 0,
-      object_page_prompt_count: 0,
-      other_page_prompt_count: 0,
-    };
-  
+
+    let upsert = UpsertAnalyticsAppSession { app_session_token: token, namespace: PaymentsNamespace::Artcraft, user_token: &user_token, ip_address: &ip_address, app_version: app_version.as_deref(), os_platform: request.maybe_os_platform.as_deref(), os_version: request.maybe_os_version.as_deref(), session_duration_seconds: request.maybe_session_duration_seconds, total_generation_count: 0, image_generation_count: 0, video_generation_count: 0, object_generation_count: 0, text_to_image_count: 0, image_to_image_count: 0, text_to_video_count: 0, image_to_video_count: 0, text_to_object_count: 0, image_to_object_count: 0, image_page_prompt_count: 0, video_page_prompt_count: 0, edit_page_prompt_count: 0, stage_page_prompt_count: 0, object_page_prompt_count: 0, other_page_prompt_count: 0 };
+
     upsert.upsert_with_connection(&mut mysql_connection).await?;
   }
 
-  Ok(Json(LogAppActiveUserResponse {
-    success: true,
-    wait_for_retry_millis: CLIENT_WAIT_FOR_RETRY_MILLIS,
-  }))
+  Ok(Json(LogAppActiveUserResponse { success: true, wait_for_retry_millis: CLIENT_WAIT_FOR_RETRY_MILLIS }))
 }
 
 fn validate_app_session_token_format(app_session_token: &AppSessionToken) -> Result<(), CommonWebError> {
@@ -148,6 +97,6 @@ fn validate_app_session_token_format(app_session_token: &AppSessionToken) -> Res
     warn!("App session token has invalid prefix: {}", app_session_token.as_str());
     return Err(CommonWebError::BadInputWithSimpleMessage("Invalid app session token format".to_string()));
   }
-  
+
   Ok(())
 }

@@ -15,15 +15,7 @@ impl GmiCloudSeedance2p0UltraFastCostState {
   pub fn estimate_cost(&self) -> VideoGenerationCostEstimate {
     let cost_in_usd_cents = self.request.request.calculate_cost_in_cents();
 
-    VideoGenerationCostEstimate {
-      cost_in_credits: None,
-      cost_in_usd_cents: Some(cost_in_usd_cents),
-      is_free: false,
-      is_unlimited: false,
-      is_rate_limited: false,
-      has_watermark: false,
-      failures_are_refunded: None,
-    }
+    VideoGenerationCostEstimate { cost_in_credits: None, cost_in_usd_cents: Some(cost_in_usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None }
   }
 }
 
@@ -92,14 +84,7 @@ mod tests {
     fn fast_cheaper_than_standard() {
       let fast = cost_cents(Some(RouterResolution::SevenTwentyP), 10);
       let standard = {
-        let builder = GenerateVideoRequestBuilder {
-          model: RouterVideoModel::Seedance2p0Ultra,
-          provider: RouterProvider::GmiCloud,
-          resolution: Some(RouterResolution::SevenTwentyP),
-          duration_seconds: Some(10),
-          video_batch_count: Some(1),
-          ..Default::default()
-        };
+        let builder = GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0Ultra, provider: RouterProvider::GmiCloud, resolution: Some(RouterResolution::SevenTwentyP), duration_seconds: Some(10), video_batch_count: Some(1), ..Default::default() };
         builder.build2().unwrap().estimate_cost().unwrap().cost_in_usd_cents.unwrap()
       };
       assert!(fast < standard, "Fast ({fast}¢) should be < Standard ({standard}¢)");
@@ -107,19 +92,7 @@ mod tests {
   }
 
   fn cost_cents(resolution: Option<RouterResolution>, duration_seconds: u16) -> u64 {
-    let builder = GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Seedance2p0UltraFast,
-      provider: RouterProvider::GmiCloud,
-      resolution,
-      duration_seconds: Some(duration_seconds),
-      video_batch_count: Some(1),
-      ..Default::default()
-    };
-    builder.build2()
-      .expect("build2 should succeed")
-      .estimate_cost()
-      .expect("estimate_cost should succeed")
-      .cost_in_usd_cents
-      .unwrap()
+    let builder = GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0UltraFast, provider: RouterProvider::GmiCloud, resolution, duration_seconds: Some(duration_seconds), video_batch_count: Some(1), ..Default::default() };
+    builder.build2().expect("build2 should succeed").estimate_cost().expect("estimate_cost should succeed").cost_in_usd_cents.unwrap()
   }
 }

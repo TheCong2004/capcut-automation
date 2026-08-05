@@ -1,4 +1,3 @@
-
 /// Subscription categories are used to namespace subscriptions.
 /// Integrations should always provide a default even if this isn't used.
 pub const UNKNOWN_SUBSCRIPTION_NAMESPACE: &str = "unknown";

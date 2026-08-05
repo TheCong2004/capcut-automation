@@ -100,11 +100,9 @@ impl FlacDecoder {
         // the stream information if provided. If neither are available, return an error.
         let bits_per_sample = if let Some(bps) = header.bits_per_sample {
             bps
-        }
-        else if let Some(bps) = self.params.bits_per_sample {
+        } else if let Some(bps) = self.params.bits_per_sample {
             bps
-        }
-        else {
+        } else {
             return decode_error("flac: bits per sample not provided");
         };
 
@@ -241,8 +239,7 @@ impl Decoder for FlacDecoder {
         if let Err(e) = self.decode_inner(packet) {
             self.buf.clear();
             Err(e)
-        }
-        else {
+        } else {
             Ok(self.buf.as_audio_buffer_ref())
         }
     }
@@ -272,8 +269,7 @@ impl Decoder for FlacDecoder {
                 }
 
                 result.verify_ok = Some(decoded == expected)
-            }
-            else {
+            } else {
                 warn!("verification requested but the expected md5 checksum was not provided");
             }
         }
@@ -433,8 +429,7 @@ fn decode_linear<B: ReadBitsLtr>(bs: &mut B, bps: u32, order: u32, buf: &mut [i3
             decode_residual(bs, order, buf)?;
 
             lpc_predict_4(order as usize, &qlp_coeffs, qlp_coeff_shift as u32, buf)?;
-        }
-        else if order <= 8 {
+        } else if order <= 8 {
             let mut qlp_coeffs = [0i32; 8];
 
             for c in qlp_coeffs[8 - order as usize..8].iter_mut().rev() {
@@ -444,8 +439,7 @@ fn decode_linear<B: ReadBitsLtr>(bs: &mut B, bps: u32, order: u32, buf: &mut [i3
             decode_residual(bs, order, buf)?;
 
             lpc_predict_8(order as usize, &qlp_coeffs, qlp_coeff_shift as u32, buf)?;
-        }
-        else if order <= 12 {
+        } else if order <= 12 {
             let mut qlp_coeffs = [0i32; 12];
 
             for c in qlp_coeffs[12 - order as usize..12].iter_mut().rev() {
@@ -455,8 +449,7 @@ fn decode_linear<B: ReadBitsLtr>(bs: &mut B, bps: u32, order: u32, buf: &mut [i3
             decode_residual(bs, order, buf)?;
 
             lpc_predict_12(order as usize, &qlp_coeffs, qlp_coeff_shift as u32, buf)?;
-        }
-        else {
+        } else {
             let mut qlp_coeffs = [0i32; 32];
 
             for c in qlp_coeffs[32 - order as usize..32].iter_mut().rev() {
@@ -467,8 +460,7 @@ fn decode_linear<B: ReadBitsLtr>(bs: &mut B, bps: u32, order: u32, buf: &mut [i3
 
             lpc_predict_32(order as usize, &qlp_coeffs, qlp_coeff_shift as u32, buf)?;
         }
-    }
-    else {
+    } else {
         return unsupported_error("flac: lpc shifts less than 0 are not supported");
     }
 
@@ -560,8 +552,7 @@ fn decode_rice_partition<B: ReadBitsLtr>(
             let r = bs.read_bits_leq32(rice_param)?;
             *sample = rice_signed_to_i32((q << rice_param) | r);
         }
-    }
-    else {
+    } else {
         let residual_bits = bs.read_bits_leq32(5)?;
 
         // trace!(

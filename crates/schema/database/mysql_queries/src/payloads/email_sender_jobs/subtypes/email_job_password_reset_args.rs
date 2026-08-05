@@ -1,4 +1,3 @@
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EmailJobPasswordResetArgs {
   /// REQUIRED.
@@ -19,9 +18,7 @@ mod tests {
 
   #[test]
   fn test_secret_key() {
-    let args = EmailJobPasswordResetArgs {
-      password_reset_secret_key: Some("code".to_string()),
-    };
+    let args = EmailJobPasswordResetArgs { password_reset_secret_key: Some("code".to_string()) };
     let json = serde_json::ser::to_string(&args).unwrap();
     assert_eq!(json, r#"{"k":"code"}"#.to_string());
     assert_json_deserializes_to_match(&json, &args);

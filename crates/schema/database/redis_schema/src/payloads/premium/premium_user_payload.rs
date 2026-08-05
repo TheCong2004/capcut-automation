@@ -17,20 +17,13 @@ pub struct PremiumUserPayload {
 }
 
 impl PremiumUserPayload {
-
   pub fn new(key: PremiumUserRedisKey) -> Self {
-    Self {
-      key,
-      payload: PremiumPayload::new(),
-    }
+    Self { key, payload: PremiumPayload::new() }
   }
 
   pub fn read_from_redis(key: PremiumUserRedisKey, redis: &mut PooledConnection<Client>) -> AnyhowResult<Self> {
     let payload = PremiumPayload::read_from_redis(key.as_str(), redis)?;
-    Ok(Self {
-      key,
-      payload,
-    })
+    Ok(Self { key, payload })
   }
 
   pub fn persist_to_redis_with_expiry(&self, redis: &mut PooledConnection<Client>) -> AnyhowResult<()> {
@@ -40,9 +33,7 @@ impl PremiumUserPayload {
   }
 
   pub fn set_key_expiry(&self, redis: &mut PooledConnection<Client>) -> AnyhowResult<()> {
-    let expire_at= Utc::now()
-        .add(PremiumUserRedisKey::get_redis_ttl())
-        .timestamp() as i64;
+    let expire_at = Utc::now().add(PremiumUserRedisKey::get_redis_ttl()).timestamp() as i64;
     redis.expire_at::<_, ()>(self.key.as_str(), expire_at)?;
     Ok(())
   }

@@ -10,43 +10,38 @@ use crate::http_server::endpoints::inference_job::utils::estimates::comfy_workfl
 use crate::http_server::endpoints::inference_job::utils::estimates::percent::percent;
 
 // TODO: These numbers are made up. We should measure the average job durations.
-const TTS_JOB_AVERAGE_SECONDS : u64 = 7;
-const VC_JOB_AVERAGE_SECONDS : u64 = 90;
+const TTS_JOB_AVERAGE_SECONDS: u64 = 7;
+const VC_JOB_AVERAGE_SECONDS: u64 = 90;
 
-const LIVE_PORTRAIT_JOB_AVERAGE_SECONDS : u64 = 90;
+const LIVE_PORTRAIT_JOB_AVERAGE_SECONDS: u64 = 90;
 
 /// Lipsync with face fusion
-const VID_FACE_FUSION_AVERAGE_SECONDS : u64 = 45;
+const VID_FACE_FUSION_AVERAGE_SECONDS: u64 = 45;
 
 /// Lipsync with SadTalker (super old and slow)
-const LIPSYNC_JOB_AVERAGE_SECONDS : u64 = 60 * 3;
+const LIPSYNC_JOB_AVERAGE_SECONDS: u64 = 60 * 3;
 
-const F5_TTS_JOB_AVERAGE_SECONDS : u64 = 12;
+const F5_TTS_JOB_AVERAGE_SECONDS: u64 = 12;
 
-const SEED_VC_JOB_AVERAGE_SECONDS : u64 = 60;
+const SEED_VC_JOB_AVERAGE_SECONDS: u64 = 60;
 
 const IMAGE_GEN_API_AVERAGE_SECONDS: u64 = 70;
 
 pub fn estimate_job_progress(job: &GenericInferenceJobStatus, maybe_args: Option<&PolymorphicInferenceArgs>) -> u8 {
   match job.status {
     // Jobs that haven't started
-    JobStatusPlus::Pending
-    | JobStatusPlus::AttemptFailed => return 0,
+    JobStatusPlus::Pending | JobStatusPlus::AttemptFailed => return 0,
     // Jobs that are "done"
-    JobStatusPlus::CompleteSuccess
-    | JobStatusPlus::CompleteFailure
-    | JobStatusPlus::Dead
-    | JobStatusPlus::CancelledByUser
-    | JobStatusPlus::CancelledBySystem => return 100,
+    JobStatusPlus::CompleteSuccess | JobStatusPlus::CompleteFailure | JobStatusPlus::Dead | JobStatusPlus::CancelledByUser | JobStatusPlus::CancelledBySystem => return 100,
     // Fall through
-    JobStatusPlus::Started => {}
+    JobStatusPlus::Started => {},
   }
 
   // TODO: This is inaccurate under retries
   //  "mark_generic_inference_job_pending_and_grab_lock" only sets "maybe_first_started_at"
   //  for the first execution, not retries. It's not clear that this is a valuable behavior,
   //  and perhaps the code should be updated to always write every job attempt's start time.
-  let started_at= job.maybe_first_started_at.unwrap_or(job.created_at);
+  let started_at = job.maybe_first_started_at.unwrap_or(job.created_at);
 
   let now = job.database_clock;
 
@@ -71,10 +66,10 @@ pub fn estimate_job_progress(job: &GenericInferenceJobStatus, maybe_args: Option
     InferenceCategory::SeedVc => percent(duration_seconds, SEED_VC_JOB_AVERAGE_SECONDS),
 
     // TODO: Better estimates for FAL, etc.
-    InferenceCategory::VideoGeneration => percent(duration_seconds, 60*5),
-    InferenceCategory::AudioGeneration => percent(duration_seconds, 60*2),
+    InferenceCategory::VideoGeneration => percent(duration_seconds, 60 * 5),
+    InferenceCategory::AudioGeneration => percent(duration_seconds, 60 * 2),
     InferenceCategory::BackgroundRemoval => percent(duration_seconds, 10),
-    InferenceCategory::ObjectGeneration => percent(duration_seconds, 60*2),
+    InferenceCategory::ObjectGeneration => percent(duration_seconds, 60 * 2),
 
     // TODO: Better estimate using video duration, params, etc.
     InferenceCategory::Workflow => comfy_workflow_estimate(maybe_args, duration_seconds),
@@ -86,8 +81,8 @@ pub fn estimate_job_progress(job: &GenericInferenceJobStatus, maybe_args: Option
     InferenceCategory::Mocap => 0,
     InferenceCategory::VideoFilter => 0,
     InferenceCategory::ConvertBvhToWorkflow => 0,
-    InferenceCategory::CharacterGeneration => percent(duration_seconds, 60*2),
-    InferenceCategory::SplatGeneration => percent(duration_seconds, 60*5),
+    InferenceCategory::CharacterGeneration => percent(duration_seconds, 60 * 2),
+    InferenceCategory::SplatGeneration => percent(duration_seconds, 60 * 5),
     InferenceCategory::DeprecatedField => 0, // TODO(bt,2024-07-16): Read job type instead.
   };
 
@@ -95,7 +90,7 @@ pub fn estimate_job_progress(job: &GenericInferenceJobStatus, maybe_args: Option
   match job.request_details.maybe_product_category {
     Some(InferenceJobProductCategory::VidFaceFusion) => {
       progress = percent(duration_seconds, VID_FACE_FUSION_AVERAGE_SECONDS);
-    }
+    },
     _ => {}, // Intentional Fallthrough
   }
 

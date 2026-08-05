@@ -11,7 +11,7 @@ use tokens::tokens::wallets::WalletToken;
 
 // TODO: Make a trait (eg. `InsertableRecord`, `UpsertableRecord`) with default impls to handle common query concerns.
 
-pub (crate) struct InsertWalletLedgerEntry<'a> {
+pub(crate) struct InsertWalletLedgerEntry<'a> {
   /// The wallet
   pub wallet_token: &'a WalletToken,
 
@@ -38,8 +38,7 @@ pub (crate) struct InsertWalletLedgerEntry<'a> {
   pub monthly_credits_after: u64,
 }
 
-impl <'a> InsertWalletLedgerEntry<'a> {
-
+impl<'a> InsertWalletLedgerEntry<'a> {
   pub async fn upsert_with_pool(&'a self, mysql_pool: &MySqlPool) -> AnyhowResult<WalletLedgerEntryToken> {
     let mut conn = mysql_pool.acquire().await?;
     self.upsert_with_connection(&mut conn).await
@@ -70,7 +69,7 @@ impl <'a> InsertWalletLedgerEntry<'a> {
 
   fn query_with_token(&self, ledger_token: &WalletLedgerEntryToken) -> Query<MySql, MySqlArguments> {
     sqlx::query!(
-        r#"
+      r#"
 INSERT INTO wallet_ledger_entries
 SET
   token = ?,

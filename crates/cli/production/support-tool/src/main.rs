@@ -15,8 +15,7 @@ async fn main() -> anyhow::Result<()> {
   let cli = Cli::parse_from(args);
 
   // Load secrets from .env file.
-  easyenv::from_filename(".env-support-tool-secrets")
-    .expect("Failed to load .env-support-tool-secrets");
+  easyenv::from_filename(".env-support-tool-secrets").expect("Failed to load .env-support-tool-secrets");
 
   easyenv::init_env_logger(Some("info"));
 

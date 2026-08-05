@@ -18,9 +18,7 @@ pub const MODEL_WEIGHT_INDEX: &str = "model_weights_v1";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ModelWeightDocument {
-
   // *** NB: Never put the bucket path to the model in Elasticsearch ! ***
-
   pub token: ModelWeightToken,
 
   pub creator_set_visibility: Visibility,
@@ -35,7 +33,6 @@ pub struct ModelWeightDocument {
   pub title_as_keyword: String,
 
   // *** NB: Never put the bucket path to the model in Elasticsearch ! ***
-
   pub maybe_cover_image_media_file_token: Option<MediaFileToken>,
   pub maybe_cover_image_public_bucket_hash: Option<String>,
   pub maybe_cover_image_public_bucket_prefix: Option<String>,
@@ -43,7 +40,6 @@ pub struct ModelWeightDocument {
 
   //pub description_markdown: String,
   //pub description_markdown_html: String,
-
   pub creator_user_token: UserToken,
   pub creator_username: String,
   pub creator_display_name: String,

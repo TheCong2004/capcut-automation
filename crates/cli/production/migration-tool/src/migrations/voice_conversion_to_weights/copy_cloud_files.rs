@@ -45,18 +45,12 @@ async fn copy_model(model: &WholeVoiceConversionModelRecord, deps: &Deps) -> Any
     VoiceConversionModelType::SoftVc => return Err(anyhow!("we never built softvc models")),
   };
 
-  deps.bucket_production_public.upload_filename_with_content_type(
-    &new_model_bucket_path.get_full_object_path_str(),
-    &model_temp_fs_path,
-    "application/octet-stream").await?;
+  deps.bucket_production_public.upload_filename_with_content_type(&new_model_bucket_path.get_full_object_path_str(), &model_temp_fs_path, "application/octet-stream").await?;
 
   safe_delete_file(&model_temp_fs_path);
   safe_delete_directory(&temp_dir);
 
-  Ok(CopiedFileData {
-    bucket_path: new_model_bucket_path,
-    file_sha_hash: file_checksum,
-  })
+  Ok(CopiedFileData { bucket_path: new_model_bucket_path, file_sha_hash: file_checksum })
 }
 
 async fn copy_index_file(model: &WholeVoiceConversionModelRecord, deps: &Deps, bucket_path: &WeightFileBucketPath) -> AnyhowResult<()> {
@@ -70,13 +64,9 @@ async fn copy_index_file(model: &WholeVoiceConversionModelRecord, deps: &Deps, b
 
   deps.bucket_production_private.download_file_to_disk(&old_model_index_bucket_path, &model_temp_fs_path).await?;
 
-  let new_model_bucket_path =
-      WeightFileBucketPath::rvc_index_file_from_object_hash(bucket_path.get_object_hash());
+  let new_model_bucket_path = WeightFileBucketPath::rvc_index_file_from_object_hash(bucket_path.get_object_hash());
 
-  deps.bucket_production_public.upload_filename_with_content_type(
-    &new_model_bucket_path.get_full_object_path_str(),
-    &model_temp_fs_path,
-    "application/octet-stream").await?;
+  deps.bucket_production_public.upload_filename_with_content_type(&new_model_bucket_path.get_full_object_path_str(), &model_temp_fs_path, "application/octet-stream").await?;
 
   safe_delete_file(&model_temp_fs_path);
   safe_delete_directory(&temp_dir);

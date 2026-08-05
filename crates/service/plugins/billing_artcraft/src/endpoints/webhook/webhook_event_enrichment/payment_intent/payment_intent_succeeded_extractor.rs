@@ -21,20 +21,12 @@ use tokens::tokens::users::UserToken;
 use tokens::tokens::wallets::WalletToken;
 
 // Handle event type: 'payment_intent.succeeded'
-pub async fn payment_intent_succeeded_extractor(
-  stripe_event_descriptor: &StripeEventDescriptor,
-  payment_intent: &PaymentIntent,
-  server_environment: ServerEnvironment,
-  stripe_client: &Client,
-) -> Result<EnrichedWebhookEvent, StripeArtcraftWebhookError> {
-
+pub async fn payment_intent_succeeded_extractor(stripe_event_descriptor: &StripeEventDescriptor, payment_intent: &PaymentIntent, server_environment: ServerEnvironment, stripe_client: &Client) -> Result<EnrichedWebhookEvent, StripeArtcraftWebhookError> {
   let payment_intent_id = payment_intent.id.to_string();
 
   // NB: We'll need this to send them to the "customer portal", which is how they can modify
   // or cancel their subscriptions.
-  let maybe_stripe_customer_id  = payment_intent.customer
-      .as_ref()
-      .map(|c| expand_customer_id(c));
+  let maybe_stripe_customer_id = payment_intent.customer.as_ref().map(|c| expand_customer_id(c));
 
   // NB: Our internal tokens
   let maybe_user_token = get_metadata_user_token(&payment_intent.metadata);
@@ -46,16 +38,10 @@ pub async fn payment_intent_succeeded_extractor(
     None => {
       warn!("No user token found in `payment_intent.success` metadata. Cannot proceed.");
       return Err(StripeArtcraftWebhookError::BadRequest("no user token in payment_intent.success".to_string()));
-    }
+    },
   };
 
-  let mut event_log_summary = WebhookEventLogSummary {
-    maybe_stripe_customer_id: maybe_stripe_customer_id.clone(),
-    maybe_user_token,
-    maybe_event_entity_id: Some(payment_intent_id.clone()),
-    action_was_taken: false,
-    should_ignore_retry: true,
-  };
+  let mut event_log_summary = WebhookEventLogSummary { maybe_stripe_customer_id: maybe_stripe_customer_id.clone(), maybe_user_token, maybe_event_entity_id: Some(payment_intent_id.clone()), action_was_taken: false, should_ignore_retry: true };
 
   // Payment intent events are bare. They have absolutely no context about what they were for.
   // No products, no checkout sessions, etc. We'll have to look them up on success.
@@ -69,18 +55,16 @@ pub async fn payment_intent_succeeded_extractor(
     info!("payment_intent.success - is not successful !?");
 
     event_log_summary.should_ignore_retry = true;
-    
+
     return Ok(EnrichedWebhookEvent::from_actionless_log(event_log_summary));
   }
 
   info!("Payment intent succeeded. Looking up payment...");
 
-  let purchase = stripe_lookup_purchase_from_payment_intent_success(&payment_intent_id, stripe_client)
-      .await
-      .map_err(|err| {
-        error!("Error looking up purchase from payment intent {}: {:?}", &payment_intent_id, err);
-        StripeArtcraftWebhookError::ServerError("error looking up purchase".to_string())
-      })?;
+  let purchase = stripe_lookup_purchase_from_payment_intent_success(&payment_intent_id, stripe_client).await.map_err(|err| {
+    error!("Error looking up purchase from payment intent {}: {:?}", &payment_intent_id, err);
+    StripeArtcraftWebhookError::ServerError("error looking up purchase".to_string())
+  })?;
 
   if purchase.has_invoice {
     // Subscription purchase. Let `invoice.paid` event handle this instead.
@@ -98,29 +82,14 @@ pub async fn payment_intent_succeeded_extractor(
       event_log_summary.should_ignore_retry = true;
 
       return Ok(EnrichedWebhookEvent::from_actionless_log(event_log_summary));
-    }
+    },
     None => {
       error!("Could not find product for ID: {}", &purchase.product_id);
       return Err(StripeArtcraftWebhookError::ServerError("unknown product".to_string()));
-    }
+    },
   };
 
   info!("Payment intent is a wallet credits purchase.");
 
-  Ok(EnrichedWebhookEvent {
-    maybe_billing_action: Some(ArtcraftBillingAction::WalletCreditsPurchase(WalletCreditsPurchaseEvent {
-      owner_user_token: user_token,
-      maybe_wallet_token,
-      pack: credits_pack.clone(),
-      quantity: purchase.quantity,
-      ledger_event_ref: Some(payment_intent_id),
-      maybe_stripe_customer_id,
-      amount_usd_cents: payment_intent.amount_received,
-      is_production: payment_intent.livemode,
-      payment_occurred_at: DateTime::from_timestamp(payment_intent.created, 0).unwrap_or_else(Utc::now),
-      maybe_stripe_charge_id: payment_intent.latest_charge.as_ref().map(|charge| charge.id().to_string()),
-      maybe_stripe_event_id: Some(stripe_event_descriptor.stripe_event_id.clone()),
-    })),
-    webhook_event_log_summary: event_log_summary,
-  })
+  Ok(EnrichedWebhookEvent { maybe_billing_action: Some(ArtcraftBillingAction::WalletCreditsPurchase(WalletCreditsPurchaseEvent { owner_user_token: user_token, maybe_wallet_token, pack: credits_pack.clone(), quantity: purchase.quantity, ledger_event_ref: Some(payment_intent_id), maybe_stripe_customer_id, amount_usd_cents: payment_intent.amount_received, is_production: payment_intent.livemode, payment_occurred_at: DateTime::from_timestamp(payment_intent.created, 0).unwrap_or_else(Utc::now), maybe_stripe_charge_id: payment_intent.latest_charge.as_ref().map(|charge| charge.id().to_string()), maybe_stripe_event_id: Some(stripe_event_descriptor.stripe_event_id.clone()) })), webhook_event_log_summary: event_log_summary })
 }

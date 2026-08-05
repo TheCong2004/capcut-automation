@@ -4,9 +4,9 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug)]
 pub enum SelectOptionalRecordError {
   DatabaseError(sqlx::Error),
-  
+
   /// Manually constructed error from mapping raw results into a final struct
-  /// Specifically, this results from manually mapping an Option<T> to T, where T should have been non-nullable, 
+  /// Specifically, this results from manually mapping an Option<T> to T, where T should have been non-nullable,
   /// but sqlx couldn't enforce that at compile time.
   RequiredFieldWasNull(&'static str),
 }

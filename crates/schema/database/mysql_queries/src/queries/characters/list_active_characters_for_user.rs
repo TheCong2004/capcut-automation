@@ -31,11 +31,7 @@ pub struct ListActiveCharactersResult {
 }
 
 /// List active, non-deleted characters for a user, paginated by descending id.
-pub async fn list_active_characters_for_user(
-  user_token: &UserToken,
-  maybe_cursor: Option<u64>,
-  connection: &mut PoolConnection<MySql>,
-) -> Result<ListActiveCharactersResult, sqlx::Error> {
+pub async fn list_active_characters_for_user(user_token: &UserToken, maybe_cursor: Option<u64>, connection: &mut PoolConnection<MySql>) -> Result<ListActiveCharactersResult, sqlx::Error> {
   let fetch_limit = (DEFAULT_PAGE_SIZE + 1) as i64;
   let id_cursor = maybe_cursor.map(|c| c as i64).unwrap_or(i64::MAX);
 
@@ -68,19 +64,12 @@ LIMIT ?
     id_cursor,
     fetch_limit,
   )
-      .fetch_all(&mut **connection)
-      .await?;
+  .fetch_all(&mut **connection)
+  .await?;
 
   let has_next = rows.len() as u32 >= DEFAULT_PAGE_SIZE;
   let characters: Vec<CharacterListRow> = rows.into_iter().take(DEFAULT_PAGE_SIZE as usize).collect();
-  let next_cursor = if has_next {
-    characters.last().map(|c| c.id)
-  } else {
-    None
-  };
+  let next_cursor = if has_next { characters.last().map(|c| c.id) } else { None };
 
-  Ok(ListActiveCharactersResult {
-    characters,
-    next_cursor,
-  })
+  Ok(ListActiveCharactersResult { characters, next_cursor })
 }

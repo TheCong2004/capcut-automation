@@ -31,27 +31,18 @@ pub struct EditTtsResultRequest {
   pub creator_set_visibility: Option<String>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn edit_tts_inference_result_handler(
-  http_request: HttpRequest,
-  path: Path<EditTtsResultPathInfo>,
-  request: Json<EditTtsResultRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn edit_tts_inference_result_handler(http_request: HttpRequest, path: Path<EditTtsResultPathInfo>, request: Json<EditTtsResultRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // NB: Moderators can see deleted results.
@@ -59,20 +50,15 @@ pub async fn edit_tts_inference_result_handler(
   let show_deleted_results = user_session.can_delete_other_users_tts_results;
 
   // Moderators get to see all the fields.
-  let is_moderator = user_session.can_delete_other_users_tts_results
-      || user_session.can_edit_other_users_tts_models; // TODO: Not an exact permission fit
+  let is_moderator = user_session.can_delete_other_users_tts_results || user_session.can_edit_other_users_tts_models; // TODO: Not an exact permission fit
 
-  let inference_result_query_result = select_tts_result_by_token(
-    &path.token,
-    show_deleted_results,
-    &server_state.mysql_pool
-  ).await;
+  let inference_result_query_result = select_tts_result_by_token(&path.token, show_deleted_results, &server_state.mysql_pool).await;
 
   let inference_result = match inference_result_query_result {
     Err(e) => {
       warn!("query error: {:?}", e);
       return Err(CommonWebError::from_anyhow_error(e));
-    }
+    },
     Ok(None) => return Err(CommonWebError::NotFound),
     Ok(Some(inference_result)) => inference_result,
   };
@@ -93,33 +79,17 @@ pub async fn edit_tts_inference_result_handler(
   let mut creator_set_visibility = Visibility::Public;
 
   if let Some(visibility) = request.creator_set_visibility.as_deref() {
-    creator_set_visibility = Visibility::from_str(visibility)
-        .map_err(|_| CommonWebError::BadInputWithSimpleMessage("bad record visibility".to_string()))?;
+    creator_set_visibility = Visibility::from_str(visibility).map_err(|_| CommonWebError::BadInputWithSimpleMessage("bad record visibility".to_string()))?;
   }
 
   let ip_address = get_request_ip(&http_request);
 
-  let args = EditTtsResultArgs {
-    tts_result_token: &inference_result.tts_result_token,
-    creator_set_visibility,
-    role_dependent_fields: if is_author {
-      CreatorOrModFields::CreatorFields {
-        creator_ip_address: &ip_address,
-      }
-    } else {
-      CreatorOrModFields::ModFields {
-        mod_user_token: user_session.user_token.as_str(),
-      }
-    },
-    mysql_pool: &server_state.mysql_pool,
-  };
+  let args = EditTtsResultArgs { tts_result_token: &inference_result.tts_result_token, creator_set_visibility, role_dependent_fields: if is_author { CreatorOrModFields::CreatorFields { creator_ip_address: &ip_address } } else { CreatorOrModFields::ModFields { mod_user_token: user_session.user_token.as_str() } }, mysql_pool: &server_state.mysql_pool };
 
-  edit_tts_result(args)
-      .await
-      .map_err(|err| {
-        error!("Update TTS result DB error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  edit_tts_result(args).await.map_err(|err| {
+    error!("Update TTS result DB error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
   Ok(Json(SimpleGenericJsonSuccess { success: true }))
 }

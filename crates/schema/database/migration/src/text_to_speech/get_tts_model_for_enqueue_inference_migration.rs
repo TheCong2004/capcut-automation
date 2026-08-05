@@ -12,32 +12,18 @@ use tokens::tokens::model_weights::ModelWeightToken;
 
 /// Get TTS model
 /// This is for the tts inference page.
-pub async fn get_tts_model_for_enqueue_inference_migration(
-  token: &str,
-  mysql_connection: &mut PoolConnection<MySql>,
-  can_see_deleted: bool,
-) -> AnyhowResult<Option<TtsModelForEnqueueInferenceMigrationWrapper>> {
+pub async fn get_tts_model_for_enqueue_inference_migration(token: &str, mysql_connection: &mut PoolConnection<MySql>, can_see_deleted: bool) -> AnyhowResult<Option<TtsModelForEnqueueInferenceMigrationWrapper>> {
   // NB: This is temporary migration code as we switch from the `tts_models` table to the `model_weights` table.
   let use_weights_table = token.starts_with(ModelWeightToken::token_prefix());
 
   if use_weights_table {
     let token = ModelWeightToken::new_from_str(token);
 
-    let maybe_model = get_weight_for_legacy_tts_enqueue_with_connection(
-      &token,
-      can_see_deleted,
-      mysql_connection
-    ).await?;
+    let maybe_model = get_weight_for_legacy_tts_enqueue_with_connection(&token, can_see_deleted, mysql_connection).await?;
 
     Ok(maybe_model.map(|model| TtsModelForEnqueueInferenceMigrationWrapper::ModelWeight(model)))
-
   } else {
-
-    let maybe_model = get_tts_model_by_token_using_connection(
-      &token,
-      true,
-      mysql_connection
-    ).await?;
+    let maybe_model = get_tts_model_by_token_using_connection(&token, true, mysql_connection).await?;
 
     Ok(maybe_model.map(|model| TtsModelForEnqueueInferenceMigrationWrapper::LegacyTts(model)))
   }
@@ -68,7 +54,7 @@ impl TtsModelForEnqueueInferenceMigrationWrapper {
     }
   }
 
-  pub fn creator_set_visibility(&self) -> Visibility{
+  pub fn creator_set_visibility(&self) -> Visibility {
     match self {
       Self::LegacyTts(ref model) => model.creator_set_visibility,
       Self::ModelWeight(ref model) => model.creator_set_visibility,
@@ -82,7 +68,7 @@ impl TtsModelForEnqueueInferenceMigrationWrapper {
         WeightsType::Tacotron2 => InferenceJobType::Tacotron2,
         WeightsType::GptSoVits => InferenceJobType::GptSovits,
         _ => InferenceJobType::Tacotron2,
-      }
+      },
     }
   }
 }

@@ -1,4 +1,3 @@
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum WatermarkType {
   /// Show a FakeYou watermark

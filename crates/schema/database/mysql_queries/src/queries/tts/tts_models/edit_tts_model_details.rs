@@ -23,7 +23,7 @@ pub async fn edit_tts_model_details_as_author(
 ) -> Result<MySqlQueryResult, sqlx::Error> {
   // We need to store the IP address details.
   sqlx::query!(
-        r#"
+    r#"
 UPDATE tts_models
 SET
     maybe_default_pretrained_vocoder = ?,
@@ -40,20 +40,20 @@ SET
 WHERE token = ?
 LIMIT 1
         "#,
-      maybe_default_pretrained_vocoder.map(|v| v.to_str()),
-      maybe_custom_vocoder_token,
-      text_pipeline_type,
-      title,
-      description_markdown,
-      description_html,
-      ietf_language_tag,
-      ietf_primary_language_subtag,
-      &creator_set_visibility.to_str(),
-      author_ip_address,
-      tts_model_token,
-    )
-      .execute(mysql_pool)
-      .await
+    maybe_default_pretrained_vocoder.map(|v| v.to_str()),
+    maybe_custom_vocoder_token,
+    text_pipeline_type,
+    title,
+    description_markdown,
+    description_html,
+    ietf_language_tag,
+    ietf_primary_language_subtag,
+    &creator_set_visibility.to_str(),
+    author_ip_address,
+    tts_model_token,
+  )
+  .execute(mysql_pool)
+  .await
 }
 
 pub async fn edit_tts_model_details_as_mod(
@@ -73,7 +73,7 @@ pub async fn edit_tts_model_details_as_mod(
 ) -> Result<MySqlQueryResult, sqlx::Error> {
   // We need to store the moderator details.
   sqlx::query!(
-        r#"
+    r#"
 UPDATE tts_models
 SET
     maybe_default_pretrained_vocoder = ?,
@@ -90,18 +90,18 @@ SET
 WHERE token = ?
 LIMIT 1
         "#,
-      maybe_default_pretrained_vocoder.map(|v| v.to_str()),
-      maybe_custom_vocoder_token,
-      text_pipeline_type,
-      title,
-      description_markdown,
-      description_html,
-      ietf_language_tag,
-      ietf_primary_language_subtag,
-      &creator_set_visibility.to_str(),
-      moderator_user_token,
-      tts_model_token,
-    )
-      .execute(mysql_pool)
-      .await
+    maybe_default_pretrained_vocoder.map(|v| v.to_str()),
+    maybe_custom_vocoder_token,
+    text_pipeline_type,
+    title,
+    description_markdown,
+    description_html,
+    ietf_language_tag,
+    ietf_primary_language_subtag,
+    &creator_set_visibility.to_str(),
+    moderator_user_token,
+    tts_model_token,
+  )
+  .execute(mysql_pool)
+  .await
 }

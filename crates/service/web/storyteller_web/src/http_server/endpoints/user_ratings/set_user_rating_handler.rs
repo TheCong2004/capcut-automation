@@ -66,11 +66,7 @@ pub struct SetUserRatingResponse {
       (status = 500, description = "Server error", body = CommonWebError),
   ),
 )]
-pub async fn set_user_rating_handler(
-  http_request: HttpRequest,
-  request: Json<SetUserRatingRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<SetUserRatingResponse>, CommonWebError>
-{
+pub async fn set_user_rating_handler(http_request: HttpRequest, request: Json<SetUserRatingRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SetUserRatingResponse>, CommonWebError> {
   // NB(bt,2023-12-14): Kasisnu found that we're getting entity type mismatches in production. Apart from
   // querying the database for entity existence, this is the next best way to prevent incorrect comment
   // attachment. This is a bit of a bad process, though, since the token types are supposed to be opaque.
@@ -92,151 +88,107 @@ pub async fn set_user_rating_handler(
     return Err(CommonWebError::BadInputWithSimpleMessage("invalid token prefix".to_string()));
   }
 
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        error!("Could not acquire DB pool: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    error!("Could not acquire DB pool: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       info!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   let ip_address = get_request_ip(&http_request);
 
-  let entity= match request.entity_type {
+  let entity = match request.entity_type {
     UserRatingEntityType::MediaFile => UserRatingEntity::MediaFile(MediaFileToken::new_from_str(&request.entity_token)),
     UserRatingEntityType::ModelWeight => UserRatingEntity::ModelWeight(ModelWeightToken::new_from_str(&request.entity_token)),
 
-    UserRatingEntityType::TtsModel => UserRatingEntity::TtsModel(
-      TtsModelToken::new_from_str(&request.entity_token)),
+    UserRatingEntityType::TtsModel => UserRatingEntity::TtsModel(TtsModelToken::new_from_str(&request.entity_token)),
 
-    UserRatingEntityType::W2lTemplate => UserRatingEntity::W2lTemplate(
-      W2lTemplateToken::new_from_str(&request.entity_token)),
+    UserRatingEntityType::W2lTemplate => UserRatingEntity::W2lTemplate(W2lTemplateToken::new_from_str(&request.entity_token)),
 
     // TODO: We'll handle ratings of more types in the future.
-    UserRatingEntityType::W2lResult | UserRatingEntityType::TtsResult =>
-      return Err(CommonWebError::BadInputWithSimpleMessage("type not yet supported".to_string())),
+    UserRatingEntityType::W2lResult | UserRatingEntityType::TtsResult => return Err(CommonWebError::BadInputWithSimpleMessage("type not yet supported".to_string())),
   };
 
-  let mut transaction = mysql_connection.begin().await
-      .map_err(|err| {
-        error!("error creating transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("error creating transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let maybe_existing_user_rating = get_user_rating_transactional_locking(
-    &user_session.user_token,
-    &entity,
-    &mut *transaction,
-  ).await
-      .map_err(|err| {
-        error!("error getting user rating: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let maybe_existing_user_rating = get_user_rating_transactional_locking(&user_session.user_token, &entity, &mut *transaction).await.map_err(|err| {
+    error!("error getting user rating: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let _r = upsert_user_rating(Args {
-    user_token: &user_session.user_token,
-    user_rating_entity: &entity,
-    user_rating_value: request.rating_value,
-    ip_address: &ip_address,
-    mysql_executor: &mut *transaction,
-    phantom: Default::default(),
-  })
-      .await
-      .map_err(|err| {
-        error!("Error upserting rating: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let _r = upsert_user_rating(Args { user_token: &user_session.user_token, user_rating_entity: &entity, user_rating_value: request.rating_value, ip_address: &ip_address, mysql_executor: &mut *transaction, phantom: Default::default() }).await.map_err(|err| {
+    error!("Error upserting rating: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let existing_rating_value = maybe_existing_user_rating
-      .map(|rating| rating.rating_value)
-      .unwrap_or(UserRatingValue::Neutral);
+  let existing_rating_value = maybe_existing_user_rating.map(|rating| rating.rating_value).unwrap_or(UserRatingValue::Neutral);
 
-  let mut maybe_rating_action =
-      match (existing_rating_value, request.rating_value) {
-        (UserRatingValue::Neutral, UserRatingValue::Neutral) => None,
-        (UserRatingValue::Neutral, UserRatingValue::Positive) => Some(RatingsAction::NeutralToPositive),
-        (UserRatingValue::Neutral, UserRatingValue::Negative) => Some(RatingsAction::NeutralToNegative),
-        (UserRatingValue::Positive, UserRatingValue::Neutral) => Some(RatingsAction::PositiveToNeutral),
-        (UserRatingValue::Positive, UserRatingValue::Positive) => None,
-        (UserRatingValue::Positive, UserRatingValue::Negative) => Some(RatingsAction::PositiveToNegative),
-        (UserRatingValue::Negative, UserRatingValue::Neutral) => Some(RatingsAction::NegativeToNeutral),
-        (UserRatingValue::Negative, UserRatingValue::Positive) => Some(RatingsAction::NeutralToPositive),
-        (UserRatingValue::Negative, UserRatingValue::Negative) => None,
-      };
+  let mut maybe_rating_action = match (existing_rating_value, request.rating_value) {
+    (UserRatingValue::Neutral, UserRatingValue::Neutral) => None,
+    (UserRatingValue::Neutral, UserRatingValue::Positive) => Some(RatingsAction::NeutralToPositive),
+    (UserRatingValue::Neutral, UserRatingValue::Negative) => Some(RatingsAction::NeutralToNegative),
+    (UserRatingValue::Positive, UserRatingValue::Neutral) => Some(RatingsAction::PositiveToNeutral),
+    (UserRatingValue::Positive, UserRatingValue::Positive) => None,
+    (UserRatingValue::Positive, UserRatingValue::Negative) => Some(RatingsAction::PositiveToNegative),
+    (UserRatingValue::Negative, UserRatingValue::Neutral) => Some(RatingsAction::NegativeToNeutral),
+    (UserRatingValue::Negative, UserRatingValue::Positive) => Some(RatingsAction::NeutralToPositive),
+    (UserRatingValue::Negative, UserRatingValue::Negative) => None,
+  };
 
   if let Some(rating_action) = maybe_rating_action {
-
     // NB: Not all rateable things have stats (eg. deprecated record types don't have stats).
-    let maybe_stats_entity_token =
-        StatsEntityToken::from_rating_entity_type_and_token(request.entity_type, &request.entity_token);
+    let maybe_stats_entity_token = StatsEntityToken::from_rating_entity_type_and_token(request.entity_type, &request.entity_token);
 
     if let Some(stats_entity_token) = maybe_stats_entity_token {
-      upsert_entity_stats_on_ratings_event(UpsertEntityStatsArgs {
-        stats_entity_token: &stats_entity_token,
-        action: rating_action,
-        mysql_executor: &mut *transaction,
-        phantom: Default::default(),
-      })
-          .await
-          .map_err(|err| {
-            error!("Error upserting entity stats: {:?}", err);
-            CommonWebError::from_anyhow_error(err)
-          })?;
+      upsert_entity_stats_on_ratings_event(UpsertEntityStatsArgs { stats_entity_token: &stats_entity_token, action: rating_action, mysql_executor: &mut *transaction, phantom: Default::default() }).await.map_err(|err| {
+        error!("Error upserting entity stats: {:?}", err);
+        CommonWebError::from_anyhow_error(err)
+      })?;
     }
   }
 
-  transaction.commit().await
-      .map_err(|err| {
-        error!("error committing transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  transaction.commit().await.map_err(|err| {
+    error!("error committing transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // NB: Legacy
   match request.entity_type {
     UserRatingEntityType::TtsModel => {
       let token = TtsModelToken::new_from_str(&request.entity_token);
-      update_tts_model_ratings(&token, &mut mysql_connection)
-          .await
-          .map_err(|err| {
-            error!("Error updating TTS rating summary stats: {:?}", err);
-            CommonWebError::from_anyhow_error(err)
-          })?;
-    }
+      update_tts_model_ratings(&token, &mut mysql_connection).await.map_err(|err| {
+        error!("Error updating TTS rating summary stats: {:?}", err);
+        CommonWebError::from_anyhow_error(err)
+      })?;
+    },
     _ => {
       // TODO
-    }
+    },
   }
 
   // TODO(bt,2024-01-04): The methods of stats collection here differs.
   //  Update this to return directly from the stats table instead of doing a COUNT(*).
 
-  let count = get_total_user_rating_count_for_entity(&entity, &mut mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error getting total user rating count for entity: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  let count = get_total_user_rating_count_for_entity(&entity, &mut mysql_connection).await.map_err(|err| {
+    error!("Error getting total user rating count for entity: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  let response = SetUserRatingResponse {
-    success: true,
-    new_positive_rating_count_for_entity: count.positive_count,
-  };
+  let response = SetUserRatingResponse { success: true, new_positive_rating_count_for_entity: count.positive_count };
 
   Ok(Json(response))
 }

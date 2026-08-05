@@ -41,18 +41,7 @@ pub async fn delete_all_files(username: &str, mysql: &Pool<MySql>) -> AnyhowResu
   loop {
     info!("Querying page {page_index} of files...");
 
-    let media_files = list_media_files_for_user(ListMediaFileForUserArgs {
-      username,
-      maybe_filter_media_types: None,
-      maybe_filter_media_classes: None,
-      maybe_filter_engine_categories: None,
-      include_user_uploads: true,
-      page_size: 100,
-      page_index,
-      sort_ascending: false,
-      view_as: ViewAs::Moderator,
-      mysql_pool: &mysql,
-    }).await?;
+    let media_files = list_media_files_for_user(ListMediaFileForUserArgs { username, maybe_filter_media_types: None, maybe_filter_media_classes: None, maybe_filter_engine_categories: None, include_user_uploads: true, page_size: 100, page_index, sort_ascending: false, view_as: ViewAs::Moderator, mysql_pool: &mysql }).await?;
 
     if media_files.records.is_empty() {
       break;

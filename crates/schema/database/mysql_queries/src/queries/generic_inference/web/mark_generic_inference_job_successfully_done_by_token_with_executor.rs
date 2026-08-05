@@ -17,23 +17,17 @@ pub struct MarkGenericInferenceJobSuccessfullyDoneByTokenWithExecutorArgs<'a, E>
 /// Mark a job complete using an arbitrary executor. Pass `&mut *transaction`
 /// as the executor to perform the write inside an existing transaction (e.g.
 /// right after a `SELECT ... FOR UPDATE` re-check, to finalize exactly once).
-pub async fn mark_generic_inference_job_successfully_done_by_token_with_executor<'e, 'a, E>(
-  args: MarkGenericInferenceJobSuccessfullyDoneByTokenWithExecutorArgs<'a, E>,
-) -> Result<(), sqlx::Error>
+pub async fn mark_generic_inference_job_successfully_done_by_token_with_executor<'e, 'a, E>(args: MarkGenericInferenceJobSuccessfullyDoneByTokenWithExecutorArgs<'a, E>) -> Result<(), sqlx::Error>
 where
   E: Executor<'e, Database = MySql>,
 {
   // NB: MySql's unsigned int (32 bits) can store integers up to 4,294,967,295.
   // Given milliseconds, this is ~49.71 days, which should be plenty for us.
-  let truncated_total_job_execution_millis = args.total_job_duration
-      .map(|duration| duration.as_millis() as u32)
-      .unwrap_or(0);
-  let truncated_inference_execution_millis = args.inference_duration
-      .map(|duration| duration.as_millis() as u32)
-      .unwrap_or(0);
+  let truncated_total_job_execution_millis = args.total_job_duration.map(|duration| duration.as_millis() as u32).unwrap_or(0);
+  let truncated_inference_execution_millis = args.inference_duration.map(|duration| duration.as_millis() as u32).unwrap_or(0);
 
   sqlx::query!(
-        r#"
+    r#"
 UPDATE generic_inference_jobs
 SET
   status = "complete_success",
@@ -47,14 +41,14 @@ SET
   successfully_completed_at = NOW()
 WHERE token = ?
         "#,
-        args.maybe_entity_type,
-        args.maybe_entity_token,
-        truncated_total_job_execution_millis,
-        truncated_inference_execution_millis,
-        args.token.as_str(),
-    )
-      .execute(args.executor)
-      .await?;
+    args.maybe_entity_type,
+    args.maybe_entity_token,
+    truncated_total_job_execution_millis,
+    truncated_inference_execution_millis,
+    args.token.as_str(),
+  )
+  .execute(args.executor)
+  .await?;
 
   Ok(())
 }

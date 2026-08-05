@@ -15,11 +15,10 @@ struct RawResult {
   record_count: i64,
 }
 
-pub async fn count_model_use_using_media_files_on_date<'e, 'c, E>(
-  mysql_executor: E,
-  token: &ModelWeightToken,
-  date: NaiveDate,
-) -> AnyhowResult<ModelUseCount> where E: 'e + Executor<'c, Database=MySql> {
+pub async fn count_model_use_using_media_files_on_date<'e, 'c, E>(mysql_executor: E, token: &ModelWeightToken, date: NaiveDate) -> AnyhowResult<ModelUseCount>
+where
+  E: 'e + Executor<'c, Database = MySql>,
+{
   // NB(1): This query supports **MODEL WEIGHT TOKENS** only as input parameters,
   //       but it will still include the count of the jobs that are being run by
   //       robots that are still using the old-format "TM:" prefixed tts_models
@@ -30,8 +29,8 @@ pub async fn count_model_use_using_media_files_on_date<'e, 'c, E>(
   //        Basically it requires an interval of timestamps:
   //        (f.created_at >= CURDATE() AND f.created_at < CURDATE() + INTERVAL 1 DAY)
   let query = sqlx::query_as!(
-      RawResult,
-        r#"
+    RawResult,
+    r#"
 SELECT
   COUNT(*) as record_count
   FROM media_files as f
@@ -43,15 +42,13 @@ SELECT
   AND f.created_at >= ?
   AND f.created_at < ? + INTERVAL 1 DAY
         "#,
-      token.as_str(),
-      token.as_str(),
-      date,
-      date,
-    );
+    token.as_str(),
+    token.as_str(),
+    date,
+    date,
+  );
 
   let result = query.fetch_one(mysql_executor).await?;
 
-  Ok(ModelUseCount {
-    record_count: try_i64_to_u64_or_min(result.record_count),
-  })
+  Ok(ModelUseCount { record_count: try_i64_to_u64_or_min(result.record_count) })
 }

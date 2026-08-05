@@ -24,8 +24,6 @@ impl ResponseError for DisabledError {
     // NB: I'm setting a string error because I mistakenly got caught by this in local dev
     // and couldn't figure out the issue for a bit. At least I can grep for this string.
     // However, I need to balance this requirement with not cluing in those that are banned.
-    HttpResponseBuilder::new(self.status_code())
-        .append_header((CONTENT_TYPE, ContentType::json()))
-        .body(r#"{"success": false, "error_message": "ERR128: too many requests"}"#)
+    HttpResponseBuilder::new(self.status_code()).append_header((CONTENT_TYPE, ContentType::json())).body(r#"{"success": false, "error_message": "ERR128: too many requests"}"#)
   }
 }

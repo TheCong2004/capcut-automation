@@ -26,15 +26,8 @@ pub struct DetectLocaleResponse {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn detect_locale_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<DetectLocaleResponse>, CommonWebError> {
+pub async fn detect_locale_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<DetectLocaleResponse>, CommonWebError> {
   let locale = get_user_locale(&http_request);
 
-  Ok(Json(DetectLocaleResponse {
-    success: true,
-    full_language_tags: locale.full_language_tags,
-    language_codes: locale.language_codes,
-  }))
+  Ok(Json(DetectLocaleResponse { success: true, full_language_tags: locale.full_language_tags, language_codes: locale.language_codes }))
 }

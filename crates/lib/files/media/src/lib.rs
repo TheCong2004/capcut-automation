@@ -14,12 +14,11 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
-pub (crate) mod decode_webm_opus_info;
-pub (crate) mod open_media_source_stream;
+pub(crate) mod decode_webm_opus_info;
+pub(crate) mod open_media_source_stream;
 
 pub mod decode_basic_audio_info;

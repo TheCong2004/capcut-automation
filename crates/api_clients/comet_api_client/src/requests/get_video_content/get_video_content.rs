@@ -78,20 +78,12 @@ impl CometVideoFailureReason {
 /// NB: For tasks that are merely still running, the message reports the
 /// in-flight status the same way — call this for tasks the poll endpoint
 /// already reported as failed.
-pub async fn probe_video_failure_reason(
-  args: ProbeVideoFailureReasonArgs<'_>,
-) -> Result<Option<CometVideoFailureReason>, CometError> {
+pub async fn probe_video_failure_reason(args: ProbeVideoFailureReasonArgs<'_>) -> Result<Option<CometVideoFailureReason>, CometError> {
   let url = format!("{COMET_API_BASE_URL}/v1/videos/{}/content", args.task_id);
 
-  let client = reqwest::Client::builder()
-    .build()
-    .map_err(CometClientError::ReqwestClientError)?;
+  let client = reqwest::Client::builder().build().map_err(CometClientError::ReqwestClientError)?;
 
-  let response = client.get(&url)
-    .bearer_auth(args.api_key.as_str())
-    .send()
-    .await
-    .map_err(CometGenericApiError::ReqwestError)?;
+  let response = client.get(&url).bearer_auth(args.api_key.as_str()).send().await.map_err(CometGenericApiError::ReqwestError)?;
 
   let status_code = response.status();
 
@@ -100,17 +92,11 @@ pub async fn probe_video_failure_reason(
     return Ok(None);
   }
 
-  let maybe_request_id = response.headers()
-    .get("x-cometapi-request-id")
-    .and_then(|value| value.to_str().ok())
-    .map(|value| value.to_string());
+  let maybe_request_id = response.headers().get("x-cometapi-request-id").and_then(|value| value.to_str().ok()).map(|value| value.to_string());
 
-  let body = response.text()
-    .await
-    .map_err(CometGenericApiError::ReqwestError)?;
+  let body = response.text().await.map_err(CometGenericApiError::ReqwestError)?;
 
-  let raw: VideoContentErrorRawResponse = serde_json::from_str(&body)
-    .map_err(|err| CometGenericApiError::SerdeResponseParseErrorWithBody(err, body.clone()))?;
+  let raw: VideoContentErrorRawResponse = serde_json::from_str(&body).map_err(|err| CometGenericApiError::SerdeResponseParseErrorWithBody(err, body.clone()))?;
 
   let mut reason = failure_reason_from_message(raw.error.message);
   reason.maybe_error_type = raw.error.error_type;
@@ -122,18 +108,9 @@ pub async fn probe_video_failure_reason(
 }
 
 fn failure_reason_from_message(raw_message: String) -> CometVideoFailureReason {
-  let maybe_underlying_status = raw_message
-    .split(CURRENT_STATUS_MARKER)
-    .nth(1)
-    .map(|status| status.trim().trim_end_matches('.').to_string())
-    .filter(|status| !status.is_empty());
+  let maybe_underlying_status = raw_message.split(CURRENT_STATUS_MARKER).nth(1).map(|status| status.trim().trim_end_matches('.').to_string()).filter(|status| !status.is_empty());
 
-  CometVideoFailureReason {
-    raw_message,
-    maybe_underlying_status,
-    maybe_error_type: None,
-    maybe_request_id: None,
-  }
+  CometVideoFailureReason { raw_message, maybe_underlying_status, maybe_error_type: None, maybe_request_id: None }
 }
 
 #[cfg(test)]
@@ -142,8 +119,7 @@ mod tests {
 
   #[test]
   fn extracts_violation_status_from_real_message() {
-    let reason = failure_reason_from_message(
-      "Task is not completed yet, current status: VIOLATION".to_string());
+    let reason = failure_reason_from_message("Task is not completed yet, current status: VIOLATION".to_string());
 
     assert_eq!(reason.maybe_underlying_status.as_deref(), Some("VIOLATION"));
     assert!(reason.is_content_violation());
@@ -151,8 +127,7 @@ mod tests {
 
   #[test]
   fn extracts_other_statuses() {
-    let reason = failure_reason_from_message(
-      "Task is not completed yet, current status: IN_PROGRESS".to_string());
+    let reason = failure_reason_from_message("Task is not completed yet, current status: IN_PROGRESS".to_string());
 
     assert_eq!(reason.maybe_underlying_status.as_deref(), Some("IN_PROGRESS"));
     assert!(!reason.is_content_violation());

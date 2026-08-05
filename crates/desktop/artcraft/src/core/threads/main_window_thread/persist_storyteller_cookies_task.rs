@@ -15,22 +15,15 @@ use tauri_plugin_http::Http;
 
 const STORYTELLER_ROOT_COOKIE_URL_STR: &str = "https://api.storyteller.ai/";
 
-static STORYTELLER_ROOT_COOKIE_URL: Lazy<Url> = Lazy::new(|| {
-  Url::parse(STORYTELLER_ROOT_COOKIE_URL_STR).expect("URL should parse")
-});
+static STORYTELLER_ROOT_COOKIE_URL: Lazy<Url> = Lazy::new(|| Url::parse(STORYTELLER_ROOT_COOKIE_URL_STR).expect("URL should parse"));
 
-const AVT_COOKIE_NAME : &str = "visitor";
-const SESSION_COOKIE_NAME : &str = "session";
+const AVT_COOKIE_NAME: &str = "visitor";
+const SESSION_COOKIE_NAME: &str = "session";
 
 /// There's some kind of race condition that we need to wait for before inspecting cookies.
 const RACE_CONDITION_WAIT_TIME: TimeDelta = TimeDelta::milliseconds(5000);
 
-pub async fn persist_storyteller_cookies_task(
-  app: &AppHandle,
-  storyteller_credential_manager: &StorytellerCredentialManager,
-  app_startup_time: &AppStartupTime,
-) -> AnyhowResult<()> {
-
+pub async fn persist_storyteller_cookies_task(app: &AppHandle, storyteller_credential_manager: &StorytellerCredentialManager, app_startup_time: &AppStartupTime) -> AnyhowResult<()> {
   //if app_startup_time.time_delta_since() < RACE_CONDITION_WAIT_TIME {
   //  // NB:     There's an issue when the "main window thread" inquires about the
   //  //     webview cookies shortly after app startup. When it attempts to dump the
@@ -41,32 +34,29 @@ pub async fn persist_storyteller_cookies_task(
   //}
 
   let maybe_http = app.try_state::<Http>();
-  
+
   let http = match maybe_http {
     None => {
       error!("No HTTP plugin found");
       return Err(anyhow!("No HTTP plugin found"));
-    }
+    },
     Some(http) => http,
   };
-  
+
   match http.cookies_jar.store.lock() {
     Err(err) => {
       error!("Failed to lock cookie jar: {:?}", err);
       return Err(anyhow!("Failed to lock cookie jar"));
-    }
+    },
     Ok(cookie_jar) => {
       sync_tauri_credentials(&cookie_jar, storyteller_credential_manager)?;
-    }
+    },
   }
-  
+
   Ok(())
 }
 
-fn sync_tauri_credentials(
-  cookie_store: &CookieStore,
-  storyteller_credential_manager: &StorytellerCredentialManager,
-) -> AnyhowResult<()> {
+fn sync_tauri_credentials(cookie_store: &CookieStore, storyteller_credential_manager: &StorytellerCredentialManager) -> AnyhowResult<()> {
   let current_http_plugin_credentials = get_credentials_from_cookie_store(cookie_store)?;
 
   let mut replace_credentials = true;
@@ -78,14 +68,14 @@ fn sync_tauri_credentials(
       replace_credentials = false;
     }
   }
-  
+
   if replace_credentials {
     info!("Syncing ArtCraft credentials ...");
     storyteller_credential_manager.set_credentials(&current_http_plugin_credentials)?;
     // NB: tauri-plugin-http stores the credentials on disk, so we can defer to that for now.
     //storyteller_credential_manager.persist_all_to_disk()?;
   }
-  
+
   Ok(())
 }
 
@@ -101,8 +91,5 @@ pub fn get_credentials_from_cookie_store(cookie_jar: &CookieStore) -> AnyhowResu
     }
   }
 
-  Ok(StorytellerCredentialSet::initialize(
-    avt_cookie,
-    session_cookie,
-  ))
+  Ok(StorytellerCredentialSet::initialize(avt_cookie, session_cookie))
 }

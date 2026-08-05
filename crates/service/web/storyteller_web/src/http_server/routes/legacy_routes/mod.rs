@@ -1,4 +1,4 @@
-pub (super) mod add_legacy_routes;
+pub(super) mod add_legacy_routes;
 mod beta_key_routes;
 mod desktop_vc_app_routes;
 mod image_studio_routes;

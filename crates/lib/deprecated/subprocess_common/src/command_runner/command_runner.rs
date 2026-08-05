@@ -42,13 +42,9 @@ pub struct CommandRunner {
 }
 
 impl CommandRunner {
-
   /// Run the command with the `subprocess` crate utilities
   pub fn run_with_subprocess(&self, args: RunAsSubprocessArgs<'_>) -> CommandExitStatus {
-    self.do_run_with_subprocess(args)
-        .unwrap_or_else(|err| {
-          CommandExitStatus::FailureWithReason { reason: format!("error: {:?}", err) }
-        })
+    self.do_run_with_subprocess(args).unwrap_or_else(|err| CommandExitStatus::FailureWithReason { reason: format!("error: {:?}", err) })
   }
 
   fn do_run_with_subprocess(&self, args: RunAsSubprocessArgs<'_>) -> AnyhowResult<CommandExitStatus> {
@@ -61,11 +57,7 @@ impl CommandRunner {
       ExecutableOrShellCommand::ShShellCommand(_) => "sh",
     };
 
-    let command_parts = [
-      shell,
-      "-c",
-      &command
-    ];
+    let command_parts = [shell, "-c", &command];
 
     let mut env_vars = Vec::new();
 
@@ -76,10 +68,7 @@ impl CommandRunner {
       //if IGNORED_ENVIRONMENT_VARS.contains(&env_key) {
       //  continue;
       //}
-      env_vars.push((
-        OsString::from(env_key),
-        OsString::from(env_value),
-      ));
+      env_vars.push((OsString::from(env_key), OsString::from(env_value)));
     }
 
     let mut config = PopenConfig::default();
@@ -89,29 +78,29 @@ impl CommandRunner {
     }
 
     match args.stderr {
-      StreamRedirection::None => {} // Inherit defaults.
+      StreamRedirection::None => {}, // Inherit defaults.
       StreamRedirection::Pipe => {
         config.stderr = Redirection::Pipe;
-      }
+      },
       StreamRedirection::File(FileOrCreate::NewFileWithName(stderr_output_file)) => {
         info!("stderr will be written to file: {:?}", stderr_output_file);
 
         let stderr_file = File::create(stderr_output_file)?;
         config.stderr = Redirection::File(stderr_file);
-      }
+      },
     }
 
     match args.stdout {
-      StreamRedirection::None => {} // Inherit defaults.
+      StreamRedirection::None => {}, // Inherit defaults.
       StreamRedirection::Pipe => {
         config.stdout = Redirection::Pipe;
-      }
+      },
       StreamRedirection::File(FileOrCreate::NewFileWithName(stdout_output_file)) => {
         info!("stdout will be written to file: {:?}", stdout_output_file);
 
         let stdout_file = File::create(stdout_output_file)?;
         config.stdout = Redirection::File(stdout_file);
-      }
+      },
     }
 
     let mut popen_handle = Popen::create(&command_parts, config)?;
@@ -123,11 +112,11 @@ impl CommandRunner {
         let exit_status = popen_handle.wait()?;
         info!("Subprocess exit status: {:?}", exit_status);
         return Ok(CommandExitStatus::from_exit_status(exit_status));
-      }
+      },
       Some(timeout) => {
         info!("Executing with timeout: {:?}", &timeout);
         popen_handle.wait_timeout(timeout)?
-      }
+      },
     };
 
     match maybe_exit_status {
@@ -136,11 +125,11 @@ impl CommandRunner {
         info!("Subprocess didn't end after timeout; terminating...");
         let _r = popen_handle.terminate()?;
         Ok(CommandExitStatus::Timeout)
-      }
+      },
       Some(exit_status) => {
         info!("Subprocess timed wait exit status: {:?}", exit_status);
         Ok(CommandExitStatus::from_exit_status(exit_status))
-      }
+      },
     }
   }
 
@@ -162,15 +151,15 @@ impl CommandRunner {
       ExecutableOrShellCommand::Executable(ref executable) => {
         command.push_str(&path_to_string(executable));
         command.push_str(" ");
-      }
+      },
       ExecutableOrShellCommand::ShShellCommand(ref cmd) => {
         command.push_str(cmd);
         command.push_str(" ");
-      }
+      },
       ExecutableOrShellCommand::BashShellCommand(ref cmd) => {
         command.push_str(cmd);
         command.push_str(" ");
-      }
+      },
     }
 
     let command_arguments = command_args.to_command_string();
@@ -204,16 +193,9 @@ mod tests {
 
   #[test]
   fn simple_executable() {
-    let runner = CommandRunner {
-      executable_or_command: ExecutableOrShellCommand::Executable(PathBuf::from("blender")),
-      maybe_execution_directory: None,
-      env_var_policy: EnvVarPolicy::CopyNone,
-      maybe_virtual_env_activation_command: None,
-      maybe_docker_options: None,
-      maybe_execution_timeout: None,
-    };
+    let runner = CommandRunner { executable_or_command: ExecutableOrShellCommand::Executable(PathBuf::from("blender")), maybe_execution_directory: None, env_var_policy: EnvVarPolicy::CopyNone, maybe_virtual_env_activation_command: None, maybe_docker_options: None, maybe_execution_timeout: None };
 
-    let ptr : Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
+    let ptr: Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
     let result = runner.build_command_string(&ptr);
 
     assert_eq!(&result, r#"blender -a --foo --bar=baz --bin="blah blah""#);
@@ -221,16 +203,9 @@ mod tests {
 
   #[test]
   fn simple_command() {
-    let runner = CommandRunner {
-      executable_or_command: ExecutableOrShellCommand::BashShellCommand("python3.6 inference.py".to_string()),
-      maybe_execution_directory: None,
-      env_var_policy: EnvVarPolicy::CopyNone,
-      maybe_virtual_env_activation_command: None,
-      maybe_docker_options: None,
-      maybe_execution_timeout: None,
-    };
+    let runner = CommandRunner { executable_or_command: ExecutableOrShellCommand::BashShellCommand("python3.6 inference.py".to_string()), maybe_execution_directory: None, env_var_policy: EnvVarPolicy::CopyNone, maybe_virtual_env_activation_command: None, maybe_docker_options: None, maybe_execution_timeout: None };
 
-    let ptr : Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
+    let ptr: Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
     let result = runner.build_command_string(&ptr);
 
     assert_eq!(&result, r#"python3.6 inference.py -a --foo --bar=baz --bin="blah blah""#);
@@ -238,16 +213,9 @@ mod tests {
 
   #[test]
   fn executable_with_directory() {
-    let runner = CommandRunner {
-      executable_or_command: ExecutableOrShellCommand::Executable(PathBuf::from("blender")),
-      maybe_execution_directory: Some(PathBuf::from("/usr/local/bin")),
-      env_var_policy: EnvVarPolicy::CopyNone,
-      maybe_virtual_env_activation_command: None,
-      maybe_docker_options: None,
-      maybe_execution_timeout: None,
-    };
+    let runner = CommandRunner { executable_or_command: ExecutableOrShellCommand::Executable(PathBuf::from("blender")), maybe_execution_directory: Some(PathBuf::from("/usr/local/bin")), env_var_policy: EnvVarPolicy::CopyNone, maybe_virtual_env_activation_command: None, maybe_docker_options: None, maybe_execution_timeout: None };
 
-    let ptr : Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
+    let ptr: Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
     let result = runner.build_command_string(&ptr);
 
     assert_eq!(&result, r#"cd /usr/local/bin && blender -a --foo --bar=baz --bin="blah blah""#);
@@ -255,16 +223,9 @@ mod tests {
 
   #[test]
   fn command_with_venv() {
-    let runner = CommandRunner {
-      executable_or_command: ExecutableOrShellCommand::BashShellCommand("python3.6 inference.py".to_string()),
-      maybe_execution_directory: None,
-      env_var_policy: EnvVarPolicy::CopyNone,
-      maybe_virtual_env_activation_command: Some("source venv/bin/activate".to_string()),
-      maybe_docker_options: None,
-      maybe_execution_timeout: None,
-    };
+    let runner = CommandRunner { executable_or_command: ExecutableOrShellCommand::BashShellCommand("python3.6 inference.py".to_string()), maybe_execution_directory: None, env_var_policy: EnvVarPolicy::CopyNone, maybe_virtual_env_activation_command: Some("source venv/bin/activate".to_string()), maybe_docker_options: None, maybe_execution_timeout: None };
 
-    let ptr : Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
+    let ptr: Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
     let result = runner.build_command_string(&ptr);
 
     assert_eq!(&result, r#"source venv/bin/activate && python3.6 inference.py -a --foo --bar=baz --bin="blah blah""#);
@@ -273,21 +234,9 @@ mod tests {
   // TODO(bt, 2024-01-27): The quotes are broken. Fix this!!
   #[test]
   fn execute_with_docker() {
-    let runner = CommandRunner {
-      executable_or_command: ExecutableOrShellCommand::Executable(PathBuf::from("blender")),
-      maybe_execution_directory: None,
-      env_var_policy: EnvVarPolicy::CopyNone,
-      maybe_virtual_env_activation_command: None,
-      maybe_docker_options: Some(DockerOptions {
-        image_name: "ABCDE".to_string(),
-        maybe_bind_mount: None,
-        maybe_environment_variables: None,
-        maybe_gpu: Some(DockerGpu::All),
-      }),
-      maybe_execution_timeout: None,
-    };
+    let runner = CommandRunner { executable_or_command: ExecutableOrShellCommand::Executable(PathBuf::from("blender")), maybe_execution_directory: None, env_var_policy: EnvVarPolicy::CopyNone, maybe_virtual_env_activation_command: None, maybe_docker_options: Some(DockerOptions { image_name: "ABCDE".to_string(), maybe_bind_mount: None, maybe_environment_variables: None, maybe_gpu: Some(DockerGpu::All) }), maybe_execution_timeout: None };
 
-    let ptr : Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
+    let ptr: Box<&dyn CommandArgs> = Box::new(&BlenderArgs {});
     let result = runner.build_command_string(&ptr);
 
     // TODO(bt, 2024-01-27): The quotes are broken. Fix this!!

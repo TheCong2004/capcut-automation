@@ -9,7 +9,7 @@ pub async fn classify_http_error_response(response: reqwest::Response) -> Runway
     Ok(text) => text,
     Err(err) => return RunwayMlError::Api(ApiError::ReqwestError(err)),
   };
-  
+
   // TODO: Handle various error messages from the API.
 
   //anyhow::anyhow!("Upload failed with status {}: {}", status, message))

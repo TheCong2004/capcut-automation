@@ -21,9 +21,7 @@ where
 /// `from_parent_token`. The parent guard makes the operation safe to run
 /// idempotently — it won't accidentally unparent a folder that's a child
 /// of a different parent.
-pub async fn bulk_clear_parent_folder<'e, 'c: 'e, E>(
-  args: BulkClearParentFolderArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn bulk_clear_parent_folder<'e, 'c: 'e, E>(args: BulkClearParentFolderArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -31,9 +29,7 @@ where
     return Ok(0);
   }
 
-  let mut builder = QueryBuilder::<MySql>::new(
-    "UPDATE folders SET maybe_parent_folder_token = NULL WHERE owner_user_token = ",
-  );
+  let mut builder = QueryBuilder::<MySql>::new("UPDATE folders SET maybe_parent_folder_token = NULL WHERE owner_user_token = ");
   builder.push_bind(args.owner_user_token.as_str());
   builder.push(" AND maybe_deleted_at IS NULL AND maybe_parent_folder_token = ");
   builder.push_bind(args.from_parent_token.as_str());

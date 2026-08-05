@@ -10,7 +10,7 @@ pub struct EnvArgs {
   pub server_environment: ServerEnvironment,
 
   // Feature flags (compatible with storyteller-web; see storyteller-web for documentation)
-  pub maybe_status_alert_category: Option<String>, // During outage, predefined category for user alerts
+  pub maybe_status_alert_category: Option<String>,       // During outage, predefined category for user alerts
   pub maybe_status_alert_custom_message: Option<String>, // During outage, custom text for user alerts
 }
 
@@ -20,19 +20,10 @@ pub fn env_args() -> AnyhowResult<EnvArgs> {
 
   let enable_gzip = easyenv::get_env_num("ENABLE_GZIP", false)?;
 
-  let server_environment = ServerEnvironment::from_str(
-    &easyenv::get_env_string_required("SERVER_ENVIRONMENT")?)
-      .ok_or(anyhow!("invalid server environment"))?;
+  let server_environment = ServerEnvironment::from_str(&easyenv::get_env_string_required("SERVER_ENVIRONMENT")?).ok_or(anyhow!("invalid server environment"))?;
 
-  let maybe_status_alert_category =  easyenv::get_env_string_optional("FF_STATUS_ALERT_CATEGORY");
-  let maybe_status_alert_custom_message =  easyenv::get_env_string_optional("FF_STATUS_ALERT_CUSTOM_MESSAGE");
+  let maybe_status_alert_category = easyenv::get_env_string_optional("FF_STATUS_ALERT_CATEGORY");
+  let maybe_status_alert_custom_message = easyenv::get_env_string_optional("FF_STATUS_ALERT_CUSTOM_MESSAGE");
 
-  Ok(EnvArgs {
-    bind_address,
-    num_workers,
-    enable_gzip,
-    server_environment,
-    maybe_status_alert_category,
-    maybe_status_alert_custom_message,
-  })
+  Ok(EnvArgs { bind_address, num_workers, enable_gzip, server_environment, maybe_status_alert_category, maybe_status_alert_custom_message })
 }

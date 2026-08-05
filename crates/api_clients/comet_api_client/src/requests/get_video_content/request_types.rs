@@ -33,8 +33,7 @@ mod tests {
 
   #[test]
   fn parse_real_violation_error() {
-    let response: VideoContentErrorRawResponse = serde_json::from_str(REAL_VIOLATION_ERROR_RESPONSE.trim())
-      .expect("should parse");
+    let response: VideoContentErrorRawResponse = serde_json::from_str(REAL_VIOLATION_ERROR_RESPONSE.trim()).expect("should parse");
 
     assert_eq!(response.error.message, "Task is not completed yet, current status: VIOLATION");
     assert_eq!(response.error.error_type.as_deref(), Some("invalid_request_error"));

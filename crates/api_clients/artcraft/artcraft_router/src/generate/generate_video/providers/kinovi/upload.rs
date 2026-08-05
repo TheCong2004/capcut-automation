@@ -7,32 +7,14 @@ use seedance2pro_client::requests::upload_file::upload_file::{upload_file, Uploa
 use url_utils::extension::extract_extension_from_url::{extract_extension_from_url_str, ExtractExtensions};
 
 /// Downloads a file from a source URL and re-uploads it to seedance2pro CDN.
-pub(crate) async fn upload_to_seedance2pro(
-  session: &Seedance2ProSession,
-  source_url: &str,
-) -> Result<String, ArtcraftRouterError> {
-  let extension = extract_extension_from_url_str(source_url, &ExtractExtensions::All)
-      .map(|ext| ext.without_period().to_string())
-      .unwrap_or_else(|| "jpg".to_string());
+pub(crate) async fn upload_to_seedance2pro(session: &Seedance2ProSession, source_url: &str) -> Result<String, ArtcraftRouterError> {
+  let extension = extract_extension_from_url_str(source_url, &ExtractExtensions::All).map(|ext| ext.without_period().to_string()).unwrap_or_else(|| "jpg".to_string());
 
   let file_bytes = download_file(source_url).await?;
 
-  let prepare_response = prepare_file_upload(PrepareFileUploadArgs {
-    session,
-    extension,
-    host_override: None,
-  })
-      .await
-      .map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
+  let prepare_response = prepare_file_upload(PrepareFileUploadArgs { session, extension, host_override: None }).await.map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
 
-  let upload_response = upload_file(UploadFileArgs {
-    upload_url: prepare_response.upload_url,
-    file_bytes,
-    host_override: None,
-  })
-      .await
-      .map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
+  let upload_response = upload_file(UploadFileArgs { upload_url: prepare_response.upload_url, file_bytes, host_override: None }).await.map_err(|err| ArtcraftRouterError::Provider(ProviderError::Seedance2Pro(err)))?;
 
   Ok(upload_response.public_url)
 }
-

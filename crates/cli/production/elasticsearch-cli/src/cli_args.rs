@@ -40,26 +40,22 @@ pub enum Action {
 }
 
 #[derive(Parser, Debug)]
-#[command(name="elasticsearch-cli")]
+#[command(name = "elasticsearch-cli")]
 pub struct Args {
-  #[arg(name="action", long="action", help="action to take", required=true)]
+  #[arg(name = "action", long = "action", help = "action to take", required = true)]
   action: Action,
 
-  #[arg(name="mysql", long="mysql", help="production or development")]
+  #[arg(name = "mysql", long = "mysql", help = "production or development")]
   mysql: Option<String>,
 
-  #[arg(name="elasticsearch", long="elasticsearch", help="production or development")]
+  #[arg(name = "elasticsearch", long = "elasticsearch", help = "production or development")]
   elasticsearch: Option<String>,
 }
 
 pub fn parse_cli_args() -> AnyhowResult<ParsedArgs> {
   let args = Args::parse();
 
-  Ok(ParsedArgs {
-    mysql_environment: to_environment(args.mysql.as_deref())?,
-    elasticsearch_environment: to_environment(args.elasticsearch.as_deref())?,
-    action: args.action,
-  })
+  Ok(ParsedArgs { mysql_environment: to_environment(args.mysql.as_deref())?, elasticsearch_environment: to_environment(args.elasticsearch.as_deref())?, action: args.action })
 }
 
 fn to_environment(environment: Option<&str>) -> AnyhowResult<Environment> {
@@ -72,12 +68,9 @@ fn to_environment(environment: Option<&str>) -> AnyhowResult<Environment> {
 }
 
 fn action_from_str(value: &str) -> AnyhowResult<Action> {
-  let action = Action::from_str(value)
-      .map_err(|err| {
-        let choices = Action::iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<_>>();
-        anyhow!("parse error: {:?}, provided: \"{}\" choices: {:?}", err, value, choices)
-      })?;
+  let action = Action::from_str(value).map_err(|err| {
+    let choices = Action::iter().map(|e| e.to_string()).collect::<Vec<_>>();
+    anyhow!("parse error: {:?}, provided: \"{}\" choices: {:?}", err, value, choices)
+  })?;
   Ok(action)
 }

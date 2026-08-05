@@ -76,9 +76,7 @@ where
 ///
 /// Compile-time-checked via `sqlx::query!` against the offline `.sqlx` cache
 /// (regenerate with `cargo sqlx prepare` after schema changes).
-pub async fn insert_user_spend_event<'e, 'c: 'e, E>(
-  args: InsertUserSpendEventArgs<'e, 'c, E>,
-) -> Result<(), sqlx::Error>
+pub async fn insert_user_spend_event<'e, 'c: 'e, E>(args: InsertUserSpendEventArgs<'e, 'c, E>) -> Result<(), sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -125,8 +123,8 @@ ON DUPLICATE KEY UPDATE token = token
     args.is_production,
     args.payment_occurred_at,
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(())
 }

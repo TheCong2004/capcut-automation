@@ -75,11 +75,7 @@ pub struct UpdateGptImageJobStatusSuccessResponse {
     ("request" = UpdateGptImageJobStatusRequest, description = "Request"),
   )
 )]
-pub async fn update_gpt_image_job_status_handler(
-  http_request: HttpRequest,
-  request: Json<UpdateGptImageJobStatusRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<UpdateGptImageJobStatusSuccessResponse>, CommonWebError>
-{
+pub async fn update_gpt_image_job_status_handler(http_request: HttpRequest, request: Json<UpdateGptImageJobStatusRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<UpdateGptImageJobStatusSuccessResponse>, CommonWebError> {
   //// TODO(bt,2024-06-16): Reuse connection
   //let mut mysql_connection = server_state.mysql_pool.acquire()
   //    .await
@@ -88,10 +84,7 @@ pub async fn update_gpt_image_job_status_handler(
   //      CommonWebError::from_error(e)
   //    })?;
 
-  let inference_job = get_inference_job_status(
-    &request.job_token,
-    &server_state.mysql_pool
-  ).await;
+  let inference_job = get_inference_job_status(&request.job_token, &server_state.mysql_pool).await;
 
   let inference_job = match inference_job {
     Ok(Some(record)) => record,
@@ -99,14 +92,13 @@ pub async fn update_gpt_image_job_status_handler(
     Err(err) => {
       error!("tts job query error: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   };
-
 
   match inference_job.status {
     JobStatusPlus::CompleteSuccess => {
       // Job has already been completed. Don't replay the request.
-      return Ok(Json(UpdateGptImageJobStatusSuccessResponse { success: true }))
+      return Ok(Json(UpdateGptImageJobStatusSuccessResponse { success: true }));
     },
     // TODO: Handle other states as terminal states?
     //JobStatusPlus::CompleteFailure => return Err(CommonWebError::from_error(err)),
@@ -114,7 +106,7 @@ pub async fn update_gpt_image_job_status_handler(
     //JobStatusPlus::Dead => {}
     //JobStatusPlus::CancelledByUser => return Err(CommonWebError::from_error(err)),
     //JobStatusPlus::CancelledBySystem => {}
-    _ => {} // Intentional fall through.
+    _ => {}, // Intentional fall through.
   }
 
   let target_status = match request.job_status {
@@ -127,45 +119,30 @@ pub async fn update_gpt_image_job_status_handler(
 
   if let Some(images) = &request.images {
     for image in images.iter() {
-      let result = upload_and_save_image(
-        image,
-        &inference_job,
-        &server_state.mysql_pool,
-        &server_state.public_bucket_client,
-      ).await;
+      let result = upload_and_save_image(image, &inference_job, &server_state.mysql_pool, &server_state.public_bucket_client).await;
       let media_token = match result {
         Ok(media_token) => media_token,
         Err(err) => {
           error!("Error uploading image: {:?}", err);
           return Err(CommonWebError::from_anyhow_error(err));
-        }
+        },
       };
     }
   }
 
   info!("Updating job record for job: {:?}", request.job_token);
 
-  update_job_record(&request, &server_state, inference_job, target_status)
-      .await
-      .map_err(|err| {
-        error!("Error updating job: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  update_job_record(&request, &server_state, inference_job, target_status).await.map_err(|err| {
+    error!("Error updating job: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
   info!("Job record updated for job: {:?}", request.job_token);
 
-  Ok(Json(UpdateGptImageJobStatusSuccessResponse {
-    success: true,
-  }))
+  Ok(Json(UpdateGptImageJobStatusSuccessResponse { success: true }))
 }
 
-async fn upload_and_save_image(
-  base64_image: &str,
-  inference_job: &GenericInferenceJobStatus,
-  mysql_pool: &MySqlPool,
-  public_bucket_client: &LegacyBucketClient,
-) -> AnyhowResult<MediaFileToken> {
-
+async fn upload_and_save_image(base64_image: &str, inference_job: &GenericInferenceJobStatus, mysql_pool: &MySqlPool, public_bucket_client: &LegacyBucketClient) -> AnyhowResult<MediaFileToken> {
   let image_bytes = BASE64_STANDARD.decode(base64_image)?;
 
   // Read file metadata
@@ -175,11 +152,9 @@ async fn upload_and_save_image(
   let mimetype = image_info.mime_type();
 
   // Upload file
-  const PREFIX : Option<&str> = Some("image_");
+  const PREFIX: Option<&str> = Some("image_");
 
-  let extension_with_period = image_info.file_extension()
-      .map(|ext| ext.extension_with_period())
-      .unwrap_or_else(|| ".png");
+  let extension_with_period = image_info.file_extension().map(|ext| ext.extension_with_period()).unwrap_or_else(|| ".png");
 
   let media_file_type = match mimetype {
     "image/png" => MediaFileType::Png,
@@ -187,64 +162,31 @@ async fn upload_and_save_image(
     _ => MediaFileType::Png,
   };
 
-  let bucket_upload_path = MediaFileBucketPath::generate_new(
-    PREFIX, Some(extension_with_period));
+  let bucket_upload_path = MediaFileBucketPath::generate_new(PREFIX, Some(extension_with_period));
 
   info!("Uploading media to bucket path: {}", bucket_upload_path.get_full_object_path_str());
 
-  public_bucket_client.upload_file_with_content_type(
-    bucket_upload_path.get_full_object_path_str(),
-    image_bytes.as_ref(),
-    mimetype
-  ).await?;
+  public_bucket_client.upload_file_with_content_type(bucket_upload_path.get_full_object_path_str(), image_bytes.as_ref(), mimetype).await?;
 
-  let media_token = MediaFileInsertBuilder::new()
-      .maybe_creator_user(inference_job.user_details.maybe_creator_user_token.as_ref())
-      .maybe_creator_anonymous_visitor(inference_job.user_details.maybe_creator_anonymous_visitor_token.as_ref())
-      .creator_ip_address(&inference_job.user_details.creator_ip_address)
-      .public_bucket_directory_hash(&bucket_upload_path)
-      .media_file_class(MediaFileClass::Image)
-      .media_file_type(media_file_type)
-      .media_file_origin_category(MediaFileOriginCategory::Inference)
-      .media_file_origin_product_category(MediaFileOriginProductCategory::ImageStudio)
-      .mime_type(mimetype)
-      .file_size_bytes(file_size_bytes as u64)
-      .frame_width(image_info.width())
-      .frame_height(image_info.height())
-      .checksum_sha2(&file_hash)
-      .insert_pool(mysql_pool)
-      .await?;
+  let media_token = MediaFileInsertBuilder::new().maybe_creator_user(inference_job.user_details.maybe_creator_user_token.as_ref()).maybe_creator_anonymous_visitor(inference_job.user_details.maybe_creator_anonymous_visitor_token.as_ref()).creator_ip_address(&inference_job.user_details.creator_ip_address).public_bucket_directory_hash(&bucket_upload_path).media_file_class(MediaFileClass::Image).media_file_type(media_file_type).media_file_origin_category(MediaFileOriginCategory::Inference).media_file_origin_product_category(MediaFileOriginProductCategory::ImageStudio).mime_type(mimetype).file_size_bytes(file_size_bytes as u64).frame_width(image_info.width()).frame_height(image_info.height()).checksum_sha2(&file_hash).insert_pool(mysql_pool).await?;
 
   Ok(media_token)
 }
 
-async fn update_job_record(
-  request: &Json<UpdateGptImageJobStatusRequest>,
-  server_state: &Data<Arc<ServerState>>,
-  inference_job: GenericInferenceJobStatus,
-  target_status: JobStatusPlus,
-) -> AnyhowResult<()> {
-
+async fn update_job_record(request: &Json<UpdateGptImageJobStatusRequest>, server_state: &Data<Arc<ServerState>>, inference_job: GenericInferenceJobStatus, target_status: JobStatusPlus) -> AnyhowResult<()> {
   match target_status {
-    JobStatusPlus::Pending => {}
-    JobStatusPlus::Started => {}
+    JobStatusPlus::Pending => {},
+    JobStatusPlus::Started => {},
     JobStatusPlus::CompleteSuccess => {
       info!("Matched job status complete_success");
-      mark_generic_inference_job_successfully_done_by_token(
-        &server_state.mysql_pool,
-        &request.job_token,
-        None,
-        None,
-        None,
-        None,
-      ).await?;
-    }
+      mark_generic_inference_job_successfully_done_by_token(&server_state.mysql_pool, &request.job_token, None, None, None, None).await?;
+    },
     // TODO: Handle terminal states
-    JobStatusPlus::CompleteFailure => {}
-    JobStatusPlus::AttemptFailed => {}
-    JobStatusPlus::Dead => {}
-    JobStatusPlus::CancelledByUser => {}
-    JobStatusPlus::CancelledBySystem => {}
+    JobStatusPlus::CompleteFailure => {},
+    JobStatusPlus::AttemptFailed => {},
+    JobStatusPlus::Dead => {},
+    JobStatusPlus::CancelledByUser => {},
+    JobStatusPlus::CancelledBySystem => {},
   }
   Ok(())
 }

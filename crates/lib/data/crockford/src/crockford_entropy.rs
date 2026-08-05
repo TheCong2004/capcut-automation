@@ -18,10 +18,12 @@ pub fn crockford_entropy_lower(length: usize) -> String {
 fn crockford_entropy(length: usize, character_set: &[u8]) -> String {
   let mut rng = rand::thread_rng();
 
-  (0..length).map(|_| {
-    let idx = rng.gen_range(0..character_set.len());
-    character_set[idx] as char
-  }).collect()
+  (0..length)
+    .map(|_| {
+      let idx = rng.gen_range(0..character_set.len());
+      character_set[idx] as char
+    })
+    .collect()
 }
 
 #[cfg(test)]

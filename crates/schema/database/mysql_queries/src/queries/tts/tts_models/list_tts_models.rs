@@ -46,85 +46,46 @@ pub struct TtsModelRecordForList {
 
 // FIXME: This is the old style of query scoping and shouldn't be copied.
 
-pub async fn list_tts_models(
-  mysql_pool: &MySqlPool,
-  scope_creator_username: Option<&str>,
-  require_mod_approved: bool
-) -> AnyhowResult<Vec<TtsModelRecordForList>> {
+pub async fn list_tts_models(mysql_pool: &MySqlPool, scope_creator_username: Option<&str>, require_mod_approved: bool) -> AnyhowResult<Vec<TtsModelRecordForList>> {
   let mut connection = mysql_pool.acquire().await?;
   list_tts_models_with_connection(&mut connection, scope_creator_username, require_mod_approved).await
 }
 
-pub async fn list_tts_models_with_connection(
-  mysql_connection: &mut PoolConnection<MySql>,
-  scope_creator_username: Option<&str>,
-  require_mod_approved: bool
-) -> AnyhowResult<Vec<TtsModelRecordForList>> {
-
+pub async fn list_tts_models_with_connection(mysql_connection: &mut PoolConnection<MySql>, scope_creator_username: Option<&str>, require_mod_approved: bool) -> AnyhowResult<Vec<TtsModelRecordForList>> {
   let maybe_models = match scope_creator_username {
-    Some(username) => {
-      list_tts_models_creator_scoped(mysql_connection, username, require_mod_approved)
-        .await
-    },
-    None => {
-      list_tts_models_for_all_creators(mysql_connection, require_mod_approved)
-        .await
-    },
+    Some(username) => list_tts_models_creator_scoped(mysql_connection, username, require_mod_approved).await,
+    None => list_tts_models_for_all_creators(mysql_connection, require_mod_approved).await,
   };
 
-  let models : Vec<InternalRawTtsModelRecordForList> = match maybe_models {
+  let models: Vec<InternalRawTtsModelRecordForList> = match maybe_models {
     Ok(models) => models,
     Err(err) => {
       return match err {
-        Error::RowNotFound => {
-          Ok(Vec::new())
-        },
+        Error::RowNotFound => Ok(Vec::new()),
         _ => {
           warn!("tts model list query error: {:?}", err);
           Err(anyhow!("tts model list query error"))
-        }
+        },
       }
-    }
+    },
   };
 
-  Ok(models.into_iter()
-    .map(|model| {
-      TtsModelRecordForList {
-        model_token: model.model_token,
-        tts_model_type: model.tts_model_type,
-        creator_user_token: model.creator_user_token,
-        creator_username: model.creator_username,
-        creator_display_name: model.creator_display_name,
-        creator_gravatar_hash: model.creator_gravatar_hash,
-        title: model.title,
-        ietf_language_tag: model.ietf_language_tag,
-        ietf_primary_language_subtag: model.ietf_primary_language_subtag,
-        is_locked_from_use: i8_to_bool(model.is_locked_from_use),
-        is_front_page_featured: i8_to_bool(model.is_front_page_featured),
-        is_twitch_featured: i8_to_bool(model.is_twitch_featured),
-        maybe_suggested_unique_bot_command: model.maybe_suggested_unique_bot_command,
-        user_ratings_positive_count: model.user_ratings_positive_count,
-        user_ratings_negative_count: model.user_ratings_negative_count,
-        user_ratings_total_count: model.user_ratings_total_count,
-        creator_set_visibility: model.creator_set_visibility,
-        created_at: model.created_at,
-        updated_at: model.updated_at,
-      }
-    })
-    .collect::<Vec<TtsModelRecordForList>>())
+  Ok(
+    models
+      .into_iter()
+      .map(|model| TtsModelRecordForList { model_token: model.model_token, tts_model_type: model.tts_model_type, creator_user_token: model.creator_user_token, creator_username: model.creator_username, creator_display_name: model.creator_display_name, creator_gravatar_hash: model.creator_gravatar_hash, title: model.title, ietf_language_tag: model.ietf_language_tag, ietf_primary_language_subtag: model.ietf_primary_language_subtag, is_locked_from_use: i8_to_bool(model.is_locked_from_use), is_front_page_featured: i8_to_bool(model.is_front_page_featured), is_twitch_featured: i8_to_bool(model.is_twitch_featured), maybe_suggested_unique_bot_command: model.maybe_suggested_unique_bot_command, user_ratings_positive_count: model.user_ratings_positive_count, user_ratings_negative_count: model.user_ratings_negative_count, user_ratings_total_count: model.user_ratings_total_count, creator_set_visibility: model.creator_set_visibility, created_at: model.created_at, updated_at: model.updated_at })
+      .collect::<Vec<TtsModelRecordForList>>(),
+  )
 }
 
-async fn list_tts_models_for_all_creators(
-  mysql_connection: &mut PoolConnection<MySql>,
-  allow_mod_disabled: bool
-) -> Result<Vec<InternalRawTtsModelRecordForList>, Error> {
+async fn list_tts_models_for_all_creators(mysql_connection: &mut PoolConnection<MySql>, allow_mod_disabled: bool) -> Result<Vec<InternalRawTtsModelRecordForList>, Error> {
   // TODO: There has to be a better way.
   //  Sqlx doesn't like anything except string literals.
   let maybe_models = if !allow_mod_disabled {
     info!("listing tts models for everyone; mod-approved only");
     sqlx::query_as!(
       InternalRawTtsModelRecordForList,
-        r#"
+      r#"
 SELECT
     tts.token as model_token,
     tts.tts_model_type,
@@ -152,14 +113,15 @@ WHERE
     tts.is_locked_from_use IS FALSE
     AND tts.user_deleted_at IS NULL
     AND tts.mod_deleted_at IS NULL
-        "#)
-      .fetch_all(&mut **mysql_connection)
-      .await?
+        "#
+    )
+    .fetch_all(&mut **mysql_connection)
+    .await?
   } else {
     info!("listing tts models for everyone; all");
     sqlx::query_as!(
       InternalRawTtsModelRecordForList,
-        r#"
+      r#"
 SELECT
     tts.token as model_token,
     tts.tts_model_type,
@@ -186,26 +148,23 @@ JOIN users
 WHERE
     tts.user_deleted_at IS NULL
     AND tts.mod_deleted_at IS NULL
-        "#)
-      .fetch_all(&mut **mysql_connection)
-      .await?
+        "#
+    )
+    .fetch_all(&mut **mysql_connection)
+    .await?
   };
 
   Ok(maybe_models)
 }
 
-async fn list_tts_models_creator_scoped(
-  mysql_connection: &mut PoolConnection<MySql>,
-  scope_creator_username: &str,
-  allow_mod_disabled: bool
-) -> Result<Vec<InternalRawTtsModelRecordForList>, Error> {
+async fn list_tts_models_creator_scoped(mysql_connection: &mut PoolConnection<MySql>, scope_creator_username: &str, allow_mod_disabled: bool) -> Result<Vec<InternalRawTtsModelRecordForList>, Error> {
   // TODO: There has to be a better way.
   //  Sqlx doesn't like anything except string literals.
   let maybe_models = if !allow_mod_disabled {
     info!("listing tts models for user; mod-approved only");
     sqlx::query_as!(
       InternalRawTtsModelRecordForList,
-        r#"
+      r#"
 SELECT
     tts.token as model_token,
     tts.tts_model_type,
@@ -236,14 +195,15 @@ WHERE
     AND tts.user_deleted_at IS NULL
     AND tts.mod_deleted_at IS NULL
         "#,
-      scope_creator_username)
-      .fetch_all(&mut **mysql_connection)
-      .await?
+      scope_creator_username
+    )
+    .fetch_all(&mut **mysql_connection)
+    .await?
   } else {
     info!("listing tts models for user; all");
     sqlx::query_as!(
       InternalRawTtsModelRecordForList,
-        r#"
+      r#"
 SELECT
     tts.token as model_token,
     tts.tts_model_type,
@@ -273,9 +233,10 @@ WHERE
     AND tts.user_deleted_at IS NULL
     AND tts.mod_deleted_at IS NULL
         "#,
-      scope_creator_username)
-      .fetch_all(&mut **mysql_connection)
-      .await?
+      scope_creator_username
+    )
+    .fetch_all(&mut **mysql_connection)
+    .await?
   };
 
   Ok(maybe_models)
@@ -298,7 +259,7 @@ struct InternalRawTtsModelRecordForList {
   pub is_locked_from_use: i8, // bool
 
   pub is_front_page_featured: i8, // bool
-  pub is_twitch_featured: i8, // bool
+  pub is_twitch_featured: i8,     // bool
 
   pub maybe_suggested_unique_bot_command: Option<String>,
 

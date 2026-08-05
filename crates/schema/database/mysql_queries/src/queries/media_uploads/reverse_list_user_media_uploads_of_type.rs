@@ -25,27 +25,15 @@ pub struct MediaUploadRecord {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn reverse_list_user_media_uploads_of_type(
-  creator_user_token: &UserToken,
-  media_upload_type: MediaUploadType,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Vec<MediaUploadRecord>> {
+pub async fn reverse_list_user_media_uploads_of_type(creator_user_token: &UserToken, media_upload_type: MediaUploadType, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<MediaUploadRecord>> {
   let mut connection = mysql_pool.acquire().await?;
-  reverse_list_user_media_uploads_of_type_with_connection(
-    creator_user_token,
-    media_upload_type,
-    &mut connection
-  ).await
+  reverse_list_user_media_uploads_of_type_with_connection(creator_user_token, media_upload_type, &mut connection).await
 }
 
-pub async fn reverse_list_user_media_uploads_of_type_with_connection(
-  creator_user_token: &UserToken,
-  media_upload_type: MediaUploadType,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<Vec<MediaUploadRecord>> {
+pub async fn reverse_list_user_media_uploads_of_type_with_connection(creator_user_token: &UserToken, media_upload_type: MediaUploadType, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Vec<MediaUploadRecord>> {
   let maybe_results = sqlx::query_as!(
-      RawMediaUploadRecord,
-        r#"
+    RawMediaUploadRecord,
+    r#"
 SELECT
     mu.token as `token: tokens::tokens::media_uploads::MediaUploadToken`,
     mu.media_type as `media_type: enums::by_table::media_uploads::media_upload_type::MediaUploadType`,
@@ -68,8 +56,8 @@ LIMIT 25
     creator_user_token,
     media_upload_type.to_str(),
   )
-          .fetch_all(&mut **mysql_connection)
-          .await;
+  .fetch_all(&mut **mysql_connection)
+  .await;
 
   match maybe_results {
     Err(err) => match err {
@@ -77,20 +65,9 @@ LIMIT 25
       _ => {
         error!("list media uploads db error: {:?}", err);
         Err(anyhow!("error with query: {:?}", err))
-      }
+      },
     },
-    Ok(results) => Ok(results.into_iter()
-        .map(|upload| MediaUploadRecord {
-          token: upload.token,
-          media_type: upload.media_type,
-          maybe_original_filename: upload.maybe_original_filename,
-          original_file_size_bytes: upload.original_file_size_bytes as u32,
-          original_duration_millis: upload.original_duration_millis as u32,
-          creator_set_visibility: upload.creator_set_visibility,
-          created_at: upload.created_at,
-          updated_at: upload.updated_at,
-        })
-        .collect()),
+    Ok(results) => Ok(results.into_iter().map(|upload| MediaUploadRecord { token: upload.token, media_type: upload.media_type, maybe_original_filename: upload.maybe_original_filename, original_file_size_bytes: upload.original_file_size_bytes as u32, original_duration_millis: upload.original_duration_millis as u32, creator_set_visibility: upload.creator_set_visibility, created_at: upload.created_at, updated_at: upload.updated_at }).collect()),
   }
 }
 

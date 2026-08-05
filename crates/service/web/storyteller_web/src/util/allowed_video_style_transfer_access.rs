@@ -11,9 +11,7 @@ pub fn allowed_video_style_transfer_access(maybe_session: Option<impl UserSessio
     return true;
   }
 
-  maybe_session
-      .map(|ref session| session.can_access_video_style_transfer())
-      .unwrap_or(false)
+  maybe_session.map(|ref session| session.can_access_video_style_transfer()).unwrap_or(false)
 }
 
 pub trait UserSessionVideoStyleTransferFlag {
@@ -47,8 +45,7 @@ impl UserSessionVideoStyleTransferFlag for &SessionUserRecord {
 fn user_session_has_feature(user_session: &SessionUserRecord) -> bool {
   // TODO(bt, 2024-03-05): this is horrible.
   //  There should be a wrapper class between the query and the caller.
-  let flags =
-      UserSessionFeatureFlags::from_optional_str(user_session.maybe_feature_flags.as_deref());
+  let flags = UserSessionFeatureFlags::from_optional_str(user_session.maybe_feature_flags.as_deref());
 
   flags.has_flag(UserFeatureFlag::VideoStyleTransfer)
 }

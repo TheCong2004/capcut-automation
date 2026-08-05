@@ -25,25 +25,16 @@ pub struct MediaUploadRecord {
 }
 
 /// Query for a media upload to see if we already uploaded it.
-pub async fn get_media_upload_by_uuid(
-  uuid_idempotency_token: &str,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Option<MediaUploadRecord>> {
+pub async fn get_media_upload_by_uuid(uuid_idempotency_token: &str, mysql_pool: &MySqlPool) -> AnyhowResult<Option<MediaUploadRecord>> {
   let mut connection = mysql_pool.acquire().await?;
-  get_media_upload_by_uuid_with_connection(
-    uuid_idempotency_token,
-    &mut connection
-  ).await
+  get_media_upload_by_uuid_with_connection(uuid_idempotency_token, &mut connection).await
 }
 
 /// Query for a media upload to see if we already uploaded it.
-pub async fn get_media_upload_by_uuid_with_connection(
-  uuid_idempotency_token: &str,
-  mysql_connection: &mut PoolConnection<MySql>,
-) -> AnyhowResult<Option<MediaUploadRecord>> {
+pub async fn get_media_upload_by_uuid_with_connection(uuid_idempotency_token: &str, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<MediaUploadRecord>> {
   let maybe_result = sqlx::query_as!(
-      RawMediaUploadRecord,
-        r#"
+    RawMediaUploadRecord,
+    r#"
 SELECT
     mu.token as `token: tokens::tokens::media_uploads::MediaUploadToken`,
     mu.media_type as `media_type: enums::by_table::media_uploads::media_upload_type::MediaUploadType`,
@@ -61,8 +52,8 @@ WHERE
         "#,
     uuid_idempotency_token,
   )
-      .fetch_one(&mut **mysql_connection)
-      .await;
+  .fetch_one(&mut **mysql_connection)
+  .await;
 
   match maybe_result {
     Err(err) => match err {
@@ -70,18 +61,9 @@ WHERE
       _ => {
         error!("list media uploads db error: {:?}", err);
         Err(anyhow!("error with query: {:?}", err))
-      }
+      },
     },
-    Ok(upload) => Ok(Some(MediaUploadRecord {
-      token: upload.token,
-      media_type: upload.media_type,
-      maybe_original_filename: upload.maybe_original_filename,
-      original_file_size_bytes: upload.original_file_size_bytes as u32,
-      original_duration_millis: upload.original_duration_millis as u32,
-      creator_set_visibility: upload.creator_set_visibility,
-      created_at: upload.created_at,
-      updated_at: upload.updated_at,
-    }))
+    Ok(upload) => Ok(Some(MediaUploadRecord { token: upload.token, media_type: upload.media_type, maybe_original_filename: upload.maybe_original_filename, original_file_size_bytes: upload.original_file_size_bytes as u32, original_duration_millis: upload.original_duration_millis as u32, creator_set_visibility: upload.creator_set_visibility, created_at: upload.created_at, updated_at: upload.updated_at })),
   }
 }
 

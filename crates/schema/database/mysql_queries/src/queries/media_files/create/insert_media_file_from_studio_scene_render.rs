@@ -45,10 +45,7 @@ pub struct InsertStudioSceneRenderArgs<'a> {
   pub maybe_public_bucket_extension: Option<&'a str>,
 }
 
-pub async fn insert_media_file_from_studio_scene_render(
-  args: InsertStudioSceneRenderArgs<'_>
-) -> AnyhowResult<MediaFileToken>
-{
+pub async fn insert_media_file_from_studio_scene_render(args: InsertStudioSceneRenderArgs<'_>) -> AnyhowResult<MediaFileToken> {
   let (new_media_token, _id) = insert_media_file_generic(InsertArgs {
     pool: &args.pool,
 
@@ -114,7 +111,8 @@ pub async fn insert_media_file_from_studio_scene_render(
     maybe_generation_provider: None,
     maybe_platform_type: None,
     maybe_cover_image_media_file_token: None,
-  }).await?;
+  })
+  .await?;
 
   Ok(new_media_token)
 }

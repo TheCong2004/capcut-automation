@@ -3,10 +3,7 @@ use enums::traits::mysql_from_row::MySqlFromRow as _;
 use sqlx::{Acquire, FromRow, MySql, MySqlConnection, MySqlPool, QueryBuilder, Row};
 use sqlx::mysql::MySqlRow;
 
-use enums::by_table::model_weights::{
-  weights_category::WeightsCategory,
-  weights_types::WeightsType,
-};
+use enums::by_table::model_weights::{weights_category::WeightsCategory, weights_types::WeightsType};
 use errors::AnyhowResult;
 use tokens::tokens::model_weights::ModelWeightToken;
 use tokens::tokens::users::UserToken;
@@ -47,12 +44,7 @@ pub struct WeightsByTokensRecord {
   pub mod_deleted_at: Option<DateTime<Utc>>,
 }
 
-pub async fn list_weights_by_tokens(
-  mysql_pool: &MySqlPool,
-  weight_tokens: &[ModelWeightToken],
-  can_see_deleted: bool
-) -> AnyhowResult<Vec<WeightsByTokensRecord>> {
-
+pub async fn list_weights_by_tokens(mysql_pool: &MySqlPool, weight_tokens: &[ModelWeightToken], can_see_deleted: bool) -> AnyhowResult<Vec<WeightsByTokensRecord>> {
   let mut connection = mysql_pool.acquire().await?;
 
   let raw_weights: Vec<RawWeightJoinUser> = get_raw_weights_by_tokens(&mut connection, weight_tokens, can_see_deleted).await?;
@@ -60,16 +52,12 @@ pub async fn list_weights_by_tokens(
   Ok(map_to_weights(raw_weights))
 }
 
-async fn get_raw_weights_by_tokens(
-  connection: &mut MySqlConnection,
-  weight_tokens: &[ModelWeightToken],
-  can_see_deleted: bool
-) -> AnyhowResult<Vec<RawWeightJoinUser>> {
-
+async fn get_raw_weights_by_tokens(connection: &mut MySqlConnection, weight_tokens: &[ModelWeightToken], can_see_deleted: bool) -> AnyhowResult<Vec<RawWeightJoinUser>> {
   let connection = connection.acquire().await?;
 
-  let mut query_builder : QueryBuilder<MySql> = if can_see_deleted {
-    QueryBuilder::new(r#"
+  let mut query_builder: QueryBuilder<MySql> = if can_see_deleted {
+    QueryBuilder::new(
+      r#"
       SELECT
           mw.token,
           mw.title,
@@ -108,9 +96,9 @@ async fn get_raw_weights_by_tokens(
           AND mw.token IN (
       "#,
     )
-
   } else {
-    QueryBuilder::new(r#"
+    QueryBuilder::new(
+      r#"
       SELECT
           mw.token,
           mw.title,
@@ -149,7 +137,7 @@ async fn get_raw_weights_by_tokens(
           AND mw.user_deleted_at IS NULL
           AND mw.mod_deleted_at IS NULL
           AND mw.token IN (
-      "#
+      "#,
     )
   };
 
@@ -167,50 +155,45 @@ async fn get_raw_weights_by_tokens(
 /// Return a comma-separated predicate, since SQLx does not yet support WHERE IN(?) for Vec<T>, etc.
 /// Issue: https://github.com/launchbadge/sqlx/issues/875
 fn token_predicate(tokens: &[ModelWeightToken]) -> String {
-  tokens.iter()
-      .map(|ty| ty.as_str())
-      .map(|ty| format!("\"{}\"", ty))
-      .collect::<Vec<String>>()
-      .join(", ")
+  tokens.iter().map(|ty| ty.as_str()).map(|ty| format!("\"{}\"", ty)).collect::<Vec<String>>().join(", ")
 }
 
-fn map_to_weights(dataset:Vec<RawWeightJoinUser>) -> Vec<WeightsByTokensRecord> {
+fn map_to_weights(dataset: Vec<RawWeightJoinUser>) -> Vec<WeightsByTokensRecord> {
   let weights: Vec<WeightsByTokensRecord> = dataset
-      .into_iter()
-      .map(|weight| {
-        WeightsByTokensRecord {
-          token: weight.token,
-          title: weight.title,
-          weights_type: weight.weights_type,
-          weights_category: weight.weights_category,
+    .into_iter()
+    .map(|weight| WeightsByTokensRecord {
+      token: weight.token,
+      title: weight.title,
+      weights_type: weight.weights_type,
+      weights_category: weight.weights_category,
 
-          maybe_ietf_language_tag: weight.maybe_ietf_language_tag,
-          maybe_ietf_primary_language_subtag: weight.maybe_ietf_primary_language_subtag,
+      maybe_ietf_language_tag: weight.maybe_ietf_language_tag,
+      maybe_ietf_primary_language_subtag: weight.maybe_ietf_primary_language_subtag,
 
-          creator_user_token: weight.creator_user_token,
-          creator_username: weight.creator_username,
-          creator_display_name: weight.creator_display_name,
-          creator_email_gravatar_hash: weight.creator_email_gravatar_hash,
+      creator_user_token: weight.creator_user_token,
+      creator_username: weight.creator_username,
+      creator_display_name: weight.creator_display_name,
+      creator_email_gravatar_hash: weight.creator_email_gravatar_hash,
 
-          public_bucket_hash: weight.public_bucket_hash,
-          maybe_public_bucket_prefix: weight.maybe_public_bucket_prefix,
-          maybe_public_bucket_extension: weight.maybe_public_bucket_extension,
+      public_bucket_hash: weight.public_bucket_hash,
+      maybe_public_bucket_prefix: weight.maybe_public_bucket_prefix,
+      maybe_public_bucket_extension: weight.maybe_public_bucket_extension,
 
-          maybe_cover_image_public_bucket_hash: weight.maybe_cover_image_public_bucket_hash,
-          maybe_cover_image_public_bucket_prefix: weight.maybe_cover_image_public_bucket_prefix,
-          maybe_cover_image_public_bucket_extension: weight.maybe_cover_image_public_bucket_extension,
+      maybe_cover_image_public_bucket_hash: weight.maybe_cover_image_public_bucket_hash,
+      maybe_cover_image_public_bucket_prefix: weight.maybe_cover_image_public_bucket_prefix,
+      maybe_cover_image_public_bucket_extension: weight.maybe_cover_image_public_bucket_extension,
 
-          maybe_ratings_positive_count: weight.maybe_ratings_positive_count,
-          maybe_ratings_negative_count: weight.maybe_ratings_negative_count,
-          maybe_bookmark_count: weight.maybe_bookmark_count,
-          cached_usage_count: weight.cached_usage_count,
+      maybe_ratings_positive_count: weight.maybe_ratings_positive_count,
+      maybe_ratings_negative_count: weight.maybe_ratings_negative_count,
+      maybe_bookmark_count: weight.maybe_bookmark_count,
+      cached_usage_count: weight.cached_usage_count,
 
-          created_at: weight.created_at,
-          updated_at: weight.updated_at,
-          user_deleted_at: weight.user_deleted_at,
-          mod_deleted_at: weight.mod_deleted_at,
-        }
-      }).collect();
+      created_at: weight.created_at,
+      updated_at: weight.updated_at,
+      user_deleted_at: weight.user_deleted_at,
+      mod_deleted_at: weight.mod_deleted_at,
+    })
+    .collect();
 
   weights
 }

@@ -12,8 +12,6 @@ impl MuapiSession {
   }
 
   pub fn from_api_key_string(api_key: String) -> Self {
-    MuapiSession {
-      api_key: MuapiApiKey::new(api_key),
-    }
+    MuapiSession { api_key: MuapiApiKey::new(api_key) }
   }
 }

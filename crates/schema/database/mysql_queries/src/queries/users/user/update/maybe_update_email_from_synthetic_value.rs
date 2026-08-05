@@ -13,12 +13,10 @@ pub struct MaybeUpdateEmailFromSyntheticValueArgs<'a> {
   pub email_gravatar_hash: &'a str,
   pub mysql_connection: &'a mut PoolConnection<MySql>,
 }
-pub async fn maybe_update_email_from_synthetic_value(
-  args: MaybeUpdateEmailFromSyntheticValueArgs<'_>,
-)  -> AnyhowResult<()> {
+pub async fn maybe_update_email_from_synthetic_value(args: MaybeUpdateEmailFromSyntheticValueArgs<'_>) -> AnyhowResult<()> {
   let result = sqlx::query_as!(
     UserEmailCheckRecordRaw,
-        r#"
+    r#"
 SELECT
   email_address,
   email_is_synthetic
@@ -26,10 +24,10 @@ FROM users
 WHERE token = ?
 LIMIT 1
         "#,
-        args.user_token.as_str(),
-    )
-      .fetch_one(&mut **args.mysql_connection)
-      .await;
+    args.user_token.as_str(),
+  )
+  .fetch_one(&mut **args.mysql_connection)
+  .await;
 
   let maybe_record = transform_optional_result(result)?;
 
@@ -38,7 +36,7 @@ LIMIT 1
     None => return Err(anyhow!("User not found for token: {}", args.user_token)),
   };
 
-  let record : UserEmailCheckRecord = record.into();
+  let record: UserEmailCheckRecord = record.into();
 
   if !record.email_is_synthetic {
     return Ok(());
@@ -52,35 +50,16 @@ LIMIT 1
   //}
 
   // Normally we don't have much business logic in this crate, but let's be extra careful since we don't have a change log.
-  if record_email.contains("gmail")
-      || record_email.contains("aol.com")
-      || record_email.contains("apple")
-      || record_email.contains("att.net")
-      || record_email.contains("comcast")
-      || record_email.contains("earthlink")
-      || record_email.contains("hotmail")
-      || record_email.contains("icloud")
-      || record_email.contains("live.com")
-      || record_email.contains("mac.com")
-      || record_email.contains("mail.ru")
-      || record_email.contains("me.com")
-      || record_email.contains("outlook")
-      || record_email.contains("proton")
-      || record_email.contains("rocketmail")
-      || record_email.contains("sbcglobal")
-      || record_email.contains("yahoo")
-      || record_email.contains("ymail")
-      || record_email.contains("zoho")
-  {
+  if record_email.contains("gmail") || record_email.contains("aol.com") || record_email.contains("apple") || record_email.contains("att.net") || record_email.contains("comcast") || record_email.contains("earthlink") || record_email.contains("hotmail") || record_email.contains("icloud") || record_email.contains("live.com") || record_email.contains("mac.com") || record_email.contains("mail.ru") || record_email.contains("me.com") || record_email.contains("outlook") || record_email.contains("proton") || record_email.contains("rocketmail") || record_email.contains("sbcglobal") || record_email.contains("yahoo") || record_email.contains("ymail") || record_email.contains("zoho") {
     // NB: Just to super extra careful, in case we change the synthetic email format.
     // This obviously won't catch everything.
     return Ok(());
   }
-  
+
   let update_email = args.email_address.to_lowercase();
 
   let query = sqlx::query!(
-      r#"
+    r#"
 UPDATE users
 SET
   email_address = ?,
@@ -115,9 +94,6 @@ struct UserEmailCheckRecord {
 
 impl From<UserEmailCheckRecordRaw> for UserEmailCheckRecord {
   fn from(raw: UserEmailCheckRecordRaw) -> Self {
-    Self {
-      email_address: raw.email_address,
-      email_is_synthetic: i8_to_bool(raw.email_is_synthetic),
-    }
+    Self { email_address: raw.email_address, email_is_synthetic: i8_to_bool(raw.email_is_synthetic) }
   }
 }

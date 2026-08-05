@@ -5,7 +5,7 @@ use errors::AnyhowResult;
 use tokens::tokens::password_reset::PasswordResetToken;
 use tokens::tokens::users::UserToken;
 
-pub struct PasswordResetStateAndTransaction <'a> {
+pub struct PasswordResetStateAndTransaction<'a> {
   pub transaction: Transaction<'a, MySql>,
   pub reset_state: PasswordResetLookupInfo,
 }
@@ -22,7 +22,7 @@ pub async fn lookup_password_reset_request<'a>(password_reset_token: &str, pool:
 
   let result = sqlx::query_as!(
     PasswordResetLookupInfo,
-        r#"
+    r#"
 SELECT
   pw.token as `password_reset_token: tokens::tokens::password_reset::PasswordResetToken`,
   pw.user_token as `user_token: tokens::tokens::users::UserToken`
@@ -37,16 +37,13 @@ WHERE public_reset_token = ?
 LIMIT 1
 FOR UPDATE
         "#,
-        password_reset_token,
-    )
-      .fetch_one(&mut *transaction)
-      .await;
+    password_reset_token,
+  )
+  .fetch_one(&mut *transaction)
+  .await;
 
   match result {
-    Ok(record) => Ok(Some(PasswordResetStateAndTransaction {
-      transaction,
-      reset_state: record,
-    })),
+    Ok(record) => Ok(Some(PasswordResetStateAndTransaction { transaction, reset_state: record })),
     Err(err) => match err {
       Error::RowNotFound => Ok(None),
       _ => Err(anyhow!(err)),

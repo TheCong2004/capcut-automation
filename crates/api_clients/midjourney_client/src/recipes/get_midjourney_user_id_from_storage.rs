@@ -10,17 +10,9 @@ pub struct GetMidjourneyUserIdRequest {
 }
 
 pub async fn get_midjourney_user_id_from_storage(req: GetMidjourneyUserIdRequest) -> Result<MidjourneyUserId, MidjourneyError> {
-  let items = storage_list(GetStorageListRequest {
-    hostname: req.hostname,
-    cookie_header: req.cookie_header,
-  }).await?;
+  let items = storage_list(GetStorageListRequest { hostname: req.hostname, cookie_header: req.cookie_header }).await?;
 
-  let user_id = items
-    .into_iter()
-    .find_map(|item| item.bucket_pathname)
-    .and_then(|path| path.split('/').next().map(|id| id.to_owned()))
-    .map(|id| MidjourneyUserId(id.to_string()))
-    .ok_or(MidjourneyApiError::NoUserId)?;
+  let user_id = items.into_iter().find_map(|item| item.bucket_pathname).and_then(|path| path.split('/').next().map(|id| id.to_owned())).map(|id| MidjourneyUserId(id.to_string())).ok_or(MidjourneyApiError::NoUserId)?;
 
   Ok(user_id)
 }
@@ -37,10 +29,7 @@ mod tests {
   async fn test() -> AnyhowResult<()> {
     let cookie_header = read_to_trimmed_string("/Users/bt/secrets/midjourney/cookie.txt")?;
 
-    let result = get_midjourney_user_id_from_storage(GetMidjourneyUserIdRequest {
-      cookie_header,
-      hostname: MidjourneyHostname::Standard,
-    }).await?;
+    let result = get_midjourney_user_id_from_storage(GetMidjourneyUserIdRequest { cookie_header, hostname: MidjourneyHostname::Standard }).await?;
 
     println!("Response: {:?}\n\n", result);
 
@@ -49,4 +38,3 @@ mod tests {
     Ok(())
   }
 }
-

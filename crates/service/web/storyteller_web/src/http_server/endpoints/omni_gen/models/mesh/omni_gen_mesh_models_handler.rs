@@ -18,10 +18,7 @@ use crate::state::server_state::ServerState;
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn omni_gen_mesh_models_handler(
-  _http_request: HttpRequest,
-  _server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<OmniGenMeshModelsResponse>, CommonWebError> {
+pub async fn omni_gen_mesh_models_handler(_http_request: HttpRequest, _server_state: web::Data<Arc<ServerState>>) -> Result<Json<OmniGenMeshModelsResponse>, CommonWebError> {
   let response = (*OMNI_GEN_MESH_MODELS_AND_PROVIDERS).clone();
   Ok(Json(response))
 }

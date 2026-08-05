@@ -35,23 +35,10 @@ use crate::state::job_dependencies::JobDependencies;
 use crate::util::common_commands::ffmpeg::old::ffmpeg_logo_watermark_command::WatermarkArgs;
 use crate::util::downloaders::download_media_file::{download_media_file, DownloadMediaFileArgs};
 
-pub async fn process_face_fusion_job(
-  deps: &JobDependencies,
-  job: &AvailableInferenceJob,
-) -> Result<JobSuccessResult, ProcessSingleJobError> {
+pub async fn process_face_fusion_job(deps: &JobDependencies, job: &AvailableInferenceJob) -> Result<JobSuccessResult, ProcessSingleJobError> {
+  let mut job_progress_reporter = deps.clients.job_progress_reporter.new_generic_inference(job.inference_job_token.as_str()).map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
 
-  let mut job_progress_reporter = deps
-      .clients
-      .job_progress_reporter
-      .new_generic_inference(job.inference_job_token.as_str())
-      .map_err(|e| ProcessSingleJobError::Other(anyhow!(e)))?;
-
-  let comfy_deps = deps
-      .job
-      .job_specific_dependencies
-      .maybe_comfy_ui_dependencies
-      .as_ref()
-      .ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing ComfyUI dependencies".to_string())))?;
+  let comfy_deps = deps.job.job_specific_dependencies.maybe_comfy_ui_dependencies.as_ref().ok_or_else(|| ProcessSingleJobError::JobSystemMisconfiguration(Some("Missing ComfyUI dependencies".to_string())))?;
 
   let job_payload = extract_face_fusion_payload_from_job(&job)?;
 
@@ -62,31 +49,25 @@ pub async fn process_face_fusion_job(
   let work_temp_dir = format!("temp_face_fusion_{}", job.id.0);
 
   // NB: TempDir exists until it goes out of scope, at which point it should delete from filesystem.
-  let work_temp_dir = deps
-      .fs
-      .scoped_temp_dir_creator_for_work
-      .new_tempdir(&work_temp_dir)
-      .map_err(|e| ProcessSingleJobError::from_io_error(e))?;
+  let work_temp_dir = deps.fs.scoped_temp_dir_creator_for_work.new_tempdir(&work_temp_dir).map_err(|e| ProcessSingleJobError::from_io_error(e))?;
 
   let output_dir = work_temp_dir.path().join("output");
   let output_file_path = work_temp_dir.path().join("output.mp4");
 
   if !output_dir.exists() {
-    std::fs::create_dir_all(&output_dir)
-        .map_err(|err| ProcessSingleJobError::IoError(err))?;
+    std::fs::create_dir_all(&output_dir).map_err(|err| ProcessSingleJobError::IoError(err))?;
   }
 
   // ===================== DOWNLOAD REQUIRED FILES ===================== //
 
-  job_progress_reporter.log_status("downloading dependencies")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("downloading dependencies").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   let remote_cloud_file_client = RemoteCloudFileClient::get_remote_cloud_file_client().await;
   let remote_cloud_file_client = match remote_cloud_file_client {
     Ok(res) => res,
     Err(_) => {
       return Err(ProcessSingleJobError::from(anyhow!("failed to get remote cloud file client")));
-    }
+    },
   };
 
   info!("Preparing to download audio media file...");
@@ -94,32 +75,17 @@ pub async fn process_face_fusion_job(
   let audio_media_token = job_payload.audio_media_file_token.ok_or_else(|| anyhow!("no audio media token"))?;
   let audio_file_path = work_temp_dir.path().join("audio.bin");
 
-  let audio = download_media_file(DownloadMediaFileArgs {
-    mysql_pool: &deps.db.mysql_pool,
-    remote_cloud_file_client: &remote_cloud_file_client,
-    media_file_token: &audio_media_token,
-    can_see_deleted: true,
-    download_path: &audio_file_path,
-  }).await?;
+  let audio = download_media_file(DownloadMediaFileArgs { mysql_pool: &deps.db.mysql_pool, remote_cloud_file_client: &remote_cloud_file_client, media_file_token: &audio_media_token, can_see_deleted: true, download_path: &audio_file_path }).await?;
 
   info!("Preparing to download image or video media file...");
 
   let image_or_video_media_token = job_payload.image_or_video_media_file_token.ok_or_else(|| anyhow!("no image or video media token"))?;
   let image_or_video_file_path = work_temp_dir.path().join("image_or_video.bin");
 
-  let image_or_video = download_media_file(DownloadMediaFileArgs {
-    mysql_pool: &deps.db.mysql_pool,
-    remote_cloud_file_client: &remote_cloud_file_client,
-    media_file_token: &image_or_video_media_token,
-    can_see_deleted: true,
-    download_path: &image_or_video_file_path,
-  }).await?;
+  let image_or_video = download_media_file(DownloadMediaFileArgs { mysql_pool: &deps.db.mysql_pool, remote_cloud_file_client: &remote_cloud_file_client, media_file_token: &image_or_video_media_token, can_see_deleted: true, download_path: &image_or_video_file_path }).await?;
 
   let input_is_image = match audio.media_file.media_type {
-    MediaFileType::Image
-    | MediaFileType::Jpg
-    | MediaFileType::Png
-    | MediaFileType::Gif => true,
+    MediaFileType::Image | MediaFileType::Jpg | MediaFileType::Png | MediaFileType::Gif => true,
     _ => false,
   };
 
@@ -127,8 +93,7 @@ pub async fn process_face_fusion_job(
 
   info!("Preparing for ComfyUI inference...");
 
-  job_progress_reporter.log_status("running inference")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("running inference").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   let stderr_output_file = work_temp_dir.path().join("stderr.txt");
   let stdout_output_file = work_temp_dir.path().join("stdout.txt");
@@ -184,8 +149,7 @@ pub async fn process_face_fusion_job(
     safe_delete_file(&stdout_output_file);
     safe_delete_directory(&work_temp_dir);
 
-    return Err(ProcessSingleJobError::Other(anyhow!("Output file did not exist: {:?}",
-            &output_file_path)));
+    return Err(ProcessSingleJobError::Other(anyhow!("Output file did not exist: {:?}", &output_file_path)));
   }
 
   // ==================== OPTIONAL WATERMARK ======================== //
@@ -203,15 +167,7 @@ pub async fn process_face_fusion_job(
 
     let watermark_output_file = work_temp_dir.path().join("watermark.mp4");
 
-    let watermark_command_exit_status = comfy_deps
-        .ffmpeg_watermark_command
-        .execute(WatermarkArgs {
-          video_path: &output_file_path,
-          maybe_override_logo_path: Some(&watermark_details.path),
-          alpha: watermark_details.alpha,
-          scale: watermark_details.scale,
-          output_path: &watermark_output_file,
-        });
+    let watermark_command_exit_status = comfy_deps.ffmpeg_watermark_command.execute(WatermarkArgs { video_path: &output_file_path, maybe_override_logo_path: Some(&watermark_details.path), alpha: watermark_details.alpha, scale: watermark_details.scale, output_path: &watermark_output_file });
 
     match check_file_exists(&watermark_output_file) {
       Err(err) => error!("Watermarking failed to produce file: {:?}", err),
@@ -221,7 +177,7 @@ pub async fn process_face_fusion_job(
         } else {
           error!("Watermarking failed: {:?}", watermark_command_exit_status);
         }
-      }
+      },
     }
   }
 
@@ -232,7 +188,7 @@ pub async fn process_face_fusion_job(
     Err(err) => {
       error!("Error reading video info with ffprobe: {:?}", err);
       None // NB: Fail open instead of failing the job on ffprobe errors.
-    }
+    },
   };
 
   if let Some(info) = &maybe_ffprobe_info {
@@ -251,30 +207,18 @@ pub async fn process_face_fusion_job(
   let mut maybe_frame_height = None;
 
   if let Some(video_info) = maybe_ffprobe_info {
-    maybe_duration_millis = video_info.duration
-        .map(|duration| duration.millis as u64);
+    maybe_duration_millis = video_info.duration.map(|duration| duration.millis as u64);
 
-    maybe_frame_width = video_info.dimensions
-        .as_ref()
-        .map(|dimensions| dimensions.width as u32);
+    maybe_frame_width = video_info.dimensions.as_ref().map(|dimensions| dimensions.width as u32);
 
-    maybe_frame_height = video_info.dimensions
-        .as_ref()
-        .map(|dimensions| dimensions.height as u32);
+    maybe_frame_height = video_info.dimensions.as_ref().map(|dimensions| dimensions.height as u32);
   }
 
-  let file_checksum = sha256_hash_file(&final_video_path)
-      .map_err(|err| {
-        ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err))
-      })?;
+  let file_checksum = sha256_hash_file(&final_video_path).map_err(|err| ProcessSingleJobError::Other(anyhow!("Error hashing file: {:?}", err)))?;
 
-  let file_size_bytes = file_size(&final_video_path)
-      .map_err(|err| ProcessSingleJobError::Other(err))?;
+  let file_size_bytes = file_size(&final_video_path).map_err(|err| ProcessSingleJobError::Other(err))?;
 
-  let mimetype = get_mimetype_for_file(&final_video_path)
-      .map_err(|err| ProcessSingleJobError::from_io_error(err))?
-      .map(|mime| mime.to_string())
-      .ok_or(ProcessSingleJobError::Other(anyhow!("Mimetype could not be determined")))?;
+  let mimetype = get_mimetype_for_file(&final_video_path).map_err(|err| ProcessSingleJobError::from_io_error(err))?.map(|mime| mime.to_string()).ok_or(ProcessSingleJobError::Other(anyhow!("Mimetype could not be determined")))?;
 
   let model_title = audio.media_file.maybe_model_weights_title.as_deref();
   let audio_title = audio.media_file.maybe_title.as_deref();
@@ -286,9 +230,7 @@ pub async fn process_face_fusion_job(
   const PREFIX: &str = "storyteller_";
   const EXT_SUFFIX: &str = ".mp4";
 
-  let result_bucket_location = MediaFileBucketPath::generate_new(
-    Some(PREFIX),
-    Some(EXT_SUFFIX));
+  let result_bucket_location = MediaFileBucketPath::generate_new(Some(PREFIX), Some(EXT_SUFFIX));
 
   let result_bucket_object_pathbuf = result_bucket_location.to_full_object_pathbuf();
 
@@ -303,10 +245,7 @@ pub async fn process_face_fusion_job(
       .await
       .map_err(|e| ProcessSingleJobError::Other(e))?;
 
-  let face_fusion_video_info = FaceFusionVideoExtraInfo {
-    maybe_audio_media_token: Some(audio.media_file.token.clone()),
-    image_or_video_media_token: Some(image_or_video.media_file.token.clone()),
-  };
+  let face_fusion_video_info = FaceFusionVideoExtraInfo { maybe_audio_media_token: Some(audio.media_file.token.clone()), image_or_video_media_token: Some(image_or_video.media_file.token.clone()) };
 
   let media_file_token = insert_media_file_from_face_fusion(InsertFaceFusionArgs {
     pool: &deps.db.mysql_pool,
@@ -329,11 +268,11 @@ pub async fn process_face_fusion_job(
     worker_hostname: &deps.job.info.container.hostname,
     worker_cluster: &deps.job.info.container.cluster_name,
   })
-      .await
-      .map_err(|e| {
-        error!("Error saving media file record: {:?}", e);
-        ProcessSingleJobError::Other(e)
-      })?;
+  .await
+  .map_err(|e| {
+    error!("Error saving media file record: {:?}", e);
+    ProcessSingleJobError::Other(e)
+  })?;
 
   // ==================== (OPTIONAL) DEBUG SLEEP ==================== //
 
@@ -344,13 +283,7 @@ pub async fn process_face_fusion_job(
 
   // ==================== GENERATE THUMBNAILS ==================== //
 
-  let thumbnail_task_result = ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4)
-    .with_bucket(&*deps.buckets.public_bucket_client.bucket_name())
-    .with_path(&*path_to_string(result_bucket_object_pathbuf.clone()))
-    .with_output_suffix("thumb")
-    .with_event_id(&job.id.0.to_string())
-    .send_all()
-    .await;
+  let thumbnail_task_result = ThumbnailTaskBuilder::new_for_source_mimetype(ThumbnailTaskInputMimeType::MP4).with_bucket(&*deps.buckets.public_bucket_client.bucket_name()).with_path(&*path_to_string(result_bucket_object_pathbuf.clone())).with_output_suffix("thumb").with_event_id(&job.id.0.to_string()).send_all().await;
 
   match thumbnail_task_result {
     Ok(thumbnail_task) => {
@@ -358,7 +291,7 @@ pub async fn process_face_fusion_job(
     },
     Err(e) => {
       error!("Failed to create some/all thumbnail tasks: {:?}", e);
-    }
+    },
   }
 
   // ==================== CLEANUP/ DELETE TEMP FILES ==================== //
@@ -375,20 +308,13 @@ pub async fn process_face_fusion_job(
 
   info!("Work Done.");
 
-  job_progress_reporter.log_status("done")
-      .map_err(|e| ProcessSingleJobError::Other(e))?;
+  job_progress_reporter.log_status("done").map_err(|e| ProcessSingleJobError::Other(e))?;
 
   info!("Result media token: {:?}", &media_file_token);
 
   info!("Job {:?} complete success!", job.id);
 
-  Ok(JobSuccessResult {
-    maybe_result_entity: Some(ResultEntity {
-      entity_type: InferenceResultType::MediaFile,
-      entity_token: media_file_token.to_string(),
-    }),
-    inference_duration,
-  })
+  Ok(JobSuccessResult { maybe_result_entity: Some(ResultEntity { entity_type: InferenceResultType::MediaFile, entity_token: media_file_token.to_string() }), inference_duration })
 }
 
 fn print_and_detect_stderr_issues(stderr_output_file: &Path) -> Result<(), ProcessSingleJobError> {
@@ -400,14 +326,14 @@ fn print_and_detect_stderr_issues(stderr_output_file: &Path) -> Result<(), Proce
     Err(err) => {
       error!("Error reading stderr output: {:?}", err);
       return Ok(());
-    }
+    },
   };
 
   match categorize_face_fusion_error(&contents) {
     Some(ProcessSingleJobError::FaceDetectionFailure) => {
       warn!("Face not detected in source");
       Err(ProcessSingleJobError::FaceDetectionFailure)
-    }
-    _ => Ok(())
+    },
+    _ => Ok(()),
   }
 }

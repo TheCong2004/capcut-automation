@@ -36,22 +36,8 @@ use crate::state::server_state::ServerState;
     ),
   )
 )]
-pub async fn upload_updated_editor_2d_project_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>,
-  path: Path<UploadUpdatedEditor2dProjectPathInfo>,
-  MultipartForm(form): MultipartForm<UpdateProjectMultipartForm>,
-) -> Result<Json<UploadUpdatedEditor2dProjectSuccessResponse>, CommonWebError> {
-  update_project(UpdateProjectArgs {
-    http_request: &http_request,
-    server_state: &server_state,
-    config: &EDITOR_2D_PROJECT_CONFIG,
-    media_file_token: &path.token,
-    form,
-  }).await?;
+pub async fn upload_updated_editor_2d_project_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>, path: Path<UploadUpdatedEditor2dProjectPathInfo>, MultipartForm(form): MultipartForm<UpdateProjectMultipartForm>) -> Result<Json<UploadUpdatedEditor2dProjectSuccessResponse>, CommonWebError> {
+  update_project(UpdateProjectArgs { http_request: &http_request, server_state: &server_state, config: &EDITOR_2D_PROJECT_CONFIG, media_file_token: &path.token, form }).await?;
 
-  Ok(Json(UploadUpdatedEditor2dProjectSuccessResponse {
-    success: true,
-    media_file_token: path.into_inner().token,
-  }))
+  Ok(Json(UploadUpdatedEditor2dProjectSuccessResponse { success: true, media_file_token: path.into_inner().token }))
 }

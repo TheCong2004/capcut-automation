@@ -1,4 +1,3 @@
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum EventMatchPredicate {
@@ -39,24 +38,22 @@ mod tests {
     let rust_value = EventMatchPredicate::NotSet {};
     let json = "{\"not_set\":{}}";
 
-    let converted_to_json= serde_json::to_string(&rust_value).unwrap();
+    let converted_to_json = serde_json::to_string(&rust_value).unwrap();
     assert_eq!(&converted_to_json, json);
 
-    let converted_from_json : EventMatchPredicate = serde_json::from_str(json).unwrap();
+    let converted_from_json: EventMatchPredicate = serde_json::from_str(json).unwrap();
     assert_eq!(&converted_from_json, &rust_value);
   }
 
   #[test]
   fn bits_cheermote_name_exact_match() {
-    let rust_value = EventMatchPredicate::BitsCheermoteNameExactMatch {
-      cheermote_name: "Cheer1".to_string()
-    };
+    let rust_value = EventMatchPredicate::BitsCheermoteNameExactMatch { cheermote_name: "Cheer1".to_string() };
     let json = "{\"bits_cheermote_name_exact_match\":{\"cheermote_name\":\"Cheer1\"}}";
 
-    let converted_to_json= serde_json::to_string(&rust_value).unwrap();
+    let converted_to_json = serde_json::to_string(&rust_value).unwrap();
     assert_eq!(&converted_to_json, json);
 
-    let converted_from_json : EventMatchPredicate = serde_json::from_str(json).unwrap();
+    let converted_from_json: EventMatchPredicate = serde_json::from_str(json).unwrap();
     assert_eq!(&converted_from_json, &rust_value);
   }
 }

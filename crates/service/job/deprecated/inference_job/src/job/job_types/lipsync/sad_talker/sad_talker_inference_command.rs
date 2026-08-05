@@ -36,7 +36,6 @@ pub struct SadTalkerInferenceCommand {
   /// Inference arg.
   /// --checkpoint_dir: optional location for checkpoints directory
   pub alternate_checkpoint_dir: Option<PathBuf>,
-
 }
 
 #[derive(Clone)]
@@ -71,41 +70,21 @@ pub struct InferenceArgs<'s, P: AsRef<Path>> {
 
   /// --preprocess: "crop", etc.
   pub maybe_preprocess: Option<&'s str>,
-
   // TODO: Other SadTalker args
 }
 
 impl SadTalkerInferenceCommand {
-  pub fn new<P: AsRef<Path>>(
-    sad_talker_root_code_directory: P,
-    executable_or_command: ExecutableOrCommand,
-    maybe_virtual_env_activation_command: Option<&str>,
-    maybe_default_config_path: Option<P>,
-    maybe_docker_options: Option<DockerOptions>,
-    maybe_execution_timeout: Option<Duration>,
-    alternate_checkpoint_dir: Option<PathBuf>
-  ) -> Self {
-    Self {
-      sad_talker_root_code_directory: sad_talker_root_code_directory.as_ref().to_path_buf(),
-      executable_or_command,
-      maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()),
-      maybe_default_config_path: maybe_default_config_path.map(|p| p.as_ref().to_path_buf()),
-      maybe_docker_options,
-      maybe_execution_timeout,
-      alternate_checkpoint_dir,
-    }
+  pub fn new<P: AsRef<Path>>(sad_talker_root_code_directory: P, executable_or_command: ExecutableOrCommand, maybe_virtual_env_activation_command: Option<&str>, maybe_default_config_path: Option<P>, maybe_docker_options: Option<DockerOptions>, maybe_execution_timeout: Option<Duration>, alternate_checkpoint_dir: Option<PathBuf>) -> Self {
+    Self { sad_talker_root_code_directory: sad_talker_root_code_directory.as_ref().to_path_buf(), executable_or_command, maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()), maybe_default_config_path: maybe_default_config_path.map(|p| p.as_ref().to_path_buf()), maybe_docker_options, maybe_execution_timeout, alternate_checkpoint_dir }
   }
 
   pub fn from_env() -> AnyhowResult<Self> {
-    let sad_talker_root_code_directory = easyenv::get_env_pathbuf_required(
-      "SAD_TALKER_INFERENCE_ROOT_DIRECTORY")?;
+    let sad_talker_root_code_directory = easyenv::get_env_pathbuf_required("SAD_TALKER_INFERENCE_ROOT_DIRECTORY")?;
 
-    let maybe_inference_command = easyenv::get_env_string_optional(
-      "SAD_TALKER_INFERENCE_COMMAND");
+    let maybe_inference_command = easyenv::get_env_string_optional("SAD_TALKER_INFERENCE_COMMAND");
 
     // Optional, eg. `./infer.py`. Typically we'll use the command form instead.
-    let maybe_inference_executable = easyenv::get_env_pathbuf_optional(
-      "SAD_TALKER_INFERENCE_EXECUTABLE");
+    let maybe_inference_executable = easyenv::get_env_pathbuf_optional("SAD_TALKER_INFERENCE_EXECUTABLE");
 
     let executable_or_command = match maybe_inference_command {
       Some(command) => ExecutableOrCommand::Command(command),
@@ -115,56 +94,28 @@ impl SadTalkerInferenceCommand {
       },
     };
 
-    let maybe_virtual_env_activation_command = easyenv::get_env_string_optional(
-      "SAD_TALKER_INFERENCE_MAYBE_VENV_COMMAND");
+    let maybe_virtual_env_activation_command = easyenv::get_env_string_optional("SAD_TALKER_INFERENCE_MAYBE_VENV_COMMAND");
 
-    let maybe_default_config_path = easyenv::get_env_pathbuf_optional(
-      "SAD_TALKER_INFERENCE_MAYBE_DEFAULT_CONFIG_PATH");
+    let maybe_default_config_path = easyenv::get_env_pathbuf_optional("SAD_TALKER_INFERENCE_MAYBE_DEFAULT_CONFIG_PATH");
 
-    let maybe_execution_timeout =
-        easyenv::get_env_duration_seconds_optional("SAD_TALKER_TIMEOUT_SECONDS");
+    let maybe_execution_timeout = easyenv::get_env_duration_seconds_optional("SAD_TALKER_TIMEOUT_SECONDS");
 
-    let maybe_docker_options = easyenv::get_env_string_optional(
-      "SAD_TALKER_INFERENCE_MAYBE_DOCKER_IMAGE")
-        .map(|image_name| {
-          DockerOptions {
-            image_name,
-            maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()),
-            maybe_environment_variables: None,
-            maybe_gpu: Some(DockerGpu::All),
-          }
-        });
+    let maybe_docker_options = easyenv::get_env_string_optional("SAD_TALKER_INFERENCE_MAYBE_DOCKER_IMAGE").map(|image_name| DockerOptions { image_name, maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()), maybe_environment_variables: None, maybe_gpu: Some(DockerGpu::All) });
 
     // Override for --checkpoint_dir at inference time
-    let alternate_checkpoint_dir = easyenv::get_env_pathbuf_optional(
-      "SAD_TALKER_ALTERNATE_CHECKPOINT_PATH");
+    let alternate_checkpoint_dir = easyenv::get_env_pathbuf_optional("SAD_TALKER_ALTERNATE_CHECKPOINT_PATH");
 
-    Ok(Self {
-      sad_talker_root_code_directory,
-      executable_or_command,
-      maybe_virtual_env_activation_command,
-      maybe_default_config_path,
-      maybe_docker_options,
-      maybe_execution_timeout,
-      alternate_checkpoint_dir,
-    })
+    Ok(Self { sad_talker_root_code_directory, executable_or_command, maybe_virtual_env_activation_command, maybe_default_config_path, maybe_docker_options, maybe_execution_timeout, alternate_checkpoint_dir })
   }
 
-  pub fn execute_inference<P: AsRef<Path>>(
-    &self,
-    args: InferenceArgs<P>,
-  ) -> CommandExitStatus {
+  pub fn execute_inference<P: AsRef<Path>>(&self, args: InferenceArgs<P>) -> CommandExitStatus {
     match self.do_execute_inference(args) {
       Ok(exit_status) => exit_status,
       Err(error) => CommandExitStatus::FailureWithReason { reason: format!("error: {:?}", error) },
     }
   }
 
-  fn do_execute_inference<P: AsRef<Path>>(
-    &self,
-    args: InferenceArgs<P>,
-  ) -> AnyhowResult<CommandExitStatus> {
-
+  fn do_execute_inference<P: AsRef<Path>>(&self, args: InferenceArgs<P>) -> AnyhowResult<CommandExitStatus> {
     let mut command = String::new();
     command.push_str(&format!("cd {}", path_to_string(&self.sad_talker_root_code_directory)));
 
@@ -180,11 +131,11 @@ impl SadTalkerInferenceCommand {
       ExecutableOrCommand::Executable(ref executable) => {
         command.push_str(&path_to_string(executable));
         command.push_str(" ");
-      }
+      },
       ExecutableOrCommand::Command(ref cmd) => {
         command.push_str(cmd);
         command.push_str(" ");
-      }
+      },
     }
 
     // ===== Begin Python Args =====
@@ -229,11 +180,7 @@ impl SadTalkerInferenceCommand {
 
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
     let env_vars = get_filtered_env_vars();
 
@@ -257,7 +204,7 @@ impl SadTalkerInferenceCommand {
         let exit_status = p.wait()?;
         info!("Subprocess exit status: {:?}", exit_status);
         Ok(CommandExitStatus::from_exit_status(exit_status))
-      }
+      },
       Some(timeout) => {
         info!("Executing with timeout: {:?}", &timeout);
         let exit_status = p.wait_timeout(timeout)?;
@@ -268,13 +215,13 @@ impl SadTalkerInferenceCommand {
             info!("Subprocess didn't end after timeout: {:?}; terminating...", &timeout);
             let _r = p.terminate()?;
             Ok(CommandExitStatus::Timeout)
-          }
+          },
           Some(exit_status) => {
             info!("Subprocess timed wait exit status: {:?}", exit_status);
             Ok(CommandExitStatus::from_exit_status(exit_status))
-          }
+          },
         }
-      }
+      },
     }
   }
 }

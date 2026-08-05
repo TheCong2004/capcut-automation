@@ -51,7 +51,6 @@ pub struct ZeroShotVoiceEmbeddingBucketDirectory {
 impl PrivatePath for ZeroShotVoiceEmbeddingBucketDirectory {}
 
 impl ZeroShotVoiceEmbeddingBucketDirectory {
-
   pub fn generate_new(model_category: ModelCategory, model_type: ModelType) -> Self {
     let entropy = crockford_entropy_lower(32);
     Self::from_object_hash(model_category, model_type, &entropy)
@@ -62,12 +61,7 @@ impl ZeroShotVoiceEmbeddingBucketDirectory {
     let subdirs = format!("{}/{}", model_category.to_str(), model_type.to_str());
     let middle = hashed_directory_path_long_string(object_hash);
     let directory = format!("{}/{}/{}{}", DIRECTORY, subdirs, middle, object_hash);
-    Self {
-      model_category,
-      model_type,
-      object_hash: object_hash.to_string(),
-      directory,
-    }
+    Self { model_category, model_type, object_hash: object_hash.to_string(), directory }
   }
 
   pub fn get_directory_path_str(&self) -> &str {

@@ -22,27 +22,18 @@ pub struct AddIpBanRequest {
   maybe_target_user_token: Option<String>,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn add_ip_ban_handler(
-  http_request: HttpRequest,
-  request: Json<AddIpBanRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn add_ip_ban_handler(http_request: HttpRequest, request: Json<AddIpBanRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SimpleGenericJsonSuccess>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   if !user_session.can_ban_users {
@@ -59,17 +50,10 @@ pub async fn add_ip_ban_handler(
 
   info!("Creating ban...");
 
-  upsert_ip_ban(UpsertIpBanArgs {
-    ip_address,
-    maybe_target_user_token: request.maybe_target_user_token.as_deref(),
-    mod_user_token: user_session.user_token.as_str(),
-    mod_notes: &request.mod_notes,
-    mysql_pool: &server_state.mysql_pool,
-  }).await
-      .map_err(|err| {
-        warn!("Add IP ban DB error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  upsert_ip_ban(UpsertIpBanArgs { ip_address, maybe_target_user_token: request.maybe_target_user_token.as_deref(), mod_user_token: user_session.user_token.as_str(), mod_notes: &request.mod_notes, mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
+    warn!("Add IP ban DB error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
   Ok(Json(SimpleGenericJsonSuccess { success: true }))
 }

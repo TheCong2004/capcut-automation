@@ -10,7 +10,8 @@ use tokens::tokens::users::UserToken;
 
 /// Arguments for inserting a new pending character record.
 pub struct CreatePendingCharacterArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   /// The type of character (e.g. KinoviSeedance).
   pub character_type: CharacterType,
@@ -47,10 +48,9 @@ pub struct CreatePendingCharacterArgs<'e, 'c, E>
 ///
 /// The character is created with `is_active = false`. It will be activated
 /// once the async creation job completes.
-pub async fn create_pending_character<'e, 'c: 'e, E>(
-  args: CreatePendingCharacterArgs<'e, 'c, E>,
-) -> Result<CharacterToken, sqlx::Error>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn create_pending_character<'e, 'c: 'e, E>(args: CreatePendingCharacterArgs<'e, 'c, E>) -> Result<CharacterToken, sqlx::Error>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let token = CharacterToken::generate();
 
@@ -85,8 +85,7 @@ SET
     args.maybe_generic_inference_job_token.map(|t| t.as_str()),
   );
 
-  let result = query.execute(args.mysql_executor)
-      .await?;
+  let result = query.execute(args.mysql_executor).await?;
 
   info!("Created pending character {} (record ID {})", token, result.last_insert_id());
 

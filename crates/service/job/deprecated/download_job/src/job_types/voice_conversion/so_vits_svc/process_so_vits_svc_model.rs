@@ -26,14 +26,7 @@ use crate::job_types::voice_conversion::so_vits_svc::so_vits_svc_model_check_com
 use crate::JobState;
 
 /// Returns the token of the entity.
-pub async fn process_so_vits_svc_model<'a, 'b>(
-  job_state: &JobState,
-  job: &AvailableDownloadJob,
-  temp_dir: &TempDir,
-  download_filename: &str,
-  redis_logger: &'a mut RedisJobStatusLogger<'b>,
-) -> AnyhowResult<JobResults> {
-
+pub async fn process_so_vits_svc_model<'a, 'b>(job_state: &JobState, job: &AvailableDownloadJob, temp_dir: &TempDir, download_filename: &str, redis_logger: &'a mut RedisJobStatusLogger<'b>) -> AnyhowResult<JobResults> {
   // ==================== RUN MODEL CHECK ==================== //
 
   info!("Checking that model is valid...");
@@ -46,13 +39,7 @@ pub async fn process_so_vits_svc_model<'a, 'b>(
   //let input_wav_path = PathBuf::from("/models/voice_conversion/so-vits-svc/example.wav"); // TODO: This could be variable.
   let output_wav_path = temp_dir.path().join("output.wav");
 
-  let model_check_result = job_state.sidecar_configs.so_vits_svc_model_check_command.execute_check(CheckArgs {
-    model_path: &original_model_file_path,
-    maybe_input_path: None,
-    output_path: &output_wav_path,
-    maybe_config_path: None,
-    device: Device::Cuda,
-  });
+  let model_check_result = job_state.sidecar_configs.so_vits_svc_model_check_command.execute_check(CheckArgs { model_path: &original_model_file_path, maybe_input_path: None, output_path: &output_wav_path, maybe_config_path: None, device: Device::Cuda });
 
   if let Err(e) = model_check_result {
     safe_delete_file(&original_model_file_path);
@@ -133,7 +120,8 @@ pub async fn process_so_vits_svc_model<'a, 'b>(
     private_bucket_hash: &private_bucket_hash,
     private_bucket_object_name: "", // TODO: This should go away.
     mysql_pool: &job_state.mysql_pool,
-  }).await?;
+  })
+  .await?;
 
   info!("Saving model weights record...");
 
@@ -150,22 +138,21 @@ pub async fn process_so_vits_svc_model<'a, 'b>(
     creator_user_token: &job.creator_user_token,
     creator_ip_address: &job.creator_ip_address,
     creator_set_visibility: Visibility::Public, // TODO: All models default to public at start
-    has_index_file: false, // SVC do not have index files.
+    has_index_file: false,                      // SVC do not have index files.
     public_bucket_hash: new_model_bucket_path.get_object_hash().to_string(),
     maybe_public_bucket_prefix: new_model_bucket_path.get_optional_prefix().map(|p| p.to_string()),
     maybe_public_bucket_extension: new_model_bucket_path.get_optional_extension().map(|p| p.to_string()),
     mysql_pool: &job_state.mysql_pool,
-  }).await?;
+  })
+  .await?;
 
-  job_state.badge_granter.maybe_grant_voice_conversion_model_uploads_badge(&job.creator_user_token)
-      .await
-      .map_err(|e| {
-        warn!("error maybe awarding badge: {:?}", e);
-        anyhow!("error maybe awarding badge")
-      })?;
+  job_state.badge_granter.maybe_grant_voice_conversion_model_uploads_badge(&job.creator_user_token).await.map_err(|e| {
+    warn!("error maybe awarding badge: {:?}", e);
+    anyhow!("error maybe awarding badge")
+  })?;
 
   Ok(JobResults {
-    entity_token: Some(voice_conversion_model_token.to_string()), // TODO: Swap model token.
+    entity_token: Some(voice_conversion_model_token.to_string()),       // TODO: Swap model token.
     entity_type: Some(VoiceConversionModelType::SoVitsSvc.to_string()), // NB: This may be different from `GenericDownloadType` in the future!
   })
 }

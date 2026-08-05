@@ -14,53 +14,42 @@ pub struct JobArgs {
 }
 
 pub fn check_and_validate_job(job: &AvailableInferenceJob) -> Result<JobArgs, ProcessSingleJobError> {
-  let inference_category = job.maybe_inference_args
-    .as_ref()
-    .map(|args| args.inference_category)
-    .flatten();
+  let inference_category = job.maybe_inference_args.as_ref().map(|args| args.inference_category).flatten();
 
   match inference_category {
     Some(InferenceCategoryAbbreviated::VoiceConversion) | Some(InferenceCategoryAbbreviated::SeedVc) => {},
     _ => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong inference category for job!")));
-    }
+    },
   };
 
-  let inference_args = job.maybe_inference_args
-      .as_ref()
-      .map(|args| args.args.as_ref())
-      .flatten()
-      .map(|args| match args {
-        PolymorphicInferenceArgs::Sv(args) => Ok(args),
-        _ => Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong payload for job!"))),
-      })
-      .transpose()?
-      .ok_or_else(|| ProcessSingleJobError::from_anyhow_error(anyhow!("no inference args for job!")))?;
+  let inference_args = job
+    .maybe_inference_args
+    .as_ref()
+    .map(|args| args.args.as_ref())
+    .flatten()
+    .map(|args| match args {
+      PolymorphicInferenceArgs::Sv(args) => Ok(args),
+      _ => Err(ProcessSingleJobError::from_anyhow_error(anyhow!("wrong payload for job!"))),
+    })
+    .transpose()?
+    .ok_or_else(|| ProcessSingleJobError::from_anyhow_error(anyhow!("no inference args for job!")))?;
 
   let input_media_file_token = match &job.maybe_input_source_token {
     Some(text) => MediaFileToken::new_from_str(text.clone().as_ref()),
     None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no source media token for job!")));
-    }
+    },
   };
 
   let reference_media_file_token = match &inference_args.reference_media_file_token {
     Some(text) => text.clone(),
     None => {
       return Err(ProcessSingleJobError::from_anyhow_error(anyhow!("no reference media token for job!")));
-    }
+    },
   };
 
-  let maybe_truncate_seconds = if job.max_duration_seconds <= 0 {
-    None
-  } else {
-    Some(job.max_duration_seconds as u32)
-  };
+  let maybe_truncate_seconds = if job.max_duration_seconds <= 0 { None } else { Some(job.max_duration_seconds as u32) };
 
-  Ok(JobArgs {
-    target_language: None,
-    source_inference_media: input_media_file_token,
-    reference_inference_media: reference_media_file_token,
-    maybe_truncate_seconds,
-  })
+  Ok(JobArgs { target_language: None, source_inference_media: input_media_file_token, reference_inference_media: reference_media_file_token, maybe_truncate_seconds })
 }

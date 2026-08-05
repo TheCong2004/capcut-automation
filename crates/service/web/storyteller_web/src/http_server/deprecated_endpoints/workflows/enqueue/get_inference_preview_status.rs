@@ -28,7 +28,7 @@ use crate::state::server_state::ServerState;
 /// maintained a keepalive. This prevents wasted work when users who are unlikely to return
 /// navigate away. Premium users have accounts and can always return to the site, so they
 /// typically do not require keepalive.
-const JOB_KEEPALIVE_TTL_SECONDS : usize = 60 * 3;
+const JOB_KEEPALIVE_TTL_SECONDS: usize = 60 * 3;
 
 /// For the URL PathInfo
 #[derive(Deserialize, ToSchema)]
@@ -54,11 +54,9 @@ pub struct InferenceJobStatusResponsePayload {
   pub updated_at: DateTime<Utc>,
 }
 
-
 /// Details about what the user requested for generation
 #[derive(Serialize, ToSchema)]
-pub struct RequestDetailsResponse {
-}
+pub struct RequestDetailsResponse {}
 
 /// Details about the ongoing job status
 #[derive(Serialize, ToSchema)]
@@ -138,11 +136,7 @@ impl fmt::Display for GetInferenceJobStatusError {
   }
 }
 
-pub async fn get_inference_preview_status_handler(
-  http_request: HttpRequest,
-  path: Path<GetInferenceJobStatusPathInfo>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetInferenceJobStatusSuccessResponse>, GetInferenceJobStatusError>
-{
+pub async fn get_inference_preview_status_handler(http_request: HttpRequest, path: Path<GetInferenceJobStatusPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetInferenceJobStatusSuccessResponse>, GetInferenceJobStatusError> {
   if path.token.as_str().trim() == "None" {
     // NB: A bunch of Python clients use our API and can fail in this manner.
     // This was a large traffic driver during the 2023-03-08 outage.
@@ -151,10 +145,7 @@ pub async fn get_inference_preview_status_handler(
   }
 
   // NB: Since this is publicly exposed, we don't query sensitive data.
-  let maybe_status = get_inference_job_status(
-    &path.token,
-    &server_state.mysql_pool
-  ).await;
+  let maybe_status = get_inference_job_status(&path.token, &server_state.mysql_pool).await;
 
   let record = match maybe_status {
     Ok(Some(record)) => record,
@@ -162,26 +153,23 @@ pub async fn get_inference_preview_status_handler(
     Err(err) => {
       error!("tts job query error: {:?}", err);
       return Err(GetInferenceJobStatusError::ServerError);
-    }
+    },
   };
 
-  let mut redis = server_state.redis_pool
-    .get()
-    .map_err(|e| {
-      error!("redis error: {:?}", e);
-      GetInferenceJobStatusError::ServerError
-    })?;
+  let mut redis = server_state.redis_pool.get().map_err(|e| {
+    error!("redis error: {:?}", e);
+    GetInferenceJobStatusError::ServerError
+  })?;
 
   let progress_key = StyleTransferProgressKey::new_for_job_id(record.job_token.clone());
   let progress_value: RedisResult<Option<String>> = redis.get(progress_key.to_string());
 
   let maybe_result = match progress_value {
     Ok(Some(value)) => {
-      let progress_details: InferenceProgressDetailsResponse = serde_json::from_str(&value)
-        .map_err(|e| {
-          error!("redis error: {:?}", e);
-          GetInferenceJobStatusError::ServerError
-        })?;
+      let progress_details: InferenceProgressDetailsResponse = serde_json::from_str(&value).map_err(|e| {
+        error!("redis error: {:?}", e);
+        GetInferenceJobStatusError::ServerError
+      })?;
 
       Some(progress_details)
     },
@@ -189,28 +177,17 @@ pub async fn get_inference_preview_status_handler(
     Err(e) => {
       error!("redis error: {:?}", e);
       return Err(GetInferenceJobStatusError::ServerError);
-    }
+    },
   };
-  
 
-
-  Ok(Json(GetInferenceJobStatusSuccessResponse {
-    success: true,
-    state: record_to_payload(record, maybe_result, None),
-  }))
+  Ok(Json(GetInferenceJobStatusSuccessResponse { success: true, state: record_to_payload(record, maybe_result, None) }))
 }
 
-fn record_to_payload(
-  record: GenericInferenceJobStatus,
-  progress_details: Option<InferenceProgressDetailsResponse>,
-  maybe_extra_status_description: Option<String>,
-) -> InferenceJobStatusResponsePayload {
+fn record_to_payload(record: GenericInferenceJobStatus, progress_details: Option<InferenceProgressDetailsResponse>, maybe_extra_status_description: Option<String>) -> InferenceJobStatusResponsePayload {
   let inference_category = record.request_details.inference_category;
 
   // NB: Fail open. We don't want to fail the request if we can't extract the args.
-  let maybe_polymorphic_args = extract_polymorphic_inference_args(&record)
-      .ok()
-      .flatten();
+  let maybe_polymorphic_args = extract_polymorphic_inference_args(&record).ok().flatten();
 
   let progress_percentage = estimate_job_progress(&record, maybe_polymorphic_args.as_ref());
 
@@ -224,17 +201,7 @@ fn record_to_payload(
       // maybe_raw_inference_text: record.request_details.maybe_raw_inference_text,
       // maybe_style_name: record.request_details.maybe_style_name,
     },
-    status: StatusDetailsResponse {
-      status: record.status,
-      maybe_extra_status_description,
-      maybe_assigned_worker: maybe_filter_model_name(record.maybe_assigned_worker.as_deref()),
-      maybe_assigned_cluster: record.maybe_assigned_cluster,
-      maybe_first_started_at: record.maybe_first_started_at,
-      attempt_count: record.attempt_count as u8,
-      requires_keepalive: record.is_keepalive_required,
-      maybe_failure_category: record.maybe_frontend_failure_category,
-      progress_percentage,
-    },
+    status: StatusDetailsResponse { status: record.status, maybe_extra_status_description, maybe_assigned_worker: maybe_filter_model_name(record.maybe_assigned_worker.as_deref()), maybe_assigned_cluster: record.maybe_assigned_cluster, maybe_first_started_at: record.maybe_first_started_at, attempt_count: record.attempt_count as u8, requires_keepalive: record.is_keepalive_required, maybe_failure_category: record.maybe_frontend_failure_category, progress_percentage },
     maybe_result: progress_details,
     created_at: record.created_at,
     updated_at: record.updated_at,

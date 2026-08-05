@@ -18,7 +18,7 @@ pub struct UpdateUsernameArgs<'e, 't> {
 }
 
 #[derive(Debug)]
-pub enum UpdateUsernameError{
+pub enum UpdateUsernameError {
   UsernameIsTaken,
   DatabaseError { source: sqlx::Error },
 }
@@ -30,20 +30,17 @@ impl Display for UpdateUsernameError {
     match self {
       UpdateUsernameError::UsernameIsTaken => {
         write!(f, "UpdateUsernameError: username is taken")
-      }
+      },
       UpdateUsernameError::DatabaseError { source } => {
         write!(f, "UpdateUsernameError: database error: {:?}", source)
-      }
+      },
     }
   }
 }
 
-pub async fn update_username<'e, 't>(
-  args: UpdateUsernameArgs<'e, 't>
-) -> Result<(), UpdateUsernameError>
-{
+pub async fn update_username<'e, 't>(args: UpdateUsernameArgs<'e, 't>) -> Result<(), UpdateUsernameError> {
   let query = sqlx::query!(
-      r#"
+    r#"
 UPDATE users
 SET
   username = ?,
@@ -67,19 +64,14 @@ LIMIT 1
   match query_result {
     Ok(_) => Ok(()),
     Err(Database(err)) => {
-      let maybe_code = err.code()
-          .map(|c| c.into_owned());
+      let maybe_code = err.code().map(|c| c.into_owned());
 
-      if maybe_code.as_deref() == Some("23000")
-          && err.message().contains("username")
-      {
+      if maybe_code.as_deref() == Some("23000") && err.message().contains("username") {
         return Err(UpdateUsernameError::UsernameIsTaken);
       }
 
       Err(UpdateUsernameError::DatabaseError { source: Database(err) })
     },
-    Err(err) => {
-      Err(UpdateUsernameError::DatabaseError { source: err })
-    },
+    Err(err) => Err(UpdateUsernameError::DatabaseError { source: err }),
   }
 }

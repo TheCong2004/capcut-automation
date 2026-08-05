@@ -18,19 +18,12 @@ const MAX_REDIRECTS: usize = 10;
 #[derive(Debug)]
 pub enum DownloadFileToBytesError {
   WreqError(wreq::Error),
-  BadResponseError {
-    status_code: StatusCode,
-    body: Bytes,
-    url: String,
-  }
+  BadResponseError { status_code: StatusCode, body: Bytes, url: String },
 }
 
 /// Downloads a (binary) file to memory. Good for images, etc. Not great for large files.
 pub async fn http_download_url_to_bytes(url: &str) -> Result<Bytes, DownloadFileToBytesError> {
-  let client = Client::builder()
-      .gzip(true)
-      .redirect(Policy::limited(MAX_REDIRECTS))
-      .build()?;
+  let client = Client::builder().gzip(true).redirect(Policy::limited(MAX_REDIRECTS)).build()?;
 
   let response = client.get(url) // NB: No IntoUrl for &Url.
       .header("User-Agent", USER_AGENT)
@@ -44,11 +37,7 @@ pub async fn http_download_url_to_bytes(url: &str) -> Result<Bytes, DownloadFile
   if !status.is_success() {
     warn!("Error downloading URL (status={}): {:?}", status.as_u16(), url);
 
-    return Err(DownloadFileToBytesError::BadResponseError {
-      status_code: status,
-      body: bytes,
-      url: url.to_string(),
-    });
+    return Err(DownloadFileToBytesError::BadResponseError { status_code: status, body: bytes, url: url.to_string() });
   }
 
   Ok(bytes)
@@ -69,7 +58,7 @@ impl Display for DownloadFileToBytesError {
       DownloadFileToBytesError::WreqError(e) => write!(f, "Wreq error: {}", e),
       DownloadFileToBytesError::BadResponseError { status_code, body, url } => {
         write!(f, "Bad response (status={}) fetching {} : {:?}", status_code.as_u16(), url, body)
-      }
+      },
     }
   }
 }

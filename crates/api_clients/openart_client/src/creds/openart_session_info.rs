@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone)]
 pub struct OpenArtSessionInfo {
   /// This is either a session ID, user ID, or subscription ID.

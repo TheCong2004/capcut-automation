@@ -9,7 +9,7 @@ use tokens::tokens::anonymous_visitor_tracking::AnonymousVisitorTrackingToken;
  *
  *  Version 1: Claims include "avt_token" and "cookie_version"
  */
-const COOKIE_VERSION : u32 = 1;
+const COOKIE_VERSION: u32 = 1;
 
 // TODO: Should probably use protobuf or nom for handling
 //  data-migration sensitive wire formats rather than
@@ -26,41 +26,26 @@ pub struct AvtCookiePayload {
 }
 
 impl AvtCookiePayload {
-
   pub fn new() -> Self {
     let avt_token = AnonymousVisitorTrackingToken::generate();
 
-    AvtCookiePayload {
-      avt_token,
-      cookie_version: COOKIE_VERSION,
-    }
+    AvtCookiePayload { avt_token, cookie_version: COOKIE_VERSION }
   }
 
   pub fn from_token(avt_token: AnonymousVisitorTrackingToken) -> Self {
-    AvtCookiePayload {
-      avt_token,
-      cookie_version: COOKIE_VERSION,
-    }
+    AvtCookiePayload { avt_token, cookie_version: COOKIE_VERSION }
   }
 
   pub fn from_map(map: BTreeMap<String, String>) -> Result<Self, AvtCookiePayloadError> {
-    let avt_token = map.get("avt_token")
-        .ok_or(AvtCookiePayloadError::MissingField("avt_token"))?;
+    let avt_token = map.get("avt_token").ok_or(AvtCookiePayloadError::MissingField("avt_token"))?;
 
-    let cookie_version = map
-        .get("cookie_version")
-        .ok_or(AvtCookiePayloadError::MissingField("cookie_version"))?;
+    let cookie_version = map.get("cookie_version").ok_or(AvtCookiePayloadError::MissingField("cookie_version"))?;
 
     let avt_token = AnonymousVisitorTrackingToken::new_from_str(avt_token);
 
-    let cookie_version = u32::from_str(cookie_version)
-        .map_err(|e| AvtCookiePayloadError::PayloadDecodeError(
-          format!("invalid integer for cookie_version: {:?}, version: {}", e, cookie_version)))?;
+    let cookie_version = u32::from_str(cookie_version).map_err(|e| AvtCookiePayloadError::PayloadDecodeError(format!("invalid integer for cookie_version: {:?}, version: {}", e, cookie_version)))?;
 
-    Ok(AvtCookiePayload {
-      avt_token,
-      cookie_version,
-    })
+    Ok(AvtCookiePayload { avt_token, cookie_version })
   }
 
   pub fn to_map(&self) -> BTreeMap<String, String> {
@@ -88,13 +73,9 @@ mod tests {
 
   #[test]
   fn round_trip_test() {
-    let payload = AvtCookiePayload {
-      avt_token: AnonymousVisitorTrackingToken::generate(),
-      cookie_version: 123,
-    };
+    let payload = AvtCookiePayload { avt_token: AnonymousVisitorTrackingToken::generate(), cookie_version: 123 };
 
-    let round_trip_payload= AvtCookiePayload::from_map(payload.to_map())
-        .unwrap();
+    let round_trip_payload = AvtCookiePayload::from_map(payload.to_map()).unwrap();
 
     assert_eq!(&payload, &round_trip_payload);
   }

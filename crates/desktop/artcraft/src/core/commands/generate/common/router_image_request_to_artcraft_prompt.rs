@@ -11,22 +11,8 @@ use enums::common::generation::common_resolution::CommonResolution as EnumsResol
 use enums::common::generation_provider::GenerationProvider;
 use uuid_utils::uuid::generate_random_uuid;
 
-pub fn router_image_request_to_artcraft_prompt(
-  request: &GenerateImageRequestBuilder,
-) -> CreatePromptRequest {
-  CreatePromptRequest {
-    uuid_idempotency_token: generate_random_uuid(),
-    positive_prompt: request.prompt.clone(),
-    negative_prompt: None,
-    model_type: image_model_to_common_model_type(request.model),
-    generation_provider: Some(provider_to_generation_provider(request.provider)),
-    maybe_generation_mode: Some(determine_image_generation_mode(request)),
-    maybe_aspect_ratio: request.aspect_ratio.map(router_aspect_ratio_to_enums),
-    maybe_resolution: request.resolution.map(router_resolution_to_enums),
-    maybe_batch_count: request.image_batch_count.map(|n| n.min(255) as u8),
-    maybe_generate_audio: None,
-    maybe_duration_seconds: None,
-  }
+pub fn router_image_request_to_artcraft_prompt(request: &GenerateImageRequestBuilder) -> CreatePromptRequest {
+  CreatePromptRequest { uuid_idempotency_token: generate_random_uuid(), positive_prompt: request.prompt.clone(), negative_prompt: None, model_type: image_model_to_common_model_type(request.model), generation_provider: Some(provider_to_generation_provider(request.provider)), maybe_generation_mode: Some(determine_image_generation_mode(request)), maybe_aspect_ratio: request.aspect_ratio.map(router_aspect_ratio_to_enums), maybe_resolution: request.resolution.map(router_resolution_to_enums), maybe_batch_count: request.image_batch_count.map(|n| n.min(255) as u8), maybe_generate_audio: None, maybe_duration_seconds: None }
 }
 
 // ── Converters ──
@@ -70,7 +56,7 @@ fn provider_to_generation_provider(provider: RouterProvider) -> GenerationProvid
     RouterProvider::Artcraft => GenerationProvider::Artcraft,
     RouterProvider::Fal => GenerationProvider::Fal,
     // Unused providers -> ArtCraft
-    RouterProvider::Seedance2Pro => GenerationProvider::Artcraft ,
+    RouterProvider::Seedance2Pro => GenerationProvider::Artcraft,
     RouterProvider::GmiCloud => GenerationProvider::Artcraft,
     RouterProvider::GrokApi => GenerationProvider::Artcraft,
     RouterProvider::WorldLabs => GenerationProvider::Artcraft,
@@ -119,22 +105,7 @@ mod tests {
   use artcraft_router::client::request_mismatch_mitigation_strategy::RequestMismatchMitigationStrategy;
 
   fn base_builder() -> GenerateImageRequestBuilder {
-    GenerateImageRequestBuilder {
-      model: RouterImageModel::NanoBananaPro,
-      provider: RouterProvider::Fal,
-      prompt: Some("a cat in space".to_string()),
-      image_inputs: None,
-      resolution: None,
-      aspect_ratio: None,
-      quality: None,
-      image_batch_count: None,
-      horizontal_angle: None,
-      vertical_angle: None,
-      zoom: None,
-      request_mismatch_mitigation_strategy: RequestMismatchMitigationStrategy::ErrorOut,
-      generation_mode_mismatch_strategy: None,
-      idempotency_token: None,
-    }
+    GenerateImageRequestBuilder { model: RouterImageModel::NanoBananaPro, provider: RouterProvider::Fal, prompt: Some("a cat in space".to_string()), image_inputs: None, resolution: None, aspect_ratio: None, quality: None, image_batch_count: None, horizontal_angle: None, vertical_angle: None, zoom: None, request_mismatch_mitigation_strategy: RequestMismatchMitigationStrategy::ErrorOut, generation_mode_mismatch_strategy: None, idempotency_token: None }
   }
 
   #[test]
@@ -162,22 +133,14 @@ mod tests {
   #[test]
   fn edit_mode_when_images_present() {
     use artcraft_router::api::image_list_ref::ImageListRef;
-    let builder = GenerateImageRequestBuilder {
-      image_inputs: Some(ImageListRef::Urls(vec!["https://example.com/img.jpg".to_string()])),
-      ..base_builder()
-    };
+    let builder = GenerateImageRequestBuilder { image_inputs: Some(ImageListRef::Urls(vec!["https://example.com/img.jpg".to_string()])), ..base_builder() };
     let prompt = router_image_request_to_artcraft_prompt(&builder);
     assert_eq!(prompt.maybe_generation_mode, Some(CommonGenerationMode::Edit));
   }
 
   #[test]
   fn with_aspect_ratio_and_resolution() {
-    let builder = GenerateImageRequestBuilder {
-      aspect_ratio: Some(RouterAspectRatio::WideSixteenByNine),
-      resolution: Some(RouterResolution::TwoK),
-      image_batch_count: Some(3),
-      ..base_builder()
-    };
+    let builder = GenerateImageRequestBuilder { aspect_ratio: Some(RouterAspectRatio::WideSixteenByNine), resolution: Some(RouterResolution::TwoK), image_batch_count: Some(3), ..base_builder() };
     let prompt = router_image_request_to_artcraft_prompt(&builder);
     assert_eq!(prompt.maybe_aspect_ratio, Some(EnumsAspectRatio::WideSixteenByNine));
     assert_eq!(prompt.maybe_resolution, Some(EnumsResolution::TwoK));
@@ -186,23 +149,14 @@ mod tests {
 
   #[test]
   fn no_prompt() {
-    let builder = GenerateImageRequestBuilder {
-      prompt: None,
-      ..base_builder()
-    };
+    let builder = GenerateImageRequestBuilder { prompt: None, ..base_builder() };
     let prompt = router_image_request_to_artcraft_prompt(&builder);
     assert!(prompt.positive_prompt.is_none());
   }
 
   #[test]
   fn all_image_models_map() {
-    let models = [
-      (RouterImageModel::Flux1Dev, CommonModelType::Flux1Dev),
-      (RouterImageModel::Flux1Schnell, CommonModelType::Flux1Schnell),
-      (RouterImageModel::NanoBananaPro, CommonModelType::NanoBananaPro),
-      (RouterImageModel::GptImage1, CommonModelType::GptImage1),
-      (RouterImageModel::Seedream4, CommonModelType::Seedream4),
-    ];
+    let models = [(RouterImageModel::Flux1Dev, CommonModelType::Flux1Dev), (RouterImageModel::Flux1Schnell, CommonModelType::Flux1Schnell), (RouterImageModel::NanoBananaPro, CommonModelType::NanoBananaPro), (RouterImageModel::GptImage1, CommonModelType::GptImage1), (RouterImageModel::Seedream4, CommonModelType::Seedream4)];
     for (router_model, expected) in models {
       let builder = GenerateImageRequestBuilder { model: router_model, ..base_builder() };
       let prompt = router_image_request_to_artcraft_prompt(&builder);

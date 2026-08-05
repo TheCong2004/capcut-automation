@@ -18,14 +18,12 @@ pub struct InsertTwitchEventRuleBuilder {
 }
 
 impl InsertTwitchEventRuleBuilder {
-
   /// Returns the newly generated token.
   pub async fn insert(&self, mysql_pool: &MySqlPool) -> AnyhowResult<String> {
-
     let token = TwitchEventRuleToken::generate().to_string();
 
     let query = sqlx::query!(
-        r#"
+      r#"
 INSERT INTO twitch_event_rules
 SET
   uuid_idempotency_token = ?,

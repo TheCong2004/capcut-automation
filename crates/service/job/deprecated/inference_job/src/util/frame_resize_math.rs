@@ -26,7 +26,7 @@ pub fn aspect_preserving_frame_resize(args: ResizeArgs) -> ResizeResult {
   let width_ratio = args.target.width as f64 / args.source.width as f64;
   let height_ratio = args.target.height as f64 / args.source.height as f64;
 
-  let resize_ratio= match args.resize_method {
+  let resize_ratio = match args.resize_method {
     ResizeMethod::KeepUnder => f64::min(width_ratio, height_ratio),
     ResizeMethod::MustFill => f64::max(width_ratio, height_ratio),
   };
@@ -36,10 +36,7 @@ pub fn aspect_preserving_frame_resize(args: ResizeArgs) -> ResizeResult {
 
   // TODO(bt): u32 overflow.
 
-  ResizeResult {
-    new_width: new_width as u32,
-    new_height: new_height as u32,
-  }
+  ResizeResult { new_width: new_width as u32, new_height: new_height as u32 }
 }
 
 #[cfg(test)]
@@ -49,17 +46,7 @@ mod tests {
   #[test]
   fn no_resize() {
     for resize_method in [ResizeMethod::MustFill, ResizeMethod::KeepUnder] {
-      let result = aspect_preserving_frame_resize(ResizeArgs {
-        source: Dimensions {
-          width: 100,
-          height: 100,
-        },
-        target: Dimensions {
-          width: 100,
-          height: 100,
-        },
-        resize_method,
-      });
+      let result = aspect_preserving_frame_resize(ResizeArgs { source: Dimensions { width: 100, height: 100 }, target: Dimensions { width: 100, height: 100 }, resize_method });
       assert_eq!(result.new_width, 100);
       assert_eq!(result.new_height, 100);
     }
@@ -70,17 +57,7 @@ mod tests {
 
     #[test]
     fn above_constraints_width() {
-      let result = aspect_preserving_frame_resize(ResizeArgs {
-        source: Dimensions {
-          width: 1000,
-          height: 1000,
-        },
-        target: Dimensions {
-          width: 768,
-          height: 512,
-        },
-        resize_method: ResizeMethod::KeepUnder,
-      });
+      let result = aspect_preserving_frame_resize(ResizeArgs { source: Dimensions { width: 1000, height: 1000 }, target: Dimensions { width: 768, height: 512 }, resize_method: ResizeMethod::KeepUnder });
       assert_eq!(result.new_width, 512);
       assert_eq!(result.new_height, 512);
     }

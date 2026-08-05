@@ -23,10 +23,7 @@ mod tests {
 
   #[test]
   fn base_case() {
-    let payload = MediaFileExtraInfo::L(LivePortraitVideoExtraInfo {
-      maybe_portrait_media_token: Some(MediaFileToken::new_from_str("portrait")),
-      maybe_driver_video_media_token: Some(MediaFileToken::new_from_str("driver")),
-    });
+    let payload = MediaFileExtraInfo::L(LivePortraitVideoExtraInfo { maybe_portrait_media_token: Some(MediaFileToken::new_from_str("portrait")), maybe_driver_video_media_token: Some(MediaFileToken::new_from_str("driver")) });
 
     let json = r#"{"L":{"p":"portrait","d":"driver"}}"#;
 

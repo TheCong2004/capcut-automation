@@ -16,16 +16,11 @@ pub fn test_synthetic_failure_reason(prompt: &str) -> Option<SyntheticFailure> {
     return None;
   }
 
-  let maybe_category = prompt
-      .split_whitespace()
-      .find_map(|word| FrontendFailureCategory::from_str(word).ok());
+  let maybe_category = prompt.split_whitespace().find_map(|word| FrontendFailureCategory::from_str(word).ok());
 
   let category = maybe_category.unwrap_or(FrontendFailureCategory::GenerationFailed);
 
-  Some(SyntheticFailure {
-    frontend_failure_category: category,
-    frontend_failure_message: Some("This was a simulated failure".to_string()),
-  })
+  Some(SyntheticFailure { frontend_failure_category: category, frontend_failure_message: Some("This was a simulated failure".to_string()) })
 }
 
 #[cfg(test)]

@@ -70,26 +70,5 @@ pub struct ByQueueStats {
 )]
 #[deprecated(note = "legacy inference is shut down; this endpoint returns a hardcoded snapshot")]
 pub async fn get_unified_queue_stats_handler() -> Json<GetUnifiedQueueStatsSuccessResponse> {
-  Json(GetUnifiedQueueStatsSuccessResponse {
-    success: true,
-    cache_time: Utc::now().naive_utc(),
-    refresh_interval_millis: REFRESH_INTERVAL_MILLIS,
-    inference: ModernInferenceQueueStats {
-      total_pending_job_count: FROZEN_TOTAL_PENDING_JOB_COUNT,
-      pending_job_count: FROZEN_TOTAL_PENDING_JOB_COUNT,
-      by_queue: ByQueueStats {
-        pending_tacotron2_jobs: FROZEN_PENDING_TACOTRON2_JOBS,
-        pending_voice_designer: 0,
-        pending_rvc_jobs: FROZEN_PENDING_RVC_JOBS,
-        pending_svc_jobs: FROZEN_PENDING_SVC_JOBS,
-        pending_stable_diffusion: 0,
-        pending_face_animation_jobs: 0,
-        pending_storyteller_studio: 0,
-        pending_acting_face: 0,
-      },
-    },
-    legacy_tts: LegacyQueueDetails {
-      pending_job_count: 0,
-    },
-  })
+  Json(GetUnifiedQueueStatsSuccessResponse { success: true, cache_time: Utc::now().naive_utc(), refresh_interval_millis: REFRESH_INTERVAL_MILLIS, inference: ModernInferenceQueueStats { total_pending_job_count: FROZEN_TOTAL_PENDING_JOB_COUNT, pending_job_count: FROZEN_TOTAL_PENDING_JOB_COUNT, by_queue: ByQueueStats { pending_tacotron2_jobs: FROZEN_PENDING_TACOTRON2_JOBS, pending_voice_designer: 0, pending_rvc_jobs: FROZEN_PENDING_RVC_JOBS, pending_svc_jobs: FROZEN_PENDING_SVC_JOBS, pending_stable_diffusion: 0, pending_face_animation_jobs: 0, pending_storyteller_studio: 0, pending_acting_face: 0 } }, legacy_tts: LegacyQueueDetails { pending_job_count: 0 } })
 }

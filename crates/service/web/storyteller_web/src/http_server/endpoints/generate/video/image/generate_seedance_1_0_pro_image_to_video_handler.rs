@@ -3,9 +3,7 @@ use std::sync::Arc;
 use crate::billing::wallets::attempt_wallet_deduction::attempt_wallet_deduction_else_common_web_error;
 use crate::http_server::common_responses::common_web_error::CommonWebError;
 use crate::http_server::common_responses::media::media_links_builder::MediaLinksBuilder;
-use crate::http_server::endpoints::generate::common::generation_debug_logs::{
-  insert_generation_failure_debug_log, insert_generation_request_debug_log,
-};
+use crate::http_server::endpoints::generate::common::generation_debug_logs::{insert_generation_failure_debug_log, insert_generation_request_debug_log};
 use crate::http_server::endpoints::generate::common::payments_error_test::payments_error_test;
 use crate::http_server::endpoints::media_files::helpers::get_media_domain::get_media_domain;
 use crate::http_server::validations::validate_idempotency_token_format::validate_idempotency_token_format;
@@ -53,36 +51,23 @@ use utoipa::ToSchema;
     ("request" = GenerateSeedance10ProImageToVideoRequest, description = "Payload for Request"),
   )
 )]
-pub async fn generate_seedance_1_0_pro_image_to_video_handler(
-  http_request: HttpRequest,
-  request: Json<GenerateSeedance10ProImageToVideoRequest>,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<GenerateSeedance10ProImageToVideoResponse>, CommonWebError> {
-  
+pub async fn generate_seedance_1_0_pro_image_to_video_handler(http_request: HttpRequest, request: Json<GenerateSeedance10ProImageToVideoRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GenerateSeedance10ProImageToVideoResponse>, CommonWebError> {
   payments_error_test(&request.prompt.as_deref().unwrap_or(""))?;
-  
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
+
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   let user_token = match maybe_user_session.as_ref() {
     Some(session) => &session.user_token,
     None => {
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // ==================== DEBUG LOG: HTTP REQUEST ==================== //
@@ -91,31 +76,19 @@ pub async fn generate_seedance_1_0_pro_image_to_video_handler(
   let ip_address = get_request_ip(&http_request);
   let request_url = http_request.uri().to_string();
 
-  insert_generation_request_debug_log(
-    &debug_log_event_token,
-    user_token,
-    &ip_address,
-    &request_url,
-    &serde_json::to_string(&*request).unwrap_or_default(),
-    &mut *mysql_connection,
-  ).await;
+  insert_generation_request_debug_log(&debug_log_event_token, user_token, &ip_address, &request_url, &serde_json::to_string(&*request).unwrap_or_default(), &mut *mysql_connection).await;
 
   let start_frame_media_file_token = match &request.media_file_token {
     Some(token) => token,
     None => {
       warn!("No media file token provided");
       return Err(CommonWebError::BadInputWithSimpleMessage("No media file token provided".to_string()));
-    }
+    },
   };
 
-  let mut tokens = vec![
-    start_frame_media_file_token.clone(),
-  ];
+  let mut tokens = vec![start_frame_media_file_token.clone()];
 
-  let media_files = fetch_all_required_media_files(
-    &mut mysql_connection,
-    &tokens,
-  ).await?;
+  let media_files = fetch_all_required_media_files(&mut mysql_connection, &tokens).await?;
 
   for media_file in media_files.iter() {
     if !media_file.media_type.is_jpg_or_png_or_legacy_image() {
@@ -127,40 +100,31 @@ pub async fn generate_seedance_1_0_pro_image_to_video_handler(
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("invalid idempotency token".to_string())
-      })?;
+  insert_idempotency_token(&request.uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    error!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("invalid idempotency token".to_string())
+  })?;
 
   let media_domain = get_media_domain(&http_request);
 
-  let start_frame_url = media_files.iter()
-      .find(|file| &file.token == start_frame_media_file_token)
-      .map(|file| file.to_media_links(media_domain, server_state.server_environment))
-      .map(|file| file.cdn_url)
-      .ok_or_else(|| {
-        warn!("Start frame media file not found after fetch");
-        CommonWebError::NotFound
-      })?;
+  let start_frame_url = media_files.iter().find(|file| &file.token == start_frame_media_file_token).map(|file| file.to_media_links(media_domain, server_state.server_environment)).map(|file| file.cdn_url).ok_or_else(|| {
+    warn!("Start frame media file not found after fetch");
+    CommonWebError::NotFound
+  })?;
 
   info!("Fal webhook URL: {}", server_state.inference_providers.fal.webhook_url);
 
   let apriori_job_token = InferenceJobToken::generate();
 
-  let prompt = request.prompt
-      .as_deref()
-      .map(|prompt| prompt.trim())
-      .unwrap_or_else(|| "");
-  
+  let prompt = request.prompt.as_deref().map(|prompt| prompt.trim()).unwrap_or_else(|| "");
+
   let resolution = match &request.resolution {
     Some(GenerateSeedance10ProResolution::FourEightyP) => Seedance1ProResolution::FourEightyP,
     Some(GenerateSeedance10ProResolution::SevenTwentyP) => Seedance1ProResolution::SevenTwentyP,
     Some(GenerateSeedance10ProResolution::TenEightyP) => Seedance1ProResolution::TenEightyP,
     None => Seedance1ProResolution::SevenTwentyP,
   };
-  
+
   let duration = match &request.duration {
     Some(GenerateSeedance10ProDuration::ThreeSeconds) => Seedance1ProDuration::ThreeSeconds,
     Some(GenerateSeedance10ProDuration::FourSeconds) => Seedance1ProDuration::FourSeconds,
@@ -174,73 +138,51 @@ pub async fn generate_seedance_1_0_pro_image_to_video_handler(
     Some(GenerateSeedance10ProDuration::TwelveSeconds) => Seedance1ProDuration::TwelveSeconds,
     None => Seedance1ProDuration::FiveSeconds,
   };
-  
+
   let i2v_request = Seedance1ProRequest {
     image_url: start_frame_url.to_string(),
     duration,
     resolution,
     prompt: prompt.to_string(),
     camera_fixed: false, // TODO: Parameterize
-    seed: None, // TODO: Parameterize
+    seed: None,          // TODO: Parameterize
   };
 
   let cost = i2v_request.calculate_cost_in_cents();
 
   info!("Charging wallet: {}", cost);
 
-  attempt_wallet_deduction_else_common_web_error(
-    user_token,
-    Some(apriori_job_token.as_str()),
-    cost,
-    &mut mysql_connection,
-  ).await?;
+  attempt_wallet_deduction_else_common_web_error(user_token, Some(apriori_job_token.as_str()), cost, &mut mysql_connection).await?;
 
-  let args = Seedance1ProArgs {
-    request: i2v_request,
-    webhook_url: &server_state.inference_providers.fal.webhook_url,
-    api_key: &server_state.inference_providers.fal.api_key,
-  };
+  let args = Seedance1ProArgs { request: i2v_request, webhook_url: &server_state.inference_providers.fal.webhook_url, api_key: &server_state.inference_providers.fal.api_key };
 
   let fal_result = match enqueue_seedance_1_pro_image_to_video_webhook(args).await {
     Ok(result) => result,
     Err(err) => {
       warn!("Error calling enqueue_seedance_1_pro_image_to_video_webhook: {:?}", err);
-      insert_generation_failure_debug_log(
-        &debug_log_event_token,
-        user_token,
-        &ip_address,
-        &request_url,
-        &format!("Seedance 1.0 Pro generation failed: {:?}", err),
-        &mut *mysql_connection,
-      ).await;
+      insert_generation_failure_debug_log(&debug_log_event_token, user_token, &ip_address, &request_url, &format!("Seedance 1.0 Pro generation failed: {:?}", err), &mut *mysql_connection).await;
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
-  let external_job_id = fal_result.request_id
-      .ok_or_else(|| {
-        warn!("Fal request_id is None");
-        CommonWebError::server_error_with_message("Fal request_id is None")
-      })?;
-  
+  let external_job_id = fal_result.request_id.ok_or_else(|| {
+    warn!("Fal request_id is None");
+    CommonWebError::server_error_with_message("Fal request_id is None")
+  })?;
+
   info!("Fal request_id: {}", external_job_id);
-  
-  let mut transaction = mysql_connection
-      .begin()
-      .await
-      .map_err(|err| {
-        error!("Error starting MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+
+  let mut transaction = mysql_connection.begin().await.map_err(|err| {
+    error!("Error starting MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // NB: Don't fail the job if the query fails.
   let prompt_result = insert_prompt(InsertPromptArgs {
     maybe_bitrate: None,
     maybe_apriori_prompt_token: None,
     prompt_type: PromptType::ArtcraftApp,
-    maybe_creator_user_token: maybe_user_session
-        .as_ref()
-        .map(|s| &s.user_token),
+    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
     maybe_model_type: Some(CommonModelType::Seedance10Pro),
     maybe_generation_provider: Some(GenerationProvider::Artcraft),
     maybe_positive_prompt: Some(prompt),
@@ -266,56 +208,31 @@ pub async fn generate_seedance_1_0_pro_image_to_video_handler(
     creator_ip_address: &ip_address,
     mysql_executor: &mut *transaction,
     phantom: Default::default(),
-  }).await;
+  })
+  .await;
 
   let prompt_token = match prompt_result {
     Ok(token) => Some(token),
     Err(err) => {
       warn!("Error inserting prompt: {:?}", err);
       None // Don't fail the job if the prompt insertion fails.
-    }
+    },
   };
 
-  let db_result = insert_generic_inference_job_for_fal_queue_with_apriori_job_token(InsertGenericInferenceForFalWithAprioriJobTokenArgs {
-    apriori_job_token: &apriori_job_token,
-    uuid_idempotency_token: &request.uuid_idempotency_token,
-    maybe_external_third_party_id: &external_job_id,
-    fal_category: FalCategory::VideoGeneration,
-    maybe_model_type: Some(CommonModelType::Seedance10Pro),
-    maybe_inference_args: None,
-    maybe_prompt_token: prompt_token.as_ref(),
-    maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
-    maybe_avt_token: maybe_avt_token.as_ref(),
-    creator_ip_address: &ip_address,
-    creator_set_visibility: Visibility::Public,
-    maybe_platform_type: get_request_platform_type(&http_request),
-    maybe_cost_estimates: None,
-    mysql_executor: &mut *transaction,
-    starting_job_status_override: None,
-    maybe_frontend_failure_category: None,
-    maybe_failure_reason: None,
-    maybe_debug_log_event_token: Some(&debug_log_event_token),
-    phantom: Default::default(),
-  }).await;
+  let db_result = insert_generic_inference_job_for_fal_queue_with_apriori_job_token(InsertGenericInferenceForFalWithAprioriJobTokenArgs { apriori_job_token: &apriori_job_token, uuid_idempotency_token: &request.uuid_idempotency_token, maybe_external_third_party_id: &external_job_id, fal_category: FalCategory::VideoGeneration, maybe_model_type: Some(CommonModelType::Seedance10Pro), maybe_inference_args: None, maybe_prompt_token: prompt_token.as_ref(), maybe_creator_user_token: maybe_user_session.as_ref().map(|s| &s.user_token), maybe_avt_token: maybe_avt_token.as_ref(), creator_ip_address: &ip_address, creator_set_visibility: Visibility::Public, maybe_platform_type: get_request_platform_type(&http_request), maybe_cost_estimates: None, mysql_executor: &mut *transaction, starting_job_status_override: None, maybe_frontend_failure_category: None, maybe_failure_reason: None, maybe_debug_log_event_token: Some(&debug_log_event_token), phantom: Default::default() }).await;
 
   let job_token = match db_result {
     Ok(token) => token,
     Err(err) => {
       warn!("Error inserting generic inference job for FAL queue: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
-  let _r = transaction
-      .commit()
-      .await
-      .map_err(|err| {
-        error!("Error committing MySQL transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let _r = transaction.commit().await.map_err(|err| {
+    error!("Error committing MySQL transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  Ok(Json(GenerateSeedance10ProImageToVideoResponse {
-    success: true,
-    inference_job_token: job_token,
-  }))
+  Ok(Json(GenerateSeedance10ProImageToVideoResponse { success: true, inference_job_token: job_token }))
 }

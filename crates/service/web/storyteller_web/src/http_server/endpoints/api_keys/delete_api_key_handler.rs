@@ -8,9 +8,7 @@ use log::warn;
 use artcraft_api_defs::api_keys::common::ApiKeyPathInfo;
 use artcraft_api_defs::api_keys::delete_api_key::DeleteApiKeySuccessResponse;
 use mysql_queries::queries::api_keys::delete_api_key::{delete_api_key, DeleteApiKeyArgs};
-use mysql_queries::queries::api_keys::get_api_key_by_token::{
-  get_api_key_by_token, GetApiKeyByTokenArgs,
-};
+use mysql_queries::queries::api_keys::get_api_key_by_token::{get_api_key_by_token, GetApiKeyByTokenArgs};
 use tokens::tokens::api_keys::ApiKeyToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
@@ -30,11 +28,7 @@ use crate::state::server_state::ServerState;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn delete_api_key_handler(
-  http_request: HttpRequest,
-  path: Path<ApiKeyPathInfo>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<DeleteApiKeySuccessResponse>, CommonWebError> {
+pub async fn delete_api_key_handler(http_request: HttpRequest, path: Path<ApiKeyPathInfo>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<DeleteApiKeySuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -45,25 +39,19 @@ pub async fn delete_api_key_handler(
   // The by-token delete query isn't owner-scoped, so first look the key up and
   // confirm ownership. Return NotFound for missing OR other-owned keys, so we
   // never leak the existence of another user's key.
-  let row = get_api_key_by_token(GetApiKeyByTokenArgs {
-    token: &path.api_key_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
-    warn!("get_api_key_by_token failed: {:?}", err);
-    CommonWebError::from_error(err)
-  })?
-  .filter(|row| row.owner_user_token == user_session.user_token)
-  .ok_or(CommonWebError::NotFound)?;
+  let row = get_api_key_by_token(GetApiKeyByTokenArgs { token: &path.api_key_token, mysql_executor: &mut *conn, phantom: PhantomData })
+    .await
+    .map_err(|err| {
+      warn!("get_api_key_by_token failed: {:?}", err);
+      CommonWebError::from_error(err)
+    })?
+    .filter(|row| row.owner_user_token == user_session.user_token)
+    .ok_or(CommonWebError::NotFound)?;
 
   // Only issue the delete if the key is still live. If it's already
   // soft-deleted the desired end state already holds, so treat it as success.
   if row.maybe_deleted_at.is_none() {
-    delete_api_key(DeleteApiKeyArgs {
-      token: &path.api_key_token,
-      mysql_executor: &mut *conn,
-      phantom: PhantomData,
-    }).await.map_err(|err| {
+    delete_api_key(DeleteApiKeyArgs { token: &path.api_key_token, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
       warn!("delete_api_key failed: {:?}", err);
       CommonWebError::from_error(err)
     })?;

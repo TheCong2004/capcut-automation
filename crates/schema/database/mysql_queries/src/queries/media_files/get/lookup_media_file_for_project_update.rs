@@ -29,9 +29,7 @@ where
 /// the creator tokens (for ownership checks) and the media/project types
 /// (to confirm the record is the right kind of project document).
 /// Excludes soft-deleted rows.
-pub async fn lookup_media_file_for_project_update<'e, 'c: 'e, E>(
-  args: LookupMediaFileForProjectUpdateArgs<'e, 'c, E>,
-) -> Result<Option<MediaFileForProjectUpdate>, sqlx::Error>
+pub async fn lookup_media_file_for_project_update<'e, 'c: 'e, E>(args: LookupMediaFileForProjectUpdateArgs<'e, 'c, E>) -> Result<Option<MediaFileForProjectUpdate>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -50,13 +48,8 @@ LIMIT 1
     "#,
     args.media_file_token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|record| MediaFileForProjectUpdate {
-    maybe_creator_user_token: record.maybe_creator_user_token,
-    maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token,
-    media_type: record.media_type,
-    maybe_project_type: record.maybe_project_type,
-  }))
+  Ok(result.map(|record| MediaFileForProjectUpdate { maybe_creator_user_token: record.maybe_creator_user_token, maybe_creator_anonymous_visitor_token: record.maybe_creator_anonymous_visitor_token, media_type: record.media_type, maybe_project_type: record.maybe_project_type }))
 }

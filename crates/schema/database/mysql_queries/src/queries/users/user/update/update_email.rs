@@ -26,20 +26,17 @@ impl Display for UpdateEmailError {
     match self {
       UpdateEmailError::EmailIsTaken => {
         write!(f, "UpdateEmailError: email is taken")
-      }
+      },
       UpdateEmailError::DatabaseError { source } => {
         write!(f, "UpdateEmailError: database error: {:?}", source)
-      }
+      },
     }
   }
 }
 
-pub async fn update_email<'e, 't>(
-  args: UpdateEmailArgs<'e, 't>
-) -> Result<(), UpdateEmailError>
-{
+pub async fn update_email<'e, 't>(args: UpdateEmailArgs<'e, 't>) -> Result<(), UpdateEmailError> {
   let query = sqlx::query!(
-      r#"
+    r#"
 UPDATE users
 SET
   email_address = ?,
@@ -64,20 +61,15 @@ LIMIT 1
   match query_result {
     Ok(_) => Ok(()),
     Err(Database(err)) => {
-      let maybe_code = err.code()
-          .map(|c| c.into_owned());
+      let maybe_code = err.code().map(|c| c.into_owned());
 
       // MySQL error code 23000 is a duplicate key constraint violation
-      if maybe_code.as_deref() == Some("23000")
-          && err.message().contains("email_address")
-      {
+      if maybe_code.as_deref() == Some("23000") && err.message().contains("email_address") {
         return Err(UpdateEmailError::EmailIsTaken);
       }
 
       Err(UpdateEmailError::DatabaseError { source: Database(err) })
     },
-    Err(err) => {
-      Err(UpdateEmailError::DatabaseError { source: err })
-    },
+    Err(err) => Err(UpdateEmailError::DatabaseError { source: err }),
   }
 }

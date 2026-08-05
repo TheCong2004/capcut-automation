@@ -53,9 +53,7 @@ where
 ///
 /// Cover images deliberately do not consume the creator's synthetic file IDs:
 /// those number the user's visible assets, and covers are hidden.
-pub async fn insert_cover_media_file<'a, 'c: 'a, E>(
-  args: InsertCoverMediaFileArgs<'a, 'c, E>,
-) -> Result<MediaFileToken, sqlx::Error>
+pub async fn insert_cover_media_file<'a, 'c: 'a, E>(args: InsertCoverMediaFileArgs<'a, 'c, E>) -> Result<MediaFileToken, sqlx::Error>
 where
   E: 'a + Executor<'c, Database = MySql>,
 {
@@ -116,7 +114,8 @@ where
     // Connection
     mysql_executor: args.mysql_executor,
     phantom: Default::default(),
-  }).await?;
+  })
+  .await?;
 
   Ok(media_token)
 }

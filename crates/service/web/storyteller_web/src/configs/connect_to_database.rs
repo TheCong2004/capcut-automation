@@ -22,19 +22,11 @@ pub async fn connect_to_database() -> AnyhowResult<MySqlPool> {
 
   // NB: Log the settings before building/connecting so a connect failure has context. We do NOT
   // log the connection string (it contains credentials).
-  info!(
-    "Building MySQL pool: max_connections={}, min_connections={}, acquire_timeout_seconds={}",
-    max_connections, min_connections, acquire_timeout_seconds,
-  );
+  info!("Building MySQL pool: max_connections={}, min_connections={}, acquire_timeout_seconds={}", max_connections, min_connections, acquire_timeout_seconds,);
 
-  let pool_options = MySqlPoolOptions::new()
-      .max_connections(max_connections)
-      .min_connections(min_connections)
-      .acquire_timeout(Duration::from_secs(acquire_timeout_seconds));
+  let pool_options = MySqlPoolOptions::new().max_connections(max_connections).min_connections(min_connections).acquire_timeout(Duration::from_secs(acquire_timeout_seconds));
 
-  let pool = pool_options
-      .connect(&db_connection_string)
-      .await?;
+  let pool = pool_options.connect(&db_connection_string).await?;
 
   Ok(pool)
 }

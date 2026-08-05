@@ -34,9 +34,7 @@ where
 /// `version` vector clock is incremented by 1, and `updated_at` is refreshed via
 /// the column's `ON UPDATE` clause. Returns the number of rows affected (0 if no
 /// row matched).
-pub async fn update_uploaded_video_note<'e, 'c: 'e, E>(
-  args: UpdateUploadedVideoNoteArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn update_uploaded_video_note<'e, 'c: 'e, E>(args: UpdateUploadedVideoNoteArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -70,8 +68,8 @@ LIMIT 1
     args.maybe_comment_update_ip_address,
     args.token.as_str(),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(result.rows_affected())
 }

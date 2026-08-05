@@ -245,8 +245,7 @@ pub fn read_id3v1<B: ReadBytes>(reader: &mut B, metadata: &mut MetadataBuilder) 
         metadata.add_tag(Tag::new(Some(StandardTagKey::TrackNumber), "TRACK", Value::from(track)));
 
         decode_iso8859_text(&buf[94..122])
-    }
-    else {
+    } else {
         decode_iso8859_text(&buf[94..124])
     };
 

@@ -17,8 +17,7 @@ pub struct ArtcraftSeedance2p0BytePlusFastCostState {
 
 impl ArtcraftSeedance2p0BytePlusFastCostState {
   pub fn from_request(request: &ArtcraftSeedance2p0BytePlusFastRequestState) -> Self {
-    let resolution = request.request.resolution
-      .unwrap_or(CommonResolution::SevenTwentyP);
+    let resolution = request.request.resolution.unwrap_or(CommonResolution::SevenTwentyP);
     let duration_seconds = request.request.duration_seconds.unwrap_or(5);
     let batch_count = request.request.video_batch_count.unwrap_or(1);
     Self { resolution, duration_seconds, batch_count }
@@ -32,15 +31,7 @@ impl ArtcraftSeedance2p0BytePlusFastCostState {
 
     let usd_cents = (self.duration_seconds as f64 * cents_per_second * self.batch_count as f64).round() as u64;
 
-    VideoGenerationCostEstimate {
-      cost_in_credits: Some(usd_cents),
-      cost_in_usd_cents: Some(usd_cents),
-      is_free: false,
-      is_unlimited: false,
-      is_rate_limited: false,
-      has_watermark: false,
-      failures_are_refunded: None,
-    }
+    VideoGenerationCostEstimate { cost_in_credits: Some(usd_cents), cost_in_usd_cents: Some(usd_cents), is_free: false, is_unlimited: false, is_rate_limited: false, has_watermark: false, failures_are_refunded: None }
   }
 }
 
@@ -127,19 +118,8 @@ mod tests {
 
   // -- Helpers --
 
-  fn build_cost(
-    resolution: Option<RouterResolution>,
-    duration_seconds: u16,
-    video_batch_count: u16,
-  ) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
-    GenerateVideoRequestBuilder {
-      model: RouterVideoModel::Seedance2p0BytePlusFast,
-      provider: RouterProvider::Artcraft,
-      resolution,
-      duration_seconds: Some(duration_seconds),
-      video_batch_count: Some(video_batch_count),
-      ..Default::default()
-    }.build2().expect("build2").estimate_cost().expect("estimate_cost")
+  fn build_cost(resolution: Option<RouterResolution>, duration_seconds: u16, video_batch_count: u16) -> crate::generate::generate_video::video_generation_cost_estimate::VideoGenerationCostEstimate {
+    GenerateVideoRequestBuilder { model: RouterVideoModel::Seedance2p0BytePlusFast, provider: RouterProvider::Artcraft, resolution, duration_seconds: Some(duration_seconds), video_batch_count: Some(video_batch_count), ..Default::default() }.build2().expect("build2").estimate_cost().expect("estimate_cost")
   }
 
   fn cost_cents(resolution: Option<RouterResolution>, duration_seconds: u16, video_batch_count: u16) -> u64 {

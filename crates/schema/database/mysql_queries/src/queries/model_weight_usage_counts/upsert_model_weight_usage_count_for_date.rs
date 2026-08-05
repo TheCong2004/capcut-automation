@@ -8,7 +8,8 @@ use errors::AnyhowResult;
 use tokens::tokens::model_weights::ModelWeightToken;
 
 pub struct Args<'e, 'c, E>
-where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub model_token: &'e ModelWeightToken,
   pub date: NaiveDate,
@@ -27,10 +28,9 @@ where E: 'e + Executor<'c, Database = MySql>
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn upsert_model_weight_usage_count_for_date<'e, 'c : 'e, E>(
-  args: Args<'e, 'c, E>,
-) -> AnyhowResult<()>
-where E: 'e + Executor<'c, Database = MySql>
+pub async fn upsert_model_weight_usage_count_for_date<'e, 'c: 'e, E>(args: Args<'e, 'c, E>) -> AnyhowResult<()>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   if !args.insert_on_zero && args.usage_count == 0 {
     info!("Skipping insert for zero usage count");
@@ -38,7 +38,7 @@ where E: 'e + Executor<'c, Database = MySql>
   }
 
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO model_weight_usage_counts
 SET
   token = ?,
@@ -49,12 +49,12 @@ SET
 ON DUPLICATE KEY UPDATE
   usage_count = ?
         "#,
-      // Insert
-      args.model_token.as_str(),
-      args.date,
-      args.usage_count,
-      args.usage_count,
-    );
+    // Insert
+    args.model_token.as_str(),
+    args.date,
+    args.usage_count,
+    args.usage_count,
+  );
 
   let _r = query.execute(args.mysql_executor).await?;
 

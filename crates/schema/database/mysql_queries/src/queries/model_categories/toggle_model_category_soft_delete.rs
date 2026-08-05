@@ -11,15 +11,12 @@ pub enum ToggleSoftDeleteState {
   Undelete,
 }
 
-pub async fn toggle_model_category_soft_delete(
-  category_token: &str,
-  state: ToggleSoftDeleteState,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<()> {
+pub async fn toggle_model_category_soft_delete(category_token: &str, state: ToggleSoftDeleteState, mysql_pool: &MySqlPool) -> AnyhowResult<()> {
   // NB: We're soft deleting so we don't delete the associations.
   let query = match state {
     ToggleSoftDeleteState::Delete => {
-      sqlx::query!(r#"
+      sqlx::query!(
+        r#"
         UPDATE model_categories
         SET
           deleted_at = CURRENT_TIMESTAMP
@@ -27,10 +24,12 @@ pub async fn toggle_model_category_soft_delete(
           token = ?
         LIMIT 1
       "#,
-      category_token)
-    }
+        category_token
+      )
+    },
     ToggleSoftDeleteState::Undelete => {
-      sqlx::query!(r#"
+      sqlx::query!(
+        r#"
         UPDATE model_categories
         SET
           deleted_at = NULL
@@ -38,8 +37,9 @@ pub async fn toggle_model_category_soft_delete(
           token = ?
         LIMIT 1
       "#,
-      category_token)
-    }
+        category_token
+      )
+    },
   };
 
   // NB: We're soft deleting so we don't delete the associations.

@@ -95,8 +95,7 @@ impl VorbisDecoder {
             let _next_window_flag = bs.read_bool()?;
 
             (self.ident.bs1_exp, &mut self.dsp.imdct_long)
-        }
-        else {
+        } else {
             // This packet (block) uses a short window.
             (self.ident.bs0_exp, &mut self.dsp.imdct_short)
         };
@@ -124,8 +123,7 @@ impl VorbisDecoder {
                 // data just read from the bitstream, synthesize the floor curve for this channel
                 // now and save it for audio synthesis later.
                 floor.synthesis(bs_exp, &mut ch.floor)?;
-            }
-            else {
+            } else {
                 // If the channel is unused, zero the floor vector.
                 ch.floor[..n2].fill(0.0);
             }
@@ -181,8 +179,7 @@ impl VorbisDecoder {
                 // Magnitude channel index < angle channel index.
                 let (a, b) = self.dsp.channels.split_at_mut(coupling.angle_ch as usize);
                 (&mut a[coupling.magnitude_ch as usize], &mut b[0])
-            }
-            else {
+            } else {
                 // Angle channel index < magnitude channel index.
                 let (a, b) = self.dsp.channels.split_at_mut(coupling.magnitude_ch as usize);
                 (&mut b[0], &mut a[coupling.angle_ch as usize])
@@ -192,16 +189,13 @@ impl VorbisDecoder {
                 let (new_m, new_a) = if *m > 0.0 {
                     if *a > 0.0 {
                         (*m, *m - *a)
-                    }
-                    else {
+                    } else {
                         (*m + *a, *m)
                     }
-                }
-                else {
+                } else {
                     if *a > 0.0 {
                         (*m, *m + *a)
-                    }
-                    else {
+                    } else {
                         (*m - *a, *m)
                     }
                 };
@@ -235,8 +229,7 @@ impl VorbisDecoder {
             // The previous block size.
             let prev_block_n = if lap_state.prev_block_flag {
                 1 << self.ident.bs1_exp
-            }
-            else {
+            } else {
                 1 << self.ident.bs0_exp
             };
 
@@ -341,8 +334,7 @@ impl Decoder for VorbisDecoder {
         if let Err(e) = self.decode_inner(packet) {
             self.buf.clear();
             Err(e)
-        }
-        else {
+        } else {
             Ok(self.buf.as_audio_buffer_ref())
         }
     }
@@ -674,8 +666,7 @@ fn read_mapping_type0(
 
             multiplex.push(mux);
         }
-    }
-    else {
+    } else {
         multiplex.resize(usize::from(audio_channels), 0);
     }
 

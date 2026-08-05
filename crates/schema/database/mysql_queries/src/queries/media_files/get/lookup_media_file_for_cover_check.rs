@@ -29,9 +29,7 @@ where
 /// the media class and type (to decide whether the file can be used as a
 /// cover directly), and the file's own self-referential cover-image token
 /// (for the "use the cover's cover" fallback). Excludes soft-deleted rows.
-pub async fn lookup_media_file_for_cover_check<'e, 'c: 'e, E>(
-  args: LookupMediaFileForCoverCheckArgs<'e, 'c, E>,
-) -> Result<Option<MediaFileForCoverCheck>, sqlx::Error>
+pub async fn lookup_media_file_for_cover_check<'e, 'c: 'e, E>(args: LookupMediaFileForCoverCheckArgs<'e, 'c, E>) -> Result<Option<MediaFileForCoverCheck>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -50,13 +48,8 @@ LIMIT 1
     "#,
     args.media_file_token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|r| MediaFileForCoverCheck {
-    maybe_creator_user_token: r.maybe_creator_user_token,
-    media_class: r.media_class,
-    media_type: r.media_type,
-    maybe_cover_image_media_file_token: r.maybe_cover_image_media_file_token,
-  }))
+  Ok(result.map(|r| MediaFileForCoverCheck { maybe_creator_user_token: r.maybe_creator_user_token, media_class: r.media_class, media_type: r.media_type, maybe_cover_image_media_file_token: r.maybe_cover_image_media_file_token }))
 }

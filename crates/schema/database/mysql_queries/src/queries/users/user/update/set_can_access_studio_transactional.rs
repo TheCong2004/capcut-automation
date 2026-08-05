@@ -15,7 +15,7 @@ pub struct SetCanAccessStudioArgs<'a, 'b> {
 
 pub async fn set_can_access_studio_transactional(args: SetCanAccessStudioArgs<'_, '_>) -> AnyhowResult<()> {
   let query_result = sqlx::query!(
-        r#"
+    r#"
 UPDATE users
 SET
     can_access_studio = ?,
@@ -24,11 +24,11 @@ SET
 WHERE users.token = ?
 LIMIT 1
         "#,
-      args.can_access_studio,
-      args.subject_user_token,
-    )
-      .execute(&mut **args.transaction)
-      .await;
+    args.can_access_studio,
+    args.subject_user_token,
+  )
+  .execute(&mut **args.transaction)
+  .await;
 
   if let Err(err) = query_result {
     return Err(anyhow!("error with query: {:?}", err));

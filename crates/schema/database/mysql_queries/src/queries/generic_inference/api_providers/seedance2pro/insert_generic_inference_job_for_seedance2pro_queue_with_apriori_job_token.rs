@@ -21,13 +21,11 @@ use tokens::tokens::wallet_ledger_entries::WalletLedgerEntryToken;
 use crate::errors::database_query_error::DatabaseQueryError;
 use crate::queries::generic_inference::common::job_cost_estimates::JobCostEstimates;
 use crate::payloads::generic_inference_args::generic_inference_args::GenericInferenceArgs;
-use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{
-  insert_generic_inference_job_for_provider,
-  InsertGenericInferenceJobForProviderArgs,
-};
+use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{insert_generic_inference_job_for_provider, InsertGenericInferenceJobForProviderArgs};
 
 pub struct InsertGenericInferenceForSeedance2ProWithAprioriJobTokenArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   /// Which kinovi queue to use
   pub kinovi_version: KinoviVersion,
@@ -73,49 +71,22 @@ pub enum KinoviVersion {
   BytePlusUltra,
 }
 
-
-pub async fn insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token<'e, 'c : 'e, E>(
-  args: InsertGenericInferenceForSeedance2ProWithAprioriJobTokenArgs<'e, 'c, E>
-) -> Result<InferenceJobToken, DatabaseQueryError>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token<'e, 'c: 'e, E>(args: InsertGenericInferenceForSeedance2ProWithAprioriJobTokenArgs<'e, 'c, E>) -> Result<InferenceJobToken, DatabaseQueryError>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   let is_image_model = match args.maybe_model_type {
-    Some(CommonModelType::Midjourney7) |
-    Some(CommonModelType::Midjourney7Niji) |
-    Some(CommonModelType::Midjourney8) |
-    Some(CommonModelType::Seedream5p0Pro) => true,
+    Some(CommonModelType::Midjourney7) | Some(CommonModelType::Midjourney7Niji) | Some(CommonModelType::Midjourney8) | Some(CommonModelType::Seedream5p0Pro) => true,
     _ => false,
   };
 
-  let is_audio_model = args.maybe_model_type
-    .map(|model_type| model_type.get_model_class() == CommonModelClass::Audio)
-    .unwrap_or(false);
+  let is_audio_model = args.maybe_model_type.map(|model_type| model_type.get_model_class() == CommonModelClass::Audio).unwrap_or(false);
 
-  let (
-    job_type,
-    external_third_party,
-    mut product_category
-  ) = match (args.kinovi_version, is_image_model) {
-    (KinoviVersion::Volcengine, true) => (
-      InferenceJobType::Seedance2ProQueue,
-      InferenceJobExternalThirdParty::Seedance2Pro,
-      InferenceJobProductCategory::Seedance2ProVideo,
-    ),
-    (KinoviVersion::Volcengine, false) => (
-      InferenceJobType::Seedance2ProQueue,
-      InferenceJobExternalThirdParty::Seedance2Pro,
-      InferenceJobProductCategory::Seedance2ProImage,
-    ),
-    (KinoviVersion::BytePlus, _) => (
-      InferenceJobType::Seedance2ProAltQueue,
-      InferenceJobExternalThirdParty::Seedance2ProAlt,
-      InferenceJobProductCategory::Seedance2ProVideoAlt,
-    ),
-    (KinoviVersion::BytePlusUltra, _) => (
-      InferenceJobType::Seedance2ProBytePlusUltraQueue,
-      InferenceJobExternalThirdParty::Seedance2ProBytePlusUltra,
-      InferenceJobProductCategory::Seedance2ProVideoBytePlusUltra,
-    ),
+  let (job_type, external_third_party, mut product_category) = match (args.kinovi_version, is_image_model) {
+    (KinoviVersion::Volcengine, true) => (InferenceJobType::Seedance2ProQueue, InferenceJobExternalThirdParty::Seedance2Pro, InferenceJobProductCategory::Seedance2ProVideo),
+    (KinoviVersion::Volcengine, false) => (InferenceJobType::Seedance2ProQueue, InferenceJobExternalThirdParty::Seedance2Pro, InferenceJobProductCategory::Seedance2ProImage),
+    (KinoviVersion::BytePlus, _) => (InferenceJobType::Seedance2ProAltQueue, InferenceJobExternalThirdParty::Seedance2ProAlt, InferenceJobProductCategory::Seedance2ProVideoAlt),
+    (KinoviVersion::BytePlusUltra, _) => (InferenceJobType::Seedance2ProBytePlusUltraQueue, InferenceJobExternalThirdParty::Seedance2ProBytePlusUltra, InferenceJobProductCategory::Seedance2ProVideoBytePlusUltra),
   };
 
   if is_audio_model {
@@ -154,7 +125,8 @@ pub async fn insert_generic_inference_job_for_seedance2pro_queue_with_apriori_jo
     status: JobStatusPlus::Pending,
     mysql_executor: args.mysql_executor,
     phantom: args.phantom,
-  }).await?;
+  })
+  .await?;
 
   info!("Insert generic inference job for Seedance 2 Pro queue: {} with record ID {}", args.apriori_job_token, record_id);
 

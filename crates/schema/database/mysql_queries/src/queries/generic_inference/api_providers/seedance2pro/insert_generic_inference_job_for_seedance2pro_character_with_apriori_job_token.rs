@@ -14,13 +14,11 @@ use tokens::tokens::generic_inference_jobs::InferenceJobToken;
 use tokens::tokens::users::UserToken;
 
 use crate::errors::database_query_error::DatabaseQueryError;
-use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{
-  insert_generic_inference_job_for_provider,
-  InsertGenericInferenceJobForProviderArgs,
-};
+use crate::queries::generic_inference::api_providers::common::insert_generic_inference_job_for_provider::{insert_generic_inference_job_for_provider, InsertGenericInferenceJobForProviderArgs};
 
 pub struct InsertGenericInferenceForSeedance2ProCharacterWithAprioriJobTokenArgs<'e, 'c, E>
-  where E: 'e + Executor<'c, Database = MySql>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
   pub uuid_idempotency_token: &'e str,
 
@@ -41,12 +39,10 @@ pub struct InsertGenericInferenceForSeedance2ProCharacterWithAprioriJobTokenArgs
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn insert_generic_inference_job_for_seedance2pro_character_with_apriori_job_token<'e, 'c : 'e, E>(
-  args: InsertGenericInferenceForSeedance2ProCharacterWithAprioriJobTokenArgs<'e, 'c, E>
-) -> Result<InferenceJobToken, DatabaseQueryError>
-  where E: 'e + Executor<'c, Database = MySql>
+pub async fn insert_generic_inference_job_for_seedance2pro_character_with_apriori_job_token<'e, 'c: 'e, E>(args: InsertGenericInferenceForSeedance2ProCharacterWithAprioriJobTokenArgs<'e, 'c, E>) -> Result<InferenceJobToken, DatabaseQueryError>
+where
+  E: 'e + Executor<'c, Database = MySql>,
 {
-
   let record_id = insert_generic_inference_job_for_provider(InsertGenericInferenceJobForProviderArgs {
     apriori_job_token: args.apriori_job_token,
     uuid_idempotency_token: args.uuid_idempotency_token,
@@ -71,7 +67,8 @@ pub async fn insert_generic_inference_job_for_seedance2pro_character_with_aprior
     status: JobStatusPlus::Pending,
     mysql_executor: args.mysql_executor,
     phantom: args.phantom,
-  }).await?;
+  })
+  .await?;
 
   info!("Insert generic inference job for Seedance2Pro character: {} with record ID {}", args.apriori_job_token, record_id);
 

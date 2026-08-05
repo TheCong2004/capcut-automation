@@ -16,28 +16,19 @@ use crate::job_types::dispatch_job_to_handler::{dispatch_job_to_handler, Dispatc
 use crate::JobState;
 
 pub async fn process_single_job(job_state: &JobState, job: &AvailableDownloadJob) -> AnyhowResult<()> {
-
   // ==================== ATTEMPT TO GRAB JOB LOCK ==================== //
 
-  let lock_acquired = mark_generic_download_job_pending_and_grab_lock(
-    &job_state.mysql_pool,
-    job.id,
-    &job_state.container_db,
-  ).await?;
+  let lock_acquired = mark_generic_download_job_pending_and_grab_lock(&job_state.mysql_pool, job.id, &job_state.container_db).await?;
 
   if !lock_acquired {
     warn!("Could not acquire job lock for: {}", &job.id.0);
-    return Ok(())
+    return Ok(());
   }
 
   process_single_job_wrap_with_logs(job_state, job).await
 }
 
-async fn process_single_job_wrap_with_logs(
-  job_state: &JobState,
-  job: &AvailableDownloadJob,
-) -> AnyhowResult<()> {
-
+async fn process_single_job_wrap_with_logs(job_state: &JobState, job: &AvailableDownloadJob) -> AnyhowResult<()> {
   println!("\n  ----------------------------------------- JOB START -----------------------------------------  \n");
 
   info!("Beginning work download ({}): {:?}", job.id.0, job.download_job_token);
@@ -53,7 +44,6 @@ async fn process_single_job_wrap_with_logs(
 }
 
 pub async fn do_process_single_job(job_state: &JobState, job: &AvailableDownloadJob) -> AnyhowResult<()> {
-
   // TODO(bt, 2023-07-27): Redis pool management probably belongs at near the outermost loop.
   let mut redis = job_state.redis_pool.get()?;
   let mut redis_logger = RedisJobStatusLogger::new_generic_download(&mut redis, job.download_job_token.as_str());
@@ -83,20 +73,14 @@ pub async fn do_process_single_job(job_state: &JobState, job: &AvailableDownload
     Err(e) => {
       safe_delete_directory(&temp_dir);
       return Err(e);
-    }
+    },
   };
 
   info!("Downloaded filename: {}", &download_filename);
 
   // ==================== HANDLE DIFFERENT DOWNLOAD TYPES ==================== //
 
-  let result_details = dispatch_job_to_handler(DispatchJobToHandlerArgs {
-    job_runner_state: job_state,
-    job,
-    temp_dir: &temp_dir,
-    download_filename: &download_filename,
-    redis_logger: &mut redis_logger,
-  }).await?;
+  let result_details = dispatch_job_to_handler(DispatchJobToHandlerArgs { job_runner_state: job_state, job, temp_dir: &temp_dir, download_filename: &download_filename, redis_logger: &mut redis_logger }).await?;
 
   let mut entity_token: Option<String> = None;
   let mut entity_type: Option<String> = None;
@@ -115,25 +99,14 @@ pub async fn do_process_single_job(job_state: &JobState, job: &AvailableDownload
 
   info!("Marking job complete...");
 
-  mark_generic_download_job_done(
-    &job_state.mysql_pool,
-    job,
-    true,
-    entity_token.as_deref(),
-    entity_type.as_deref(),
-    job_duration,
-  ).await?;
+  mark_generic_download_job_done(&job_state.mysql_pool, job, true, entity_token.as_deref(), entity_type.as_deref(), job_duration).await?;
 
   info!("Saved model record: {} - {}", job.id.0, &job.download_job_token);
 
-  job_state.firehose_publisher.publish_generic_download_finished(
-    &job.creator_user_token,
-    entity_token.as_deref())
-      .await
-      .map_err(|e| {
-        warn!("error publishing event: {:?}", e);
-        anyhow!("error publishing event")
-      })?;
+  job_state.firehose_publisher.publish_generic_download_finished(&job.creator_user_token, entity_token.as_deref()).await.map_err(|e| {
+    warn!("error publishing event: {:?}", e);
+    anyhow!("error publishing event")
+  })?;
 
   redis_logger.log_status("done")?;
 

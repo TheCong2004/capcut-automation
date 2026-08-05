@@ -93,45 +93,29 @@ pub struct TtsModelModeratorFields {
 // FIXME: This is the old style of query scoping and shouldn't be copied.
 //  The moderator-only fields are good practice, though.
 
-
-pub async fn get_tts_model_by_token(
-  tts_model_token: &str,
-  can_see_deleted: bool,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<Option<TtsModelRecord>> {
+pub async fn get_tts_model_by_token(tts_model_token: &str, can_see_deleted: bool, mysql_pool: &MySqlPool) -> AnyhowResult<Option<TtsModelRecord>> {
   let mut connection = mysql_pool.acquire().await?;
   get_tts_model_by_token_using_connection(tts_model_token, can_see_deleted, &mut connection).await
 }
 
-pub async fn get_tts_model_by_token_using_connection(
-  tts_model_token: &str,
-  can_see_deleted: bool,
-  mysql_connection: &mut PoolConnection<MySql>
-) -> AnyhowResult<Option<TtsModelRecord>> {
+pub async fn get_tts_model_by_token_using_connection(tts_model_token: &str, can_see_deleted: bool, mysql_connection: &mut PoolConnection<MySql>) -> AnyhowResult<Option<TtsModelRecord>> {
+  let maybe_record = if can_see_deleted { select_including_deleted(tts_model_token, mysql_connection).await } else { select_without_deleted(tts_model_token, mysql_connection).await };
 
-  let maybe_record = if can_see_deleted {
-    select_including_deleted(tts_model_token, mysql_connection).await
-  } else {
-    select_without_deleted(tts_model_token, mysql_connection).await
-  };
-
-  let model : InternalTtsModelRecordRaw = match maybe_record {
+  let model: InternalTtsModelRecordRaw = match maybe_record {
     Ok(model) => model,
-    Err(ref err) => {
-      match err {
-        sqlx::Error::RowNotFound => {
-          warn!("tts model not found: {:?}", &err);
-          return Ok(None);
-        },
-        _ => {
-          warn!("tts model query error: {:?}", &err);
-          return Err(anyhow!("database error"));
-        }
-      }
-    }
+    Err(ref err) => match err {
+      sqlx::Error::RowNotFound => {
+        warn!("tts model not found: {:?}", &err);
+        return Ok(None);
+      },
+      _ => {
+        warn!("tts model query error: {:?}", &err);
+        return Err(anyhow!("database error"));
+      },
+    },
   };
 
-  let mut maybe_vocoder : Option<VocoderType> = None;
+  let mut maybe_vocoder: Option<VocoderType> = None;
   if let Some(vocoder) = model.maybe_default_pretrained_vocoder.as_deref() {
     maybe_vocoder = Some(VocoderType::from_str(vocoder)?);
   }
@@ -146,14 +130,7 @@ pub async fn get_tts_model_by_token_using_connection(
       // NB: We're relying on a single field's presence to infer that the others vocoder fields
       // are also there. If for some reason they aren't, fail open.
       None => None,
-      Some(vocoder_token) => Some(CustomVocoderFields {
-        vocoder_token,
-        vocoder_title: model.maybe_custom_vocoder_title.unwrap_or("".to_string()),
-        creator_user_token: model.maybe_custom_vocoder_creator_user_token.unwrap_or("".to_string()),
-        creator_username: model.maybe_custom_vocoder_creator_username.unwrap_or("".to_string()),
-        creator_display_name: model.maybe_custom_vocoder_creator_display_name.unwrap_or("".to_string()),
-        creator_gravatar_hash: model.maybe_custom_vocoder_creator_gravatar_hash.unwrap_or("".to_string()),
-      })
+      Some(vocoder_token) => Some(CustomVocoderFields { vocoder_token, vocoder_title: model.maybe_custom_vocoder_title.unwrap_or("".to_string()), creator_user_token: model.maybe_custom_vocoder_creator_user_token.unwrap_or("".to_string()), creator_username: model.maybe_custom_vocoder_creator_username.unwrap_or("".to_string()), creator_display_name: model.maybe_custom_vocoder_creator_display_name.unwrap_or("".to_string()), creator_gravatar_hash: model.maybe_custom_vocoder_creator_gravatar_hash.unwrap_or("".to_string()) }),
     },
     creator_user_token: model.creator_user_token,
     creator_username: model.creator_username,
@@ -171,36 +148,22 @@ pub async fn get_tts_model_by_token_using_connection(
     user_ratings_positive_count: model.user_ratings_positive_count,
     user_ratings_negative_count: model.user_ratings_negative_count,
     user_ratings_total_count: model.user_ratings_total_count,
-    creator_set_visibility: Visibility::from_str(&model.creator_set_visibility)
-        .unwrap_or(Visibility::Public),
+    creator_set_visibility: Visibility::from_str(&model.creator_set_visibility).unwrap_or(Visibility::Public),
     is_locked_from_use: i8_to_bool(model.is_locked_from_use),
     is_locked_from_user_modification: i8_to_bool(model.is_locked_from_user_modification),
-    maybe_migration_new_model_weights_token: model.maybe_migration_new_model_weights_token
-        .as_deref()
-        .map(|token| ModelWeightToken::new_from_str(token)),
+    maybe_migration_new_model_weights_token: model.maybe_migration_new_model_weights_token.as_deref().map(|token| ModelWeightToken::new_from_str(token)),
     created_at: model.created_at,
     updated_at: model.updated_at,
-    maybe_moderator_fields: Some(TtsModelModeratorFields {
-      use_default_mel_multiply_factor: i8_to_bool(model.use_default_mel_multiply_factor),
-      maybe_custom_mel_multiply_factor: model.maybe_custom_mel_multiply_factor,
-      creator_is_banned: i8_to_bool(model.creator_is_banned),
-      creator_ip_address_creation: model.creator_ip_address_creation,
-      creator_ip_address_last_update: model.creator_ip_address_last_update,
-      user_deleted_at: model.user_deleted_at,
-      mod_deleted_at: model.mod_deleted_at,
-    }),
+    maybe_moderator_fields: Some(TtsModelModeratorFields { use_default_mel_multiply_factor: i8_to_bool(model.use_default_mel_multiply_factor), maybe_custom_mel_multiply_factor: model.maybe_custom_mel_multiply_factor, creator_is_banned: i8_to_bool(model.creator_is_banned), creator_ip_address_creation: model.creator_ip_address_creation, creator_ip_address_last_update: model.creator_ip_address_last_update, user_deleted_at: model.user_deleted_at, mod_deleted_at: model.mod_deleted_at }),
   };
 
   Ok(Some(model_for_response))
 }
 
-async fn select_including_deleted(
-  tts_model_token: &str,
-  mysql_connection: &mut PoolConnection<MySql>
-) -> Result<InternalTtsModelRecordRaw, sqlx::Error> {
+async fn select_including_deleted(tts_model_token: &str, mysql_connection: &mut PoolConnection<MySql>) -> Result<InternalTtsModelRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      InternalTtsModelRecordRaw,
-        r#"
+    InternalTtsModelRecordRaw,
+    r#"
 SELECT
     tts.token as model_token,
     tts.tts_model_type as `tts_model_type: enums::by_table::tts_models::tts_model_type::TtsModelType`,
@@ -266,19 +229,16 @@ LEFT OUTER JOIN users AS vocoder_user
 
 WHERE tts.token = ?
         "#,
-      tts_model_token
-    )
-    .fetch_one(&mut **mysql_connection)
-    .await // TODO: This will return error if it doesn't exist
+    tts_model_token
+  )
+  .fetch_one(&mut **mysql_connection)
+  .await // TODO: This will return error if it doesn't exist
 }
 
-async fn select_without_deleted(
-  tts_model_token: &str,
-  mysql_connection: &mut PoolConnection<MySql>
-) -> Result<InternalTtsModelRecordRaw, sqlx::Error> {
+async fn select_without_deleted(tts_model_token: &str, mysql_connection: &mut PoolConnection<MySql>) -> Result<InternalTtsModelRecordRaw, sqlx::Error> {
   sqlx::query_as!(
-      InternalTtsModelRecordRaw,
-        r#"
+    InternalTtsModelRecordRaw,
+    r#"
 SELECT
     tts.token as model_token,
     tts.tts_model_type as `tts_model_type: enums::by_table::tts_models::tts_model_type::TtsModelType`,
@@ -347,10 +307,10 @@ WHERE
     AND tts.user_deleted_at IS NULL
     AND tts.mod_deleted_at IS NULL
         "#,
-      tts_model_token
-    )
-    .fetch_one(&mut **mysql_connection)
-    .await // TODO: This will return error if it doesn't exist
+    tts_model_token
+  )
+  .fetch_one(&mut **mysql_connection)
+  .await // TODO: This will return error if it doesn't exist
 }
 
 #[derive(Serialize)]

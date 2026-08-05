@@ -1,11 +1,7 @@
 use log::warn;
 
 use enums::common::visibility::Visibility;
-use mysql_queries::queries::generic_inference::api_providers::seedance2pro::insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token::{
-  insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token,
-  InsertGenericInferenceForSeedance2ProWithAprioriJobTokenArgs,
-  KinoviVersion,
-};
+use mysql_queries::queries::generic_inference::api_providers::seedance2pro::insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token::{insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token, InsertGenericInferenceForSeedance2ProWithAprioriJobTokenArgs, KinoviVersion};
 use tokens::tokens::generic_inference_jobs::InferenceJobToken;
 use tokens::tokens::wallet_ledger_entries::WalletLedgerEntryToken;
 
@@ -20,40 +16,15 @@ pub struct InsertSeedance2proJobArgs<'a, 'tx> {
 }
 
 pub async fn insert_seedance2pro_job(args: InsertSeedance2proJobArgs<'_, '_>) -> Result<InferenceJobToken, CommonWebError> {
-  let InsertSeedance2proJobArgs {
-    order_id,
-    maybe_wallet_ledger_entry_token,
-    kinovi_version,
-    shared,
-  } = args;
+  let InsertSeedance2proJobArgs { order_id, maybe_wallet_ledger_entry_token, kinovi_version, shared } = args;
 
-  let db_result = insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token(
-    InsertGenericInferenceForSeedance2ProWithAprioriJobTokenArgs {
-      kinovi_version,
-      apriori_job_token: shared.apriori_job_token,
-      uuid_idempotency_token: shared.idempotency_token,
-      maybe_external_third_party_id: order_id,
-      maybe_model_type: shared.maybe_model_type,
-      maybe_prompt_token: shared.maybe_prompt_token,
-      maybe_wallet_ledger_entry_token,
-      maybe_creator_user_token: Some(shared.user_token),
-      maybe_avt_token: shared.maybe_avt_token,
-      creator_ip_address: shared.ip_address,
-      creator_set_visibility: Visibility::Public,
-      maybe_platform_type: shared.maybe_platform_type,
-      maybe_cost_estimates: shared.maybe_cost_estimates,
-      maybe_debug_log_event_token: shared.maybe_debug_log_event_token,
-      mysql_executor: &mut **shared.transaction,
-      maybe_inference_args: None,
-      phantom: Default::default(),
-    }
-  ).await;
+  let db_result = insert_generic_inference_job_for_seedance2pro_queue_with_apriori_job_token(InsertGenericInferenceForSeedance2ProWithAprioriJobTokenArgs { kinovi_version, apriori_job_token: shared.apriori_job_token, uuid_idempotency_token: shared.idempotency_token, maybe_external_third_party_id: order_id, maybe_model_type: shared.maybe_model_type, maybe_prompt_token: shared.maybe_prompt_token, maybe_wallet_ledger_entry_token, maybe_creator_user_token: Some(shared.user_token), maybe_avt_token: shared.maybe_avt_token, creator_ip_address: shared.ip_address, creator_set_visibility: Visibility::Public, maybe_platform_type: shared.maybe_platform_type, maybe_cost_estimates: shared.maybe_cost_estimates, maybe_debug_log_event_token: shared.maybe_debug_log_event_token, mysql_executor: &mut **shared.transaction, maybe_inference_args: None, phantom: Default::default() }).await;
 
   match db_result {
     Ok(token) => Ok(token),
     Err(err) => {
       warn!("Error inserting seedance2pro audio inference job (order_id={}): {:?}", order_id, err);
       Err(CommonWebError::from_error(err))
-    }
+    },
   }
 }

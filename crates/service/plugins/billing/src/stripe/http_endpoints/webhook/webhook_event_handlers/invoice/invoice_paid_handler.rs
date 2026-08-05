@@ -69,42 +69,31 @@ pub enum InvoicePaidDetails {
 //    appropriate date in the future (plus a day or two for leeway).
 //
 pub fn invoice_paid_handler(invoice: &Invoice) -> Result<StripeWebhookSummary, StripeWebhookError> {
-  let maybe_invoice_details = invoice_paid_extractor(invoice)
-      .map_err(|err| {
-        let reason = format!("Error extracting invoice details from 'invoice.paid' payload: {:?}", err);
-        error!("{}", reason);
-        StripeWebhookError::ServerError(reason)
-      })?;
+  let maybe_invoice_details = invoice_paid_extractor(invoice).map_err(|err| {
+    let reason = format!("Error extracting invoice details from 'invoice.paid' payload: {:?}", err);
+    error!("{}", reason);
+    StripeWebhookError::ServerError(reason)
+  })?;
 
   // TODO
-  Ok(StripeWebhookSummary {
-    maybe_user_token: None,
-    maybe_event_entity_id: None,
-    maybe_stripe_customer_id: None,
-    action_was_taken: false,
-    should_ignore_retry: false,
-  })
+  Ok(StripeWebhookSummary { maybe_user_token: None, maybe_event_entity_id: None, maybe_stripe_customer_id: None, action_was_taken: false, should_ignore_retry: false })
 }
 
 fn invoice_paid_extractor(invoice: &Invoice) -> AnyhowResult<Option<InvoicePaidDetails>> {
   match invoice.status {
-    Some(InvoiceStatus::Paid) => {}
+    Some(InvoiceStatus::Paid) => {},
     _ => {
       return Ok(None);
     },
   }
 
   let invoice_id = invoice.id.to_string();
-  let is_production= invoice.livemode.unwrap_or(false);
+  let is_production = invoice.livemode.unwrap_or(false);
   let paid_status = invoice.status;
 
-  let maybe_stripe_customer_id  = invoice.customer
-      .as_ref()
-      .map(|c| expand_customer_id(c));
+  let maybe_stripe_customer_id = invoice.customer.as_ref().map(|c| expand_customer_id(c));
 
-  let maybe_stripe_subscription_id = invoice.subscription
-      .as_ref()
-      .map(|s| expand_subscription_id(s));
+  let maybe_stripe_subscription_id = invoice.subscription.as_ref().map(|s| expand_subscription_id(s));
 
   // TODO: We only handle a single line item for now.
   let line_item = match invoice.lines.data.first() {
@@ -115,43 +104,23 @@ fn invoice_paid_extractor(invoice: &Invoice) -> AnyhowResult<Option<InvoicePaidD
   let paid_details = match line_item.type_ {
     InvoiceLineItemType::InvoiceItem => {
       return Ok(None); // TODO: Handle one-time payments.
-    }
+    },
     InvoiceLineItemType::Subscription => {
-      let maybe_subscription_id = line_item.subscription
-          .as_ref().map(|s| expand_subscription_id(s));
+      let maybe_subscription_id = line_item.subscription.as_ref().map(|s| expand_subscription_id(s));
 
-      let maybe_product_id = line_item.price
-          .as_ref()
-          .and_then(|price| price.product.as_ref())
-          .map(|product| expand_product_id(product));
+      let maybe_product_id = line_item.price.as_ref().and_then(|price| price.product.as_ref()).map(|product| expand_product_id(product));
 
-      let maybe_price_id = line_item.price
-          .as_ref()
-          .map(|price| price.id.to_string());
+      let maybe_price_id = line_item.price.as_ref().map(|price| price.id.to_string());
 
       // NB: Internal user token (non-stripe)
-      let maybe_user_token = line_item.metadata.get(METADATA_USER_TOKEN)
-          .map(|d| d.to_string());
+      let maybe_user_token = line_item.metadata.get(METADATA_USER_TOKEN).map(|d| d.to_string());
 
-      InvoicePaidDetails::Subscription(SubscriptionDetails {
-        user_token: maybe_user_token,
-        stripe_is_production: is_production,
-        stripe_invoice_id: invoice_id,
-        stripe_customer_id: maybe_stripe_customer_id,
-        stripe_subscription_id: maybe_subscription_id,
-        stripe_product_id: maybe_product_id,
-        stripe_price_id: maybe_price_id,
-        subscription_is_active: false,
-        billed_at: Utc::now(),
-        subscription_interval: Default::default(),
-        subscription_expires_at: Utc::now(),
-      })
-    }
+      InvoicePaidDetails::Subscription(SubscriptionDetails { user_token: maybe_user_token, stripe_is_production: is_production, stripe_invoice_id: invoice_id, stripe_customer_id: maybe_stripe_customer_id, stripe_subscription_id: maybe_subscription_id, stripe_product_id: maybe_product_id, stripe_price_id: maybe_price_id, subscription_is_active: false, billed_at: Utc::now(), subscription_interval: Default::default(), subscription_expires_at: Utc::now() })
+    },
   };
 
   Ok(Some(paid_details))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -193,11 +162,13 @@ mod tests {
     let details = invoice_paid_extractor(&invoice).unwrap().unwrap();
 
     match details {
-      InvoicePaidDetails::Product(_) => { bail!("This is supposed to be a subscription!"); }
+      InvoicePaidDetails::Product(_) => {
+        bail!("This is supposed to be a subscription!");
+      },
       InvoicePaidDetails::Subscription(subscription) => {
         assert_eq!(subscription.stripe_invoice_id, "in_1Lh1R6EU5se17Mekksuvq20H".to_string());
         assert_eq!(subscription.user_token, Some("U:TOKEN".to_string()));
-      }
+      },
     }
 
     Ok(())

@@ -20,9 +20,7 @@ where
 /// just-committed soft-delete and cleans up links the snapshot happily
 /// inserted. Cheap — an IN-list probe on `index_tag_token` plus a
 /// primary-key lookup per link.
-pub async fn delete_links_to_soft_deleted_tags<'e, 'c: 'e, E>(
-  args: DeleteLinksToSoftDeletedTagsArgs<'e, 'c, E>,
-) -> Result<u64, sqlx::Error>
+pub async fn delete_links_to_soft_deleted_tags<'e, 'c: 'e, E>(args: DeleteLinksToSoftDeletedTagsArgs<'e, 'c, E>) -> Result<u64, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {

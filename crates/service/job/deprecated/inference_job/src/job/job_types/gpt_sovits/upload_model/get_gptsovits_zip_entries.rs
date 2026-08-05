@@ -9,13 +9,13 @@ use crate::job::job_types::gpt_sovits::model_package::model_package::{GptSovitsP
 // We want most of our users to name the reference audio and text transcript files as
 // "reference.wav" and "reference.txt" respectively. (Even if this isn't universally
 // adopted as standard, we can use heuristics to make other inputs work.)
-const EXPECTED_REFERENCE_FILE_STEM : &str = "reference";
+const EXPECTED_REFERENCE_FILE_STEM: &str = "reference";
 
 // Justin's files start with "ref_audio" and "ref_text". He packs other audio files in
 // as well, so we'll want to ignore those.
 const BACKUP_REFERENCE_FILE_PREFIX: &str = "ref_";
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct PackageZipEntryDetails {
   pub package_type: GptSovitsPackageFileType,
   pub enclosed_name: PathBuf,
@@ -47,11 +47,10 @@ fn find_archive_files_of_interest<R: Read + Seek>(archive: &mut ZipArchive<BufRe
   for i in 0..archive.len() {
     info!("Reading file {}...", i);
 
-    let file = archive.by_index(i)
-        .map_err(|err| {
-          error!("Problem reading file from archive: {:?}", err);
-          GptSovitsPackageError::InvalidArchive
-        })?;
+    let file = archive.by_index(i).map_err(|err| {
+      error!("Problem reading file from archive: {:?}", err);
+      GptSovitsPackageError::InvalidArchive
+    })?;
 
     let filename = file.name();
     let filename_lowercase = filename.to_lowercase();
@@ -79,21 +78,17 @@ fn find_archive_files_of_interest<R: Read + Seek>(archive: &mut ZipArchive<BufRe
     };
 
     // "reference.wav" --> "reference"
-    let maybe_stem = enclosed_name.file_stem()
-        .map(|stem| stem.to_str())
-        .flatten();
+    let maybe_stem = enclosed_name.file_stem().map(|stem| stem.to_str()).flatten();
 
     // "reference.wav" --> "wav"
-    let maybe_extension = enclosed_name.extension()
-        .map(|ext| ext.to_str())
-        .flatten();
+    let maybe_extension = enclosed_name.extension().map(|ext| ext.to_str()).flatten();
 
     let stem = match maybe_stem {
       Some(stem) => stem,
       None => {
         info!("No stem for file: {:?}", filename);
         continue;
-      }
+      },
     };
 
     let extension = match maybe_extension {
@@ -101,7 +96,7 @@ fn find_archive_files_of_interest<R: Read + Seek>(archive: &mut ZipArchive<BufRe
       None => {
         info!("No extension for file: {:?}", filename);
         continue;
-      }
+      },
     };
 
     info!("Attempting to process file with name {} extension: {}", enclosed_name.display(), extension);
@@ -110,19 +105,11 @@ fn find_archive_files_of_interest<R: Read + Seek>(archive: &mut ZipArchive<BufRe
       None => {
         info!("Skipping file with name {} extension: {}", enclosed_name.display(), extension);
         continue;
-      }
+      },
       Some(package_type) => {
         info!("Adding file with name {} extension: {}", enclosed_name.display(), extension);
-        entries.push(PackageZipEntryDetails {
-          enclosed_name: enclosed_name.to_path_buf(),
-          maybe_better_alternative_output_name: package_type.package_identifier().to_string(),
-          file_size: file.size(),
-          is_valid_file_extension: package_type.extension_is_allowed(extension),
-          package_type,
-          extension: extension.to_string(),
-          stem: stem.to_string(),
-        });
-      }
+        entries.push(PackageZipEntryDetails { enclosed_name: enclosed_name.to_path_buf(), maybe_better_alternative_output_name: package_type.package_identifier().to_string(), file_size: file.size(), is_valid_file_extension: package_type.extension_is_allowed(extension), package_type, extension: extension.to_string(), stem: stem.to_string() });
+      },
     }
   }
 
@@ -144,15 +131,9 @@ fn filter_expected_reference_file_names(entries: Vec<PackageZipEntryDetails>) ->
     }
   }
 
-  let maybe_audio = audio_reference_files.iter()
-      .find(|file| {
-        &file.stem == EXPECTED_REFERENCE_FILE_STEM
-      });
+  let maybe_audio = audio_reference_files.iter().find(|file| &file.stem == EXPECTED_REFERENCE_FILE_STEM);
 
-  let maybe_text = text_reference_files.iter()
-      .find(|file| {
-        &file.stem == EXPECTED_REFERENCE_FILE_STEM
-      });
+  let maybe_text = text_reference_files.iter().find(|file| &file.stem == EXPECTED_REFERENCE_FILE_STEM);
 
   // If we find both names as expected, discard any and all other audio and text files.
   if let Some(audio) = maybe_audio {
@@ -183,15 +164,9 @@ fn filter_matching_reference_file_names(entries: Vec<PackageZipEntryDetails>) ->
     }
   }
 
-  let maybe_audio = audio_reference_files.iter()
-      .find(|file| {
-        file.stem.starts_with(BACKUP_REFERENCE_FILE_PREFIX)
-      });
+  let maybe_audio = audio_reference_files.iter().find(|file| file.stem.starts_with(BACKUP_REFERENCE_FILE_PREFIX));
 
-  let maybe_text = text_reference_files.iter()
-      .find(|file| {
-        file.stem.starts_with(BACKUP_REFERENCE_FILE_PREFIX)
-      });
+  let maybe_text = text_reference_files.iter().find(|file| file.stem.starts_with(BACKUP_REFERENCE_FILE_PREFIX));
 
   // If we find both names as expected, discard any and all other audio and text files.
   if let Some(audio) = maybe_audio {
@@ -225,10 +200,7 @@ fn filter_prefixed_reference_file_names(entries: Vec<PackageZipEntryDetails>) ->
   // If there are multiple audio files, try to pair them with matching text transcript files on the basis of name matching.
   if audio_reference_files.len() > 1 {
     for text_reference in text_reference_files.iter() {
-      let maybe_audio = audio_reference_files.iter()
-          .find(|audio| {
-            &audio.stem == &text_reference.stem
-          });
+      let maybe_audio = audio_reference_files.iter().find(|audio| &audio.stem == &text_reference.stem);
 
       if let Some(audio) = maybe_audio {
         audio_reference_files = vec![audio.clone()];
@@ -241,10 +213,7 @@ fn filter_prefixed_reference_file_names(entries: Vec<PackageZipEntryDetails>) ->
   // If there are multiple text transcript files, try to pair them with matching audio files on the basis of name matching.
   if text_reference_files.len() > 1 {
     for audio_reference in audio_reference_files.iter() {
-      let maybe_text = text_reference_files.iter()
-          .find(|text| {
-            &text.stem == &audio_reference.stem
-          });
+      let maybe_text = text_reference_files.iter().find(|text| &text.stem == &audio_reference.stem);
 
       if let Some(text) = maybe_text {
         text_reference_files = vec![text.clone()];
@@ -267,19 +236,11 @@ fn fail_on_duplicate_files(entries: Vec<PackageZipEntryDetails>) -> Result<Vec<P
     if let Some(package_type) = GptSovitsPackageFileType::for_extension(&entry.extension) {
       if filtered.iter().any(|entry: &PackageZipEntryDetails| &entry.package_type == &package_type) {
         return match package_type {
-          GptSovitsPackageFileType::GptModel => {
-            Err(GptSovitsPackageError::InvalidGPTModel("Multiple GPT models found".to_string()))
-          }
-          GptSovitsPackageFileType::SovitsCheckpoint => {
-            Err(GptSovitsPackageError::InvalidSovitsCheckpoint("Multiple Sovits checkpoints found".to_string()))
-          }
-          GptSovitsPackageFileType::ReferenceAudio => {
-            Err(GptSovitsPackageError::InvalidReferenceAudio("Multiple reference audio files found".to_string()))
-          }
-          GptSovitsPackageFileType::ReferenceTranscript => {
-            Err(GptSovitsPackageError::InvalidReferenceTranscript("Multiple reference transcript files found".to_string()))
-          }
-        }
+          GptSovitsPackageFileType::GptModel => Err(GptSovitsPackageError::InvalidGPTModel("Multiple GPT models found".to_string())),
+          GptSovitsPackageFileType::SovitsCheckpoint => Err(GptSovitsPackageError::InvalidSovitsCheckpoint("Multiple Sovits checkpoints found".to_string())),
+          GptSovitsPackageFileType::ReferenceAudio => Err(GptSovitsPackageError::InvalidReferenceAudio("Multiple reference audio files found".to_string())),
+          GptSovitsPackageFileType::ReferenceTranscript => Err(GptSovitsPackageError::InvalidReferenceTranscript("Multiple reference transcript files found".to_string())),
+        };
       }
       filtered.push(entry);
     }
@@ -290,13 +251,9 @@ fn fail_on_duplicate_files(entries: Vec<PackageZipEntryDetails>) -> Result<Vec<P
 
 fn fail_on_no_models(entries: Vec<PackageZipEntryDetails>) -> Result<Vec<PackageZipEntryDetails>, GptSovitsPackageError> {
   // Only the model files are truly essential
-  let has_no_gpt = entries.iter()
-      .find(|entry| entry.package_type == GptSovitsPackageFileType::GptModel)
-      .is_none();
+  let has_no_gpt = entries.iter().find(|entry| entry.package_type == GptSovitsPackageFileType::GptModel).is_none();
 
-  let has_no_sovits = entries.iter()
-      .find(|entry| entry.package_type == GptSovitsPackageFileType::SovitsCheckpoint)
-      .is_none();
+  let has_no_sovits = entries.iter().find(|entry| entry.package_type == GptSovitsPackageFileType::SovitsCheckpoint).is_none();
 
   if has_no_gpt || has_no_sovits {
     return Err(GptSovitsPackageError::InvalidArchive);

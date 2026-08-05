@@ -2,7 +2,6 @@
 /// These do not have to have the same value for each instance, but they behave
 /// similarly across all usages.
 pub struct CommonEnv {
-
   /// The amount of time to wait between job batches (not individual jobs).
   /// This prevents the outer loop of querying batches from flooding the DB.
   /// (In theory, there's work within jobs that prevents rapidly pegging the DB.)
@@ -25,14 +24,7 @@ pub struct CommonEnv {
 }
 
 impl CommonEnv {
-
   pub fn read_from_env() -> anyhow::Result<Self> {
-    Ok(Self {
-      job_batch_wait_millis: easyenv::get_env_num("JOB_BATCH_WAIT_MILLIS", 100)?,
-      job_max_attempts: easyenv::get_env_num("JOB_MAX_ATTEMPTS", 3)?,
-      job_batch_size: easyenv::get_env_num("JOB_BATCH_SIZE", 10)?,
-      no_op_logger_millis: easyenv::get_env_num("NO_OP_LOGGER_MILLIS", 15_000)?,
-      debug_job_end_sleep_millis: easyenv::get_env_num("DEBUG_JOB_END_SLEEP_MILLIS", 0)?,
-    })
+    Ok(Self { job_batch_wait_millis: easyenv::get_env_num("JOB_BATCH_WAIT_MILLIS", 100)?, job_max_attempts: easyenv::get_env_num("JOB_MAX_ATTEMPTS", 3)?, job_batch_size: easyenv::get_env_num("JOB_BATCH_SIZE", 10)?, no_op_logger_millis: easyenv::get_env_num("NO_OP_LOGGER_MILLIS", 15_000)?, debug_job_end_sleep_millis: easyenv::get_env_num("DEBUG_JOB_END_SLEEP_MILLIS", 0)? })
   }
 }

@@ -5,7 +5,6 @@ use jwt_light::error::JwtError;
 use jwt_light::parse_jwt_claims_trait::ParseJwtClaims;
 use serde_json::{Map, Value};
 
-
 #[derive(Clone, Debug)]
 pub struct JwtClaims {
   /// From the "iat" field
@@ -22,30 +21,13 @@ pub struct JwtClaims {
 
 impl ParseJwtClaims for JwtClaims {
   fn extract_claims(common_claims: CommonClaims, extra_claims: Map<String, Value>) -> Result<Self, JwtError> {
-    let id = extra_claims.get("id")
-        .ok_or_else(|| JwtError::CustomClaimsFieldError("no id claim".to_string()))?
-        .as_i64()
-        .ok_or_else(|| JwtError::CustomClaimsFieldError("id is not a string".to_string()))?
-        .to_string();
+    let id = extra_claims.get("id").ok_or_else(|| JwtError::CustomClaimsFieldError("no id claim".to_string()))?.as_i64().ok_or_else(|| JwtError::CustomClaimsFieldError("id is not a string".to_string()))?.to_string();
 
-    let email = extra_claims.get("email")
-        .ok_or_else(|| JwtError::CustomClaimsFieldError("no email claim".to_string()))?
-        .as_str()
-        .ok_or_else(|| JwtError::CustomClaimsFieldError("email is not a string".to_string()))?
-        .to_string();
+    let email = extra_claims.get("email").ok_or_else(|| JwtError::CustomClaimsFieldError("no email claim".to_string()))?.as_str().ok_or_else(|| JwtError::CustomClaimsFieldError("email is not a string".to_string()))?.to_string();
 
-    let sso = extra_claims.get("sso")
-        .map(|val| val.as_bool())
-        .flatten()
-        .unwrap_or(false);
+    let sso = extra_claims.get("sso").map(|val| val.as_bool()).flatten().unwrap_or(false);
 
-    Ok(Self {
-      created: common_claims.created,
-      expiration: common_claims.expiration,
-      id,
-      email,
-      sso,
-    })
+    Ok(Self { created: common_claims.created, expiration: common_claims.expiration, id, email, sso })
   }
 }
 

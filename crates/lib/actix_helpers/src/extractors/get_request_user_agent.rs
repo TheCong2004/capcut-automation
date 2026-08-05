@@ -11,11 +11,7 @@ pub fn get_request_user_agent(request: &HttpRequest) -> Option<&str> {
 }
 
 fn try_get_request_user_agent(request: &HttpRequest) -> Result<Option<&str>, ToStrError> {
-  Ok(request.headers()
-      .get(USER_AGENT)
-      .map(|value| value.to_str())
-      .transpose()?
-      .filter(|value| !value.is_empty()))
+  Ok(request.headers().get(USER_AGENT).map(|value| value.to_str()).transpose()?.filter(|value| !value.is_empty()))
 }
 
 #[cfg(test)]
@@ -26,8 +22,7 @@ mod tests {
 
   #[test]
   fn missing_user_agent() {
-    let request = TestRequest::default()
-        .to_http_request();
+    let request = TestRequest::default().to_http_request();
 
     let origin = get_request_user_agent(&request);
 
@@ -36,9 +31,7 @@ mod tests {
 
   #[test]
   fn empty_string_user_agent() {
-    let request = TestRequest::default()
-        .insert_header(("User-Agent", ""))
-        .to_http_request();
+    let request = TestRequest::default().insert_header(("User-Agent", "")).to_http_request();
 
     let origin = get_request_user_agent(&request);
 
@@ -47,9 +40,7 @@ mod tests {
 
   #[test]
   fn user_agent() {
-    let request = TestRequest::default()
-        .insert_header(("User-Agent", "Blah Blah"))
-        .to_http_request();
+    let request = TestRequest::default().insert_header(("User-Agent", "Blah Blah")).to_http_request();
 
     let origin = get_request_user_agent(&request);
 
@@ -58,9 +49,7 @@ mod tests {
 
   #[test]
   fn user_agent_lower_case() {
-    let request = TestRequest::default()
-        .insert_header(("user-agent", "foo/1.0"))
-        .to_http_request();
+    let request = TestRequest::default().insert_header(("user-agent", "foo/1.0")).to_http_request();
 
     let origin = get_request_user_agent(&request);
 

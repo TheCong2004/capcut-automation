@@ -59,9 +59,7 @@ where
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn get_user_spend_summary<'e, 'c: 'e, E>(
-  args: GetUserSpendSummaryArgs<'e, 'c, E>,
-) -> Result<Option<UserSpendSummaryRecord>, sqlx::Error>
+pub async fn get_user_spend_summary<'e, 'c: 'e, E>(args: GetUserSpendSummaryArgs<'e, 'c, E>) -> Result<Option<UserSpendSummaryRecord>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -116,8 +114,8 @@ LIMIT 1
     args.payments_namespace.to_str(),
     args.user_token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
   Ok(row)
 }

@@ -1,4 +1,4 @@
-pub (crate) mod internal_select_wallet_balance_for_update;
+pub(crate) mod internal_select_wallet_balance_for_update;
 pub mod add_durable_banked_balance_to_wallet;
 pub mod create_new_artcraft_wallet_for_owner_user;
 pub mod create_new_wallet_for_owner_user;

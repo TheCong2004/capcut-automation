@@ -28,10 +28,7 @@ pub async fn main() -> AnyhowResult<()> {
 
   let db_connection_string = env_get_mysql_connection_string_or_default();
 
-  let pool = MySqlPoolOptions::new()
-      .max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 3)?)
-      .connect(&db_connection_string)
-      .await?;
+  let pool = MySqlPoolOptions::new().max_connections(easyenv::get_env_num("MYSQL_MAX_CONNECTIONS", 3)?).connect(&db_connection_string).await?;
 
   let _args = parse_cli_args()?;
 
@@ -41,11 +38,11 @@ pub async fn main() -> AnyhowResult<()> {
   //  maybe_bucket_clients = Some(get_bucket_clients()?);
   //}
 
-//  let mut maybe_elasticsearch = None;
-//
-//  if args.seed_elasticsearch {
-//    maybe_elasticsearch = Some(get_elasticsearch_client());
-//  }
+  //  let mut maybe_elasticsearch = None;
+  //
+  //  if args.seed_elasticsearch {
+  //    maybe_elasticsearch = Some(get_elasticsearch_client());
+  //  }
 
   idempotent_always_seed(&pool).await?;
 
@@ -55,7 +52,7 @@ pub async fn main() -> AnyhowResult<()> {
   seed_weights(&pool).await?;
   // seed_media_seedtool(&pool).await?;
   // seed_tts_tacotron2(&pool, maybe_bucket_clients.as_ref()).await?;
-  
+
   // should seed the weights with a few files for hanashi
   //seed_weights_files(&pool, maybe_bucket_clients.as_ref()).await?;
   //println!("TESTING DOWLOAD");

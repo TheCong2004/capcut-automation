@@ -17,13 +17,11 @@ impl MuapiError {
       Self::ApiGeneric(MuapiGenericApiError::CloudflareError(CloudflareError::BadGateway502)) => true,
       Self::ApiGeneric(MuapiGenericApiError::CloudflareError(CloudflareError::GatewayTimeout504)) => true,
       Self::ApiGeneric(MuapiGenericApiError::CloudflareError(CloudflareError::TimeoutOccurred524)) => true,
-      Self::ApiGeneric(MuapiGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code, body: _ }) => {
-        match status_code.as_u16() {
-          502 => true,
-          504 => true,
-          524 => true,
-          _ => false,
-        }
+      Self::ApiGeneric(MuapiGenericApiError::UncategorizedBadResponseWithStatusAndBody { status_code, body: _ }) => match status_code.as_u16() {
+        502 => true,
+        504 => true,
+        524 => true,
+        _ => false,
       },
       _ => false,
     }

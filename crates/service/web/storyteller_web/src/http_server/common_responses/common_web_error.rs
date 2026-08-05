@@ -79,10 +79,7 @@ pub enum CommonWebError {
   UncaughtServerError(Arc<dyn std::error::Error + Send + Sync + 'static>),
 
   /// Same as above, with a specified extra message string
-  UncaughtServerErrorWithInternalMessage {
-    internal_message: String,
-    error: Arc<dyn std::error::Error + Send + Sync + 'static>
-  }
+  UncaughtServerErrorWithInternalMessage { internal_message: String, error: Arc<dyn std::error::Error + Send + Sync + 'static> },
 }
 
 // =============== Public accessors ===============
@@ -94,10 +91,7 @@ impl CommonWebError {
   }
 
   pub fn from_error_with_message(message: String, error: impl std::error::Error + Send + Sync + 'static) -> Self {
-    Self::UncaughtServerErrorWithInternalMessage {
-      internal_message: message,
-      error: Arc::new(error)
-    }
+    Self::UncaughtServerErrorWithInternalMessage { internal_message: message, error: Arc::new(error) }
   }
 
   /// Wrap an `anyhow::Error` as an `UncaughtServerError`.
@@ -164,12 +158,10 @@ impl Display for CommonWebError {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::BadInputWithSimpleMessage(msg) => write!(f, "Bad input: {}", msg),
-      Self::BadInputTailoredResponse(payload) => {
-        match serde_json::to_string(payload) {
-          Ok(s) => write!(f, "Bad input (tailored): {}", s),
-          Err(_) => write!(f, "Bad input (tailored): <unserializable payload>"),
-        }
-      }
+      Self::BadInputTailoredResponse(payload) => match serde_json::to_string(payload) {
+        Ok(s) => write!(f, "Bad input (tailored): {}", s),
+        Err(_) => write!(f, "Bad input (tailored): <unserializable payload>"),
+      },
       Self::NotAuthorized => write!(f, "Not authorized"),
       Self::NotFound => write!(f, "Not found"),
       Self::PaymentRequired => write!(f, "Payment required"),
@@ -180,7 +172,7 @@ impl Display for CommonWebError {
       Self::UncaughtServerError(err) => write!(f, "Server error: {}", err),
       Self::UncaughtServerErrorWithInternalMessage { internal_message, error } => {
         write!(f, "Server error: {}: {}", internal_message, error)
-      }
+      },
     }
   }
 }
@@ -189,12 +181,10 @@ impl std::fmt::Debug for CommonWebError {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::BadInputWithSimpleMessage(msg) => write!(f, "BadInputWithSimpleMessage({:?})", msg),
-      Self::BadInputTailoredResponse(payload) => {
-        match serde_json::to_string(payload) {
-          Ok(s) => write!(f, "BadInputTailoredResponse({})", s),
-          Err(_) => write!(f, "BadInputTailoredResponse(<unserializable>)"),
-        }
-      }
+      Self::BadInputTailoredResponse(payload) => match serde_json::to_string(payload) {
+        Ok(s) => write!(f, "BadInputTailoredResponse({})", s),
+        Err(_) => write!(f, "BadInputTailoredResponse(<unserializable>)"),
+      },
       Self::NotAuthorized => write!(f, "NotAuthorized"),
       Self::NotFound => write!(f, "NotFound"),
       Self::PaymentRequired => write!(f, "PaymentRequired"),
@@ -205,7 +195,7 @@ impl std::fmt::Debug for CommonWebError {
       Self::UncaughtServerError(err) => write!(f, "UncaughtServerError({:?})", err),
       Self::UncaughtServerErrorWithInternalMessage { internal_message, error } => {
         write!(f, "UncaughtServerErrorWithInternalMessage({:?}, {:?})", internal_message, error)
-      }
+      },
     }
   }
 }
@@ -243,44 +233,11 @@ impl ResponseError for CommonWebError {
     let status = self.status_code();
 
     match self {
-      Self::BadInputWithSimpleMessage(msg) => {
-        HttpResponse::BadRequest()
-            .json(JsonErrorWithMessage {
-              success: false,
-              error_code: status.as_u16(),
-              error_code_str: status.canonical_reason(),
-              message: msg,
-            })
-      }
-      Self::BadInputTailoredResponse(payload) => {
-        HttpResponse::BadRequest().json(payload)
-      }
-      Self::ContentPolicyRejected => {
-        HttpResponseBuilder::new(status)
-            .json(JsonErrorWithMessage {
-              success: false,
-              error_code: status.as_u16(),
-              error_code_str: status.canonical_reason(),
-              message: "Content rejected by policy",
-            })
-      }
-      Self::ContentPolicyRejectedWithMessage(msg) => {
-        HttpResponseBuilder::new(status)
-            .json(JsonErrorWithMessage {
-              success: false,
-              error_code: status.as_u16(),
-              error_code_str: status.canonical_reason(),
-              message: msg,
-            })
-      }
-      _ => {
-        HttpResponseBuilder::new(status)
-            .json(JsonErrorWithoutMessage {
-              success: false,
-              error_code: status.as_u16(),
-              error_code_str: status.canonical_reason(),
-            })
-      }
+      Self::BadInputWithSimpleMessage(msg) => HttpResponse::BadRequest().json(JsonErrorWithMessage { success: false, error_code: status.as_u16(), error_code_str: status.canonical_reason(), message: msg }),
+      Self::BadInputTailoredResponse(payload) => HttpResponse::BadRequest().json(payload),
+      Self::ContentPolicyRejected => HttpResponseBuilder::new(status).json(JsonErrorWithMessage { success: false, error_code: status.as_u16(), error_code_str: status.canonical_reason(), message: "Content rejected by policy" }),
+      Self::ContentPolicyRejectedWithMessage(msg) => HttpResponseBuilder::new(status).json(JsonErrorWithMessage { success: false, error_code: status.as_u16(), error_code_str: status.canonical_reason(), message: msg }),
+      _ => HttpResponseBuilder::new(status).json(JsonErrorWithoutMessage { success: false, error_code: status.as_u16(), error_code_str: status.canonical_reason() }),
     }
   }
 }
@@ -372,34 +329,7 @@ struct JsonErrorWithMessage<'a> {
 
 impl utoipa::PartialSchema for CommonWebError {
   fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::Schema> {
-    utoipa::openapi::ObjectBuilder::new()
-        .property(
-          "success",
-          utoipa::openapi::ObjectBuilder::new()
-              .schema_type(utoipa::openapi::schema::Type::Boolean),
-        )
-        .required("success")
-        .property(
-          "error_code",
-          utoipa::openapi::ObjectBuilder::new()
-              .schema_type(utoipa::openapi::schema::Type::Integer)
-              .format(Some(utoipa::openapi::SchemaFormat::KnownFormat(
-                utoipa::openapi::KnownFormat::Int32,
-              ))),
-        )
-        .required("error_code")
-        .property(
-          "error_code_str",
-          utoipa::openapi::ObjectBuilder::new()
-              .schema_type(utoipa::openapi::schema::Type::String),
-        )
-        .property(
-          "message",
-          utoipa::openapi::ObjectBuilder::new()
-              .schema_type(utoipa::openapi::schema::Type::String)
-              .description(Some("User-facing error message (present only for bad input errors)")),
-        )
-        .into()
+    utoipa::openapi::ObjectBuilder::new().property("success", utoipa::openapi::ObjectBuilder::new().schema_type(utoipa::openapi::schema::Type::Boolean)).required("success").property("error_code", utoipa::openapi::ObjectBuilder::new().schema_type(utoipa::openapi::schema::Type::Integer).format(Some(utoipa::openapi::SchemaFormat::KnownFormat(utoipa::openapi::KnownFormat::Int32)))).required("error_code").property("error_code_str", utoipa::openapi::ObjectBuilder::new().schema_type(utoipa::openapi::schema::Type::String)).property("message", utoipa::openapi::ObjectBuilder::new().schema_type(utoipa::openapi::schema::Type::String).description(Some("User-facing error message (present only for bad input errors)"))).into()
   }
 }
 
@@ -438,10 +368,7 @@ mod tests {
       count: u32,
     }
 
-    let error = CommonWebError::bad_input_tailored_response(Sample {
-      reason: "no good",
-      count: 3,
-    });
+    let error = CommonWebError::bad_input_tailored_response(Sample { reason: "no good", count: 3 });
     assert_eq!(error.status_code(), StatusCode::BAD_REQUEST);
     assert!(!error.is_server_error());
     assert!(error.cause().is_none());

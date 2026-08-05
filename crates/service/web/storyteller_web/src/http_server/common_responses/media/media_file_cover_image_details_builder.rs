@@ -10,12 +10,11 @@ use utoipa::ToSchema;
 
 /// There are currently 25 cover images numbered 0 to 24 (0-indexed).
 /// The original dataset was numbered 1 - 25, but I renamed 25 to 0.
-const NUMBER_OF_IMAGES : u64 = 25;
-const NUMBER_OF_IMAGES_SALT_OFFSET : u8 = 5;
+const NUMBER_OF_IMAGES: u64 = 25;
+const NUMBER_OF_IMAGES_SALT_OFFSET: u8 = 5;
 
-const NUMBER_OF_COLORS : u64 = 8;
-const NUMBER_OF_COLORS_SALT_OFFSET : u8 = 1;
-
+const NUMBER_OF_COLORS: u64 = 8;
+const NUMBER_OF_COLORS_SALT_OFFSET: u8 = 1;
 
 pub struct MediaFileCoverImageDetailsBuilder {}
 
@@ -39,46 +38,16 @@ impl MediaFileCoverImageDetailsBuilder {
     }
   }
 
-  pub fn from_optional_db_fields(
-    token: &MediaFileToken,
-    domain: MediaDomain,
-    server_environment: ServerEnvironment,
-    maybe_cover_image_public_bucket_path: Option<&str>,
-    maybe_cover_image_public_bucket_prefix: Option<&str>,
-    maybe_cover_image_public_bucket_extension: Option<&str>,
-  ) -> MediaFileCoverImageDetails {
-    Self::from_optional_db_str_fields(
-      token.as_str(),
-      domain,
-      server_environment,
-      maybe_cover_image_public_bucket_path,
-      maybe_cover_image_public_bucket_prefix,
-      maybe_cover_image_public_bucket_extension
-    )
+  pub fn from_optional_db_fields(token: &MediaFileToken, domain: MediaDomain, server_environment: ServerEnvironment, maybe_cover_image_public_bucket_path: Option<&str>, maybe_cover_image_public_bucket_prefix: Option<&str>, maybe_cover_image_public_bucket_extension: Option<&str>) -> MediaFileCoverImageDetails {
+    Self::from_optional_db_str_fields(token.as_str(), domain, server_environment, maybe_cover_image_public_bucket_path, maybe_cover_image_public_bucket_prefix, maybe_cover_image_public_bucket_extension)
   }
 
-  pub fn from_optional_db_str_fields(
-    token: &str,
-    domain: MediaDomain,
-    server_environment: ServerEnvironment,
-    maybe_cover_image_public_bucket_path: Option<&str>,
-    maybe_cover_image_public_bucket_prefix: Option<&str>,
-    maybe_cover_image_public_bucket_extension: Option<&str>,
-  ) -> MediaFileCoverImageDetails {
-    let maybe_bucket_path = maybe_cover_image_public_bucket_path
-        .map(|hash| MediaFileBucketPath::from_object_hash(
-          hash,
-          maybe_cover_image_public_bucket_prefix,
-          maybe_cover_image_public_bucket_extension
-        ));
+  pub fn from_optional_db_str_fields(token: &str, domain: MediaDomain, server_environment: ServerEnvironment, maybe_cover_image_public_bucket_path: Option<&str>, maybe_cover_image_public_bucket_prefix: Option<&str>, maybe_cover_image_public_bucket_extension: Option<&str>) -> MediaFileCoverImageDetails {
+    let maybe_bucket_path = maybe_cover_image_public_bucket_path.map(|hash| MediaFileBucketPath::from_object_hash(hash, maybe_cover_image_public_bucket_prefix, maybe_cover_image_public_bucket_extension));
 
-    let maybe_links = CoverImageLinksBuilder::from_maybe_media_path(
-      domain, server_environment, maybe_bucket_path.as_ref());
+    let maybe_links = CoverImageLinksBuilder::from_maybe_media_path(domain, server_environment, maybe_bucket_path.as_ref());
 
-    MediaFileCoverImageDetails {
-      maybe_links,
-      default_cover: MediaFileDefaultCoverBuilder::from_token_str(token),
-    }
+    MediaFileCoverImageDetails { maybe_links, default_cover: MediaFileDefaultCoverBuilder::from_token_str(token) }
   }
 }
 
@@ -90,10 +59,7 @@ impl MediaFileDefaultCoverBuilder {
 
   /// For non-media file tokens (eg. emulated TTS results)
   pub fn from_token_str(token: &str) -> MediaFileDefaultCover {
-    MediaFileDefaultCover {
-      image_index: hash(token, NUMBER_OF_IMAGES, NUMBER_OF_IMAGES_SALT_OFFSET),
-      color_index: hash(token, NUMBER_OF_COLORS, NUMBER_OF_COLORS_SALT_OFFSET),
-    }
+    MediaFileDefaultCover { image_index: hash(token, NUMBER_OF_IMAGES, NUMBER_OF_IMAGES_SALT_OFFSET), color_index: hash(token, NUMBER_OF_COLORS, NUMBER_OF_COLORS_SALT_OFFSET) }
   }
 }
 
@@ -105,7 +71,7 @@ fn hash(token: &str, max_number: u64, salt: u8) -> u8 {
 
   let hash = hasher.finish();
 
-  let index= hash % max_number;
+  let index = hash % max_number;
   index as u8
 }
 

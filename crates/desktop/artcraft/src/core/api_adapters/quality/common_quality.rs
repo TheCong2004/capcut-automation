@@ -17,5 +17,5 @@ impl CommonQuality {
       CommonQuality::Medium => RouterQuality::Medium,
       CommonQuality::Low => RouterQuality::Low,
     }
-  } 
+  }
 }

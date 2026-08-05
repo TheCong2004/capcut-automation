@@ -25,9 +25,7 @@ where
   pub phantom: PhantomData<&'c E>,
 }
 
-pub async fn list_user_spend_events_for_user<'e, 'c: 'e, E>(
-  args: ListUserSpendEventsForUserArgs<'e, 'c, E>,
-) -> Result<Vec<UserSpendEventRow>, sqlx::Error>
+pub async fn list_user_spend_events_for_user<'e, 'c: 'e, E>(args: ListUserSpendEventsForUserArgs<'e, 'c, E>) -> Result<Vec<UserSpendEventRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -48,8 +46,8 @@ ORDER BY payment_occurred_at ASC
     args.user_token.as_str(),
     args.payments_namespace.to_str(),
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

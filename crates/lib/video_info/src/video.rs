@@ -42,27 +42,27 @@ impl VideoInfo {
   pub fn from_bytes(data: &[u8]) -> Result<VideoInfo, VideoInfoError> {
     match SeedanceInfo::from_bytes(data) {
       Ok(info) => return Ok(VideoInfo::Seedance(info)),
-      Err(VideoInfoError::NotSeedance) => {}
+      Err(VideoInfoError::NotSeedance) => {},
       Err(other) => return Err(other),
     }
     match VeoInfo::from_bytes(data) {
       Ok(info) => return Ok(VideoInfo::Veo(info)),
-      Err(VideoInfoError::NotVeo) => {}
+      Err(VideoInfoError::NotVeo) => {},
       Err(other) => return Err(other),
     }
     match SoraInfo::from_bytes(data) {
       Ok(info) => return Ok(VideoInfo::Sora(info)),
-      Err(VideoInfoError::NotSora) => {}
+      Err(VideoInfoError::NotSora) => {},
       Err(other) => return Err(other),
     }
     match DreaminaInfo::from_bytes(data) {
       Ok(info) => return Ok(VideoInfo::Dreamina(info)),
-      Err(VideoInfoError::NotDreamina) => {}
+      Err(VideoInfoError::NotDreamina) => {},
       Err(other) => return Err(other),
     }
     match KlingInfo::from_bytes(data) {
       Ok(info) => return Ok(VideoInfo::Kling(info)),
-      Err(VideoInfoError::NotKling) => {}
+      Err(VideoInfoError::NotKling) => {},
       Err(other) => return Err(other),
     }
     Err(VideoInfoError::Unrecognized)

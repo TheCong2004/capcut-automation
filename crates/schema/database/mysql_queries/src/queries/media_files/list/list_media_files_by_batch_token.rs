@@ -39,10 +39,10 @@ pub struct MediaFileListItem {
 
   pub origin_category: MediaFileOriginCategory,
   pub origin_product_category: MediaFileOriginProductCategory,
-  
+
   pub maybe_origin_model_type: Option<MediaFileOriginModelType>,
   pub maybe_origin_model_token: Option<String>,
-  
+
   // NB: The title won't be populated for `tts_models` records or non-`model_weights` records.
   pub maybe_origin_model_title: Option<String>,
 
@@ -83,79 +83,59 @@ pub struct ListMediaFileByBatchArgs<'a> {
 pub async fn list_media_files_by_batch_token(args: ListMediaFileByBatchArgs<'_>) -> AnyhowResult<MediaFileListPage> {
   /// Let's figure out how many results we could have returned total
   let count_fields = select_total_count_field();
-  let mut count_query_builder = query_builder(
-    args.batch_token,
-    false,
-    0,
-    0,
-    args.sort_ascending,
-    args.view_as,
-    count_fields.as_str(),
-  );
+  let mut count_query_builder = query_builder(args.batch_token, false, 0, 0, args.sort_ascending, args.view_as, count_fields.as_str());
 
   let row_count_query = count_query_builder.build_query_scalar::<i64>();
   let row_count_result = row_count_query.fetch_one(args.mysql_pool).await?;
 
   /// Now fetch the actual results with all the fields
   let result_fields = select_result_fields();
-  let mut query = query_builder(
-    args.batch_token,
-    true,
-    args.page_index,
-    args.page_size,
-    args.sort_ascending,
-    args.view_as,
-    result_fields.as_str(),
-  );
+  let mut query = query_builder(args.batch_token, true, args.page_index, args.page_size, args.sort_ascending, args.view_as, result_fields.as_str());
 
   let query = query.build_query_as::<MediaFileListItemInternal>();
   let results = query.fetch_all(args.mysql_pool).await?;
 
   let number_of_pages = 1 + (row_count_result / args.page_size as i64) as usize;
 
-  let results = results.into_iter()
-      .map(|record| {
-        MediaFileListItem {
-          token: record.token,
-          media_class: record.media_class,
-          media_type: record.media_type,
-          maybe_engine_category: record.maybe_engine_category,
-          maybe_animation_type: record.maybe_animation_type,
-          origin_category: record.origin_category,
-          origin_product_category: record.origin_product_category,
-          maybe_origin_model_type: record.maybe_origin_model_type,
-          maybe_origin_model_token: record.maybe_origin_model_token,
-          maybe_origin_model_title: record.maybe_origin_model_title,
-          public_bucket_directory_hash: record.public_bucket_directory_hash,
-          maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
-          maybe_public_bucket_extension: record.maybe_public_bucket_extension,
-          creator_set_visibility: record.creator_set_visibility,
-          is_user_upload: i8_to_bool(record.is_user_upload),
-          is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
-          maybe_title: record.maybe_title,
-          maybe_text_transcript: record.maybe_text_transcript,
-          maybe_prompt_args: record.maybe_other_prompt_args
+  let results = results
+    .into_iter()
+    .map(|record| {
+      MediaFileListItem {
+        token: record.token,
+        media_class: record.media_class,
+        media_type: record.media_type,
+        maybe_engine_category: record.maybe_engine_category,
+        maybe_animation_type: record.maybe_animation_type,
+        origin_category: record.origin_category,
+        origin_product_category: record.origin_product_category,
+        maybe_origin_model_type: record.maybe_origin_model_type,
+        maybe_origin_model_token: record.maybe_origin_model_token,
+        maybe_origin_model_title: record.maybe_origin_model_title,
+        public_bucket_directory_hash: record.public_bucket_directory_hash,
+        maybe_public_bucket_prefix: record.maybe_public_bucket_prefix,
+        maybe_public_bucket_extension: record.maybe_public_bucket_extension,
+        creator_set_visibility: record.creator_set_visibility,
+        is_user_upload: i8_to_bool(record.is_user_upload),
+        is_intermediate_system_file: i8_to_bool(record.is_intermediate_system_file),
+        maybe_title: record.maybe_title,
+        maybe_text_transcript: record.maybe_text_transcript,
+        maybe_prompt_args: record.maybe_other_prompt_args
               .as_deref()
               .map(|args| PromptInnerPayload::from_json(args))
               .transpose()
               .ok() // NB: Fail open
               .flatten(),
-          maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
-          maybe_ratings_positive_count: record.maybe_ratings_positive_count,
-          maybe_ratings_negative_count: record.maybe_ratings_negative_count,
-          maybe_bookmark_count: record.maybe_bookmark_count,
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-        }
-      })
-      .collect::<Vec<_>>();
+        maybe_duration_millis: record.maybe_duration_millis.map(|d| d as u64),
+        maybe_ratings_positive_count: record.maybe_ratings_positive_count,
+        maybe_ratings_negative_count: record.maybe_ratings_negative_count,
+        maybe_bookmark_count: record.maybe_bookmark_count,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+      }
+    })
+    .collect::<Vec<_>>();
 
-  Ok(MediaFileListPage {
-    records: results,
-    sort_ascending: args.sort_ascending,
-    current_page: args.page_index,
-    total_page_count: number_of_pages,
-  })
+  Ok(MediaFileListPage { records: results, sort_ascending: args.sort_ascending, current_page: args.page_index, total_page_count: number_of_pages })
 }
 
 fn select_result_fields() -> String {
@@ -208,19 +188,10 @@ fn select_total_count_field() -> String {
   .to_string()
 }
 
-fn query_builder<'a>(
-  batch_token: &'a BatchGenerationToken,
-  enforce_limits: bool,
-  page_index: usize,
-  page_size: usize,
-  sort_ascending: bool,
-  view_as: ViewAs,
-  select_fields: &'a str,
-) -> QueryBuilder<'a, MySql> {
-
+fn query_builder<'a>(batch_token: &'a BatchGenerationToken, enforce_limits: bool, page_index: usize, page_size: usize, sort_ascending: bool, view_as: ViewAs, select_fields: &'a str) -> QueryBuilder<'a, MySql> {
   // NB: Query cannot be statically checked by sqlx
-  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
-    format!(r#"
+  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
+    r#"
 SELECT
      {select_fields}
 FROM media_files AS m
@@ -243,7 +214,7 @@ LEFT OUTER JOIN prompts
     ViewAs::Author | ViewAs::Moderator => {
       // NB(bt): Actually, mods don't want to see deleted files. We'll improve the moderator UI later.
       query_builder.push(" AND m.user_deleted_at IS NULL AND m.mod_deleted_at IS NULL ");
-    }
+    },
     ViewAs::AnotherUser => {
       query_builder.push(" AND m.user_deleted_at IS NULL AND m.mod_deleted_at IS NULL ");
       // FIXME: Binding shouldn't require to_str().
@@ -251,7 +222,7 @@ LEFT OUTER JOIN prompts
       //  incorrect binding and runtime error.
       query_builder.push(" AND m.creator_set_visibility = ");
       query_builder.push_bind(Visibility::Public.to_str());
-    }
+    },
   }
 
   if sort_ascending {
@@ -280,10 +251,10 @@ struct MediaFileListItemInternal {
 
   origin_category: MediaFileOriginCategory,
   origin_product_category: MediaFileOriginProductCategory,
-  
+
   maybe_origin_model_type: Option<MediaFileOriginModelType>,
   maybe_origin_model_token: Option<String>,
-  
+
   // NB: The title won't be populated for `tts_models` records or non-`model_weights` records.
   maybe_origin_model_title: Option<String>,
 

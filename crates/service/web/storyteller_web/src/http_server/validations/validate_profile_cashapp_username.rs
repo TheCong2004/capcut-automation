@@ -2,9 +2,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 pub fn validate_profile_cashapp_username(username: &str) -> Result<(), String> {
-  static CASHAPP_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^\$?.{1,20}$").expect("should be valid regex")
-  });
+  static CASHAPP_USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\$?.{1,20}$").expect("should be valid regex"));
 
   if username.starts_with("$") {
     if username.len() < 2 {

@@ -16,7 +16,8 @@
 // Strict AF
 //#![forbid(warnings)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -66,37 +67,28 @@ pub mod threads;
 pub mod util;
 
 // Buckets (shared config)
-const ENV_ACCESS_KEY : &str = "ACCESS_KEY";
-const ENV_SECRET_KEY : &str = "SECRET_KEY";
-const ENV_REGION_NAME : &str = "REGION_NAME";
+const ENV_ACCESS_KEY: &str = "ACCESS_KEY";
+const ENV_SECRET_KEY: &str = "SECRET_KEY";
+const ENV_REGION_NAME: &str = "REGION_NAME";
 
 // Bucket names
-const ENV_PRIVATE_BUCKET_NAME : &str = "PRIVATE_BUCKET_NAME";
-const ENV_PUBLIC_BUCKET_NAME : &str = "PUBLIC_BUCKET_NAME";
-const ENV_GC_ENABLED_PUBLIC_BUCKET_NAME : &str = "GC_ENABLED_PUBLIC_BUCKET_NAME";
+const ENV_PRIVATE_BUCKET_NAME: &str = "PRIVATE_BUCKET_NAME";
+const ENV_PUBLIC_BUCKET_NAME: &str = "PUBLIC_BUCKET_NAME";
+const ENV_GC_ENABLED_PUBLIC_BUCKET_NAME: &str = "GC_ENABLED_PUBLIC_BUCKET_NAME";
 
 // HTTP sidecar
 const ENV_TTS_INFERENCE_SIDECAR_HOSTNAME: &str = "TTS_INFERENCE_SIDECAR_HOSTNAME";
 
 const OTEL_METER_NAME: &str = "inference-job";
 
-
-
 #[tokio::main]
 // #[actix_web::main]
 async fn main() -> AnyhowResult<()> {
-
   let app_name = "inference-job";
 
-  let container_environment = bootstrap(BootstrapArgs {
-    app_name,
-    default_logging_override: Some(DEFAULT_RUST_LOG),
-    config_search_directories: &[".", "./config", "crates/service/job/deprecated/inference_job/config"],
-    ignore_legacy_dot_env_file: true,
-  })?;
+  let container_environment = bootstrap(BootstrapArgs { app_name, default_logging_override: Some(DEFAULT_RUST_LOG), config_search_directories: &[".", "./config", "crates/service/job/deprecated/inference_job/config"], ignore_legacy_dot_env_file: true })?;
 
   info!("Hostname: {}", &container_environment.hostname);
-
 
   // NB: These are non-standard env vars we're injecting ourselves.
   let _k8s_node_name = easyenv::get_env_string_optional("K8S_NODE_NAME");
@@ -112,55 +104,24 @@ async fn main() -> AnyhowResult<()> {
   let public_bucket_name = easyenv::get_env_string_required(ENV_PUBLIC_BUCKET_NAME)?;
   let gc_enabled_public_bucket_name = easyenv::get_env_string_required(ENV_GC_ENABLED_PUBLIC_BUCKET_NAME)?;
 
-  let s3_compatible_endpoint_url = easyenv::get_env_string_or_default("S3_COMPATIBLE_ENDPOINT_URL",
-    "https://storage.googleapis.com");
-  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS",
-    Duration::from_secs(60 * 5));
+  let s3_compatible_endpoint_url = easyenv::get_env_string_or_default("S3_COMPATIBLE_ENDPOINT_URL", "https://storage.googleapis.com");
+  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS", Duration::from_secs(60 * 5));
 
-  let private_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &private_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let private_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &private_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  let public_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &public_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let public_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &public_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  let auto_gc_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &gc_enabled_public_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let auto_gc_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &gc_enabled_public_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
   // Where we download models and resources to (typically a shared NFS volume in prod).
 
-  let semi_persistent_cache = SemiPersistentCacheDir::configured_root(
-    easyenv::get_env_pathbuf_or_default("SEMI_PERSISTENT_DIR_ROOT",
-                                        PathBuf::from("/tmp/persistent")));
+  let semi_persistent_cache = SemiPersistentCacheDir::configured_root(easyenv::get_env_pathbuf_or_default("SEMI_PERSISTENT_DIR_ROOT", PathBuf::from("/tmp/persistent")));
 
   let db_connection_string = env_get_mysql_connection_string_or_default();
 
   info!("Connecting to MySQL database...");
 
-  let mysql_pool = MySqlPoolOptions::new()
-      .max_connections(2)
-      .connect(&db_connection_string)
-      .await?;
+  let mysql_pool = MySqlPoolOptions::new().max_connections(2).connect(&db_connection_string).await?;
 
   let mysql_pool_2 = mysql_pool.clone();
 
@@ -168,22 +129,16 @@ async fn main() -> AnyhowResult<()> {
 
   let common_env = CommonEnv::read_from_env()?;
 
-  let sidecar_max_synthesizer_models = easyenv::get_env_num(
-    "SIDECAR_MAX_SYNTHESIZER_MODELS", 3)?;
+  let sidecar_max_synthesizer_models = easyenv::get_env_num("SIDECAR_MAX_SYNTHESIZER_MODELS", 3)?;
 
   // Set to "0" to always treat low priority the same as high priority
-  let low_priority_starvation_prevention_every_nth= easyenv::get_env_num(
-    "LOW_PRIORITY_STARVATION_PREVENTION_EVERY_NTH", 3)?;
+  let low_priority_starvation_prevention_every_nth = easyenv::get_env_num("LOW_PRIORITY_STARVATION_PREVENTION_EVERY_NTH", 3)?;
 
   let firehose_publisher = FirehosePublisher {
     mysql_pool: mysql_pool.clone(), // NB: MySqlPool is clone/send/sync safe
   };
 
-  let maybe_minimum_priority = easyenv::get_env_string_optional("MAYBE_MINIMUM_PRIORITY")
-      .map(|priority_string| {
-        priority_string.parse::<u8>()
-      })
-      .transpose()?;
+  let maybe_minimum_priority = easyenv::get_env_string_optional("MAYBE_MINIMUM_PRIORITY").map(|priority_string| priority_string.parse::<u8>()).transpose()?;
 
   info!("Using 'MAYBE_MINIMUM_PRIORITY' of {:?}", maybe_minimum_priority);
 
@@ -193,9 +148,7 @@ async fn main() -> AnyhowResult<()> {
 
   // Optionally report job progress to the user via Redis (for now)
   // We want to turn this off in the on-premises workers since we're not tunneling to the production Redis.
-  let job_progress_reporter : Box<dyn JobProgressReporterBuilder>
-      = match easyenv::get_env_string_optional("REDIS_FOR_JOB_PROGRESS").as_deref()
-  {
+  let job_progress_reporter: Box<dyn JobProgressReporterBuilder> = match easyenv::get_env_string_optional("REDIS_FOR_JOB_PROGRESS").as_deref() {
     None | Some("") => {
       warn!("Redis for job progress status reports is DISABLED! Users will not see in-flight details of inference progress.");
       Box::new(NoOpJobProgressReporterBuilder {})
@@ -206,22 +159,21 @@ async fn main() -> AnyhowResult<()> {
       let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
 
       Box::new(RedisJobProgressReporterBuilder::from_redis_pool(redis_pool))
-    }
+    },
   };
 
-  let maybe_keepalive_redis_pool =
-      match easyenv::get_env_string_optional("REDIS_FOR_KEEPALIVE_URL").as_deref() {
-        None | Some("") => {
-          warn!("Redis for job keepalive is DISABLED! This might break some jobs.");
-          None
-        },
-        Some(redis_url) => {
-          info!("Connecting to Redis for keepalive signals... {}", redis_url);
-          let redis_manager = RedisConnectionManager::new(redis_url)?;
-          let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
-          Some(redis_pool)
-        }
-      };
+  let maybe_keepalive_redis_pool = match easyenv::get_env_string_optional("REDIS_FOR_KEEPALIVE_URL").as_deref() {
+    None | Some("") => {
+      warn!("Redis for job keepalive is DISABLED! This might break some jobs.");
+      None
+    },
+    Some(redis_url) => {
+      info!("Connecting to Redis for keepalive signals... {}", redis_url);
+      let redis_manager = RedisConnectionManager::new(redis_url)?;
+      let redis_pool = r2d2::Pool::builder().build(redis_manager)?;
+      Some(redis_pool)
+    },
+  };
 
   // NB: Threading eats the Ctrl-C signal, so we're going to send application shutdown across
   // threads with an atomic bool.
@@ -229,40 +181,23 @@ async fn main() -> AnyhowResult<()> {
 
   let job_stats = JobStats::new();
 
-  let create_server_args = CreateServerArgs {
-    container_environment: container_environment.clone(),
-    job_stats: job_stats.clone(),
-  };
+  let create_server_args = CreateServerArgs { container_environment: container_environment.clone(), job_stats: job_stats.clone() };
 
   // TODO(bt,2024-07-16): Phase out model type scoping in favor of job type scoping
   let scoped_job_type_execution = ScopedJobTypeExecution::new_from_env()?;
   let scoped_model_type_execution = ScopedModelTypeExecution::new_from_env()?;
 
-  let build_sha = std::fs::read_to_string("/GIT_SHA")
-      .unwrap_or(String::from("unknown"))
-      .trim()
-      .to_string();
+  let build_sha = std::fs::read_to_string("/GIT_SHA").unwrap_or(String::from("unknown")).trim().to_string();
 
-  if let Err(e) = init_otel_metrics_pipeline(
-    JobInstrumentLabels{
-      service_name: app_name.to_string(),
-      service_namespace: container_environment.cluster_name.clone(),
-      service_version: build_sha,
-      service_instance_id: container_environment.hostname.clone(),
-      service_job_scope: easyenv::get_env_string_optional("SCOPED_EXECUTION_MODEL_TYPES").unwrap_or_else(|| "unknown".to_string()),
-    }
-  ) {
+  if let Err(e) = init_otel_metrics_pipeline(JobInstrumentLabels { service_name: app_name.to_string(), service_namespace: container_environment.cluster_name.clone(), service_version: build_sha, service_instance_id: container_environment.hostname.clone(), service_job_scope: easyenv::get_env_string_optional("SCOPED_EXECUTION_MODEL_TYPES").unwrap_or_else(|| "unknown".to_string()) }) {
     warn!("Failed to initialize OpenTelemetry metrics pipeline, continuing execution: {}", e);
   }
 
   let meter = opentelemetry::global::meter("inference-job");
 
-  let job_specific_dependencies = JobSpecificDependencies::setup_for_jobs(
-    &scoped_job_type_execution, &scoped_model_type_execution).await?;
+  let job_specific_dependencies = JobSpecificDependencies::setup_for_jobs(&scoped_job_type_execution, &scoped_model_type_execution).await?;
 
-  let scoped_tempdir_for_downloads = ScopedTempDirCreator::for_directory(
-    easyenv::get_env_pathbuf_or_default(
-      "SCOPED_TEMP_DIR_LONG_LIVED_DOWNLOADS", PathBuf::from("/tmp/downloads_long_lived")));
+  let scoped_tempdir_for_downloads = ScopedTempDirCreator::for_directory(easyenv::get_env_pathbuf_or_default("SCOPED_TEMP_DIR_LONG_LIVED_DOWNLOADS", PathBuf::from("/tmp/downloads_long_lived")));
 
   let job_dependencies = JobDependencies {
     db: DatabaseDependencies {
@@ -270,75 +205,12 @@ async fn main() -> AnyhowResult<()> {
       maybe_redis_pool: None, // TODO(bt, 2023-01-11): See note in JobDependencies
       maybe_keepalive_redis_pool,
     },
-    fs: FileSystemDetails {
-      maybe_pause_file: easyenv::get_env_pathbuf_optional("PAUSE_FILE"),
-      scoped_temp_dir_creator_for_short_lived_downloads: ScopedTempDirCreator::for_directory(
-        easyenv::get_env_pathbuf_or_default(
-          "SCOPED_TEMP_DIR_SHORT_LIVED_DOWNLOADS", PathBuf::from("/tmp/downloads_short_lived"))),
-      scoped_temp_dir_creator_for_long_lived_downloads: scoped_tempdir_for_downloads.clone(),
-      scoped_temp_dir_creator_for_work: ScopedTempDirCreator::for_directory(
-        easyenv::get_env_pathbuf_or_default(
-          "SCOPED_TEMP_DIR_WORK", PathBuf::from("/tmp/downloads_long_lived"))),
-      semi_persistent_cache,
-      model_weights_cache_directory: ModelWeightsCacheDirectory::setup_from_env_and_deps(
-        &scoped_tempdir_for_downloads,
-        &public_bucket_client,
-      )?,
-    },
-    buckets: BucketDependencies {
-      public_bucket_client,
-      private_bucket_client,
-      auto_gc_bucket_client,
-      bucket_path_unifier: BucketPathUnifier::default_paths(),
-    },
-    clients: ClientDependencies {
-      job_progress_reporter,
-      firehose_publisher,
-    },
+    fs: FileSystemDetails { maybe_pause_file: easyenv::get_env_pathbuf_optional("PAUSE_FILE"), scoped_temp_dir_creator_for_short_lived_downloads: ScopedTempDirCreator::for_directory(easyenv::get_env_pathbuf_or_default("SCOPED_TEMP_DIR_SHORT_LIVED_DOWNLOADS", PathBuf::from("/tmp/downloads_short_lived"))), scoped_temp_dir_creator_for_long_lived_downloads: scoped_tempdir_for_downloads.clone(), scoped_temp_dir_creator_for_work: ScopedTempDirCreator::for_directory(easyenv::get_env_pathbuf_or_default("SCOPED_TEMP_DIR_WORK", PathBuf::from("/tmp/downloads_long_lived"))), semi_persistent_cache, model_weights_cache_directory: ModelWeightsCacheDirectory::setup_from_env_and_deps(&scoped_tempdir_for_downloads, &public_bucket_client)? },
+    buckets: BucketDependencies { public_bucket_client, private_bucket_client, auto_gc_bucket_client, bucket_path_unifier: BucketPathUnifier::default_paths() },
+    clients: ClientDependencies { job_progress_reporter, firehose_publisher },
     job: JobSystemDependencies {
-      system: JobSystemControls {
-        scoped_model_type_execution,
-        scoped_job_type_execution,
-        always_allow_cold_filesystem_cache: easyenv::get_env_bool_or_default("ALWAYS_ALLOW_COLD_FILESYSTEM_CACHE", false),
-        cold_filesystem_cache_starvation_threshold: easyenv::get_env_num("COLD_FILESYSTEM_CACHE_STARVATION_THRESHOLD", 3)?,
-        job_batch_wait_millis: common_env.job_batch_wait_millis,
-        job_max_attempts: common_env.job_max_attempts as u16,
-        job_batch_size: common_env.job_batch_size,
-        no_op_logger_millis: common_env.no_op_logger_millis,
-        sidecar_max_synthesizer_models,
-        low_priority_starvation_prevention_every_nth,
-        maybe_minimum_priority,
-        is_debug_worker,
-        application_shutdown: application_shutdown.clone(),
-      },
-      info: JobInstanceInfo {
-        job_stats,
-        caches: JobCaches {
-          tts_model_record_cache: MultiItemTtlCache::create_with_duration(
-            easyenv::get_env_duration_seconds_or_default(
-              "TTS_MODEL_RECORD_CACHE_SECONDS",
-              Duration::from_secs(60*5)
-            ),
-          ),
-          vc_model_record_cache: MultiItemTtlCache::create_with_duration(
-            easyenv::get_env_duration_seconds_or_default(
-              "VC_MODEL_RECORD_CACHE_SECONDS",
-              Duration::from_secs(60)
-            ),
-          ),
-          model_cache_counter: TtlKeyCounter::create_with_duration(
-            easyenv::get_env_duration_seconds_or_default(
-              "TTL_KEY_COUNTER_CACHE_SECONDS",
-              Duration::from_secs(60 * 5)
-            ),
-          ),
-        },
-        container: container_environment.clone(),
-        container_db: ContainerEnvironmentArg {
-          hostname: container_environment.hostname,
-          cluster_name: container_environment.cluster_name,
-        },
-      },
+      system: JobSystemControls { scoped_model_type_execution, scoped_job_type_execution, always_allow_cold_filesystem_cache: easyenv::get_env_bool_or_default("ALWAYS_ALLOW_COLD_FILESYSTEM_CACHE", false), cold_filesystem_cache_starvation_threshold: easyenv::get_env_num("COLD_FILESYSTEM_CACHE_STARVATION_THRESHOLD", 3)?, job_batch_wait_millis: common_env.job_batch_wait_millis, job_max_attempts: common_env.job_max_attempts as u16, job_batch_size: common_env.job_batch_size, no_op_logger_millis: common_env.no_op_logger_millis, sidecar_max_synthesizer_models, low_priority_starvation_prevention_every_nth, maybe_minimum_priority, is_debug_worker, application_shutdown: application_shutdown.clone() },
+      info: JobInstanceInfo { job_stats, caches: JobCaches { tts_model_record_cache: MultiItemTtlCache::create_with_duration(easyenv::get_env_duration_seconds_or_default("TTS_MODEL_RECORD_CACHE_SECONDS", Duration::from_secs(60 * 5))), vc_model_record_cache: MultiItemTtlCache::create_with_duration(easyenv::get_env_duration_seconds_or_default("VC_MODEL_RECORD_CACHE_SECONDS", Duration::from_secs(60))), model_cache_counter: TtlKeyCounter::create_with_duration(easyenv::get_env_duration_seconds_or_default("TTL_KEY_COUNTER_CACHE_SECONDS", Duration::from_secs(60 * 5))) }, container: container_environment.clone(), container_db: ContainerEnvironmentArg { hostname: container_environment.hostname, cluster_name: container_environment.cluster_name } },
       job_specific_dependencies,
     },
     job_instruments: JobInstruments::new_from_meter(meter),
@@ -358,8 +230,7 @@ async fn main() -> AnyhowResult<()> {
     let actix_runtime = actix_web::rt::System::new();
     let http_server_handle = launch_http_server(create_server_args);
 
-    actix_runtime.block_on(http_server_handle)
-        .expect("HTTP server should not exit.");
+    actix_runtime.block_on(http_server_handle).expect("HTTP server should not exit.");
 
     warn!("Server thread is shut down.");
     application_shutdown.set(true);

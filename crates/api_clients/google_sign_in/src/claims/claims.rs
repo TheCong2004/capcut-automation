@@ -3,7 +3,7 @@ use crate::error::google_sign_in_error::GoogleSignInError;
 use jwt_simple::claims::{Audiences, JWTClaims};
 
 pub struct Claims {
-  pub (crate) claims: JWTClaims<GoogleCustomClaims>,
+  pub(crate) claims: JWTClaims<GoogleCustomClaims>,
 }
 
 impl Claims {

@@ -43,39 +43,8 @@ mod tests {
   use super::*;
   use chrono::TimeZone;
 
-  fn make_details(
-    title: &str,
-    is_from_error: bool,
-    http_method: Option<&str>,
-    http_path: Option<&str>,
-    event_time: DateTime<Utc>,
-  ) -> NotificationDetails {
-    NotificationDetails {
-      title: title.to_string(),
-      description: None,
-      event_time,
-      http_method: http_method.map(|s| s.to_string()),
-      http_path: http_path.map(|s| s.to_string()),
-      http_status_code: None,
-      is_from_error,
-      urgency: None,
-      user_token: None,
-      media_file_token: None,
-      inference_job_token: None,
-      third_party_id: None,
-      http_host: None,
-      http_origin: None,
-      http_referer: None,
-      http_user_agent: None,
-      artcraft_version: None,
-      trace_id: None,
-      request_ip_address: None,
-      avt_cookie_token: None,
-      session_token: None,
-      maybe_error: None,
-      session_user_token: None,
-      extra_message: None,
-    }
+  fn make_details(title: &str, is_from_error: bool, http_method: Option<&str>, http_path: Option<&str>, event_time: DateTime<Utc>) -> NotificationDetails {
+    NotificationDetails { title: title.to_string(), description: None, event_time, http_method: http_method.map(|s| s.to_string()), http_path: http_path.map(|s| s.to_string()), http_status_code: None, is_from_error, urgency: None, user_token: None, media_file_token: None, inference_job_token: None, third_party_id: None, http_host: None, http_origin: None, http_referer: None, http_user_agent: None, artcraft_version: None, trace_id: None, request_ip_address: None, avt_cookie_token: None, session_token: None, maybe_error: None, session_user_token: None, extra_message: None }
   }
 
   // -- hours_since_epoch tests --
@@ -213,40 +182,8 @@ mod tests {
   mod http_status_code_tests {
     use super::*;
 
-    fn make_details_with_status(
-      title: &str,
-      is_from_error: bool,
-      http_method: Option<&str>,
-      http_path: Option<&str>,
-      http_status_code: Option<u16>,
-      event_time: DateTime<Utc>,
-    ) -> NotificationDetails {
-      NotificationDetails {
-        title: title.to_string(),
-        description: None,
-        event_time,
-        http_method: http_method.map(|s| s.to_string()),
-        http_path: http_path.map(|s| s.to_string()),
-        http_status_code,
-        is_from_error,
-        urgency: None,
-        user_token: None,
-        media_file_token: None,
-        inference_job_token: None,
-        third_party_id: None,
-        http_host: None,
-        http_origin: None,
-        http_referer: None,
-        http_user_agent: None,
-        artcraft_version: None,
-        trace_id: None,
-        request_ip_address: None,
-        avt_cookie_token: None,
-        session_token: None,
-        maybe_error: None,
-        session_user_token: None,
-        extra_message: None,
-      }
+    fn make_details_with_status(title: &str, is_from_error: bool, http_method: Option<&str>, http_path: Option<&str>, http_status_code: Option<u16>, event_time: DateTime<Utc>) -> NotificationDetails {
+      NotificationDetails { title: title.to_string(), description: None, event_time, http_method: http_method.map(|s| s.to_string()), http_path: http_path.map(|s| s.to_string()), http_status_code, is_from_error, urgency: None, user_token: None, media_file_token: None, inference_job_token: None, third_party_id: None, http_host: None, http_origin: None, http_referer: None, http_user_agent: None, artcraft_version: None, trace_id: None, request_ip_address: None, avt_cookie_token: None, session_token: None, maybe_error: None, session_user_token: None, extra_message: None }
     }
 
     #[test]

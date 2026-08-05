@@ -20,9 +20,7 @@ where
 
 /// Paginated list of the user's (live) tags, newest first
 /// (`tags.id` descending; the id doubles as the cursor).
-pub async fn list_tags_for_user<'e, 'c: 'e, E>(
-  args: ListTagsForUserArgs<'e, 'c, E>,
-) -> Result<Vec<TagRow>, sqlx::Error>
+pub async fn list_tags_for_user<'e, 'c: 'e, E>(args: ListTagsForUserArgs<'e, 'c, E>) -> Result<Vec<TagRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -50,16 +48,8 @@ LIMIT ?
     cursor_id,
     limit,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
-  Ok(rows.into_iter()
-    .map(|r| TagRow {
-      id: r.id,
-      token: r.token,
-      tag_value: r.tag_value,
-      tag_value_lowercase: r.tag_value_lowercase,
-      use_count: r.use_count,
-    })
-    .collect())
+  Ok(rows.into_iter().map(|r| TagRow { id: r.id, token: r.token, tag_value: r.tag_value, tag_value_lowercase: r.tag_value_lowercase, use_count: r.use_count }).collect())
 }

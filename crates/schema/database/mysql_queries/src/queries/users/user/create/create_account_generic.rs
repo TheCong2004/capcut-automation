@@ -26,29 +26,29 @@ pub struct GenericCreateAccountArgs<'a> {
 
   /// Google did email IDV and told us it's legitimate.
   pub email_confirmed_by_google: bool,
-  
-  /// The email address is not real yet. We generated a fake/synthetic value 
-  /// that will hopefully be replaced later. This is for automated user creation 
+
+  /// The email address is not real yet. We generated a fake/synthetic value
+  /// that will hopefully be replaced later. This is for automated user creation
   /// flows, like Stripe Checkout onboarding flow.
   pub email_is_synthetic: bool,
 
   pub password_hash: &'a str,
   pub is_without_password: bool,
-  
+
   /// This is initially TRUE for accounts that were provisioned automatically,
-  /// without user intervention, e.g. in the eager Stripe Checkout onboarding 
+  /// without user intervention, e.g. in the eager Stripe Checkout onboarding
   /// flow. Accounts in this state have not yet been customized by users and may
-  /// not in fact represent real users if the users abandon the flow. Once the 
+  /// not in fact represent real users if the users abandon the flow. Once the
   /// user finishes setup, this will be set to false.
-  /// 
+  ///
   /// Existing and normal setup flow sets this flag to false.
-  /// 
-  /// If enough time has passed without the user interacting with the account, 
+  ///
+  /// If enough time has passed without the user interacting with the account,
   /// then it might be prudent to delete these records.
   pub is_temporary: bool,
-  
-  /// Whether the account was created eagerly (e.g. via stripe checkout flow) 
-  /// without the user explicitly setting up an account, choosing an email or 
+
+  /// Whether the account was created eagerly (e.g. via stripe checkout flow)
+  /// without the user explicitly setting up an account, choosing an email or
   /// password, etc. (It's a technical choice to do faster checkout flow.)
   /// This is a permanent label on the account.
   pub was_eagerly_provisioned: bool,
@@ -82,21 +82,17 @@ pub struct GenericCreateAccountArgs<'a> {
   pub maybe_user_token: Option<&'a UserToken>,
 }
 
-
 pub struct CreateAccountSuccessResult {
   pub user_token: UserToken,
   pub user_id: u64,
 }
 
-pub async fn create_account_generic<'e, 'c: 'e, E>(
-  args: GenericCreateAccountArgs<'_>,
-  mysql_executor: E,
-) -> Result<CreateAccountSuccessResult, CreateAccountError>
+pub async fn create_account_generic<'e, 'c: 'e, E>(args: GenericCreateAccountArgs<'_>, mysql_executor: E) -> Result<CreateAccountSuccessResult, CreateAccountError>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
-  const INITIAL_PROFILE_MARKDOWN : &str = "";
-  const INITIAL_PROFILE_RENDERED_HTML : &str = "";
+  const INITIAL_PROFILE_MARKDOWN: &str = "";
+  const INITIAL_PROFILE_RENDERED_HTML: &str = "";
   const INITIAL_USER_ROLE: &str = "user";
 
   let maybe_referral_url = sanitize_optional_url(args.maybe_referral_url);
@@ -108,7 +104,7 @@ where
   };
 
   let query = sqlx::query!(
-        r#"
+    r#"
 INSERT INTO users
 SET
   token = ?,
@@ -153,54 +149,38 @@ SET
   maybe_referral_partner = ?,
   maybe_referral_user_token = ?
         "#,
-      user_token.as_str(),
-    
-      args.is_temporary,
-    
-      args.username,
-      args.display_name,
-
-      args.username_is_generated,
-      args.username_is_not_customized,
-
-      args.email_address,
-      args.email_gravatar_hash,
-
-      args.email_confirmed_by_google,
-      args.email_is_synthetic,
-    
-      args.was_eagerly_provisioned,
-
-      INITIAL_PROFILE_MARKDOWN,
-      INITIAL_PROFILE_RENDERED_HTML,
-      INITIAL_USER_ROLE,
-
-      args.password_hash,
-      args.is_without_password,
-
-      args.maybe_feature_flags,
-
-      args.ip_address,
-      args.ip_address,
-      args.ip_address,
-
-      args.maybe_source.map(|s| s.to_str()),
-      args.maybe_signup_method.map(|m| m.to_str()),
-
-      maybe_referral_url,
-      maybe_landing_url,
-
-      args.maybe_referral_partner,
-      args.maybe_referral_user_token.map(|t| t.as_str()),
-    );
-
+    user_token.as_str(),
+    args.is_temporary,
+    args.username,
+    args.display_name,
+    args.username_is_generated,
+    args.username_is_not_customized,
+    args.email_address,
+    args.email_gravatar_hash,
+    args.email_confirmed_by_google,
+    args.email_is_synthetic,
+    args.was_eagerly_provisioned,
+    INITIAL_PROFILE_MARKDOWN,
+    INITIAL_PROFILE_RENDERED_HTML,
+    INITIAL_USER_ROLE,
+    args.password_hash,
+    args.is_without_password,
+    args.maybe_feature_flags,
+    args.ip_address,
+    args.ip_address,
+    args.ip_address,
+    args.maybe_source.map(|s| s.to_str()),
+    args.maybe_signup_method.map(|m| m.to_str()),
+    maybe_referral_url,
+    maybe_landing_url,
+    args.maybe_referral_partner,
+    args.maybe_referral_user_token.map(|t| t.as_str()),
+  );
 
   let query_result = query.execute(mysql_executor).await;
 
   let record_id = match query_result {
-    Ok(res) => {
-      res.last_insert_id()
-    },
+    Ok(res) => res.last_insert_id(),
     Err(err) => {
       warn!("New user creation DB error: {:?}", err);
 
@@ -216,26 +196,20 @@ SET
               } else if err.message().contains("email_address") {
                 return Err(CreateAccountError::EmailIsTaken);
               }
-            }
+            },
             _ => {},
           }
         },
         _ => {},
       }
       return Err(CreateAccountError::DatabaseError);
-    }
+    },
   };
 
-  Ok(CreateAccountSuccessResult {
-    user_token,
-    user_id: record_id,
-  })
+  Ok(CreateAccountSuccessResult { user_token, user_id: record_id })
 }
 
 /// Trim, reject empty strings, and truncate to 255 characters.
 fn sanitize_optional_url(value: Option<String>) -> Option<String> {
-  value
-    .map(|s| s.trim().to_string())
-    .filter(|s| !s.is_empty())
-    .map(|s| s.chars().take(255).collect())
+  value.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).map(|s| s.chars().take(255).collect())
 }

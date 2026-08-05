@@ -20,32 +20,10 @@ use sqlite_tasks::queries::update_successful_task_status_with_metadata::{update_
 use tauri::AppHandle;
 use tokens::tokens::media_files::MediaFileToken;
 
-pub async fn handle_successful_job(
-  app_handle: &AppHandle,
-  app_env_configs: &AppEnvConfigs,
-  creds: Option<&StorytellerCredentialSet>,
-  job: &ListSessionJobsItem,
-  task: &Task,
-  task_database: &TaskDatabase,
-) -> AnyhowResult<()> {
-  let maybe_primary_media_file_token = job.maybe_result
-      .as_ref()
-      .map(|result| MediaFileToken::new_from_str(&result.entity_token));
+pub async fn handle_successful_job(app_handle: &AppHandle, app_env_configs: &AppEnvConfigs, creds: Option<&StorytellerCredentialSet>, job: &ListSessionJobsItem, task: &Task, task_database: &TaskDatabase) -> AnyhowResult<()> {
+  let maybe_primary_media_file_token = job.maybe_result.as_ref().map(|result| MediaFileToken::new_from_str(&result.entity_token));
 
-  let updated = update_successful_task_status_with_metadata(UpdateSuccessfulTaskArgs {
-    db: task_database.get_connection(),
-    task_id: &task.id,
-    maybe_batch_token: job.maybe_result
-        .as_ref()
-        .map(|result| result.maybe_batch_token.as_ref())
-        .flatten(),
-    maybe_primary_media_file_token: maybe_primary_media_file_token.as_ref(),
-    maybe_primary_media_file_class: get_media_file_class(job),
-    maybe_primary_media_file_thumbnail_url_template: get_thumbnail_template(job),
-    maybe_primary_media_file_cdn_url: job.maybe_result
-        .as_ref()
-        .map(|result| result.media_links.cdn_url.as_str()),
-  }).await?;
+  let updated = update_successful_task_status_with_metadata(UpdateSuccessfulTaskArgs { db: task_database.get_connection(), task_id: &task.id, maybe_batch_token: job.maybe_result.as_ref().map(|result| result.maybe_batch_token.as_ref()).flatten(), maybe_primary_media_file_token: maybe_primary_media_file_token.as_ref(), maybe_primary_media_file_class: get_media_file_class(job), maybe_primary_media_file_thumbnail_url_template: get_thumbnail_template(job), maybe_primary_media_file_cdn_url: job.maybe_result.as_ref().map(|result| result.media_links.cdn_url.as_str()) }).await?;
 
   if !updated {
     return Ok(()); // If anything breaks with queries, don't spam events.
@@ -69,22 +47,10 @@ pub async fn handle_successful_job(
   Ok(())
 }
 
-async fn send_additional_success_events(
-  app_handle: &AppHandle,
-  app_env_configs: &AppEnvConfigs,
-  creds: Option<&StorytellerCredentialSet>,
-  job: &ListSessionJobsItem,
-  task: &Task
-) {
+async fn send_additional_success_events(app_handle: &AppHandle, app_env_configs: &AppEnvConfigs, creds: Option<&StorytellerCredentialSet>, job: &ListSessionJobsItem, task: &Task) {
   info!("Attempting to dispatch events for completed Storyteller job: {:?}", task);
 
-  let result = maybe_handle_frontend_caller_notification(
-    app_handle,
-    app_env_configs,
-    creds,
-    task,
-    job,
-  ).await;
+  let result = maybe_handle_frontend_caller_notification(app_handle, app_env_configs, creds, task, job).await;
 
   if let Err(err) = result {
     error!("Failed to send generation complete event: {:?}", err);
@@ -150,16 +116,11 @@ fn get_media_file_class(job: &ListSessionJobsItem) -> Option<TaskMediaFileClass>
 
   let url = result.media_links.cdn_url.as_str();
 
-  if url.ends_with("jpg")
-      || url.ends_with("jpeg")
-      || url.ends_with("png")
-  {
+  if url.ends_with("jpg") || url.ends_with("jpeg") || url.ends_with("png") {
     return Some(TaskMediaFileClass::Image);
   }
 
-  if url.ends_with("mp4")
-      || url.ends_with("webm")
-  {
+  if url.ends_with("mp4") || url.ends_with("webm") {
     return Some(TaskMediaFileClass::Video);
   }
 
@@ -167,9 +128,7 @@ fn get_media_file_class(job: &ListSessionJobsItem) -> Option<TaskMediaFileClass>
     return Some(TaskMediaFileClass::Dimensional);
   }
 
-  if url.ends_with("wav")
-      || url.ends_with("mp3")
-  {
+  if url.ends_with("wav") || url.ends_with("mp3") {
     return Some(TaskMediaFileClass::Audio);
   }
 

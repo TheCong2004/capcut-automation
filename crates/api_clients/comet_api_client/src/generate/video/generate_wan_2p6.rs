@@ -1,10 +1,7 @@
 use crate::creds::comet_api_key::CometApiKey;
 use crate::error::comet_client_error::CometClientError;
 use crate::error::comet_error::CometError;
-use crate::requests::create_video::create_video::{
-  create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize,
-  CreateVideoArgs, CreateVideoRequest,
-};
+use crate::requests::create_video::create_video::{create_video, CometInputReferenceImage, CometVideoModelRaw, CometVideoSize, CreateVideoArgs, CreateVideoRequest};
 use crate::requests::video_task_status::CometVideoTaskStatus;
 
 /// Wan 2.6 supports 2-15 second durations.
@@ -84,20 +81,12 @@ pub struct GenerateWan2p6Response {
 
 // ── Entry point ──
 
-pub async fn generate_wan_2p6(
-  args: GenerateWan2p6Args<'_>,
-) -> Result<GenerateWan2p6Response, CometError> {
+pub async fn generate_wan_2p6(args: GenerateWan2p6Args<'_>) -> Result<GenerateWan2p6Response, CometError> {
   let raw_request = args.request.to_create_video_request()?;
 
-  let result = create_video(CreateVideoArgs {
-    api_key: args.api_key,
-    request: raw_request,
-  }).await?;
+  let result = create_video(CreateVideoArgs { api_key: args.api_key, request: raw_request }).await?;
 
-  Ok(GenerateWan2p6Response {
-    task_id: result.task_id,
-    status: result.status,
-  })
+  Ok(GenerateWan2p6Response { task_id: result.task_id, status: result.status })
 }
 
 impl GenerateWan2p6Request {
@@ -105,29 +94,15 @@ impl GenerateWan2p6Request {
   pub fn to_create_video_request(&self) -> Result<CreateVideoRequest, CometClientError> {
     if let Some(seconds) = self.duration_seconds {
       if !(MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&seconds) {
-        return Err(CometClientError::InvalidRequestField {
-          field: "duration_seconds",
-          raw_value: seconds.to_string(),
-          reason: format!("Wan 2.6 supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations"),
-        });
+        return Err(CometClientError::InvalidRequestField { field: "duration_seconds", raw_value: seconds.to_string(), reason: format!("Wan 2.6 supports {MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS} second durations") });
       }
     }
 
     if self.input_reference_images.len() > MAX_REFERENCE_IMAGES {
-      return Err(CometClientError::InvalidRequestField {
-        field: "input_reference_images",
-        raw_value: self.input_reference_images.len().to_string(),
-        reason: format!("Wan 2.6 accepts at most {MAX_REFERENCE_IMAGES} references"),
-      });
+      return Err(CometClientError::InvalidRequestField { field: "input_reference_images", raw_value: self.input_reference_images.len().to_string(), reason: format!("Wan 2.6 accepts at most {MAX_REFERENCE_IMAGES} references") });
     }
 
-    Ok(CreateVideoRequest {
-      model: CometVideoModelRaw::Wan2p6,
-      prompt: self.prompt.clone(),
-      maybe_seconds: self.duration_seconds,
-      maybe_size: self.size.map(map_size),
-      input_reference_images: self.input_reference_images.clone(),
-    })
+    Ok(CreateVideoRequest { model: CometVideoModelRaw::Wan2p6, prompt: self.prompt.clone(), maybe_seconds: self.duration_seconds, maybe_size: self.size.map(map_size), input_reference_images: self.input_reference_images.clone() })
   }
 }
 
@@ -144,20 +119,10 @@ mod tests {
 
   #[test]
   fn maps_to_wire_request() {
-    let request = GenerateWan2p6Request {
-      prompt: "a steam train crossing a viaduct".to_string(),
-      duration_seconds: Some(15),
-      size: Some(Wan2p6Size::TenEightyP),
-      input_reference_images: vec![],
-    };
+    let request = GenerateWan2p6Request { prompt: "a steam train crossing a viaduct".to_string(), duration_seconds: Some(15), size: Some(Wan2p6Size::TenEightyP), input_reference_images: vec![] };
 
     let raw = request.to_create_video_request().expect("should validate");
-    assert_eq!(raw.text_form_fields(), vec![
-      ("model", "wan2.6".to_string()),
-      ("prompt", "a steam train crossing a viaduct".to_string()),
-      ("seconds", "15".to_string()),
-      ("size", "1920x1080".to_string()),
-    ]);
+    assert_eq!(raw.text_form_fields(), vec![("model", "wan2.6".to_string()), ("prompt", "a steam train crossing a viaduct".to_string()), ("seconds", "15".to_string()), ("size", "1920x1080".to_string()),]);
   }
 
   #[test]
@@ -172,13 +137,7 @@ mod tests {
   #[test]
   fn too_many_references_rejected() {
     let mut request = request_with_seconds(Some(5));
-    request.input_reference_images = (0..6)
-      .map(|i| CometInputReferenceImage {
-        file_bytes: vec![0u8],
-        filename: format!("ref_{i}.png"),
-        maybe_content_type: Some("image/png".to_string()),
-      })
-      .collect();
+    request.input_reference_images = (0..6).map(|i| CometInputReferenceImage { file_bytes: vec![0u8], filename: format!("ref_{i}.png"), maybe_content_type: Some("image/png".to_string()) }).collect();
 
     let error = request.to_create_video_request().expect_err("should reject 6 references");
     assert!(matches!(error, CometClientError::InvalidRequestField { field: "input_reference_images", .. }));
@@ -206,11 +165,6 @@ mod tests {
   }
 
   fn request_with_seconds(duration_seconds: Option<u8>) -> GenerateWan2p6Request {
-    GenerateWan2p6Request {
-      prompt: "ok".to_string(),
-      duration_seconds,
-      size: None,
-      input_reference_images: vec![],
-    }
+    GenerateWan2p6Request { prompt: "ok".to_string(), duration_seconds, size: None, input_reference_images: vec![] }
   }
 }

@@ -5,15 +5,9 @@ use actix_web::web::{Json, Path};
 use actix_web::{web, HttpRequest};
 use log::warn;
 
-use artcraft_api_defs::folders::folder::{
-  FolderPathInfo, RenameFolderRequest, RenameFolderSuccessResponse,
-};
-use mysql_queries::queries::folders::folder::get_folder_for_owner::{
-  get_folder_for_owner, GetFolderForOwnerArgs,
-};
-use mysql_queries::queries::folders::folder::update_folder_name::{
-  update_folder_name, UpdateFolderNameArgs,
-};
+use artcraft_api_defs::folders::folder::{FolderPathInfo, RenameFolderRequest, RenameFolderSuccessResponse};
+use mysql_queries::queries::folders::folder::get_folder_for_owner::{get_folder_for_owner, GetFolderForOwnerArgs};
+use mysql_queries::queries::folders::folder::update_folder_name::{update_folder_name, UpdateFolderNameArgs};
 use tokens::tokens::folders::FolderToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
@@ -36,12 +30,7 @@ const MAX_NAME_LEN: usize = 255;
     (status = 500, body = CommonWebError),
   ),
 )]
-pub async fn rename_folder_handler(
-  http_request: HttpRequest,
-  path: Path<FolderPathInfo>,
-  request: Json<RenameFolderRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<RenameFolderSuccessResponse>, CommonWebError> {
+pub async fn rename_folder_handler(http_request: HttpRequest, path: Path<FolderPathInfo>, request: Json<RenameFolderRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<RenameFolderSuccessResponse>, CommonWebError> {
   let mut conn = server_state.mysql_pool.acquire().await.map_err(|err| {
     warn!("MySQL pool error: {:?}", err);
     CommonWebError::from_error(err)
@@ -56,32 +45,21 @@ pub async fn rename_folder_handler(
   }
 
   if new_name.len() > MAX_NAME_LEN {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      format!("name too long (max {} chars)", MAX_NAME_LEN),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage(format!("name too long (max {} chars)", MAX_NAME_LEN)));
   }
 
   // Confirm the folder exists + is owned before issuing the update.
   // A 404 here is the authoritative "not found" signal — the update
   // itself is idempotent and we don't gate on rows_affected.
-  get_folder_for_owner(GetFolderForOwnerArgs {
-    folder_token: &path.folder_token,
-    owner_user_token: &user_session.user_token,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
-    warn!("Folder lookup failed: {:?}", err);
-    CommonWebError::from_error(err)
-  })?
-  .ok_or(CommonWebError::NotFound)?;
+  get_folder_for_owner(GetFolderForOwnerArgs { folder_token: &path.folder_token, owner_user_token: &user_session.user_token, mysql_executor: &mut *conn, phantom: PhantomData })
+    .await
+    .map_err(|err| {
+      warn!("Folder lookup failed: {:?}", err);
+      CommonWebError::from_error(err)
+    })?
+    .ok_or(CommonWebError::NotFound)?;
 
-  update_folder_name(UpdateFolderNameArgs {
-    folder_token: &path.folder_token,
-    owner_user_token: &user_session.user_token,
-    new_name: &new_name,
-    mysql_executor: &mut *conn,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  update_folder_name(UpdateFolderNameArgs { folder_token: &path.folder_token, owner_user_token: &user_session.user_token, new_name: &new_name, mysql_executor: &mut *conn, phantom: PhantomData }).await.map_err(|err| {
     warn!("update_folder_name failed: {:?}", err);
     CommonWebError::from_error(err)
   })?;

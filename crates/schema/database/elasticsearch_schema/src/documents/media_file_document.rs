@@ -19,7 +19,6 @@ pub const MEDIA_FILE_INDEX: &str = "media_files_v1";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MediaFileDocument {
-
   pub token: MediaFileToken,
 
   pub media_class: MediaFileClass,
@@ -43,7 +42,6 @@ pub struct MediaFileDocument {
   pub maybe_title_as_keyword: Option<String>,
 
   // *** NB: Never put the bucket path to the model in Elasticsearch ! ***
-
   pub maybe_cover_image_media_file_token: Option<MediaFileToken>,
   pub maybe_cover_image_public_bucket_hash: Option<String>,
   pub maybe_cover_image_public_bucket_prefix: Option<String>,

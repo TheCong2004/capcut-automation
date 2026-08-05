@@ -11,18 +11,9 @@ use crockford::crockford_entropy_lower;
 use enums::by_table::staff_audit_logs::staff_audit_action::StaffAuditAction;
 use enums::by_table::staff_audit_logs::staff_audit_entity_type::StaffAuditEntityType;
 use http_server_common::request::get_request_ip::get_request_ip;
-use mysql_queries::queries::staff_audit_logs::insert_staff_audit_log::{
-  insert_staff_audit_log, InsertStaffAuditLogArgs,
-};
-use mysql_queries::queries::user_impersonation_requests::insert_user_impersonation_request::{
-  insert_user_impersonation_request, InsertUserImpersonationRequestArgs,
-};
-use mysql_queries::queries::users::user::get::lookup_user_for_moderation::{
-  lookup_user_for_moderation_by_email,
-  lookup_user_for_moderation_by_token,
-  lookup_user_for_moderation_by_username,
-  LookupUserForModerationResult,
-};
+use mysql_queries::queries::staff_audit_logs::insert_staff_audit_log::{insert_staff_audit_log, InsertStaffAuditLogArgs};
+use mysql_queries::queries::user_impersonation_requests::insert_user_impersonation_request::{insert_user_impersonation_request, InsertUserImpersonationRequestArgs};
+use mysql_queries::queries::users::user::get::lookup_user_for_moderation::{lookup_user_for_moderation_by_email, lookup_user_for_moderation_by_token, lookup_user_for_moderation_by_username, LookupUserForModerationResult};
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
 use crate::http_server::user_lookup::user_session::require_moderator::require_moderator;
@@ -62,12 +53,7 @@ pub struct ModerationImpersonateSuccessResponse {
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn moderator_user_session_impersonation_request_handler(
-  http_request: HttpRequest,
-  request: Json<ModerationImpersonateRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ModerationImpersonateSuccessResponse>, CommonWebError> {
-
+pub async fn moderator_user_session_impersonation_request_handler(http_request: HttpRequest, request: Json<ModerationImpersonateRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModerationImpersonateSuccessResponse>, CommonWebError> {
   // 1. Require moderator session.
   let user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
@@ -79,25 +65,15 @@ pub async fn moderator_user_session_impersonation_request_handler(
   // 2. Determine lookup strategy from the request.
   let lookup = resolve_lookup_strategy(&request)?;
 
-  info!(
-    "Moderator {} requesting impersonation: {:?}",
-    user_session.user_token.as_str(),
-    lookup,
-  );
+  info!("Moderator {} requesting impersonation: {:?}", user_session.user_token.as_str(), lookup,);
 
   // 3. Look up the target user.
   let target_user = perform_user_lookup(&lookup, &server_state).await?;
 
   // 4. Validate target user state.
   if target_user.is_banned {
-    warn!(
-      "Moderator {} tried to impersonate banned user {}",
-      user_session.user_token.as_str(),
-      target_user.user_token.as_str(),
-    );
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "Target user is banned".to_string(),
-    ));
+    warn!("Moderator {} tried to impersonate banned user {}", user_session.user_token.as_str(), target_user.user_token.as_str(),);
+    return Err(CommonWebError::BadInputWithSimpleMessage("Target user is banned".to_string()));
   }
 
   // 5. Generate the secret password token.
@@ -107,22 +83,13 @@ pub async fn moderator_user_session_impersonation_request_handler(
   let ip_address = get_request_ip(&http_request);
 
   // 7. Begin transaction.
-  let mut transaction = server_state.mysql_pool.begin().await
-      .map_err(|err| {
-        warn!("Failed to begin transaction: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut transaction = server_state.mysql_pool.begin().await.map_err(|err| {
+    warn!("Failed to begin transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // 8. Insert staff audit log.
-  let _audit_token = insert_staff_audit_log(InsertStaffAuditLogArgs {
-    audit_action: StaffAuditAction::ImpersonateUserRequest,
-    maybe_entity_type: Some(StaffAuditEntityType::User),
-    maybe_entity_token: Some(target_user.user_token.as_str()),
-    staff_user_token: &user_session.user_token,
-    actor_ip_address: &ip_address,
-    mysql_executor: &mut *transaction,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let _audit_token = insert_staff_audit_log(InsertStaffAuditLogArgs { audit_action: StaffAuditAction::ImpersonateUserRequest, maybe_entity_type: Some(StaffAuditEntityType::User), maybe_entity_token: Some(target_user.user_token.as_str()), staff_user_token: &user_session.user_token, actor_ip_address: &ip_address, mysql_executor: &mut *transaction, phantom: PhantomData }).await.map_err(|err| {
     warn!("Failed to insert staff audit log: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -130,17 +97,7 @@ pub async fn moderator_user_session_impersonation_request_handler(
   // 9. Insert impersonation request (expires in 20 minutes).
   let expires_at = Utc::now() + Duration::minutes(20);
 
-  let _impersonation_token = insert_user_impersonation_request(
-    InsertUserImpersonationRequestArgs {
-      impersonated_user_token: &target_user.user_token,
-      impersonator_user_token: &user_session.user_token,
-      user_impersonation_token: &password_token,
-      ip_address_creation: &ip_address,
-      expires_at,
-      mysql_executor: &mut *transaction,
-      phantom: PhantomData,
-    },
-  ).await.map_err(|err| {
+  let _impersonation_token = insert_user_impersonation_request(InsertUserImpersonationRequestArgs { impersonated_user_token: &target_user.user_token, impersonator_user_token: &user_session.user_token, user_impersonation_token: &password_token, ip_address_creation: &ip_address, expires_at, mysql_executor: &mut *transaction, phantom: PhantomData }).await.map_err(|err| {
     warn!("Failed to insert impersonation request: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -151,18 +108,10 @@ pub async fn moderator_user_session_impersonation_request_handler(
     CommonWebError::from_error(err)
   })?;
 
-  info!(
-    "Impersonation request created: moderator={} target_user={} target_username={}",
-    user_session.user_token.as_str(),
-    target_user.user_token.as_str(),
-    target_user.username,
-  );
+  info!("Impersonation request created: moderator={} target_user={} target_username={}", user_session.user_token.as_str(), target_user.user_token.as_str(), target_user.username,);
 
   // 11. Respond with the password token.
-  Ok(Json(ModerationImpersonateSuccessResponse {
-    success: true,
-    password_token,
-  }))
+  Ok(Json(ModerationImpersonateSuccessResponse { success: true, password_token }))
 }
 
 // --- Helpers ---
@@ -176,26 +125,28 @@ enum UserLookup {
 }
 
 /// Resolve which lookup field was provided. Exactly one must be set.
-fn resolve_lookup_strategy(
-  request: &ModerationImpersonateRequest,
-) -> Result<UserLookup, CommonWebError> {
+fn resolve_lookup_strategy(request: &ModerationImpersonateRequest) -> Result<UserLookup, CommonWebError> {
   let mut fields_set = 0u8;
 
-  if request.username.is_some() { fields_set += 1; }
-  if request.user_token.is_some() { fields_set += 1; }
-  if request.email_address.is_some() { fields_set += 1; }
-  if request.username_email_or_token.is_some() { fields_set += 1; }
+  if request.username.is_some() {
+    fields_set += 1;
+  }
+  if request.user_token.is_some() {
+    fields_set += 1;
+  }
+  if request.email_address.is_some() {
+    fields_set += 1;
+  }
+  if request.username_email_or_token.is_some() {
+    fields_set += 1;
+  }
 
   if fields_set == 0 {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "Provide one of: username, user_token, email_address, or username_email_or_token".to_string(),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage("Provide one of: username, user_token, email_address, or username_email_or_token".to_string()));
   }
 
   if fields_set > 1 {
-    return Err(CommonWebError::BadInputWithSimpleMessage(
-      "Only one lookup field should be provided".to_string(),
-    ));
+    return Err(CommonWebError::BadInputWithSimpleMessage("Only one lookup field should be provided".to_string()));
   }
 
   if let Some(ref username) = request.username {
@@ -214,9 +165,7 @@ fn resolve_lookup_strategy(
     return Ok(classify_ambiguous_lookup(value));
   }
 
-  Err(CommonWebError::BadInputWithSimpleMessage(
-    "No lookup field provided".to_string(),
-  ))
+  Err(CommonWebError::BadInputWithSimpleMessage("No lookup field provided".to_string()))
 }
 
 /// Classify an ambiguous lookup value as username, email, or token.
@@ -234,20 +183,11 @@ fn classify_ambiguous_lookup(value: &str) -> UserLookup {
   UserLookup::Username(trimmed.to_lowercase())
 }
 
-async fn perform_user_lookup(
-  lookup: &UserLookup,
-  server_state: &ServerState,
-) -> Result<LookupUserForModerationResult, CommonWebError> {
+async fn perform_user_lookup(lookup: &UserLookup, server_state: &ServerState) -> Result<LookupUserForModerationResult, CommonWebError> {
   let maybe_user = match lookup {
-    UserLookup::Username(username) => {
-      lookup_user_for_moderation_by_username(username, &server_state.mysql_pool).await
-    }
-    UserLookup::Email(email) => {
-      lookup_user_for_moderation_by_email(email, &server_state.mysql_pool).await
-    }
-    UserLookup::Token(token) => {
-      lookup_user_for_moderation_by_token(token, &server_state.mysql_pool).await
-    }
+    UserLookup::Username(username) => lookup_user_for_moderation_by_username(username, &server_state.mysql_pool).await,
+    UserLookup::Email(email) => lookup_user_for_moderation_by_email(email, &server_state.mysql_pool).await,
+    UserLookup::Token(token) => lookup_user_for_moderation_by_token(token, &server_state.mysql_pool).await,
   };
 
   match maybe_user {
@@ -255,10 +195,10 @@ async fn perform_user_lookup(
     Ok(None) => {
       warn!("User not found for impersonation lookup: {:?}", lookup);
       Err(CommonWebError::NotFound)
-    }
+    },
     Err(err) => {
       warn!("User lookup error: {:?}", err);
       Err(CommonWebError::from_anyhow_error(err))
-    }
+    },
   }
 }

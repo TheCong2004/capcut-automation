@@ -12,10 +12,6 @@ pub struct RvcV2Dependencies {
 
 impl RvcV2Dependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      inference_command: RvcV2InferenceCommand::from_env()?,
-      pretrained_hubert_model: PretrainedHubertModel::from_env(),
-      downloaders: RvcV2Downloaders::build_all_from_env(),
-    })
+    Ok(Self { inference_command: RvcV2InferenceCommand::from_env()?, pretrained_hubert_model: PretrainedHubertModel::from_env(), downloaders: RvcV2Downloaders::build_all_from_env() })
   }
 }

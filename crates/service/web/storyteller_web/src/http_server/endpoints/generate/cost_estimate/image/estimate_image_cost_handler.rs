@@ -3,10 +3,7 @@ use std::fmt::{Display, Formatter};
 use actix_http::StatusCode;
 use actix_web::web::Json;
 use actix_web::{HttpResponse, ResponseError};
-use artcraft_api_defs::generate::cost_estimate::estimate_image_cost::{
-  EstimateImageCostError, EstimateImageCostErrorType, EstimateImageCostRequest,
-  EstimateImageCostResponse,
-};
+use artcraft_api_defs::generate::cost_estimate::estimate_image_cost::{EstimateImageCostError, EstimateImageCostErrorType, EstimateImageCostRequest, EstimateImageCostResponse};
 use artcraft_router::api::router_aspect_ratio::RouterAspectRatio;
 use artcraft_router::api::router_image_model::RouterImageModel;
 use artcraft_router::api::router_quality::RouterQuality;
@@ -32,9 +29,7 @@ use enums::common::generation_provider::GenerationProvider;
     (status = 400, description = "Invalid request", body = EstimateImageCostError),
   ),
 )]
-pub async fn estimate_image_cost_handler(
-  request: Json<EstimateImageCostRequest>,
-) -> Result<Json<EstimateImageCostResponse>, HandlerError> {
+pub async fn estimate_image_cost_handler(request: Json<EstimateImageCostRequest>) -> Result<Json<EstimateImageCostResponse>, HandlerError> {
   let router_provider = map_provider(request.provider, request.model)?;
   let router_model = map_image_model(request.model)?;
   let router_aspect_ratio = request.aspect_ratio.map(map_aspect_ratio);
@@ -44,7 +39,7 @@ pub async fn estimate_image_cost_handler(
   let router_request = GenerateImageRequestBuilder {
     model: router_model,
     provider: router_provider,
-    prompt: None, // NB: Prompt is immaterial to cost estimation
+    prompt: None,       // NB: Prompt is immaterial to cost estimation
     image_inputs: None, // TODO: Only some models charge for this - we'll need to add later.
     resolution: router_resolution,
     aspect_ratio: router_aspect_ratio,
@@ -58,19 +53,9 @@ pub async fn estimate_image_cost_handler(
     zoom: None,
   };
 
-  let estimate = router_request.build2()
-    .and_then(|dor| dor.estimate_cost())
-    .map_err(|e| HandlerError::InvalidInput(format!("{}", e)))?;
+  let estimate = router_request.build2().and_then(|dor| dor.estimate_cost()).map_err(|e| HandlerError::InvalidInput(format!("{}", e)))?;
 
-  Ok(Json(EstimateImageCostResponse {
-    success: true,
-    cost_in_credits: estimate.cost_in_credits,
-    cost_in_usd_cents: estimate.cost_in_usd_cents,
-    is_free: estimate.is_free,
-    is_unlimited: estimate.is_unlimited,
-    is_rate_limited: estimate.is_rate_limited,
-    has_watermark: estimate.has_watermark,
-  }))
+  Ok(Json(EstimateImageCostResponse { success: true, cost_in_credits: estimate.cost_in_credits, cost_in_usd_cents: estimate.cost_in_usd_cents, is_free: estimate.is_free, is_unlimited: estimate.is_unlimited, is_rate_limited: estimate.is_rate_limited, has_watermark: estimate.has_watermark }))
 }
 
 /// Local error type — wraps the serializable API error struct so we can implement
@@ -96,33 +81,17 @@ impl ResponseError for HandlerError {
 
   fn error_response(&self) -> HttpResponse {
     let (error_type, error_message) = match self {
-      HandlerError::InvalidProviderForModel { provider, model } => (
-        EstimateImageCostErrorType::InvalidProviderForModel,
-        format!("RouterProvider '{}' is not supported for model '{}'", provider, model),
-      ),
-      HandlerError::InvalidInput(msg) => (
-        EstimateImageCostErrorType::InvalidInput,
-        msg.clone(),
-      ),
+      HandlerError::InvalidProviderForModel { provider, model } => (EstimateImageCostErrorType::InvalidProviderForModel, format!("RouterProvider '{}' is not supported for model '{}'", provider, model)),
+      HandlerError::InvalidInput(msg) => (EstimateImageCostErrorType::InvalidInput, msg.clone()),
     };
-    HttpResponse::BadRequest().json(EstimateImageCostError {
-      success: false,
-      error_type,
-      error_message,
-    })
+    HttpResponse::BadRequest().json(EstimateImageCostError { success: false, error_type, error_message })
   }
 }
 
-fn map_provider(
-  provider: GenerationProvider,
-  model: CommonImageModel,
-) -> Result<RouterProvider, HandlerError> {
+fn map_provider(provider: GenerationProvider, model: CommonImageModel) -> Result<RouterProvider, HandlerError> {
   match provider {
     GenerationProvider::Artcraft => Ok(RouterProvider::Artcraft),
-    other => Err(HandlerError::InvalidProviderForModel {
-      provider: format!("{:?}", other),
-      model: format!("{:?}", model),
-    }),
+    other => Err(HandlerError::InvalidProviderForModel { provider: format!("{:?}", other), model: format!("{:?}", model) }),
   }
 }
 

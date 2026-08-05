@@ -21,10 +21,7 @@ pub struct WalletLedgerEntryForModerationResult {
   pub created_at: DateTime<Utc>,
 }
 
-pub async fn get_wallet_ledger_entry_for_moderation(
-  wallet_ledger_entry_token: &WalletLedgerEntryToken,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Option<WalletLedgerEntryForModerationResult>> {
+pub async fn get_wallet_ledger_entry_for_moderation(wallet_ledger_entry_token: &WalletLedgerEntryToken, mysql_pool: &MySqlPool) -> AnyhowResult<Option<WalletLedgerEntryForModerationResult>> {
   let result = sqlx::query_as!(
     WalletLedgerEntryForModerationResult,
     r#"
@@ -46,8 +43,8 @@ LIMIT 1
     "#,
     wallet_ledger_entry_token,
   )
-    .fetch_one(mysql_pool)
-    .await;
+  .fetch_one(mysql_pool)
+  .await;
 
   match result {
     Ok(record) => Ok(Some(record)),
@@ -55,6 +52,6 @@ LIMIT 1
     Err(err) => {
       warn!("get_wallet_ledger_entry_for_moderation query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }

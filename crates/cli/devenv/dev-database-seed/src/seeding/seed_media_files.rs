@@ -71,45 +71,34 @@ pub async fn seed_media_files(mysql_pool: &Pool<MySql>, maybe_bucket_clients: Op
     let mut media_file_path = seed_tool_data_root.clone();
     media_file_path.push(subdirectory_path);
 
-    let result = seed_model(
-      &mysql_pool,
-      &media_file_token,
-      &user_token,
-      media_file_type,
-      &media_file_path,
-      maybe_bucket_clients,
-    ).await;
+    let result = seed_model(&mysql_pool, &media_file_token, &user_token, media_file_type, &media_file_path, maybe_bucket_clients).await;
 
     match result {
       Ok(_) => info!("Seeded {:?}", media_file_path),
-      Err(err) => warn!(r#"
+      Err(err) => warn!(
+        r#"
         Could not seed media file {} , {:?} : {:?}
         (No worries: if there's a duplicate key error, we probably already
         seeded the media file on a previous invocation!)
-      "#, media_file_token, subdirectory_path, err),
+      "#,
+        media_file_token, subdirectory_path, err
+      ),
     }
   }
 
   Ok(())
 }
 
-async fn seed_model(
-  mysql_pool: &Pool<MySql>,
-  media_file_token: &MediaFileToken,
-  user_token: &UserToken,
-  media_file_type: MediaFileType,
-  media_file_path: &Path,
-  maybe_bucket_clients: Option<&BucketClients>,
-) -> AnyhowResult<()> {
+async fn seed_model(mysql_pool: &Pool<MySql>, media_file_token: &MediaFileToken, user_token: &UserToken, media_file_type: MediaFileType, media_file_path: &Path, maybe_bucket_clients: Option<&BucketClients>) -> AnyhowResult<()> {
   info!("Seeding Media file {:?} ...", media_file_path);
 
   let mut bucket_hash = "NOT_UPLOADED_BY_SEED_TOOL".to_string();
   let mut maybe_bucket_prefix = None;
   let mut maybe_bucket_extension = None;
-  
+
   if media_file_exists(mysql_pool, media_file_token).await? {
     info!("Media file already seeded: {:?}", media_file_token);
-    return Ok(())
+    return Ok(());
   }
 
   if let Some(bucket_clients) = maybe_bucket_clients {
@@ -123,41 +112,17 @@ async fn seed_model(
   let file_size_bytes = file_size(media_file_path)?;
   let sha256_checksum = sha256_hash_file(media_file_path)?;
 
-  let maybe_filename = media_file_path
-      .file_name()
-      .map(|name| name.to_str())
-      .flatten();
+  let maybe_filename = media_file_path.file_name().map(|name| name.to_str()).flatten();
 
-  insert_media_file_from_cli_tool(InsertArgs {
-    pool: &mysql_pool,
-    maybe_use_apriori_media_token: Some(media_file_token),
-    media_file_type,
-    maybe_mime_type,
-    file_size_bytes,
-    sha256_checksum: &sha256_checksum,
-    maybe_origin_filename: maybe_filename,
-    maybe_creator_user_token: Some(user_token),
-    creator_set_visibility: Visibility::Public,
-    public_bucket_directory_hash: &bucket_hash,
-    maybe_public_bucket_prefix: maybe_bucket_prefix.as_deref(),
-    maybe_public_bucket_extension: maybe_bucket_extension.as_deref(),
-  }).await?;
+  insert_media_file_from_cli_tool(InsertArgs { pool: &mysql_pool, maybe_use_apriori_media_token: Some(media_file_token), media_file_type, maybe_mime_type, file_size_bytes, sha256_checksum: &sha256_checksum, maybe_origin_filename: maybe_filename, maybe_creator_user_token: Some(user_token), creator_set_visibility: Visibility::Public, public_bucket_directory_hash: &bucket_hash, maybe_public_bucket_prefix: maybe_bucket_prefix.as_deref(), maybe_public_bucket_extension: maybe_bucket_extension.as_deref() }).await?;
 
   Ok(())
 }
 
-async fn media_file_exists(
-  mysql_pool: &Pool<MySql>,
-  media_file_token: &MediaFileToken,
-) -> AnyhowResult<bool> {
+async fn media_file_exists(mysql_pool: &Pool<MySql>, media_file_token: &MediaFileToken) -> AnyhowResult<bool> {
+  const CAN_SEE_DELETED: bool = true;
 
-  const CAN_SEE_DELETED : bool = true;
-
-  let maybe_file = get_media_file(
-    &media_file_token,
-    CAN_SEE_DELETED,
-    mysql_pool
-  ).await?;
+  let maybe_file = get_media_file(&media_file_token, CAN_SEE_DELETED, mysql_pool).await?;
 
   Ok(maybe_file.is_some())
 }
@@ -168,42 +133,27 @@ struct BucketDetails {
   maybe_bucket_extension: Option<String>,
 }
 
-async fn seed_file_to_bucket(
-  media_file_path: &Path,
-  bucket_clients: &BucketClients,
-) -> AnyhowResult<BucketDetails> {
-
+async fn seed_file_to_bucket(media_file_path: &Path, bucket_clients: &BucketClients) -> AnyhowResult<BucketDetails> {
   info!("Uploading media file {:?} ...", media_file_path);
 
   let maybe_bucket_prefix = Some("fakeyou_");
 
-  let maybe_bucket_extension = media_file_path
-      .extension()
-      .map(|extension| extension.to_str())
-      .flatten();
+  let maybe_bucket_extension = media_file_path.extension().map(|extension| extension.to_str()).flatten();
   // get the new bucket path ...
   let bucket_location = MediaFileBucketPath::generate_new(maybe_bucket_prefix, maybe_bucket_extension);
-  
+
   let bucket_path = path_to_string(bucket_location.to_full_object_pathbuf());
 
   info!("Reading media file: {:?}", media_file_path);
-  // get meta data 
+  // get meta data
   let bytes = file_read_bytes(media_file_path)?;
   let mimetype = get_mimetype_for_bytes(&bytes).unwrap_or("application/octet-stream");
-  
+
   info!("Uploading media file to bucket path: {:?}", bucket_path);
 
-  let _r = bucket_clients.public.upload_file_with_content_type(
-    &bucket_path,
-    bytes.as_ref(),
-    mimetype
-  ).await?;
+  let _r = bucket_clients.public.upload_file_with_content_type(&bucket_path, bytes.as_ref(), mimetype).await?;
 
-  Ok(BucketDetails {
-    bucket_hash: bucket_location.get_object_hash().to_string(),
-    maybe_bucket_prefix: maybe_bucket_prefix.map(|s| s.to_string()),
-    maybe_bucket_extension: maybe_bucket_extension.map(|s| s.to_string()),
-  })
+  Ok(BucketDetails { bucket_hash: bucket_location.get_object_hash().to_string(), maybe_bucket_prefix: maybe_bucket_prefix.map(|s| s.to_string()), maybe_bucket_extension: maybe_bucket_extension.map(|s| s.to_string()) })
 }
 
 // Temporary "test" to generate random tokens.

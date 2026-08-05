@@ -74,9 +74,7 @@ where
 ///
 /// Records with a NULL `maybe_project_type` are excluded so `project_type` is
 /// always present in the results.
-pub async fn list_session_project_media_files<'a, 'c: 'a, E>(
-  args: ListSessionProjectMediaFilesArgs<'a, 'c, E>,
-) -> Result<ProjectMediaFileListPage, sqlx::Error>
+pub async fn list_session_project_media_files<'a, 'c: 'a, E>(args: ListSessionProjectMediaFilesArgs<'a, 'c, E>) -> Result<ProjectMediaFileListPage, sqlx::Error>
 where
   E: 'a + Executor<'c, Database = MySql>,
 {
@@ -89,32 +87,16 @@ where
   let records = if ascending {
     // NB: IDs start at 1, so a zero sentinel means "no cursor".
     let cursor_id = args.maybe_cursor_id.unwrap_or(0);
-    select_page_ascending(
-      args.user_token,
-      args.maybe_filter_project_type,
-      cursor_id,
-      limit,
-      args.mysql_executor,
-    ).await?
+    select_page_ascending(args.user_token, args.maybe_filter_project_type, cursor_id, limit, args.mysql_executor).await?
   } else {
     let cursor_id = args.maybe_cursor_id.unwrap_or(u64::MAX);
-    select_page_descending(
-      args.user_token,
-      args.maybe_filter_project_type,
-      cursor_id,
-      limit,
-      args.mysql_executor,
-    ).await?
+    select_page_descending(args.user_token, args.maybe_filter_project_type, cursor_id, limit, args.mysql_executor).await?
   };
 
   let first_id = records.first().map(|record| record.id);
   let last_id = records.last().map(|record| record.id);
 
-  Ok(ProjectMediaFileListPage {
-    records,
-    first_id,
-    last_id,
-  })
+  Ok(ProjectMediaFileListPage { records, first_id, last_id })
 }
 
 // NB: The four queries below are intentionally duplicated so that sqlx can check
@@ -122,21 +104,15 @@ where
 // in sync; they differ only in the `maybe_project_type = ?` filter, the cursor
 // comparison direction, and the sort order.
 
-async fn select_page_ascending<'a, 'c: 'a, E>(
-  user_token: &'a UserToken,
-  maybe_filter_project_type: Option<MediaFileProjectType>,
-  cursor_id: u64,
-  limit: u64,
-  mysql_executor: E,
-) -> Result<Vec<ProjectMediaFileListItem>, sqlx::Error>
+async fn select_page_ascending<'a, 'c: 'a, E>(user_token: &'a UserToken, maybe_filter_project_type: Option<MediaFileProjectType>, cursor_id: u64, limit: u64, mysql_executor: E) -> Result<Vec<ProjectMediaFileListItem>, sqlx::Error>
 where
   E: 'a + Executor<'c, Database = MySql>,
 {
   match maybe_filter_project_type {
     Some(project_type) => {
       sqlx::query_as!(
-          ProjectMediaFileListItem,
-          r#"
+        ProjectMediaFileListItem,
+        r#"
 SELECT
     m.id as `id: u64`,
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
@@ -182,18 +158,18 @@ WHERE
 ORDER BY m.id ASC
 LIMIT ?
           "#,
-          user_token,
-          project_type.to_str(),
-          cursor_id,
-          limit,
-        )
-          .fetch_all(mysql_executor)
-          .await
-    }
+        user_token,
+        project_type.to_str(),
+        cursor_id,
+        limit,
+      )
+      .fetch_all(mysql_executor)
+      .await
+    },
     None => {
       sqlx::query_as!(
-          ProjectMediaFileListItem,
-          r#"
+        ProjectMediaFileListItem,
+        r#"
 SELECT
     m.id as `id: u64`,
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
@@ -238,31 +214,25 @@ WHERE
 ORDER BY m.id ASC
 LIMIT ?
           "#,
-          user_token,
-          cursor_id,
-          limit,
-        )
-          .fetch_all(mysql_executor)
-          .await
-    }
+        user_token,
+        cursor_id,
+        limit,
+      )
+      .fetch_all(mysql_executor)
+      .await
+    },
   }
 }
 
-async fn select_page_descending<'a, 'c: 'a, E>(
-  user_token: &'a UserToken,
-  maybe_filter_project_type: Option<MediaFileProjectType>,
-  cursor_id: u64,
-  limit: u64,
-  mysql_executor: E,
-) -> Result<Vec<ProjectMediaFileListItem>, sqlx::Error>
+async fn select_page_descending<'a, 'c: 'a, E>(user_token: &'a UserToken, maybe_filter_project_type: Option<MediaFileProjectType>, cursor_id: u64, limit: u64, mysql_executor: E) -> Result<Vec<ProjectMediaFileListItem>, sqlx::Error>
 where
   E: 'a + Executor<'c, Database = MySql>,
 {
   match maybe_filter_project_type {
     Some(project_type) => {
       sqlx::query_as!(
-          ProjectMediaFileListItem,
-          r#"
+        ProjectMediaFileListItem,
+        r#"
 SELECT
     m.id as `id: u64`,
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
@@ -308,18 +278,18 @@ WHERE
 ORDER BY m.id DESC
 LIMIT ?
           "#,
-          user_token,
-          project_type.to_str(),
-          cursor_id,
-          limit,
-        )
-          .fetch_all(mysql_executor)
-          .await
-    }
+        user_token,
+        project_type.to_str(),
+        cursor_id,
+        limit,
+      )
+      .fetch_all(mysql_executor)
+      .await
+    },
     None => {
       sqlx::query_as!(
-          ProjectMediaFileListItem,
-          r#"
+        ProjectMediaFileListItem,
+        r#"
 SELECT
     m.id as `id: u64`,
     m.token as `token: tokens::tokens::media_files::MediaFileToken`,
@@ -364,12 +334,12 @@ WHERE
 ORDER BY m.id DESC
 LIMIT ?
           "#,
-          user_token,
-          cursor_id,
-          limit,
-        )
-          .fetch_all(mysql_executor)
-          .await
-    }
+        user_token,
+        cursor_id,
+        limit,
+      )
+      .fetch_all(mysql_executor)
+      .await
+    },
   }
 }

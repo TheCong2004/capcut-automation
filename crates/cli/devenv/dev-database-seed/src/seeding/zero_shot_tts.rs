@@ -29,7 +29,7 @@ pub async fn seed_zero_shot_tts(mysql_pool: &Pool<MySql>, maybe_bucket_clients: 
   info!("Seeding zero shot TTS...");
 
   let user_token = match get_user_token_by_username(HANASHI_USERNAME, mysql_pool).await? {
-    None => { return Err(anyhow!("could not find user hanashi")) }
+    None => return Err(anyhow!("could not find user hanashi")),
     Some(token) => token,
   };
 
@@ -53,27 +53,14 @@ pub async fn seed_zero_shot_tts(mysql_pool: &Pool<MySql>, maybe_bucket_clients: 
   Ok(())
 }
 
-async fn create_voice_records(
-  voice_name: &str,
-  bucket_hash: &str,
-  wav_file: &str,
-  creator_user_token: &UserToken,
-  mysql_pool: &Pool<MySql>,
-  maybe_bucket_clients: Option<&BucketClients>,
-) -> AnyhowResult<(ZsVoiceToken, ZsVoiceDatasetToken)> {
+async fn create_voice_records(voice_name: &str, bucket_hash: &str, wav_file: &str, creator_user_token: &UserToken, mysql_pool: &Pool<MySql>, maybe_bucket_clients: Option<&BucketClients>) -> AnyhowResult<(ZsVoiceToken, ZsVoiceDatasetToken)> {
   info!("Creating voice records for voice {} ...", voice_name);
 
   let dataset_title = format!("{} Dataset", voice_name);
 
   info!("Creating dataset...");
 
-  let dataset_token = create_dataset(CreateDatasetArgs {
-    dataset_title: &dataset_title,
-    maybe_creator_user_token: Some(creator_user_token.as_str()),
-    creator_ip_address: "127.0.0.1",
-    creator_set_visibility: Visibility::Public,
-    mysql_pool,
-  }).await?;
+  let dataset_token = create_dataset(CreateDatasetArgs { dataset_title: &dataset_title, maybe_creator_user_token: Some(creator_user_token.as_str()), creator_ip_address: "127.0.0.1", creator_set_visibility: Visibility::Public, mysql_pool }).await?;
 
   let public_upload_path;
 
@@ -87,43 +74,31 @@ async fn create_voice_records(
 
   let uuid_idempotency_token = generate_random_uuid();
 
-  let (_sample_token, _media_file_token, _id) =
-      insert_dataset_sample_and_media_file(InsertDatasetSampleAndMediaFileArgs {
-        uuid_idempotency_token: &uuid_idempotency_token,
-        dataset_token: &dataset_token,
-        media_type: MediaUploadType::Audio,
-        origin_category: MediaFileOriginCategory::Upload,
-        maybe_original_filename: None,
-        maybe_mime_type: None,
-        file_size_bytes: 0,
-        maybe_original_duration_millis: None,
-        maybe_original_audio_encoding: None,
-        checksum_sha2: "", // TODO
-        media_file_path: &public_upload_path,
-        maybe_public_bucket_prefix: None,
-        maybe_public_bucket_extension: None,
-        maybe_creator_user_token: Some(&creator_user_token),
-        maybe_creator_anonymous_visitor_token: None,
-        creator_ip_address: "127.0.0.1",
-        creator_set_visibility: Visibility::Public,
-        mysql_pool,
-      }).await?;
-
-  info!("Creating voice record...");
-
-  let voice_token = create_voice(CreateVoiceArgs {
+  let (_sample_token, _media_file_token, _id) = insert_dataset_sample_and_media_file(InsertDatasetSampleAndMediaFileArgs {
+    uuid_idempotency_token: &uuid_idempotency_token,
     dataset_token: &dataset_token,
-    model_category: ZsVoiceModelCategory::Tts,
-    model_type: ZsVoiceModelType::VallEX,
-    model_version: 0,
-    model_encoding_type: ZsVoiceEncodingType::Encodec,
-    voice_title: &voice_name,
-    bucket_hash: &bucket_hash,
+    media_type: MediaUploadType::Audio,
+    origin_category: MediaFileOriginCategory::Upload,
+    maybe_original_filename: None,
+    maybe_mime_type: None,
+    file_size_bytes: 0,
+    maybe_original_duration_millis: None,
+    maybe_original_audio_encoding: None,
+    checksum_sha2: "", // TODO
+    media_file_path: &public_upload_path,
+    maybe_public_bucket_prefix: None,
+    maybe_public_bucket_extension: None,
     maybe_creator_user_token: Some(&creator_user_token),
+    maybe_creator_anonymous_visitor_token: None,
     creator_ip_address: "127.0.0.1",
     creator_set_visibility: Visibility::Public,
     mysql_pool,
-  }).await?;
+  })
+  .await?;
+
+  info!("Creating voice record...");
+
+  let voice_token = create_voice(CreateVoiceArgs { dataset_token: &dataset_token, model_category: ZsVoiceModelCategory::Tts, model_type: ZsVoiceModelType::VallEX, model_version: 0, model_encoding_type: ZsVoiceEncodingType::Encodec, voice_title: &voice_name, bucket_hash: &bucket_hash, maybe_creator_user_token: Some(&creator_user_token), creator_ip_address: "127.0.0.1", creator_set_visibility: Visibility::Public, mysql_pool }).await?;
 
   Ok((voice_token, dataset_token))
 }
@@ -131,9 +106,7 @@ async fn create_voice_records(
 async fn seed_file_to_bucket(wav_file: &str, bucket_client: &LegacyBucketClient) -> AnyhowResult<MediaFileBucketPath> {
   info!("Uploading wav file {} ...", wav_file);
 
-  let public_upload_path = MediaFileBucketPath::generate_new(
-    Some("sample_"),
-    Some(".bin"));
+  let public_upload_path = MediaFileBucketPath::generate_new(Some("sample_"), Some(".bin"));
 
   info!("Uploading media to bucket path: {}", public_upload_path.get_full_object_path_str());
 
@@ -145,11 +118,7 @@ async fn seed_file_to_bucket(wav_file: &str, bucket_client: &LegacyBucketClient)
   let bytes = file_read_bytes(file_path)?;
   let mimetype = get_mimetype_for_bytes(&bytes).unwrap_or("audio/wav");
 
-  let _r = bucket_client.upload_file_with_content_type(
-    public_upload_path.get_full_object_path_str(),
-    bytes.as_ref(),
-    mimetype)
-      .await?;
+  let _r = bucket_client.upload_file_with_content_type(public_upload_path.get_full_object_path_str(), bytes.as_ref(), mimetype).await?;
 
   Ok(public_upload_path)
 }

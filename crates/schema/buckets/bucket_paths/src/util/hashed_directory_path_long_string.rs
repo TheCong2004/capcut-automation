@@ -1,11 +1,10 @@
-
 /// Create a cloud object store directory structure that can be easily traversed without
 /// too many items living in a single directory.
 ///
 /// With a million items, each directory will have ~1 item.
 /// With a billion items, each directory will have ~953 items (totally tractable).
 ///
-pub (crate) fn hashed_directory_path_long_string(file_hash: &str) -> String {
+pub(crate) fn hashed_directory_path_long_string(file_hash: &str) -> String {
   match file_hash.len() {
     0 | 1 => "".to_string(),
     2 => format!("{}/", &file_hash[0..1]),

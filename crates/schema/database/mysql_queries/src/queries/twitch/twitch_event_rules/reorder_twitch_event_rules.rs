@@ -8,9 +8,7 @@ use sqlx::MySqlPool;
 use errors::AnyhowResult;
 
 /// Check that tokens are alphanumeric or can have colons.
-static SAFE_TOKENS_REGEX : Lazy<Regex> = Lazy::new(|| {
-  Regex::new("^[a-zA-Z0-9:]+$").unwrap()
-});
+static SAFE_TOKENS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^[a-zA-Z0-9:]+$").unwrap());
 
 /// Check that tokens are alphanumeric or can have colons.
 #[must_use]
@@ -22,13 +20,7 @@ fn check_token_safety(token: &str) -> AnyhowResult<()> {
   }
 }
 
-pub async fn reorder_twitch_event_rules(
-  rule_token_to_order_map: HashMap<String, u32>,
-  user_token: &str,
-  ip_address_update: &str,
-  mysql_pool: &MySqlPool
-) -> AnyhowResult<bool> {
-
+pub async fn reorder_twitch_event_rules(rule_token_to_order_map: HashMap<String, u32>, user_token: &str, ip_address_update: &str, mysql_pool: &MySqlPool) -> AnyhowResult<bool> {
   // THIS IS NOT SANITIZED, so we check for injection here.
   for (rule_token, _position) in rule_token_to_order_map.iter() {
     check_token_safety(rule_token.as_str())?;
@@ -36,49 +28,35 @@ pub async fn reorder_twitch_event_rules(
 
   check_token_safety(user_token)?;
 
-// NB: Sadly upserts fail due to other required primary keys that we cannot supply here (eg. uuid).
-//  let query_inner = rule_token_to_order_map.iter()
-//      .map(|(token, position)|  {
-//        format!("(\"{}\", {}, \"{}\")", token.as_str(), position, ip_address_update)
-//      })
-//      .collect::<Vec<String>>()
-//      .join(", ");
-//
-//  // Upsert to accomplish multiple updates at once.
-//  // tl;dr https://stackoverflow.com/a/34866431
-//  // ALSO THIS IS NOT SANITIZED.
-//  let query = format!(r#"
-//INSERT INTO twitch_event_rules (token, user_specified_rule_order, ip_address_last_update)
-//VALUES
-//    {}
-//ON DUPLICATE KEY UPDATE
-//    token=VALUES(token),
-//    user_specified_rule_order=VALUES(user_specified_rule_order),
-//    ip_address_last_update=VALUES(ip_address_last_update)
-//        "#, query_inner);
+  // NB: Sadly upserts fail due to other required primary keys that we cannot supply here (eg. uuid).
+  //  let query_inner = rule_token_to_order_map.iter()
+  //      .map(|(token, position)|  {
+  //        format!("(\"{}\", {}, \"{}\")", token.as_str(), position, ip_address_update)
+  //      })
+  //      .collect::<Vec<String>>()
+  //      .join(", ");
+  //
+  //  // Upsert to accomplish multiple updates at once.
+  //  // tl;dr https://stackoverflow.com/a/34866431
+  //  // ALSO THIS IS NOT SANITIZED.
+  //  let query = format!(r#"
+  //INSERT INTO twitch_event_rules (token, user_specified_rule_order, ip_address_last_update)
+  //VALUES
+  //    {}
+  //ON DUPLICATE KEY UPDATE
+  //    token=VALUES(token),
+  //    user_specified_rule_order=VALUES(user_specified_rule_order),
+  //    ip_address_last_update=VALUES(ip_address_last_update)
+  //        "#, query_inner);
 
-  let rule_tokens = rule_token_to_order_map.iter()
-      .map(|(token, _position)|  {
-        format!("'{}'", token)
-      })
-      .collect::<Vec<String>>()
-      .join(", ");
+  let rule_tokens = rule_token_to_order_map.iter().map(|(token, _position)| format!("'{}'", token)).collect::<Vec<String>>().join(", ");
 
-  let query_inner_positions = rule_token_to_order_map.iter()
-      .map(|(token, position)|  {
-        format!("when token = '{}' then '{}'", token.as_str(), position)
-      })
-      .collect::<Vec<String>>()
-      .join("\n");
+  let query_inner_positions = rule_token_to_order_map.iter().map(|(token, position)| format!("when token = '{}' then '{}'", token.as_str(), position)).collect::<Vec<String>>().join("\n");
 
-  let query_inner_ip_addresses = rule_token_to_order_map.iter()
-      .map(|(token, _position)|  {
-        format!("when token = '{}' then '{}'", token.as_str(), ip_address_update)
-      })
-      .collect::<Vec<String>>()
-      .join("\n");
+  let query_inner_ip_addresses = rule_token_to_order_map.iter().map(|(token, _position)| format!("when token = '{}' then '{}'", token.as_str(), ip_address_update)).collect::<Vec<String>>().join("\n");
 
-  let query = format!(r#"
+  let query = format!(
+    r#"
 UPDATE twitch_event_rules
 SET
     user_specified_rule_order = (case
@@ -90,7 +68,9 @@ SET
     WHERE user_token = '{}'
     AND deleted_at IS NULL
     AND token IN ({})
-  "#, query_inner_positions, query_inner_ip_addresses, user_token, rule_tokens);
+  "#,
+    query_inner_positions, query_inner_ip_addresses, user_token, rule_tokens
+  );
 
   // NB: This, unfortunately, cannot be statically checked.
   let query = sqlx::query(&query);

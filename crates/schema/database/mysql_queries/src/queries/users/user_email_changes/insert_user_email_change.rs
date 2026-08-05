@@ -30,9 +30,7 @@ where
 }
 
 /// Insert a single `user_email_changes` row recording an email-address change.
-pub async fn insert_user_email_change<'e, 'c: 'e, E>(
-  args: InsertUserEmailChangeArgs<'e, 'c, E>,
-) -> Result<(), sqlx::Error>
+pub async fn insert_user_email_change<'e, 'c: 'e, E>(args: InsertUserEmailChangeArgs<'e, 'c, E>) -> Result<(), sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -52,8 +50,8 @@ SET
     args.ip_address,
     args.maybe_changed_by_user_token.map(|t| t.as_str()),
   )
-    .execute(args.mysql_executor)
-    .await?;
+  .execute(args.mysql_executor)
+  .await?;
 
   Ok(())
 }

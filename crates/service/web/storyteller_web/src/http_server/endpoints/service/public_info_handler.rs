@@ -15,14 +15,7 @@ pub struct PublicInfoResponse {
   pub server_hostname: String,
 }
 // NB: Not using derive_more::Display since Clion doesn't understand it.
-pub async fn get_public_info_handler(
-  _http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<PublicInfoResponse>, CommonWebError> {
+pub async fn get_public_info_handler(_http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<PublicInfoResponse>, CommonWebError> {
   let server_info = get_server_info(&server_state);
-  Ok(Json(PublicInfoResponse {
-    success: true,
-    server_build_sha: server_info.build_sha,
-    server_hostname: server_info.hostname,
-  }))
+  Ok(Json(PublicInfoResponse { success: true, server_build_sha: server_info.build_sha, server_hostname: server_info.hostname }))
 }

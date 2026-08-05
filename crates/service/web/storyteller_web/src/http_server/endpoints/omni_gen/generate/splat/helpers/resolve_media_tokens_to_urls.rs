@@ -10,10 +10,7 @@ use tokens::tokens::media_files::MediaFileToken;
 ///
 /// NB: World Labs requests must keep their tokens — their draft/finalize
 /// step maps tokens to URLs itself — so only call this on the Fal path.
-pub fn resolve_media_tokens_to_urls(
-  builder: &mut GenerateSplatRequestBuilder,
-  url_map: Option<&HashMap<MediaFileToken, String>>,
-) {
+pub fn resolve_media_tokens_to_urls(builder: &mut GenerateSplatRequestBuilder, url_map: Option<&HashMap<MediaFileToken, String>>) {
   let map = match url_map {
     Some(m) => m,
     None => return,
@@ -21,9 +18,7 @@ pub fn resolve_media_tokens_to_urls(
 
   // reference_images
   if let Some(ImageListRef::MediaFileTokens(ref tokens)) = builder.reference_images {
-    let urls: Vec<String> = tokens.iter()
-      .filter_map(|t| map.get(t).cloned())
-      .collect();
+    let urls: Vec<String> = tokens.iter().filter_map(|t| map.get(t).cloned()).collect();
     if !urls.is_empty() {
       builder.reference_images = Some(ImageListRef::Urls(urls));
     }

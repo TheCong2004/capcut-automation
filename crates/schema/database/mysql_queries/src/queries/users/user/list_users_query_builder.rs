@@ -47,10 +47,7 @@ pub struct ListUsersQueryBuilder {
 
 impl ListUsersQueryBuilder {
   pub fn new() -> Self {
-    Self {
-      sort_ascending: false,
-      per_page: 50,
-    }
+    Self { sort_ascending: false, per_page: 50 }
   }
 
   pub fn sort_ascending(mut self, sort_ascending: bool) -> Self {
@@ -58,59 +55,23 @@ impl ListUsersQueryBuilder {
     self
   }
 
-  pub async fn query_for_page(
-    &self,
-    mysql_pool: &MySqlPool
-  ) -> AnyhowResult<ListUsersPage> {
-
+  pub async fn query_for_page(&self, mysql_pool: &MySqlPool) -> AnyhowResult<ListUsersPage> {
     let internal_results = self.internal_query(mysql_pool).await?;
 
-    let first_id = internal_results.first()
-        .map(|raw_result| raw_result.user_id);
+    let first_id = internal_results.first().map(|raw_result| raw_result.user_id);
 
-    let last_id = internal_results.last()
-        .map(|raw_result| raw_result.user_id);
+    let last_id = internal_results.last().map(|raw_result| raw_result.user_id);
 
-    let users = internal_results
-        .into_iter()
-        .map(|r| {
-          UserForList {
-            user_id: r.user_id,
-            user_token: r.user_token,
-            username: r.username,
-            display_name: r.display_name,
-            gravatar_hash: r.gravatar_hash,
-            is_banned: i8_to_bool(r.is_banned),
-            user_role_slug: r.user_role_slug,
-            ip_address_creation: r.ip_address_creation,
-            ip_address_last_login: r.ip_address_last_login,
-            ip_address_last_update: r.ip_address_last_update,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-          }
-        })
-        .collect::<Vec<UserForList>>();
+    let users = internal_results.into_iter().map(|r| UserForList { user_id: r.user_id, user_token: r.user_token, username: r.username, display_name: r.display_name, gravatar_hash: r.gravatar_hash, is_banned: i8_to_bool(r.is_banned), user_role_slug: r.user_role_slug, ip_address_creation: r.ip_address_creation, ip_address_last_login: r.ip_address_last_login, ip_address_last_update: r.ip_address_last_update, created_at: r.created_at, updated_at: r.updated_at }).collect::<Vec<UserForList>>();
 
-    Ok(ListUsersPage {
-      users,
-      sorted_ascending: false,
-      sorted_by_key: "".to_string(),
-      first_id,
-      last_id,
-    })
+    Ok(ListUsersPage { users, sorted_ascending: false, sorted_by_key: "".to_string(), first_id, last_id })
   }
 
-  async fn internal_query(
-    &self,
-    mysql_pool: &MySqlPool
-  ) -> AnyhowResult<Vec<UserForListRaw>> {
-
+  async fn internal_query(&self, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<UserForListRaw>> {
     let query = self.build_query_string();
     let query = sqlx::query_as::<_, UserForListRaw>(&query);
 
-
-    let results = query.fetch_all(mysql_pool)
-        .await?;
+    let results = query.fetch_all(mysql_pool).await?;
 
     Ok(results)
   }
@@ -157,4 +118,3 @@ struct UserForListRaw {
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
-

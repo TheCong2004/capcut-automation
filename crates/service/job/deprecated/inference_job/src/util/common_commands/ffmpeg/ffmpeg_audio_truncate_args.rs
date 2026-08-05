@@ -10,7 +10,6 @@ pub struct FfmpegAudioTruncateArgs<'a> {
 }
 
 impl CommandArgs for FfmpegAudioTruncateArgs<'_> {
-
   // eg. ffmpeg -i input-audio.aac -t 15 -c copy output.aac
   // time is in seconds
   fn to_command_string(&self) -> String {

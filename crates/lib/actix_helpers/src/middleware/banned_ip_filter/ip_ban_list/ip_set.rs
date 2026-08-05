@@ -6,17 +6,12 @@ pub struct IpSet {
 }
 
 impl IpSet {
-
   pub fn new() -> Self {
-    Self {
-      ip_set: HashSet::new(),
-    }
+    Self { ip_set: HashSet::new() }
   }
 
   pub fn from_set(ip_set: HashSet<String>) -> Self {
-    Self {
-      ip_set,
-    }
+    Self { ip_set }
   }
 
   pub fn replace_set(&mut self, ip_set: HashSet<String>) {

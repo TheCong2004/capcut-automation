@@ -20,35 +20,15 @@ pub fn get_bucket_clients() -> AnyhowResult<BucketClients> {
 
   // NB: Long timeout for dev rust builds to upload to cloud buckets.
   // Unoptimized binaries sometimes take a lot of time to upload, presumably due to unoptimized code.
-  let bucket_timeout = easyenv::get_env_duration_seconds_or_default(
-    "BUCKET_TIMEOUT_SECONDS", Duration::from_secs(60 * 10));
+  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS", Duration::from_secs(60 * 10));
 
   info!("Configuring public GCS bucket...");
 
-  let public_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &public_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let public_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &public_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
   info!("Configuring private GCS bucket...");
 
-  let private_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &private_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let private_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &private_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
-  Ok(BucketClients {
-    public: public_bucket_client,
-    private: private_bucket_client,
-  })
+  Ok(BucketClients { public: public_bucket_client, private: private_bucket_client })
 }

@@ -33,12 +33,7 @@ use password::bcrypt_hash_password::bcrypt_hash_password;
     ("request" = ChangePasswordRequest, description = "Payload for Request"),
   )
 )]
-pub async fn change_password_handler(
-  http_request: HttpRequest,
-  request: Json<ChangePasswordRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ChangePasswordResponse>, CommonWebError>
-{
+pub async fn change_password_handler(http_request: HttpRequest, request: Json<ChangePasswordRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ChangePasswordResponse>, CommonWebError> {
   let password = request.password.trim();
   let password_confirmation = request.password_confirmation.trim();
 
@@ -46,18 +41,12 @@ pub async fn change_password_handler(
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
-  let user_session = require_user_session_extended(
-    &http_request,
-    &server_state.session_checker,
-    &mut *mysql_connection).await?;
+  let user_session = require_user_session_extended(&http_request, &server_state.session_checker, &mut *mysql_connection).await?;
 
   if user_session.role.is_banned {
     return Err(CommonWebError::NotAuthorized);
@@ -68,24 +57,19 @@ pub async fn change_password_handler(
     Err(err) => {
       warn!("Bcrypt error: {:?}", err);
       return Err(CommonWebError::from_error(err));
-    }
+    },
   };
 
   let ip_address = get_request_ip(&http_request);
 
-  let result = update_password(UpdatePasswordArgs {
-    user_token: &user_session.user_token_typed,
-    password_hash: &password_hash,
-    ip_address: &ip_address,
-    transactor: Transactor::for_connection(&mut mysql_connection),
-  }).await;
+  let result = update_password(UpdatePasswordArgs { user_token: &user_session.user_token_typed, password_hash: &password_hash, ip_address: &ip_address, transactor: Transactor::for_connection(&mut mysql_connection) }).await;
 
   match result {
     Ok(()) => {},
     Err(err) => {
       warn!("Error updating password: {:?}", err);
       return Err(CommonWebError::from_anyhow_error(err));
-    }
+    },
   }
 
   Ok(Json(ChangePasswordResponse { success: true }))

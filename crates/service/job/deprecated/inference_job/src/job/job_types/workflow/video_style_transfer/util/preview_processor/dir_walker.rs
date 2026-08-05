@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 
-
 #[derive(Debug)]
 pub struct PathBatch {
   paths: Vec<PathBuf>,
@@ -9,9 +8,7 @@ pub struct PathBatch {
 
 impl PathBatch {
   pub fn new() -> Self {
-    Self {
-      paths: Vec::new(),
-    }
+    Self { paths: Vec::new() }
   }
 
   pub fn add_path(&mut self, path: PathBuf) {
@@ -32,19 +29,11 @@ pub struct DirWalker {
 
 impl DirWalker {
   pub(crate) fn new(base_directory: PathBuf, tx: mpsc::Sender<Result<PathBatch, std::io::Error>>) -> Self {
-    Self {
-      base_directory,
-      tx,
-      batch_size: 10,
-    }
+    Self { base_directory, tx, batch_size: 10 }
   }
-  
+
   pub(crate) fn new_with_batch_size(base_directory: PathBuf, tx: mpsc::Sender<Result<PathBatch, std::io::Error>>, batch_size: usize) -> Self {
-    Self {
-      base_directory,
-      tx,
-      batch_size,
-    }
+    Self { base_directory, tx, batch_size }
   }
 
   pub(crate) async fn send_batch(&self, batch: PathBatch) {
@@ -79,7 +68,7 @@ impl DirWalker {
       },
       Err(e) => {
         log::info!("Error reading preview frames directory: {:?}", e);
-      }
+      },
     }
   }
 

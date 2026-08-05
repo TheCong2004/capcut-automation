@@ -27,10 +27,7 @@ pub struct UserJobForModerationResult {
   pub updated_at: DateTime<Utc>,
 }
 
-pub async fn list_user_jobs_for_moderation(
-  user_token: &UserToken,
-  mysql_pool: &MySqlPool,
-) -> AnyhowResult<Vec<UserJobForModerationResult>> {
+pub async fn list_user_jobs_for_moderation(user_token: &UserToken, mysql_pool: &MySqlPool) -> AnyhowResult<Vec<UserJobForModerationResult>> {
   let results = sqlx::query_as!(
     UserJobForModerationResult,
     r#"
@@ -57,14 +54,14 @@ ORDER BY j.id DESC
     "#,
     user_token,
   )
-    .fetch_all(mysql_pool)
-    .await;
+  .fetch_all(mysql_pool)
+  .await;
 
   match results {
     Ok(records) => Ok(records),
     Err(err) => {
       warn!("list_user_jobs_for_moderation query error: {:?}", err);
       Err(anyhow!("query error"))
-    }
+    },
   }
 }

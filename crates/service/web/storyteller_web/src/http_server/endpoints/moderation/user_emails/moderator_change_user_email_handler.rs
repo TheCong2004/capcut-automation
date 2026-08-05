@@ -9,16 +9,10 @@ use utoipa::ToSchema;
 use enums::by_table::staff_audit_logs::staff_audit_action::StaffAuditAction;
 use enums::by_table::staff_audit_logs::staff_audit_entity_type::StaffAuditEntityType;
 use http_server_common::request::get_request_ip::get_request_ip;
-use mysql_queries::queries::staff_audit_logs::insert_staff_audit_log::{
-  insert_staff_audit_log, InsertStaffAuditLogArgs,
-};
+use mysql_queries::queries::staff_audit_logs::insert_staff_audit_log::{insert_staff_audit_log, InsertStaffAuditLogArgs};
 use mysql_queries::queries::users::user::get::lookup_user_for_moderation::lookup_user_for_moderation_by_token;
-use mysql_queries::queries::users::user::update::update_email::{
-  update_email, UpdateEmailArgs, UpdateEmailError,
-};
-use mysql_queries::queries::users::user_email_changes::insert_user_email_change::{
-  insert_user_email_change, InsertUserEmailChangeArgs,
-};
+use mysql_queries::queries::users::user::update::update_email::{update_email, UpdateEmailArgs, UpdateEmailError};
+use mysql_queries::queries::users::user_email_changes::insert_user_email_change::{insert_user_email_change, InsertUserEmailChangeArgs};
 use mysql_queries::utils::transactor::Transactor;
 use users::email::email_to_gravatar_hash::email_to_gravatar_hash;
 use users::email::validate_email_address_format::validate_email_address_format;
@@ -62,12 +56,7 @@ pub struct ModeratorChangeUserEmailSuccessResponse {
     (status = 500, description = "Server error", body = CommonWebError),
   ),
 )]
-pub async fn moderator_change_user_email_handler(
-  http_request: HttpRequest,
-  request: Json<ModeratorChangeUserEmailRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ModeratorChangeUserEmailSuccessResponse>, CommonWebError> {
-
+pub async fn moderator_change_user_email_handler(http_request: HttpRequest, request: Json<ModeratorChangeUserEmailRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ModeratorChangeUserEmailSuccessResponse>, CommonWebError> {
   // 1. Require moderator.
   let user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
@@ -95,62 +84,34 @@ pub async fn moderator_change_user_email_handler(
   let new_gravatar_hash = email_to_gravatar_hash(&new_email);
   let actor_ip = get_request_ip(&http_request);
 
-  info!(
-    "Moderator {} changing email for user {}.",
-    user_session.user_token.as_str(), target_user_token.as_str(),
-  );
+  info!("Moderator {} changing email for user {}.", user_session.user_token.as_str(), target_user_token.as_str(),);
 
   // 4. Open transaction: update email, audit row, audit log.
-  let mut transaction = server_state.mysql_pool.begin().await
-    .map_err(|err| {
-      warn!("Failed to begin transaction: {:?}", err);
-      CommonWebError::from_error(err)
-    })?;
+  let mut transaction = server_state.mysql_pool.begin().await.map_err(|err| {
+    warn!("Failed to begin transaction: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // 4a. Update the user's email address. Duplicate-email errors surface as 400.
-  match update_email(UpdateEmailArgs {
-    token: &target_user_token,
-    email_address: &new_email,
-    email_gravatar_hash: &new_gravatar_hash,
-    ip_address: &actor_ip,
-    transactor: Transactor::for_transaction(&mut transaction),
-  }).await {
-    Ok(()) => {}
+  match update_email(UpdateEmailArgs { token: &target_user_token, email_address: &new_email, email_gravatar_hash: &new_gravatar_hash, ip_address: &actor_ip, transactor: Transactor::for_transaction(&mut transaction) }).await {
+    Ok(()) => {},
     Err(UpdateEmailError::EmailIsTaken) => {
-      return Err(CommonWebError::BadInputWithSimpleMessage(
-        "email address is already in use".to_string(),
-      ));
-    }
+      return Err(CommonWebError::BadInputWithSimpleMessage("email address is already in use".to_string()));
+    },
     Err(UpdateEmailError::DatabaseError { source }) => {
       warn!("Error updating user email: {:?}", source);
       return Err(CommonWebError::from_error(source));
-    }
+    },
   }
 
   // 4b. Record the change in user_email_changes.
-  insert_user_email_change(InsertUserEmailChangeArgs {
-    user_token: &target_user_token,
-    old_email: &old_email,
-    new_email: &new_email,
-    ip_address: &actor_ip,
-    maybe_changed_by_user_token: Some(&user_session.user_token),
-    mysql_executor: &mut *transaction,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  insert_user_email_change(InsertUserEmailChangeArgs { user_token: &target_user_token, old_email: &old_email, new_email: &new_email, ip_address: &actor_ip, maybe_changed_by_user_token: Some(&user_session.user_token), mysql_executor: &mut *transaction, phantom: PhantomData }).await.map_err(|err| {
     warn!("Failed to insert user_email_changes row: {:?}", err);
     CommonWebError::from_error(err)
   })?;
 
   // 4c. Insert staff audit log.
-  let _audit_token = insert_staff_audit_log(InsertStaffAuditLogArgs {
-    audit_action: StaffAuditAction::ChangeUserEmail,
-    maybe_entity_type: Some(StaffAuditEntityType::User),
-    maybe_entity_token: Some(target_user_token.as_str()),
-    staff_user_token: &user_session.user_token,
-    actor_ip_address: &actor_ip,
-    mysql_executor: &mut *transaction,
-    phantom: PhantomData,
-  }).await.map_err(|err| {
+  let _audit_token = insert_staff_audit_log(InsertStaffAuditLogArgs { audit_action: StaffAuditAction::ChangeUserEmail, maybe_entity_type: Some(StaffAuditEntityType::User), maybe_entity_token: Some(target_user_token.as_str()), staff_user_token: &user_session.user_token, actor_ip_address: &actor_ip, mysql_executor: &mut *transaction, phantom: PhantomData }).await.map_err(|err| {
     warn!("Failed to insert staff audit log: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -161,10 +122,7 @@ pub async fn moderator_change_user_email_handler(
     CommonWebError::from_error(err)
   })?;
 
-  info!(
-    "Email changed for user {} by moderator {}.",
-    target_user_token.as_str(), user_session.user_token.as_str(),
-  );
+  info!("Email changed for user {} by moderator {}.", target_user_token.as_str(), user_session.user_token.as_str(),);
 
   Ok(Json(ModeratorChangeUserEmailSuccessResponse { success: true }))
 }

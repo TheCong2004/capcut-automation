@@ -6,5 +6,5 @@ pub const DEFAULT_RUST_LOG: &str = concat!(
   "hyper::proto::h1::io=warn,",
   "storyteller_web::threads::db_health_checker_thread::db_health_checker_thread=warn,",
   "http_server_common::request::get_request_ip=info,", // Debug spams Rust logs
-  "info", // Default level for everything else
+  "info",                                              // Default level for everything else
 );

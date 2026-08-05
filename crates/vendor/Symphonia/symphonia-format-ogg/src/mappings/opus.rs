@@ -183,8 +183,7 @@ impl Mapper for OpusMapper {
     fn map_packet(&mut self, packet: &[u8]) -> Result<MapResult> {
         if !self.need_comment {
             Ok(MapResult::StreamData { dur: 0 })
-        }
-        else {
+        } else {
             let mut reader = BufReader::new(packet);
 
             // Read the header signature.
@@ -200,8 +199,7 @@ impl Mapper for OpusMapper {
                 self.need_comment = false;
 
                 Ok(MapResult::SideData { data: SideData::Metadata(builder.metadata()) })
-            }
-            else {
+            } else {
                 warn!("ogg (opus): invalid packet type");
                 Ok(MapResult::Unknown)
             }

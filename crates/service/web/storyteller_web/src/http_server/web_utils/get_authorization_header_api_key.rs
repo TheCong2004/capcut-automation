@@ -13,9 +13,7 @@ const AUTHORIZATION_HEADER_NAME: HeaderName = HeaderName::from_static("authoriza
 /// bytes), or does not contain a usable key.
 pub fn get_authorization_header_api_key(http_request: &HttpRequest) -> Option<ArtcraftApiKey> {
   let header_map: &HeaderMap = http_request.headers();
-  let header_value = header_map.get(AUTHORIZATION_HEADER_NAME)?
-      .to_str()
-      .ok()?;
+  let header_value = header_map.get(AUTHORIZATION_HEADER_NAME)?.to_str().ok()?;
 
   ArtcraftApiKey::parse_from_authorization_header_value(header_value)
 }
@@ -33,36 +31,25 @@ mod tests {
 
     #[test]
     fn bearer_scheme() {
-      assert_eq!(
-        api_key_for_authorization_header(&format!("Bearer {SAMPLE_KEY}")),
-        Some(SAMPLE_KEY.to_string()));
+      assert_eq!(api_key_for_authorization_header(&format!("Bearer {SAMPLE_KEY}")), Some(SAMPLE_KEY.to_string()));
     }
 
     #[test]
     fn key_scheme() {
-      assert_eq!(
-        api_key_for_authorization_header(&format!("Key {SAMPLE_KEY}")),
-        Some(SAMPLE_KEY.to_string()));
+      assert_eq!(api_key_for_authorization_header(&format!("Key {SAMPLE_KEY}")), Some(SAMPLE_KEY.to_string()));
     }
 
     #[test]
     fn bare_key_aws_style() {
-      assert_eq!(
-        api_key_for_authorization_header(SAMPLE_KEY),
-        Some(SAMPLE_KEY.to_string()));
+      assert_eq!(api_key_for_authorization_header(SAMPLE_KEY), Some(SAMPLE_KEY.to_string()));
     }
 
     #[test]
     fn header_name_is_case_insensitive() {
       let value = format!("Bearer {SAMPLE_KEY}");
       for header_name in ["authorization", "Authorization", "AUTHORIZATION"] {
-        let http_request = TestRequest::default()
-            .insert_header((header_name, value.as_str()))
-            .to_http_request();
-        assert_eq!(
-          get_authorization_header_api_key(&http_request).map(|key| key.to_string_be_careful()),
-          Some(SAMPLE_KEY.to_string()),
-          "failed for header name {header_name:?}");
+        let http_request = TestRequest::default().insert_header((header_name, value.as_str())).to_http_request();
+        assert_eq!(get_authorization_header_api_key(&http_request).map(|key| key.to_string_be_careful()), Some(SAMPLE_KEY.to_string()), "failed for header name {header_name:?}");
       }
     }
 
@@ -131,14 +118,11 @@ mod tests {
   // can stay unchanged after the parser moved into the `artcraft_api_keys` crate.
 
   fn parse_authorization_header_api_key(header_value: &str) -> Option<String> {
-    ArtcraftApiKey::parse_from_authorization_header_value(header_value)
-        .map(|key| key.to_string_be_careful())
+    ArtcraftApiKey::parse_from_authorization_header_value(header_value).map(|key| key.to_string_be_careful())
   }
 
   fn api_key_for_authorization_header(value: &str) -> Option<String> {
-    let http_request = TestRequest::default()
-        .insert_header(("Authorization", value))
-        .to_http_request();
+    let http_request = TestRequest::default().insert_header(("Authorization", value)).to_http_request();
     get_authorization_header_api_key(&http_request).map(|key| key.to_string_be_careful())
   }
 }

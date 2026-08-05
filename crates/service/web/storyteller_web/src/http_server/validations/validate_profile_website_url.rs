@@ -2,9 +2,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 pub fn validate_profile_website_url(website_url: &str) -> Result<(), String> {
-  static WEBSITE_URL_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(https?:\\/\\/)?.*$").expect("should be valid regex")
-  });
+  static WEBSITE_URL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(https?:\\/\\/)?.*$").expect("should be valid regex"));
 
   if website_url.len() < 3 {
     return Err("website url is too short".to_string());

@@ -32,26 +32,18 @@ pub struct GetTtsInferenceQueueCountResponse {
   pub attempt_failed_count: i64,
 }
 // NB: Not using DeriveMore since Clion doesn't understand it.
-pub async fn get_tts_inference_queue_count_handler(
-  http_request: HttpRequest,
-  server_state: web::Data<Arc<ServerState>>
-) -> Result<Json<GetTtsInferenceQueueCountResponse>, CommonWebError> {
-
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn get_tts_inference_queue_count_handler(http_request: HttpRequest, server_state: web::Data<Arc<ServerState>>) -> Result<Json<GetTtsInferenceQueueCountResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: Not a good fit for this permission.
@@ -61,30 +53,17 @@ pub async fn get_tts_inference_queue_count_handler(
   }
 
   let result = get_pending_tts_inference_job_detailed_stats(&server_state.mysql_pool)
-      .await
-      .map_err(|err| {
-        warn!("get tts pending count error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?
-      .unwrap_or(
-        // NB: Not Found for null results means nothing is pending in the queue (not an error!)
-        PendingCountResult {
-          seconds_since_first: 0,
-          pending_count: 0,
-          pending_priority_nonzero_count: 0,
-          pending_priority_gt_one_count: 0,
-          attempt_failed_count: 0,
-        }
-      );
+    .await
+    .map_err(|err| {
+      warn!("get tts pending count error: {:?}", err);
+      CommonWebError::from_anyhow_error(err)
+    })?
+    .unwrap_or(
+      // NB: Not Found for null results means nothing is pending in the queue (not an error!)
+      PendingCountResult { seconds_since_first: 0, pending_count: 0, pending_priority_nonzero_count: 0, pending_priority_gt_one_count: 0, attempt_failed_count: 0 },
+    );
 
-  let response = GetTtsInferenceQueueCountResponse {
-    success: true,
-    seconds_since_first: result.seconds_since_first,
-    pending_count: result.pending_count,
-    pending_priority_nonzero_count: result.pending_priority_nonzero_count,
-    pending_priority_gt_one_count: result.pending_priority_gt_one_count,
-    attempt_failed_count: result.attempt_failed_count,
-  };
+  let response = GetTtsInferenceQueueCountResponse { success: true, seconds_since_first: result.seconds_since_first, pending_count: result.pending_count, pending_priority_nonzero_count: result.pending_priority_nonzero_count, pending_priority_gt_one_count: result.pending_priority_gt_one_count, attempt_failed_count: result.attempt_failed_count };
 
   Ok(Json(response))
 }

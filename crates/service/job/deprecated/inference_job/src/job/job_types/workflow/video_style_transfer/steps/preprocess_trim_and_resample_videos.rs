@@ -20,18 +20,12 @@ pub struct ProcessTrimAndResampleVideoArgs<'a> {
   pub videos: &'a mut VideoPathing,
 }
 
-pub fn preprocess_trim_and_resample_videos(
-  args: ProcessTrimAndResampleVideoArgs<'_>
-) -> Result<u64, ProcessSingleJobError> {
+pub fn preprocess_trim_and_resample_videos(args: ProcessTrimAndResampleVideoArgs<'_>) -> Result<u64, ProcessSingleJobError> {
   let target_fps = args.comfy_args.target_fps.unwrap_or(24);
 
-  let trim_start_millis = args.comfy_args.trim_start_milliseconds
-      .or_else(|| args.comfy_args.trim_start_seconds.map(|s| s as u64 * 1_000))
-      .unwrap_or(0);
+  let trim_start_millis = args.comfy_args.trim_start_milliseconds.or_else(|| args.comfy_args.trim_start_seconds.map(|s| s as u64 * 1_000)).unwrap_or(0);
 
-  let trim_end_millis = args.comfy_args.trim_end_milliseconds
-      .or_else(|| args.comfy_args.trim_end_seconds.map(|s| s as u64 * 1_000))
-      .unwrap_or(3_000);
+  let trim_end_millis = args.comfy_args.trim_end_milliseconds.or_else(|| args.comfy_args.trim_end_seconds.map(|s| s as u64 * 1_000)).unwrap_or(3_000);
 
   let expected_frames = (trim_end_millis - trim_start_millis) * (target_fps as u64) / 1_000;
 
@@ -39,26 +33,14 @@ pub fn preprocess_trim_and_resample_videos(
   info!("trim end millis: {trim_end_millis}");
   info!("target FPS: {target_fps}");
 
-  let resample_details = ResampleDetails {
-    target_fps,
-    trim_start_millis,
-    trim_end_millis,
-  };
+  let resample_details = ResampleDetails { target_fps, trim_start_millis, trim_end_millis };
 
   let skip_resampling_video = args.comfy_args.skip_process_video.unwrap_or(false);
 
-  preprocess_trim_and_resample_primary_video(
-    &args.comfy_deps,
-    &args.comfy_dirs,
-    &resample_details,
-    skip_resampling_video,
-    args.videos)?;
+  preprocess_trim_and_resample_primary_video(&args.comfy_deps, &args.comfy_dirs, &resample_details, skip_resampling_video, args.videos)?;
 
   if !skip_resampling_video {
-    preprocess_trim_and_resample_secondary_videos(
-      &args.comfy_deps,
-      &resample_details,
-      args.videos)?;
+    preprocess_trim_and_resample_secondary_videos(&args.comfy_deps, &resample_details, args.videos)?;
   }
 
   Ok(expected_frames)
@@ -70,32 +52,22 @@ struct ResampleDetails {
   trim_end_millis: u64,
 }
 
-fn preprocess_trim_and_resample_primary_video(
-  comfy_deps: &ComfyDependencies,
-  comfy_dirs: &ComfyDirs,
-  resample_details: &ResampleDetails,
-  skip_process_video: bool,
-  videos: &mut VideoPathing,
-) -> Result<(), ProcessSingleJobError> {
-
+fn preprocess_trim_and_resample_primary_video(comfy_deps: &ComfyDependencies, comfy_dirs: &ComfyDirs, resample_details: &ResampleDetails, skip_process_video: bool, videos: &mut VideoPathing) -> Result<(), ProcessSingleJobError> {
   let resampled_path = comfy_dirs.comfy_input_dir.join("trimmed.mp4");
 
   if skip_process_video {
     info!("Skipping video trim / resample...");
     info!("(This might break if we need to copy the video path. Salt's code implicitly expects videos to be in certain places, but doesn't allow passing of config, and that's horrible.)");
 
-    std::fs::copy(&videos.primary_video.original_download_path, &resampled_path)
-        .map_err(|err| {
-          error!("Error copying video (1): {:?}", err);
-          ProcessSingleJobError::IoError(err)
-        })?;
+    std::fs::copy(&videos.primary_video.original_download_path, &resampled_path).map_err(|err| {
+      error!("Error copying video (1): {:?}", err);
+      ProcessSingleJobError::IoError(err)
+    })?;
 
-    std::fs::copy(&videos.primary_video.original_download_path, &videos.primary_video.comfy_output_video_path)
-        .map_err(|err| {
-          error!("Error copying video (2): {:?}", err);
-          ProcessSingleJobError::IoError(err)
-        })?;
-
+    std::fs::copy(&videos.primary_video.original_download_path, &videos.primary_video.comfy_output_video_path).map_err(|err| {
+      error!("Error copying video (2): {:?}", err);
+      ProcessSingleJobError::IoError(err)
+    })?;
   } else {
     info!("Calling video trim / resample...");
     info!("Script: {:?}", &comfy_deps.inference_command.processing_script);
@@ -138,11 +110,10 @@ fn preprocess_trim_and_resample_primary_video(
 
     // NB: The process video script implicitly saves the above video as "input.mp4"
     // Comfy sometimes overwrites this, so we need to make a copy.
-    std::fs::copy(&comfy_input_video_path, &resampled_path)
-        .map_err(|err| {
-          error!("Error copying trimmed video: {:?}", err);
-          ProcessSingleJobError::IoError(err)
-        })?;
+    std::fs::copy(&comfy_input_video_path, &resampled_path).map_err(|err| {
+      error!("Error copying trimmed video: {:?}", err);
+      ProcessSingleJobError::IoError(err)
+    })?;
   }
 
   //primary_video_paths.debug_print_paths_after_trim();
@@ -157,12 +128,7 @@ fn preprocess_trim_and_resample_primary_video(
   Ok(())
 }
 
-fn preprocess_trim_and_resample_secondary_videos(
-  comfy_deps: &ComfyDependencies,
-  resample_details: &ResampleDetails,
-  secondary_videos: &mut VideoPathing,
-) -> Result<(), ProcessSingleJobError> {
-
+fn preprocess_trim_and_resample_secondary_videos(comfy_deps: &ComfyDependencies, resample_details: &ResampleDetails, secondary_videos: &mut VideoPathing) -> Result<(), ProcessSingleJobError> {
   if let Some(depth) = secondary_videos.maybe_depth.as_mut() {
     let resampled_path = preprocess_trim_and_resample_secondary_video(comfy_deps, resample_details, depth)?;
     depth.maybe_processed_path = Some(resampled_path);
@@ -181,22 +147,12 @@ fn preprocess_trim_and_resample_secondary_videos(
   Ok(())
 }
 
-fn preprocess_trim_and_resample_secondary_video(
-  comfy_deps: &ComfyDependencies,
-  resample_details: &ResampleDetails,
-  video: &SecondaryInputVideoAndPaths,
-) -> Result<PathBuf, ProcessSingleJobError> {
+fn preprocess_trim_and_resample_secondary_video(comfy_deps: &ComfyDependencies, resample_details: &ResampleDetails, video: &SecondaryInputVideoAndPaths) -> Result<PathBuf, ProcessSingleJobError> {
   info!("Calling video trim / resample...");
   info!("Script: {:?}", &comfy_deps.inference_command.processing_script);
 
   let output_path = {
-    let filename = video.original_download_path
-        .file_stem()
-        .map(|s| s.to_str())
-        .flatten()
-        .ok_or_else(|| {
-          ProcessSingleJobError::Other(anyhow!("Error getting filename: {:?}", video.original_download_path))
-        })?;
+    let filename = video.original_download_path.file_stem().map(|s| s.to_str()).flatten().ok_or_else(|| ProcessSingleJobError::Other(anyhow!("Error getting filename: {:?}", video.original_download_path)))?;
 
     let filename = format!("{}_resampled.mp4", filename);
 

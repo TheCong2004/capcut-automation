@@ -17,19 +17,8 @@ pub struct WalletDeductionResult {
   pub ledger_entry_token: WalletLedgerEntryToken,
 }
 
-pub async fn attempt_wallet_deduction_else_common_web_error(
-  user_token: &UserToken,
-  maybe_reference_token: Option<&str>,
-  amount_to_deduct: u64,
-  connection: &mut PoolConnection<MySql>
-) -> Result<WalletDeductionResult, CommonWebError> {
-
-  let result = try_wallet_deduction(
-    user_token,
-    maybe_reference_token,
-    amount_to_deduct,
-    connection
-  ).await;
+pub async fn attempt_wallet_deduction_else_common_web_error(user_token: &UserToken, maybe_reference_token: Option<&str>, amount_to_deduct: u64, connection: &mut PoolConnection<MySql>) -> Result<WalletDeductionResult, CommonWebError> {
+  let result = try_wallet_deduction(user_token, maybe_reference_token, amount_to_deduct, connection).await;
 
   // Infallible for now.
   match result {
@@ -38,49 +27,33 @@ pub async fn attempt_wallet_deduction_else_common_web_error(
       WalletSpendError::InvalidAmountToSpend => {
         log::error!("invalid spend amount charged");
         CommonWebError::PaymentRequired
-      }
+      },
       WalletSpendError::InsufficientBalance { requested_to_spend_amount, available_amount } => {
         log::error!("payment is required - requested: {}, available: {}", requested_to_spend_amount, available_amount);
         CommonWebError::PaymentRequired
-      }
+      },
       WalletSpendError::SelectError(err) => {
         log::error!("SQL error (select) in attempt_wallet_deduction: {:?}", err);
         CommonWebError::from_error(err)
-      }
+      },
       WalletSpendError::SelectOptionalError(err) => {
         log::error!("SQL error (select optional) in attempt_wallet_deduction: {:?}", err);
         CommonWebError::from_error(err)
-      }
+      },
       WalletSpendError::SqlxError(err) => {
         log::error!("SQL error (sqlx) in attempt_wallet_deduction: {:?}", err);
         CommonWebError::from_error(err)
-      }
+      },
     }),
   }
 }
 
-async fn try_wallet_deduction(
-  owner_user_token: &UserToken,
-  maybe_reference_token: Option<&str>,
-  amount_to_deduct: u64,
-  connection: &mut PoolConnection<MySql>
-) -> Result<WalletDeductionResult, WalletSpendError>
-{
-  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_connection(
-    owner_user_token,
-    PaymentsNamespace::Artcraft,
-    connection
-  ).await?;
+async fn try_wallet_deduction(owner_user_token: &UserToken, maybe_reference_token: Option<&str>, amount_to_deduct: u64, connection: &mut PoolConnection<MySql>) -> Result<WalletDeductionResult, WalletSpendError> {
+  let maybe_wallet_token = find_primary_wallet_token_for_owner_using_connection(owner_user_token, PaymentsNamespace::Artcraft, connection).await?;
 
   let mut transaction = connection.begin().await?;
 
-  let result = try_wallet_deduction_with_transaction(
-    owner_user_token,
-    maybe_wallet_token,
-    maybe_reference_token,
-    amount_to_deduct,
-    &mut transaction
-  ).await;
+  let result = try_wallet_deduction_with_transaction(owner_user_token, maybe_wallet_token, maybe_reference_token, amount_to_deduct, &mut transaction).await;
 
   match result {
     Ok(deduction_result) => {
@@ -88,49 +61,28 @@ async fn try_wallet_deduction(
       Ok(deduction_result)
     },
     Err(err) => {
-      error!("Error handling temporary wallet deduction for user {:?} : {:?}",
-        owner_user_token, err);
+      error!("Error handling temporary wallet deduction for user {:?} : {:?}", owner_user_token, err);
 
       transaction.rollback().await?;
 
       Err(err)
-    }
+    },
   }
 }
 
-async fn try_wallet_deduction_with_transaction(
-  owner_user_token: &UserToken,
-  maybe_wallet_token: Option<WalletToken>,
-  maybe_reference_token: Option<&str>,
-  amount_to_deduct: u64,
-  transaction: &mut sqlx::Transaction<'_, MySql>,
-) -> Result<WalletDeductionResult, WalletSpendError>
-{
+async fn try_wallet_deduction_with_transaction(owner_user_token: &UserToken, maybe_wallet_token: Option<WalletToken>, maybe_reference_token: Option<&str>, amount_to_deduct: u64, transaction: &mut sqlx::Transaction<'_, MySql>) -> Result<WalletDeductionResult, WalletSpendError> {
   let wallet_token = match maybe_wallet_token {
     Some(token) => token,
     None => {
       info!("No wallet found for user: {} ; creating a new one...", owner_user_token.as_str());
       create_new_artcraft_wallet_for_owner_user(owner_user_token, transaction).await?
-    }
+    },
   };
 
-  let summary = try_to_spend_wallet_balance(
-    &wallet_token,
-    amount_to_deduct,
-    maybe_reference_token,
-    transaction
-  ).await
-    .map_err(|err| {
-      error!("Failed to deduct {} credits from wallet {} for user {} : {:?}",
-        amount_to_deduct,
-        wallet_token.as_str(),
-        owner_user_token.as_str(),
-        err);
-      err
-    })?;
+  let summary = try_to_spend_wallet_balance(&wallet_token, amount_to_deduct, maybe_reference_token, transaction).await.map_err(|err| {
+    error!("Failed to deduct {} credits from wallet {} for user {} : {:?}", amount_to_deduct, wallet_token.as_str(), owner_user_token.as_str(), err);
+    err
+  })?;
 
-  Ok(WalletDeductionResult {
-    wallet_token: summary.wallet_token,
-    ledger_entry_token: summary.wallet_ledger_entry_token,
-  })
+  Ok(WalletDeductionResult { wallet_token: summary.wallet_token, ledger_entry_token: summary.wallet_ledger_entry_token })
 }

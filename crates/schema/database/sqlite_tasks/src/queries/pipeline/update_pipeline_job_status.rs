@@ -12,26 +12,18 @@ pub struct UpdatePipelineJobStatusArgs<'a> {
 
 /// Set a job's status. Terminal statuses also stamp `completed_at`.
 /// Returns true if a row was updated.
-pub async fn update_pipeline_job_status(
-  args: UpdatePipelineJobStatusArgs<'_>,
-) -> Result<bool, SqliteTasksError> {
-  let is_terminal = matches!(
-    args.status,
-    TaskStatus::CompleteSuccess
-      | TaskStatus::CompleteFailure
-      | TaskStatus::Dead
-      | TaskStatus::CancelledByUser
-      | TaskStatus::CancelledByProvider
-      | TaskStatus::CancelledByUs
-  );
+pub async fn update_pipeline_job_status(args: UpdatePipelineJobStatusArgs<'_>) -> Result<bool, SqliteTasksError> {
+  let is_terminal = matches!(args.status, TaskStatus::CompleteSuccess | TaskStatus::CompleteFailure | TaskStatus::Dead | TaskStatus::CancelledByUser | TaskStatus::CancelledByProvider | TaskStatus::CancelledByUs);
 
   let status = args.status.to_str().to_string();
   let id = args.pipeline_job_id.as_str().to_string();
 
-  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(r#"
+  let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
+    r#"
     UPDATE pipeline_jobs
     SET status =
-  "#);
+  "#,
+  );
   query_builder.push_bind(status);
   query_builder.push(", updated_at = unixepoch('now')");
   if is_terminal {

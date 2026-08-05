@@ -208,8 +208,7 @@ fn read_main_data(
             // Read the scale factors (part2) and get the number of bits read.
             let part2_len = if header.is_mpeg1() {
                 bitstream::read_scale_factors_mpeg1(&mut bs, gr, ch, frame_data)
-            }
-            else {
+            } else {
                 bitstream::read_scale_factors_mpeg2(
                     &mut bs,
                     ch > 0 && header.is_intensity_stereo(),

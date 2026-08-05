@@ -34,9 +34,7 @@ where
 ///
 /// The caller is expected to have already verified the tag belongs to
 /// the user (`get_tag_for_owner`) so a bad token can 404.
-pub async fn list_media_files_with_tag_for_user<'e, 'c: 'e, E>(
-  args: ListMediaFilesWithTagForUserArgs<'e, 'c, E>,
-) -> Result<Vec<MediaFileListRow>, sqlx::Error>
+pub async fn list_media_files_with_tag_for_user<'e, 'c: 'e, E>(args: ListMediaFilesWithTagForUserArgs<'e, 'c, E>) -> Result<Vec<MediaFileListRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -100,6 +98,6 @@ LIMIT ?
     cursor_id,
     limit,
   )
-    .fetch_all(args.mysql_executor)
-    .await
+  .fetch_all(args.mysql_executor)
+  .await
 }

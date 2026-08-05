@@ -18,16 +18,14 @@ pub struct BannedIpFilter {
 
 impl BannedIpFilter {
   pub fn new(ip_ban_list: IpBanList) -> Self {
-    Self {
-      ip_ban_list,
-    }
+    Self { ip_ban_list }
   }
 }
 
 impl<S, B> Transform<S, ServiceRequest> for BannedIpFilter
-  where
-      S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-      S::Future: 'static,
+where
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+  S::Future: 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Error;

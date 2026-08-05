@@ -12,10 +12,6 @@ pub struct SadTalkerDependencies {
 
 impl SadTalkerDependencies {
   pub fn setup() -> AnyhowResult<Self> {
-    Ok(Self {
-      downloaders: SadTalkerDownloaders::build_all_from_env(),
-      ffmpeg_watermark_command: FfmpegLogoWatermarkCommand::from_env()?,
-      inference_command: SadTalkerInferenceCommand::from_env()?,
-    })
+    Ok(Self { downloaders: SadTalkerDownloaders::build_all_from_env(), ffmpeg_watermark_command: FfmpegLogoWatermarkCommand::from_env()?, inference_command: SadTalkerInferenceCommand::from_env()? })
   }
 }

@@ -10,32 +10,30 @@ use errors::AnyhowResult;
 use mysql_queries::queries::model_weights::batch_get::batch_get_model_weights_for_elastic_search_backfill::ModelWeightForElasticsearchRecord;
 use primitives::numerics::u64_to_i32_saturating::u64_to_i32_saturating;
 
-pub async fn create_model_weight_document_from_record(
-  elasticsearch: &Elasticsearch,
-  record: ModelWeightForElasticsearchRecord
-) -> AnyhowResult<()> {
-
+pub async fn create_model_weight_document_from_record(elasticsearch: &Elasticsearch, record: ModelWeightForElasticsearchRecord) -> AnyhowResult<()> {
   info!("Create record for {:?} - {:?}", record.token, record.title);
 
   let is_deleted = record.user_deleted_at.is_some() || record.mod_deleted_at.is_some();
 
-  let maybe_ietf_language_tag = record.maybe_ietf_language_tag
-      .as_deref()
-      .or_else(|| match record.weights_category {
-        WeightsCategory::TextToSpeech => record.maybe_tts_ietf_language_tag.as_deref(),
-        WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_language_tag.as_deref(),
-        _ => None,
-      })
-      .map(|t| t.to_string());
+  let maybe_ietf_language_tag = record
+    .maybe_ietf_language_tag
+    .as_deref()
+    .or_else(|| match record.weights_category {
+      WeightsCategory::TextToSpeech => record.maybe_tts_ietf_language_tag.as_deref(),
+      WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_language_tag.as_deref(),
+      _ => None,
+    })
+    .map(|t| t.to_string());
 
-  let maybe_ietf_primary_language_subtag = record.maybe_ietf_primary_language_subtag
-      .as_deref()
-      .or_else(|| match &record.weights_category {
-        WeightsCategory::TextToSpeech => record.maybe_tts_ietf_primary_language_subtag.as_deref(),
-        WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_primary_language_subtag.as_deref(),
-        _ => None,
-      })
-      .map(|t| t.to_string());
+  let maybe_ietf_primary_language_subtag = record
+    .maybe_ietf_primary_language_subtag
+    .as_deref()
+    .or_else(|| match &record.weights_category {
+      WeightsCategory::TextToSpeech => record.maybe_tts_ietf_primary_language_subtag.as_deref(),
+      WeightsCategory::VoiceConversion => record.maybe_voice_conversion_ietf_primary_language_subtag.as_deref(),
+      _ => None,
+    })
+    .map(|t| t.to_string());
 
   let document = ModelWeightDocument {
     token: record.token,
@@ -79,27 +77,16 @@ pub async fn create_model_weight_document_from_record(
     is_deleted,
   };
 
-  let op : BulkOperation<_> = BulkOperation::index(&document)
-      .id(document.get_document_id())
-      .into();
+  let op: BulkOperation<_> = BulkOperation::index(&document).id(document.get_document_id()).into();
 
-  let response = elasticsearch
-      .bulk(BulkParts::Index(MODEL_WEIGHT_INDEX))
-      .body(vec![op])
-      .send()
-      .await?;
+  let response = elasticsearch.bulk(BulkParts::Index(MODEL_WEIGHT_INDEX)).body(vec![op]).send().await?;
 
   let json: Value = response.json().await?;
 
   let had_errors = json["errors"].as_bool().unwrap_or(false);
 
   if had_errors {
-    let failed: Vec<&Value> = json["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|v| !v["error"].is_null())
-        .collect();
+    let failed: Vec<&Value> = json["items"].as_array().unwrap().iter().filter(|v| !v["error"].is_null()).collect();
 
     error!("Errors during indexing. Failures: {}", failed.len());
 

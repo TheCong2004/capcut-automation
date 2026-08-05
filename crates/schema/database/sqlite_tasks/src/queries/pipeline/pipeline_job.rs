@@ -14,11 +14,11 @@ pub struct PipelineJob {
 
 #[derive(Debug)]
 #[derive(sqlx::FromRow)]
-pub (crate) struct RawPipelineJob {
-  pub (crate) id: String,
-  pub (crate) status: String,
-  pub (crate) current_stage: String,
-  pub (crate) input_payload: Option<String>,
-  pub (crate) stage_outputs: Option<String>,
-  pub (crate) on_failure_message: Option<String>,
+pub(crate) struct RawPipelineJob {
+  pub(crate) id: String,
+  pub(crate) status: String,
+  pub(crate) current_stage: String,
+  pub(crate) input_payload: Option<String>,
+  pub(crate) stage_outputs: Option<String>,
+  pub(crate) on_failure_message: Option<String>,
 }

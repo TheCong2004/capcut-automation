@@ -86,52 +86,27 @@ impl fmt::Display for LogBrowserSessionError {
     ("request" = LogBrowserSessionRequest, description = "Payload for Request"),
   )
 )]
-pub async fn log_browser_session_handler(
-  http_request: HttpRequest,
-  request: Json<LogBrowserSessionRequest>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<LogBrowserSessionSuccessResponse>, LogBrowserSessionError>
-{
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        warn!("MySql pool error: {:?}", err);
-        LogBrowserSessionError::ServerError
-      })?;
+pub async fn log_browser_session_handler(http_request: HttpRequest, request: Json<LogBrowserSessionRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<LogBrowserSessionSuccessResponse>, LogBrowserSessionError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    warn!("MySql pool error: {:?}", err);
+    LogBrowserSessionError::ServerError
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        LogBrowserSessionError::ServerError
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    LogBrowserSessionError::ServerError
+  })?;
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(&http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(&http_request);
 
   let ip_address = get_request_ip(&http_request);
 
-  let token = upsert_browser_session_log(UpsertBrowserSessionLogArgs {
-    maybe_log_token: request.maybe_log_token.as_ref(),
-    ip_address: &ip_address,
-    maybe_user_token: maybe_user_session.as_ref().map(|s| &s.user_token),
-    maybe_visitor_token: maybe_avt_token.as_ref(),
-    maybe_last_action: request.maybe_last_action.as_deref(),
-    mysql_pool: &server_state.mysql_pool,
-  }).await.map_err(|err| {
+  let token = upsert_browser_session_log(UpsertBrowserSessionLogArgs { maybe_log_token: request.maybe_log_token.as_ref(), ip_address: &ip_address, maybe_user_token: maybe_user_session.as_ref().map(|s| &s.user_token), maybe_visitor_token: maybe_avt_token.as_ref(), maybe_last_action: request.maybe_last_action.as_deref(), mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
     warn!("Error inserting beta keys: {:?}", err);
     LogBrowserSessionError::ServerError
   })?;
 
-  let response = LogBrowserSessionSuccessResponse {
-    success: true,
-    log_token: token,
-  };
+  let response = LogBrowserSessionSuccessResponse { success: true, log_token: token };
 
   Ok(Json(response))
 }
-

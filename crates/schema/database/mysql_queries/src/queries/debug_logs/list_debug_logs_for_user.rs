@@ -67,9 +67,7 @@ struct RawUserDebugLogRow {
 }
 
 /// List debug logs for a user, most recent first, cursor-paginated by `id`.
-pub async fn list_debug_logs_for_user<'e, 'c: 'e, E>(
-  args: ListDebugLogsForUserArgs<'e, 'c, E>,
-) -> Result<ListDebugLogsForUserResult, sqlx::Error>
+pub async fn list_debug_logs_for_user<'e, 'c: 'e, E>(args: ListDebugLogsForUserArgs<'e, 'c, E>) -> Result<ListDebugLogsForUserResult, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -108,25 +106,10 @@ LIMIT ?
     id_cursor,
     fetch_limit,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
-  let mut debug_logs: Vec<UserDebugLogRow> = rows.into_iter().map(|row| {
-    UserDebugLogRow {
-      id: row.id,
-      event_token: row.event_token,
-      debug_log_type: row.debug_log_type,
-      maybe_log_level: row.maybe_log_level,
-      maybe_creator_user_token: row.maybe_creator_user_token,
-      maybe_ip_address: row.maybe_ip_address,
-      maybe_url: row.maybe_url,
-      message: row.message,
-      created_at: row.created_at.and_utc(),
-      maybe_user_display_name: row.maybe_user_display_name,
-      maybe_user_username: row.maybe_user_username,
-      maybe_user_gravatar_hash: row.maybe_user_gravatar_hash,
-    }
-  }).collect();
+  let mut debug_logs: Vec<UserDebugLogRow> = rows.into_iter().map(|row| UserDebugLogRow { id: row.id, event_token: row.event_token, debug_log_type: row.debug_log_type, maybe_log_level: row.maybe_log_level, maybe_creator_user_token: row.maybe_creator_user_token, maybe_ip_address: row.maybe_ip_address, maybe_url: row.maybe_url, message: row.message, created_at: row.created_at.and_utc(), maybe_user_display_name: row.maybe_user_display_name, maybe_user_username: row.maybe_user_username, maybe_user_gravatar_hash: row.maybe_user_gravatar_hash }).collect();
 
   let next_cursor = if debug_logs.len() > limit as usize {
     debug_logs.truncate(limit as usize);
@@ -135,8 +118,5 @@ LIMIT ?
     None
   };
 
-  Ok(ListDebugLogsForUserResult {
-    debug_logs,
-    next_cursor,
-  })
+  Ok(ListDebugLogsForUserResult { debug_logs, next_cursor })
 }

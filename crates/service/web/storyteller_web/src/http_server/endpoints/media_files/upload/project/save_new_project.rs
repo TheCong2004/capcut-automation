@@ -64,24 +64,17 @@ pub struct SaveNewProjectArgs<'a> {
 pub async fn save_new_project(args: SaveNewProjectArgs<'_>) -> Result<MediaFileToken, CommonWebError> {
   let SaveNewProjectArgs { http_request, server_state, config, mut form } = args;
 
-  let mut mysql_connection = server_state.mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("MySql pool error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|err| {
+    error!("MySql pool error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   // ==================== SESSION (OPTIONAL) + BAN CHECK ==================== //
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(http_request, &mut mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Session checker error: {:?}", err);
-        CommonWebError::from_error(err)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(http_request, &mut mysql_connection).await.map_err(|err| {
+    error!("Session checker error: {:?}", err);
+    CommonWebError::from_error(err)
+  })?;
 
   if let Some(ref user) = maybe_user_session {
     if user.is_banned {
@@ -89,9 +82,7 @@ pub async fn save_new_project(args: SaveNewProjectArgs<'_>) -> Result<MediaFileT
     }
   }
 
-  let maybe_avt_token = server_state
-      .avt_cookie_manager
-      .get_avt_token_from_request(http_request);
+  let maybe_avt_token = server_state.avt_cookie_manager.get_avt_token_from_request(http_request);
 
   // ==================== IDEMPOTENCY ==================== //
 
@@ -101,12 +92,10 @@ pub async fn save_new_project(args: SaveNewProjectArgs<'_>) -> Result<MediaFileT
     return Err(CommonWebError::BadInputWithSimpleMessage(reason));
   }
 
-  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection)
-      .await
-      .map_err(|err| {
-        warn!("Error inserting idempotency token: {:?}", err);
-        CommonWebError::BadInputWithSimpleMessage("invalid or duplicate idempotency token".to_string())
-      })?;
+  insert_idempotency_token(uuid_idempotency_token, &mut *mysql_connection).await.map_err(|err| {
+    warn!("Error inserting idempotency token: {:?}", err);
+    CommonWebError::BadInputWithSimpleMessage("invalid or duplicate idempotency token".to_string())
+  })?;
 
   // NB: Release the connection before the bucket upload — never hold a pooled
   // connection across a network call.
@@ -114,18 +103,9 @@ pub async fn save_new_project(args: SaveNewProjectArgs<'_>) -> Result<MediaFileT
 
   // ==================== UPLOAD METADATA ==================== //
 
-  let maybe_title = form.maybe_title
-      .map(|title| title.trim().to_string())
-      .filter(|title| !title.is_empty());
+  let maybe_title = form.maybe_title.map(|title| title.trim().to_string()).filter(|title| !title.is_empty());
 
-  let creator_set_visibility = form.maybe_visibility
-      .map(|visibility| visibility.0)
-      .or_else(|| {
-        maybe_user_session
-            .as_ref()
-            .map(|user_session| user_session.preferred_tts_result_visibility)
-      })
-      .unwrap_or(Visibility::default());
+  let creator_set_visibility = form.maybe_visibility.map(|visibility| visibility.0).or_else(|| maybe_user_session.as_ref().map(|user_session| user_session.preferred_tts_result_visibility)).unwrap_or(Visibility::default());
 
   let ip_address = get_request_ip(http_request);
 
@@ -163,14 +143,13 @@ pub async fn save_new_project(args: SaveNewProjectArgs<'_>) -> Result<MediaFileT
     maybe_public_bucket_extension: Some(config.bucket_suffix),
     pool: &server_state.mysql_pool,
   })
-      .await
-      .map_err(|err| {
-        warn!("New project media file insert error: {:?}", err);
-        CommonWebError::from_anyhow_error(err)
-      })?;
+  .await
+  .map_err(|err| {
+    warn!("New project media file insert error: {:?}", err);
+    CommonWebError::from_anyhow_error(err)
+  })?;
 
-  info!("New {} project media file id: {} token: {:?}",
-    config.project_type, record_id, &token);
+  info!("New {} project media file id: {} token: {:?}", config.project_type, record_id, &token);
 
   Ok(token)
 }

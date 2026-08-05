@@ -37,16 +37,7 @@ use user_traits_component::traits::internal_session_cache_purge::InternalSession
 //     (status = 200, description = "Success Delete", body = CreateCheckoutSessionSuccessResponse),
 //   ),
 // )]
-pub async fn stripe_artcraft_create_credits_pack_checkout_handler(
-  http_request: HttpRequest,
-  request: Json<StripeArtcraftCreateCreditsPackCheckoutRequest>,
-  stripe_config: Data<ArtcraftStripeConfigWithClient>,
-  server_environment: Data<ServerEnvironment>,
-  internal_user_lookup: Data<dyn InternalUserLookup>,
-  internal_session_cache_purge: Data<dyn InternalSessionCachePurge>,
-  mysql_pool: Data<MySqlPool>,
-) -> Result<Json<StripeArtcraftCreateCreditsPackCheckoutResponse>, CommonWebError>
-{
+pub async fn stripe_artcraft_create_credits_pack_checkout_handler(http_request: HttpRequest, request: Json<StripeArtcraftCreateCreditsPackCheckoutRequest>, stripe_config: Data<ArtcraftStripeConfigWithClient>, server_environment: Data<ServerEnvironment>, internal_user_lookup: Data<dyn InternalUserLookup>, internal_session_cache_purge: Data<dyn InternalSessionCachePurge>, mysql_pool: Data<MySqlPool>) -> Result<Json<StripeArtcraftCreateCreditsPackCheckoutResponse>, CommonWebError> {
   let slug = match request.credits_pack {
     None => return Err(CommonWebError::BadInputWithSimpleMessage("no credits pack supplied".to_string())),
     Some(slug) => slug,
@@ -54,21 +45,15 @@ pub async fn stripe_artcraft_create_credits_pack_checkout_handler(
 
   let credits_pack = get_artcraft_credits_pack_by_slug_and_env(slug, **server_environment);
 
-  let mut mysql_connection = mysql_pool
-      .acquire()
-      .await
-      .map_err(|err| {
-        error!("Could not acquire mysql connection: {:?}", err);
-        CommonWebError::ServerError
-      })?;
+  let mut mysql_connection = mysql_pool.acquire().await.map_err(|err| {
+    error!("Could not acquire mysql connection: {:?}", err);
+    CommonWebError::ServerError
+  })?;
 
-  let maybe_user_metadata = internal_user_lookup
-      .lookup_user_from_http_request_and_mysql_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|err| {
-        error!("Error looking up user: {:?}", err);
-        CommonWebError::ServerError // NB: This was probably *our* fault.
-      })?;
+  let maybe_user_metadata = internal_user_lookup.lookup_user_from_http_request_and_mysql_connection(&http_request, &mut mysql_connection).await.map_err(|err| {
+    error!("Error looking up user: {:?}", err);
+    CommonWebError::ServerError // NB: This was probably *our* fault.
+  })?;
 
   // NB: Our integration relies on an internal user token being present.
   let user_metadata = match maybe_user_metadata {
@@ -79,11 +64,7 @@ pub async fn stripe_artcraft_create_credits_pack_checkout_handler(
   // NB: Currently the stripe customer id field in the `users` table is only for FakeYou subscriptions,
   // so we need to look up any existing Artcraft subscription separately. This is needed to pre-fill
   // the Stripe billing form.
-  let maybe_subscription = find_subscription_for_owner_user_using_connection(
-    &user_metadata.user_token_typed,
-    PaymentsNamespace::Artcraft,
-    &mut mysql_connection
-  ).await.map_err(|err| {
+  let maybe_subscription = find_subscription_for_owner_user_using_connection(&user_metadata.user_token_typed, PaymentsNamespace::Artcraft, &mut mysql_connection).await.map_err(|err| {
     error!("Error looking up user's ({}) existing subscription: {:?}", &user_metadata.user_token_typed, err);
     CommonWebError::ServerError // NB: This was probably *our* fault.
   })?;
@@ -95,11 +76,7 @@ pub async fn stripe_artcraft_create_credits_pack_checkout_handler(
       .flatten();
 
   if maybe_existing_stripe_customer_id.is_none() {
-    let result = find_user_stripe_customer_link_using_connection(
-      &user_metadata.user_token_typed,
-      PaymentsNamespace::Artcraft,
-      &mut mysql_connection
-    ).await;
+    let result = find_user_stripe_customer_link_using_connection(&user_metadata.user_token_typed, PaymentsNamespace::Artcraft, &mut mysql_connection).await;
 
     // NB: Fail silently.
     if let Ok(Some(link)) = result {
@@ -164,37 +141,28 @@ pub async fn stripe_artcraft_create_credits_pack_checkout_handler(
       // If we try to set this without a customer, the checkout session will blow up.
       // Stripe won't let us use `saved_payment_method_options` without an existing customer,
       // at least for one-off payments. Subscriptions allow this to be set in either case.
-      checkout_builder = checkout_builder
-          .saved_payment_method_options(CreateCheckoutSessionSavedPaymentMethodOptions {
-            // The user can choose to tick a checkbox that saves their card for redisplay later.
-            payment_method_save: Some(CreateCheckoutSessionSavedPaymentMethodOptionsPaymentMethodSave::Enabled),
-            // Without any items, we do not get card redisplay.
-            // All three values seems to enable redisplay.
-            // I haven't tested individual enum values.
-            // The user can choose to tick a checkbox that saves their card for redisplay later.
-            allow_redisplay_filters: Some(vec![
-              CreateCheckoutSessionSavedPaymentMethodOptionsAllowRedisplayFilters::Always,
-              CreateCheckoutSessionSavedPaymentMethodOptionsAllowRedisplayFilters::Limited,
-              CreateCheckoutSessionSavedPaymentMethodOptionsAllowRedisplayFilters::Unspecified,
-            ])
-          });
+      checkout_builder = checkout_builder.saved_payment_method_options(CreateCheckoutSessionSavedPaymentMethodOptions {
+        // The user can choose to tick a checkbox that saves their card for redisplay later.
+        payment_method_save: Some(CreateCheckoutSessionSavedPaymentMethodOptionsPaymentMethodSave::Enabled),
+        // Without any items, we do not get card redisplay.
+        // All three values seems to enable redisplay.
+        // I haven't tested individual enum values.
+        // The user can choose to tick a checkbox that saves their card for redisplay later.
+        allow_redisplay_filters: Some(vec![CreateCheckoutSessionSavedPaymentMethodOptionsAllowRedisplayFilters::Always, CreateCheckoutSessionSavedPaymentMethodOptionsAllowRedisplayFilters::Limited, CreateCheckoutSessionSavedPaymentMethodOptionsAllowRedisplayFilters::Unspecified]),
+      });
     } else {
       // If we don't have an existing customer_id, we want to create a new customer.
       // If we don't do that, the "customer" winds up as a "Guest" customer.
       // The only danger in forcefully creating a new customer is that we might create
       // duplicates (which Stripe won't merge) if we can't catch and consolidate across
       // all events.
-      checkout_builder = checkout_builder
-          .customer_creation(CreateCheckoutSessionCustomerCreation::Always);
+      checkout_builder = checkout_builder.customer_creation(CreateCheckoutSessionCustomerCreation::Always);
     }
 
-    let checkout_session = checkout_builder
-        .send(&stripe_config.client)
-        .await
-        .map_err(|err| {
-          error!("Stripe Error: {:?}", err);
-          CommonWebError::ServerError
-        })?;
+    let checkout_session = checkout_builder.send(&stripe_config.client).await.map_err(|err| {
+      error!("Stripe Error: {:?}", err);
+      CommonWebError::ServerError
+    })?;
 
     checkout_session
   };
@@ -204,8 +172,5 @@ pub async fn stripe_artcraft_create_credits_pack_checkout_handler(
   // Best effort to delete Redis session cache
   // internal_session_cache_purge.best_effort_purge_session_cache(&http_request);
 
-  Ok(Json(StripeArtcraftCreateCreditsPackCheckoutResponse{
-    success: true,
-    stripe_checkout_redirect_url: url,
-  }))
+  Ok(Json(StripeArtcraftCreateCreditsPackCheckoutResponse { success: true, stripe_checkout_redirect_url: url }))
 }

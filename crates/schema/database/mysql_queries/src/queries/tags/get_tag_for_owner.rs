@@ -20,9 +20,7 @@ where
 /// Fetch a single (live) tag by token, scoped to its creator. Returns
 /// `Ok(None)` if the tag doesn't exist, is soft-deleted, or belongs to a
 /// different user (don't leak existence of others' tags).
-pub async fn get_tag_for_owner<'e, 'c: 'e, E>(
-  args: GetTagForOwnerArgs<'e, 'c, E>,
-) -> Result<Option<TagRow>, sqlx::Error>
+pub async fn get_tag_for_owner<'e, 'c: 'e, E>(args: GetTagForOwnerArgs<'e, 'c, E>) -> Result<Option<TagRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -43,14 +41,8 @@ LIMIT 1
     args.tag_token.as_str(),
     args.creator_user_token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|r| TagRow {
-    id: r.id,
-    token: r.token,
-    tag_value: r.tag_value,
-    tag_value_lowercase: r.tag_value_lowercase,
-    use_count: r.use_count,
-  }))
+  Ok(result.map(|r| TagRow { id: r.id, token: r.token, tag_value: r.tag_value, tag_value_lowercase: r.tag_value_lowercase, use_count: r.use_count }))
 }

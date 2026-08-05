@@ -28,7 +28,7 @@ pub fn build_cors_config(server_environment: ServerEnvironment) -> Cors {
 
 /// Return cors config for FakeYou / Vocodes / OBS / local development
 pub fn build_production_cors_config() -> Cors {
-  const IS_PRODUCTION : bool = true;
+  const IS_PRODUCTION: bool = true;
   do_build_cors_config(IS_PRODUCTION)
 }
 
@@ -72,19 +72,20 @@ fn do_build_cors_config(is_production: bool) -> Cors {
   // false (mismatched origins get a 200 without CORS headers and the browser
   // enforces the block). We keep the long-standing 0.6 behavior of rejecting
   // mismatched origins server-side with a 400.
-  cors.block_on_origin_mismatch(true)
-      .allowed_methods(vec!["GET", "POST", "PUT", "OPTIONS", "DELETE"])
-      .supports_credentials()
-      .allowed_headers(vec![
-        actix_http::header::ACCEPT,
-        actix_http::header::ACCESS_CONTROL_ALLOW_ORIGIN, // Tabulator Ajax
-        actix_http::header::CONTENT_TYPE,
-        actix_http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS, // https://stackoverflow.com/a/46412839
-        actix_http::header::HeaderName::from_static("x-requested-with"), // Tabulator Ajax sends
-        actix_http::header::HeaderName::from_static("session"), // Custom header sent by Three.js Storyteller Studio
-        actix_http::header::HeaderName::from_static("x-artcraft-version"), // ArtCraft client app release, surfaced in error alerts
-      ])
-      .max_age(3600)
+  cors
+    .block_on_origin_mismatch(true)
+    .allowed_methods(vec!["GET", "POST", "PUT", "OPTIONS", "DELETE"])
+    .supports_credentials()
+    .allowed_headers(vec![
+      actix_http::header::ACCEPT,
+      actix_http::header::ACCESS_CONTROL_ALLOW_ORIGIN, // Tabulator Ajax
+      actix_http::header::CONTENT_TYPE,
+      actix_http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,              // https://stackoverflow.com/a/46412839
+      actix_http::header::HeaderName::from_static("x-requested-with"),   // Tabulator Ajax sends
+      actix_http::header::HeaderName::from_static("session"),            // Custom header sent by Three.js Storyteller Studio
+      actix_http::header::HeaderName::from_static("x-artcraft-version"), // ArtCraft client app release, surfaced in error alerts
+    ])
+    .max_age(3600)
 }
 
 #[cfg(test)]
@@ -196,11 +197,7 @@ mod tests {
     assert_origin_ok(&production_cors, "https://www.realseedance.com").await;
     assert_origin_ok(&production_cors, "https://real-seedance.netlify.app").await;
     // Netlify deploy-preview / branch subdomain
-    assert_origin_ok(
-      &production_cors,
-      "https://deploy-preview-12--real-seedance.netlify.app",
-    )
-    .await;
+    assert_origin_ok(&production_cors, "https://deploy-preview-12--real-seedance.netlify.app").await;
 
     // Invalid origins
     assert_origin_invalid(&production_cors, "https://realseedance.fake.com").await;

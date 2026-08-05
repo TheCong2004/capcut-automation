@@ -13,12 +13,9 @@ pub struct ChangePasswordFromPasswordResetArgs<'a, 'b> {
   pub mysql_transaction: Transaction<'b, MySql>,
 }
 
-pub async fn change_password_from_password_reset<'a, 'b>(
-  mut args: ChangePasswordFromPasswordResetArgs<'a, 'b>
-) -> AnyhowResult<()> {
-
+pub async fn change_password_from_password_reset<'a, 'b>(mut args: ChangePasswordFromPasswordResetArgs<'a, 'b>) -> AnyhowResult<()> {
   let query = sqlx::query!(
-        r#"
+    r#"
 UPDATE users
 SET
   email_confirmed = true,
@@ -33,10 +30,10 @@ WHERE
   token = ?
 LIMIT 1
         "#,
-        args.new_password_hash,
-        args.ip_address,
-        args.user_token,
-    );
+    args.new_password_hash,
+    args.ip_address,
+    args.user_token,
+  );
 
   let query_result = query.execute(&mut *args.mysql_transaction).await;
 
@@ -46,7 +43,7 @@ LIMIT 1
   }
 
   let query = sqlx::query!(
-        r#"
+    r#"
 UPDATE user_password_resets
 SET
   is_redeemed = true,
@@ -56,9 +53,9 @@ WHERE
   token = ?
 LIMIT 1
         "#,
-        args.ip_address,
-        args.password_reset_token,
-    );
+    args.ip_address,
+    args.password_reset_token,
+  );
 
   let query_result = query.execute(&mut *args.mysql_transaction).await;
 

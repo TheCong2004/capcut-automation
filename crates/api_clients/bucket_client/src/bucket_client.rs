@@ -37,28 +37,17 @@ impl BucketClient {
   /// Returns [`BucketClientError::UploadFailed`] if the store responds with a
   /// non-2xx status, or [`BucketClientError::S3Error`] on a transport/protocol
   /// error.
-  pub async fn upload_file_bytes<S: AsRef<str>>(
-    &self,
-    args: UploadFileBytesArgs<'_, S>,
-  ) -> Result<(), BucketClientError> {
+  pub async fn upload_file_bytes<S: AsRef<str>>(&self, args: UploadFileBytesArgs<'_, S>) -> Result<(), BucketClientError> {
     let object_name = ObjectName::new(&args.object_name);
 
     let response = match args.content_type {
-      Some(content_type) => {
-        self
-          .bucket
-          .put_object_with_content_type(object_name.as_str(), args.bytes, content_type)
-          .await?
-      }
+      Some(content_type) => self.bucket.put_object_with_content_type(object_name.as_str(), args.bytes, content_type).await?,
       None => self.bucket.put_object(object_name.as_str(), args.bytes).await?,
     };
 
     let status_code = response.status_code();
     if !(200..300).contains(&status_code) {
-      return Err(BucketClientError::UploadFailed {
-        status_code,
-        message: String::from_utf8_lossy(response.bytes()).into_owned(),
-      });
+      return Err(BucketClientError::UploadFailed { status_code, message: String::from_utf8_lossy(response.bytes()).into_owned() });
     }
 
     Ok(())

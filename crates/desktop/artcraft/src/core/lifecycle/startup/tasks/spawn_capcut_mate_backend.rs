@@ -82,13 +82,7 @@ fn wait_for_backend_ready(app: &AppHandle, port: u16) {
       return;
     }
     if std::time::Instant::now() >= deadline {
-      emit_backend_error(
-        app,
-        format!(
-          "capcut-mate did not start listening on :{port} within {}s",
-          READY_DEADLINE.as_secs()
-        ),
-      );
+      emit_backend_error(app, format!("capcut-mate did not start listening on :{port} within {}s", READY_DEADLINE.as_secs()));
       return;
     }
     std::thread::sleep(READY_POLL_INTERVAL);
@@ -100,9 +94,7 @@ fn is_mate_dir(p: &Path) -> bool {
 }
 
 fn exe_dir() -> Option<PathBuf> {
-  std::env::current_exe()
-    .ok()
-    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+  std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()))
 }
 
 fn resource_dir(app: &AppHandle) -> Option<PathBuf> {
@@ -168,10 +160,7 @@ fn resolve_mate_dir(app: &AppHandle) -> Option<PathBuf> {
   push_if(&mut candidates, manifest.join("../../../capcut-mate"));
   push_if(&mut candidates, manifest.join("../../../../capcut-mate"));
   push_if(&mut candidates, manifest.join(MATE_DIR_NAME));
-  push_if(
-    &mut candidates,
-    manifest.join("resources").join(MATE_DIR_NAME),
-  );
+  push_if(&mut candidates, manifest.join("resources").join(MATE_DIR_NAME));
 
   if let Ok(cwd) = std::env::current_dir() {
     push_if(&mut candidates, cwd.join(MATE_DIR_NAME));
@@ -191,62 +180,26 @@ fn resolve_mate_dir(app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn spawn_sidecar(exe: &Path) -> Result<Child, String> {
-  Command::new(exe)
-    .current_dir(exe.parent().unwrap_or_else(|| Path::new(".")))
-    .stdin(Stdio::null())
-    .stdout(Stdio::null())
-    .stderr(Stdio::null())
-    .spawn()
-    .map_err(|e| format!("Failed to spawn sidecar {}: {e}", exe.display()))
+  Command::new(exe).current_dir(exe.parent().unwrap_or_else(|| Path::new("."))).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| format!("Failed to spawn sidecar {}: {e}", exe.display()))
 }
 
 fn spawn_mate_from_dir(dir: &Path) -> Result<Child, String> {
   // Portable venv shipped next to source (build may copy .venv)
   let venv_py = dir.join(".venv").join("Scripts").join("python.exe");
   if venv_py.is_file() {
-    match Command::new(&venv_py)
-      .arg("main.py")
-      .current_dir(dir)
-      .stdin(Stdio::null())
-      .stdout(Stdio::null())
-      .stderr(Stdio::null())
-      .spawn()
-    {
+    match Command::new(&venv_py).arg("main.py").current_dir(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
       Ok(c) => return Ok(c),
       Err(e) => warn!("venv python failed: {e}"),
     }
   }
 
   // Prefer uv (project uses uv run main.py)
-  if let Ok(child) = Command::new("uv")
-    .args(["run", "main.py"])
-    .current_dir(dir)
-    .stdin(Stdio::null())
-    .stdout(Stdio::null())
-    .stderr(Stdio::null())
-    .spawn()
-  {
+  if let Ok(child) = Command::new("uv").args(["run", "main.py"]).current_dir(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
     return Ok(child);
   }
 
   // Fallback: system python
-  Command::new("python")
-    .arg("main.py")
-    .current_dir(dir)
-    .stdin(Stdio::null())
-    .stdout(Stdio::null())
-    .stderr(Stdio::null())
-    .spawn()
-    .or_else(|_| {
-      Command::new("python3")
-        .arg("main.py")
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    })
-    .map_err(|e| format!("Failed to spawn capcut-mate from {}: {e}", dir.display()))
+  Command::new("python").arg("main.py").current_dir(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().or_else(|_| Command::new("python3").arg("main.py").current_dir(dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()).map_err(|e| format!("Failed to spawn capcut-mate from {}: {e}", dir.display()))
 }
 
 fn env_auto_start() -> Option<bool> {
@@ -258,7 +211,7 @@ fn env_auto_start() -> Option<bool> {
         "1" | "true" | "yes" | "on" => Some(true),
         _ => None,
       }
-    }
+    },
     Err(_) => None,
   }
 }
@@ -289,9 +242,7 @@ fn is_packaged_mate_dir(app: &AppHandle, dir: &Path) -> bool {
 }
 
 fn manage_empty(app: &AppHandle) {
-  app.manage(CapcutMateProcess {
-    child: Mutex::new(None),
-  });
+  app.manage(CapcutMateProcess { child: Mutex::new(None) });
 }
 
 /// Call from Tauri setup. Never fails startup of the whole app.
@@ -316,17 +267,11 @@ pub fn spawn_capcut_mate_backend(app: &AppHandle) {
   if let Some(sidecar) = resolve_sidecar(app) {
     match spawn_sidecar(&sidecar) {
       Ok(child) => {
-        info!(
-          "Started capcut-mate sidecar {} (pid={}) [packaged]",
-          sidecar.display(),
-          child.id()
-        );
-        app.manage(CapcutMateProcess {
-          child: Mutex::new(Some(child)),
-        });
+        info!("Started capcut-mate sidecar {} (pid={}) [packaged]", sidecar.display(), child.id());
+        app.manage(CapcutMateProcess { child: Mutex::new(Some(child)) });
         wait_for_backend_ready(app, DEFAULT_PORT);
         return;
-      }
+      },
       Err(e) => warn!("{e}"),
     }
   }
@@ -334,13 +279,9 @@ pub fn spawn_capcut_mate_backend(app: &AppHandle) {
   // 2) Folder + uv|python|.venv
   let Some(dir) = resolve_mate_dir(app) else {
     if force_dev {
-      warn!(
-        "CAPCUT_MATE_AUTO_START=1 but capcut-mate not found. Set CAPCUT_MATE_DIR or run: cd capcut-mate; uv run main.py"
-      );
+      warn!("CAPCUT_MATE_AUTO_START=1 but capcut-mate not found. Set CAPCUT_MATE_DIR or run: cd capcut-mate; uv run main.py");
     } else {
-      info!(
-        "Dev mode: capcut-mate BE not auto-started. For CapCut Automation run: cd capcut-mate; uv run main.py (or build packaged app)"
-      );
+      info!("Dev mode: capcut-mate BE not auto-started. For CapCut Automation run: cd capcut-mate; uv run main.py (or build packaged app)");
     }
     manage_empty(app);
     return;
@@ -348,30 +289,21 @@ pub fn spawn_capcut_mate_backend(app: &AppHandle) {
 
   // Packaged layout always starts; repo/source only with CAPCUT_MATE_AUTO_START=1
   if !force_dev && !is_packaged_mate_dir(app, &dir) {
-    info!(
-      "Dev mode: found source capcut-mate at {} but not auto-starting. Run: uv run main.py there (or set CAPCUT_MATE_AUTO_START=1). Packaged .exe will auto-start BE.",
-      dir.display()
-    );
+    info!("Dev mode: found source capcut-mate at {} but not auto-starting. Run: uv run main.py there (or set CAPCUT_MATE_AUTO_START=1). Packaged .exe will auto-start BE.", dir.display());
     manage_empty(app);
     return;
   }
 
   match spawn_mate_from_dir(&dir) {
     Ok(child) => {
-      info!(
-        "Started embedded capcut-mate from {} (pid={})",
-        dir.display(),
-        child.id()
-      );
-      app.manage(CapcutMateProcess {
-        child: Mutex::new(Some(child)),
-      });
+      info!("Started embedded capcut-mate from {} (pid={})", dir.display(), child.id());
+      app.manage(CapcutMateProcess { child: Mutex::new(Some(child)) });
       wait_for_backend_ready(app, DEFAULT_PORT);
-    }
+    },
     Err(e) => {
       warn!("{e}");
       emit_backend_error(app, e);
       manage_empty(app);
-    }
+    },
   }
 }

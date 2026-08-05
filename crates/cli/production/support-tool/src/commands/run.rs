@@ -34,11 +34,7 @@ pub enum TopLevelCommand {
 
 pub async fn run(cli: Cli) -> anyhow::Result<()> {
   match cli.command {
-    TopLevelCommand::Seedance2pro { command } => {
-      seedance2pro::run(command).await
-    }
-    TopLevelCommand::Artcraft(args) => {
-      artcraft::dispatch(args).await
-    }
+    TopLevelCommand::Seedance2pro { command } => seedance2pro::run(command).await,
+    TopLevelCommand::Artcraft(args) => artcraft::dispatch(args).await,
   }
 }

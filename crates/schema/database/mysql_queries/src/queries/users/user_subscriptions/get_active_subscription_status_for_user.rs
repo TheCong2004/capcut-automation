@@ -26,9 +26,7 @@ where
 
 /// Returns the latest-expiring subscription row for the user (or `None`). The
 /// caller decides active-ness from the status + expiry.
-pub async fn get_active_subscription_status_for_user<'e, 'c: 'e, E>(
-  args: GetActiveSubscriptionStatusArgs<'e, 'c, E>,
-) -> Result<Option<UserSubscriptionStatusRow>, sqlx::Error>
+pub async fn get_active_subscription_status_for_user<'e, 'c: 'e, E>(args: GetActiveSubscriptionStatusArgs<'e, 'c, E>) -> Result<Option<UserSubscriptionStatusRow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -48,8 +46,8 @@ LIMIT 1
     args.user_token.as_str(),
     args.subscription_namespace.to_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
   Ok(row)
 }

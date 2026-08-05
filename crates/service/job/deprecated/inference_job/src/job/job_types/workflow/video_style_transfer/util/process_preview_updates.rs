@@ -21,15 +21,9 @@ use redis_schema::payloads::inference_job::style_transfer_progress_state::{Infer
 use tokens::tokens::generic_inference_jobs::InferenceJobToken;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::MissedTickBehavior;
-static ALLOWED_TYPES_FRAMES : Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  HashSet::from([
-    "jpg",
-    "jpeg",
-    "png",
-  ])
-});
+static ALLOWED_TYPES_FRAMES: Lazy<HashSet<&'static str>> = Lazy::new(|| HashSet::from(["jpg", "jpeg", "png"]));
 
-#[derive(Hash,PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(Hash, PartialEq, Eq, Copy, Clone, Debug)]
 enum PreviewStage {
   FirstPass,
   SecondPass,
@@ -38,11 +32,7 @@ enum PreviewStage {
 
 impl PreviewStage {
   fn iter() -> Vec<PreviewStage> {
-    vec![
-      PreviewStage::FirstPass,
-      PreviewStage::SecondPass,
-      PreviewStage::FinalPass,
-    ]
+    vec![PreviewStage::FirstPass, PreviewStage::SecondPass, PreviewStage::FinalPass]
   }
 }
 
@@ -72,7 +62,7 @@ pub struct PreviewFrameUpdate {
   stage: PreviewStage,
   state: PreviewFrameUploadResult,
   disk_path: PathBuf,
-  object_path: Option<MediaFileBucketPath>
+  object_path: Option<MediaFileBucketPath>,
 }
 
 impl PreviewFrameUpdate {
@@ -108,11 +98,7 @@ struct FramesStatesMapInner {
 
 impl FrameStatesMap {
   fn new() -> Self {
-    Self {
-      inner: Arc::new(Mutex::new(FramesStatesMapInner {
-        data: HashMap::new(),
-      })),
-    }
+    Self { inner: Arc::new(Mutex::new(FramesStatesMapInner { data: HashMap::new() })) }
   }
 
   fn insert(&self, key: u32, value: PreviewFrameUploadResult) {
@@ -161,9 +147,8 @@ struct StageDirectoryState {
   bucket_directory: MediaFileBucketDirectory,
   frame_extension: Option<String>,
   frame_states: FrameStatesMap,
-  bucket_upload_actor_handle: BucketUploadActorHandle
+  bucket_upload_actor_handle: BucketUploadActorHandle,
 }
-
 
 #[derive(Clone, Debug)]
 struct StageStateMap {
@@ -177,11 +162,7 @@ struct StageStateMapInner {
 
 impl StageStateMap {
   fn new() -> Self {
-    Self {
-      inner: Arc::new(Mutex::new(StageStateMapInner {
-        data: HashMap::new(),
-      })),
-    }
+    Self { inner: Arc::new(Mutex::new(StageStateMapInner { data: HashMap::new() })) }
   }
 
   fn insert(&self, key: PreviewStage, value: StageDirectoryState) {
@@ -216,30 +197,13 @@ pub struct PreviewProcessor {
   shutdown_receiver: oneshot::Receiver<()>,
 }
 
-
-
 impl StageDirectoryState {
-  fn new(stage: PreviewStage,
-         expected_frame_count: u32,
-         media_file_bucket_directory: MediaFileBucketDirectory,
-         entropy_prefix: String,
-         bucket_upload_actor_handle: BucketUploadActorHandle,
-         frame_extension: Option<String>) -> Self {
-    Self {
-      stage,
-      state: PreviewStageState::Pending,
-      expected_frame_count,
-      frame_states: FrameStatesMap::new(),
-      bucket_directory: media_file_bucket_directory,
-      bucket_upload_actor_handle,
-      entropy_prefix,
-      frame_extension
-    }
+  fn new(stage: PreviewStage, expected_frame_count: u32, media_file_bucket_directory: MediaFileBucketDirectory, entropy_prefix: String, bucket_upload_actor_handle: BucketUploadActorHandle, frame_extension: Option<String>) -> Self {
+    Self { stage, state: PreviewStageState::Pending, expected_frame_count, frame_states: FrameStatesMap::new(), bucket_directory: media_file_bucket_directory, bucket_upload_actor_handle, entropy_prefix, frame_extension }
   }
 
   fn all_frames_uploaded(&self) -> bool {
-    self.frame_states.len() == self.expected_frame_count as usize &&
-      self.frame_states.values().iter().all(|state| *state == PreviewFrameUploadResult::UploadComplete)
+    self.frame_states.len() == self.expected_frame_count as usize && self.frame_states.values().iter().all(|state| *state == PreviewFrameUploadResult::UploadComplete)
   }
 
   fn mark_frame_uploaded(&mut self, frame_number: u32) {
@@ -251,9 +215,7 @@ impl StageDirectoryState {
   }
 
   fn pending_frames(&self) -> Vec<u32> {
-    (0..self.expected_frame_count).filter(|frame_number| {
-      !self.frame_states.contains_key(frame_number)
-    }).collect()
+    (0..self.expected_frame_count).filter(|frame_number| !self.frame_states.contains_key(frame_number)).collect()
   }
 
   fn successfully_uploaded_frames(&self) -> Vec<u32> {
@@ -268,8 +230,7 @@ impl StageDirectoryState {
   }
 
   fn can_upload_frame(&self, frame_number: u32) -> bool {
-    self.state == PreviewStageState::Pending &&
-    self.is_frame_upload_pending(&frame_number)
+    self.state == PreviewStageState::Pending && self.is_frame_upload_pending(&frame_number)
   }
 
   fn default_frame_extension(&self) -> &str {
@@ -280,31 +241,17 @@ impl StageDirectoryState {
     }
   }
 
-
   fn expected_media_file_object_path(&self, frame_number: u32) -> MediaFileBucketPath {
     let frame_prefix = format!("frame_{}", frame_number);
     let frame_suffix = format!(".{}", self.default_frame_extension());
-    let frame_object_name = format!(
-      "/{}/{}/{}{}",
-      self.entropy_prefix,
-      self.stage.expected_directory_name(),
-      frame_prefix,
-      frame_suffix
-    );
-    MediaFileBucketPath::from_object_hash(
-      self.bucket_directory.get_object_hash(),
-      None,
-      Some(&frame_object_name),
-    )
+    let frame_object_name = format!("/{}/{}/{}{}", self.entropy_prefix, self.stage.expected_directory_name(), frame_prefix, frame_suffix);
+    MediaFileBucketPath::from_object_hash(self.bucket_directory.get_object_hash(), None, Some(&frame_object_name))
   }
 
-  fn all_object_paths (&self) -> Vec<MediaFileBucketPath> {
+  fn all_object_paths(&self) -> Vec<MediaFileBucketPath> {
     let frame_numbers = self.successfully_uploaded_frames();
-    frame_numbers.into_iter().map(|frame_number| {
-      self.expected_media_file_object_path(frame_number)
-    }).collect()
+    frame_numbers.into_iter().map(|frame_number| self.expected_media_file_object_path(frame_number)).collect()
   }
-
 
   async fn upload_frame_from_disk(&self, bucket_client: &LegacyBucketClient, frame_number: u32, disk_path: PathBuf) -> PreviewFrameUpdate {
     let local_file_extension = match disk_path.extension().and_then(|s| s.to_str()) {
@@ -313,46 +260,26 @@ impl StageDirectoryState {
           e
         } else {
           log::error!("Invalid extension in path: {:?}", disk_path);
-          return PreviewFrameUpdate {
-            stage: self.stage,
-            state: PreviewFrameUploadResult::InvalidInputExtension,
-            object_path: None,
-            disk_path,
-          };
+          return PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::InvalidInputExtension, object_path: None, disk_path };
         }
-      }
+      },
       None => {
         log::error!("Invalid extension in path: {:?}", disk_path);
-        return PreviewFrameUpdate {
-          stage: self.stage,
-          state: PreviewFrameUploadResult::InvalidInputExtension,
-          object_path: None,
-          disk_path,
-        };
-      }
+        return PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::InvalidInputExtension, object_path: None, disk_path };
+      },
     };
 
     let upload_file_extension = self.default_frame_extension();
     if local_file_extension != upload_file_extension {
       log::error!("Invalid extension in path: {:?}", disk_path);
-      return PreviewFrameUpdate {
-        stage: self.stage,
-        state: PreviewFrameUploadResult::InvalidInputExtension,
-        object_path: None,
-        disk_path,
-      };
+      return PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::InvalidInputExtension, object_path: None, disk_path };
     }
 
     let object_path = self.expected_media_file_object_path(frame_number);
 
     let disk_path2 = disk_path.clone();
     self.bucket_upload_actor_handle.upload_frame(disk_path, object_path.clone(), bucket_client.clone()).await;
-    PreviewFrameUpdate {
-      stage: self.stage,
-      state: PreviewFrameUploadResult::UploadComplete,
-      object_path: Some(object_path),
-      disk_path: disk_path2,
-    }
+    PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::UploadComplete, object_path: Some(object_path), disk_path: disk_path2 }
   }
 
   async fn upload_frame_from_disk_with_retry(&self, bucket_client: &LegacyBucketClient, frame_number: u32, disk_path: PathBuf) -> PreviewFrameUpdate {
@@ -360,12 +287,7 @@ impl StageDirectoryState {
     loop {
       if retries > 3 {
         log::error!("Failed to upload frame after 3 retries: {:?}", disk_path);
-        return PreviewFrameUpdate {
-          stage: self.stage,
-          state: PreviewFrameUploadResult::AttemptFailed,
-          object_path: None,
-          disk_path,
-        };
+        return PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::AttemptFailed, object_path: None, disk_path };
       }
       let result = self.upload_frame_from_disk(bucket_client, frame_number, disk_path.clone()).await;
       if result.state == PreviewFrameUploadResult::UploadComplete {
@@ -384,7 +306,6 @@ impl StageDirectoryState {
     }
   }
 
-
   async fn upload_multiple_frames_from_disk(&self, bucket_client: &LegacyBucketClient, frames: Vec<(u32, PathBuf)>) -> Vec<PreviewFrameUpdate> {
     let mut bucket_upload_requests = Vec::with_capacity(frames.len());
     let mut updates = Vec::with_capacity(frames.len());
@@ -398,73 +319,40 @@ impl StageDirectoryState {
             log::error!("Invalid extension in path: {:?}", disk_path);
             Err(PreviewFrameUploadResult::InvalidInputExtension)
           }
-        }
+        },
         None => {
           log::error!("Invalid extension in path: {:?}", disk_path);
           Err(PreviewFrameUploadResult::InvalidInputExtension)
-        }
+        },
       };
 
       let upload_file_extension = self.default_frame_extension();
       if local_file_extension != Ok(upload_file_extension) {
         log::error!("Invalid extension in path: {:?}", disk_path);
-        updates.push(
-          PreviewFrameUpdate {
-            stage: self.stage,
-            state: PreviewFrameUploadResult::InvalidInputExtension,
-            object_path: None,
-            disk_path: disk_path.clone(),
-          });
+        updates.push(PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::InvalidInputExtension, object_path: None, disk_path: disk_path.clone() });
         continue;
       }
       let object_path = self.expected_media_file_object_path(*frame_number);
-      bucket_upload_requests.push(BucketUploadRequest {
-        disk_path: disk_path.clone(),
-        bucket_path: object_path.clone(),
-      });
+      bucket_upload_requests.push(BucketUploadRequest { disk_path: disk_path.clone(), bucket_path: object_path.clone() });
     }
 
     let results = self.bucket_upload_actor_handle.upload_multiple_frames(bucket_upload_requests, bucket_client.clone()).await;
     for (disk_path, result) in results {
       match result {
         BucketUploadResult::Success => {
-          updates.push(
-            PreviewFrameUpdate {
-              stage: self.stage,
-              state: PreviewFrameUploadResult::UploadComplete,
-              object_path: None,
-              disk_path: disk_path.clone(),
-            });
-        }
+          updates.push(PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::UploadComplete, object_path: None, disk_path: disk_path.clone() });
+        },
         BucketUploadResult::Failure => {
-          updates.push(
-            PreviewFrameUpdate {
-              stage: self.stage,
-              state: PreviewFrameUploadResult::AttemptFailed,
-              object_path: None,
-              disk_path: disk_path.clone(),
-            });
-        }
+          updates.push(PreviewFrameUpdate { stage: self.stage, state: PreviewFrameUploadResult::AttemptFailed, object_path: None, disk_path: disk_path.clone() });
+        },
       }
     }
     updates
   }
-
 }
 
-
-
-
 impl PreviewProcessor {
-  pub fn new(
-    inference_job_token: InferenceJobToken,
-    redis_pool: r2d2_redis::r2d2::Pool<RedisConnectionManager>,
-    base_directory: PathBuf,
-    bucket_directory: MediaFileBucketDirectory,
-    expected_frame_count: u32,
-    shutdown_receiver: oneshot::Receiver<()>
-  ) ->  Self {
-
+  pub fn new(inference_job_token: InferenceJobToken, redis_pool: r2d2_redis::r2d2::Pool<RedisConnectionManager>, base_directory: PathBuf, bucket_directory: MediaFileBucketDirectory, expected_frame_count: u32, shutdown_receiver: oneshot::Receiver<()>) -> Self {
     // This seems excessive _but_ these frames don't have a watermark yet _and_ the frame numbers make these enumerable
     let first_pass_entropy = crockford_entropy_lower(32);
     let second_pass_entropy = crockford_entropy_lower(32);
@@ -473,7 +361,6 @@ impl PreviewProcessor {
     let first_pass_bucket_upload_actor = BucketUploadActorHandle::new();
     let second_pass_bucket_upload_actor = BucketUploadActorHandle::new();
     let final_pass_bucket_upload_actor = BucketUploadActorHandle::new();
-
 
     let first_pass_state = StageDirectoryState::new(PreviewStage::FirstPass, expected_frame_count, bucket_directory.clone(), first_pass_entropy, first_pass_bucket_upload_actor, None);
     let second_pass_state = StageDirectoryState::new(PreviewStage::SecondPass, expected_frame_count, bucket_directory.clone(), second_pass_entropy, second_pass_bucket_upload_actor, None);
@@ -484,16 +371,7 @@ impl PreviewProcessor {
     stages.insert(PreviewStage::SecondPass, second_pass_state);
     stages.insert(PreviewStage::FinalPass, final_pass_state);
 
-    Self {
-      job_id: inference_job_token,
-      stages,
-      state: PreviewState::Pending,
-      base_directory,
-      bucket_directory,
-      expected_frame_count,
-      redis_pool,
-      shutdown_receiver,
-    }
+    Self { job_id: inference_job_token, stages, state: PreviewState::Pending, base_directory, bucket_directory, expected_frame_count, redis_pool, shutdown_receiver }
   }
 
   fn infer_frame_number(&self, disk_path: &PathBuf) -> Option<u32> {
@@ -509,7 +387,7 @@ impl PreviewProcessor {
           Ok(n) => Some(n),
           Err(_) => None,
         }
-      }
+      },
       Err(_) => None,
     }
   }
@@ -525,17 +403,15 @@ impl PreviewProcessor {
         let stage_name = parts[0];
         let frame_number = parts[1].split('.').next().unwrap();
         match frame_number.parse::<u32>() {
-          Ok(n) => {
-            match stage_name {
-              "first_pass" => Some((PreviewStage::FirstPass, n)),
-              "second_pass" => Some((PreviewStage::SecondPass, n)),
-              "final_pass" => Some((PreviewStage::FinalPass, n)),
-              _ => None,
-            }
-          }
+          Ok(n) => match stage_name {
+            "first_pass" => Some((PreviewStage::FirstPass, n)),
+            "second_pass" => Some((PreviewStage::SecondPass, n)),
+            "final_pass" => Some((PreviewStage::FinalPass, n)),
+            _ => None,
+          },
           Err(_) => None,
         }
-      }
+      },
       Err(_) => None,
     }
   }
@@ -556,76 +432,78 @@ impl PreviewProcessor {
           Err(_) => {
             debug!("Invalid path: {:?} - frame number not a number", disk_path);
             false
-          }
+          },
         }
-      }
+      },
       Err(_) => {
         debug!("Invalid path: {:?} - not a valid prefix", disk_path);
         false
-      }
+      },
     }
   }
 
   fn build_redis_update(&self) -> InferenceProgressDetailsResponse {
-    let base_url = easyenv::get_env_string_or_default(
-      "EPHEMERAL_BUCKET_BASE_URL",
-      "https://cdn.storyteller.ai/studio",
-    );
+    let base_url = easyenv::get_env_string_or_default("EPHEMERAL_BUCKET_BASE_URL", "https://cdn.storyteller.ai/studio");
     InferenceProgressDetailsResponse {
       expected_stages: 3,
       // currently_active_stage: self.stages.iter().filter(|(_, state)| state.state == PreviewStageState::UploadComplete).count() as u32,
       currently_active_stage: 0,
       per_stage_frame_count: self.expected_frame_count,
-      stages:
-      vec![PreviewStage::FirstPass, PreviewStage::SecondPass, PreviewStage::FinalPass].iter().map(
-        |stage| {
+      stages: vec![PreviewStage::FirstPass, PreviewStage::SecondPass, PreviewStage::FinalPass]
+        .iter()
+        .map(|stage| {
           let state = self.stages.get(stage).unwrap();
           InferenceStageDetails {
             stage_progress: state.frame_states.len() as u32,
             expected_frame_count: self.expected_frame_count,
             stage_complete: state.all_frames_uploaded(),
-            frames: state.all_object_paths().iter().map(|object_path| {
-              let url_str = format!("{}{}", base_url, object_path.get_full_object_path_str());
-              Url::parse(&url_str).unwrap()
-            }).collect()
+            frames: state
+              .all_object_paths()
+              .iter()
+              .map(|object_path| {
+                let url_str = format!("{}{}", base_url, object_path.get_full_object_path_str());
+                Url::parse(&url_str).unwrap()
+              })
+              .collect(),
           }
-        }
-      ).collect(),
+        })
+        .collect(),
     }
   }
 
   async fn persist_redis_update(&self) -> () {
-    let base_url = easyenv::get_env_string_or_default(
-      "EPHEMERAL_BUCKET_BASE_URL",
-      "https://cdn.storyteller.ai/studio",
-    );
+    let base_url = easyenv::get_env_string_or_default("EPHEMERAL_BUCKET_BASE_URL", "https://cdn.storyteller.ai/studio");
     let mut redis = match self.redis_pool.get() {
       Ok(r) => r,
       Err(e) => {
         log::error!("Failed to get redis connection: {:?}", e);
         return;
-      }
+      },
     };
     let status = InferenceProgressDetailsResponse {
       expected_stages: 3,
       // currently_active_stage: self.stages.iter().filter(|(_, state)| state.state == PreviewStageState::UploadComplete).count() as u32,
       currently_active_stage: 0,
       per_stage_frame_count: self.expected_frame_count,
-      stages:
-      vec![PreviewStage::FirstPass, PreviewStage::SecondPass, PreviewStage::FinalPass].iter().map(
-        |stage| {
+      stages: vec![PreviewStage::FirstPass, PreviewStage::SecondPass, PreviewStage::FinalPass]
+        .iter()
+        .map(|stage| {
           let state = self.stages.get(stage).unwrap();
           InferenceStageDetails {
             stage_progress: state.frame_states.len() as u32,
             expected_frame_count: self.expected_frame_count,
             stage_complete: state.all_frames_uploaded(),
-            frames: state.all_object_paths().iter().map(|object_path| {
-              let url_str = format!("{}{}", base_url, object_path.get_full_object_path_str());
-              Url::parse(&url_str).unwrap()
-            }).collect()
+            frames: state
+              .all_object_paths()
+              .iter()
+              .map(|object_path| {
+                let url_str = format!("{}{}", base_url, object_path.get_full_object_path_str());
+                Url::parse(&url_str).unwrap()
+              })
+              .collect(),
           }
-        }
-      ).collect(),
+        })
+        .collect(),
     };
 
     let key = StyleTransferProgressKey::new_for_job_id(self.job_id.clone());
@@ -644,52 +522,52 @@ impl PreviewProcessor {
       let walker = walker.clone();
       log::debug!("Processing preview frames loop ticked at {:?}", Utc::now());
       tokio::select! {
-        _ = &mut self.shutdown_receiver => {
-          log::info!("Shutting down preview processor");
-          walker.walk().await;
-          if frames_rx.len() > 0 {
-            log::info!("Draining remaining frames");
-            let mut frames = Vec::new();
-            while let Some(frame_batch) = frames_rx.recv().await {
-              match frame_batch {
-                Ok(p) => {
-                  frames.push(p);
-                }
-                Err(e) => {
-                  log::error!("Error reading frame path: {:?}", e);
+          _ = &mut self.shutdown_receiver => {
+            log::info!("Shutting down preview processor");
+            walker.walk().await;
+            if frames_rx.len() > 0 {
+              log::info!("Draining remaining frames");
+              let mut frames = Vec::new();
+              while let Some(frame_batch) = frames_rx.recv().await {
+                match frame_batch {
+                  Ok(p) => {
+                    frames.push(p);
+                  }
+                  Err(e) => {
+                    log::error!("Error reading frame path: {:?}", e);
+                  }
                 }
               }
+              for frame_batch in frames {
+                self.process_batch_upload(bucket_client, frame_batch).await;
+              }
             }
-            for frame_batch in frames {
-              self.process_batch_upload(bucket_client, frame_batch).await;
+            return;
+          }
+          Some(frame_batch) = frames_rx.recv() => {
+            match frame_batch {
+              Ok(p) => {
+                log::debug!("Processing frame: {:?}", p);
+                self.process_batch_upload(bucket_client, p).await;
+              }
+              Err(e) => {
+                log::error!("Error reading frame path: {:?}", e);
+              }
             }
           }
-          return;
-        }
-        Some(frame_batch) = frames_rx.recv() => {
-          match frame_batch {
-            Ok(p) => {
-              log::debug!("Processing frame: {:?}", p);
-              self.process_batch_upload(bucket_client, p).await;
-            }
-            Err(e) => {
-              log::error!("Error reading frame path: {:?}", e);
-            }
+          _ = interval.tick() => {
+            log::debug!("Processing preview frames ticked at {:?}", Utc::now());
+            self.persist_redis_update().await;
+
+            tokio::spawn(async move {
+              walker.walk().await;
+            });
           }
-        }
-        _ = interval.tick() => {
-          log::debug!("Processing preview frames ticked at {:?}", Utc::now());
-          self.persist_redis_update().await;
 
-          tokio::spawn(async move {
-            walker.walk().await;
-          });
+          else => {
+            log::info!("No frames to process, returning");
         }
-
-        else => {
-          log::info!("No frames to process, returning");
       }
-    }
     }
   }
 
@@ -703,7 +581,7 @@ impl PreviewProcessor {
       None => {
         log::warn!("Invalid disk path: {:?}", disk_path);
         return;
-      }
+      },
     };
   }
 
@@ -719,7 +597,7 @@ impl PreviewProcessor {
         None => {
           log::warn!("Invalid disk path: {:?}", disk_path);
           continue;
-        }
+        },
       };
       let stage_state = self.stages.get(&stage).unwrap();
       if !stage_state.is_frame_upload_pending(&frame_number) {
@@ -749,15 +627,15 @@ impl PreviewProcessor {
     }
   }
 
- async fn upload_frame_from_disk(&self, stage: PreviewStage, frame_number: u32, bucket_client: &LegacyBucketClient, disk_path: PathBuf) -> PreviewFrameUploadResult {
+  async fn upload_frame_from_disk(&self, stage: PreviewStage, frame_number: u32, bucket_client: &LegacyBucketClient, disk_path: PathBuf) -> PreviewFrameUploadResult {
     let stage_state = self.stages.get(&stage).unwrap();
     if stage_state.state == PreviewStageState::UploadComplete {
       log::debug!("Skipped re-uploading frame: {:?}", disk_path);
-      return PreviewFrameUploadResult::UploadComplete
+      return PreviewFrameUploadResult::UploadComplete;
     }
     if !stage_state.is_frame_upload_pending(&frame_number) {
       log::debug!("Frame already uploaded: {:?}", disk_path);
-      return PreviewFrameUploadResult::UploadComplete
+      return PreviewFrameUploadResult::UploadComplete;
     }
 
     let result = stage_state.upload_frame_from_disk_with_retry(bucket_client, frame_number.clone(), disk_path).await;

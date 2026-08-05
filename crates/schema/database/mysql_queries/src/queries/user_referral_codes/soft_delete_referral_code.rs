@@ -7,11 +7,7 @@ use uuid_utils::uuid::generate_random_uuid;
 /// Sets `deleted_at` and replaces `code_lowercase` with random entropy
 /// to free up the unique constraint for reuse.
 /// Returns true if a row was updated.
-pub async fn soft_delete_referral_code<'e, 'c: 'e, E>(
-  token: &UserReferralCodeToken,
-  owner_user_token: &UserToken,
-  mysql_executor: E,
-) -> Result<bool, sqlx::Error>
+pub async fn soft_delete_referral_code<'e, 'c: 'e, E>(token: &UserReferralCodeToken, owner_user_token: &UserToken, mysql_executor: E) -> Result<bool, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -32,8 +28,8 @@ WHERE token = ?
     token.as_str(),
     owner_user_token.as_str(),
   )
-    .execute(mysql_executor)
-    .await?;
+  .execute(mysql_executor)
+  .await?;
 
   Ok(result.rows_affected() > 0)
 }

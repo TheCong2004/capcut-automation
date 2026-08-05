@@ -25,9 +25,7 @@ where
 
 /// Fetch the owner + visibility of a (live) media file. Returns
 /// `Ok(None)` if the file doesn't exist or is soft-deleted.
-pub async fn get_media_file_access_fields<'e, 'c: 'e, E>(
-  args: GetMediaFileAccessFieldsArgs<'e, 'c, E>,
-) -> Result<Option<MediaFileAccessFields>, sqlx::Error>
+pub async fn get_media_file_access_fields<'e, 'c: 'e, E>(args: GetMediaFileAccessFieldsArgs<'e, 'c, E>) -> Result<Option<MediaFileAccessFields>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -44,11 +42,8 @@ LIMIT 1
     "#,
     args.media_file_token.as_str(),
   )
-    .fetch_optional(args.mysql_executor)
-    .await?;
+  .fetch_optional(args.mysql_executor)
+  .await?;
 
-  Ok(result.map(|r| MediaFileAccessFields {
-    maybe_creator_user_token: r.maybe_creator_user_token,
-    creator_set_visibility: r.creator_set_visibility,
-  }))
+  Ok(result.map(|r| MediaFileAccessFields { maybe_creator_user_token: r.maybe_creator_user_token, creator_set_visibility: r.creator_set_visibility }))
 }

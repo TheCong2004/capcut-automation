@@ -57,34 +57,17 @@ pub struct CheckArgs<P: AsRef<Path>, Q: AsRef<Path>> {
 }
 
 impl RvcV2ModelCheckCommand {
-  pub fn new<P: AsRef<Path>>(
-    rvc_v2_root_code_directory: P,
-    executable_or_command: ExecutableOrCommand,
-    maybe_virtual_env_activation_command: Option<&str>,
-    maybe_default_config_path: Option<P>,
-    maybe_default_test_wav_path: Option<P>,
-    maybe_docker_options: Option<DockerOptions>,
-  ) -> Self {
-    Self {
-      rvc_v2_root_code_directory: rvc_v2_root_code_directory.as_ref().to_path_buf(),
-      executable_or_command,
-      maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()),
-      maybe_default_config_path: maybe_default_config_path.map(|p| p.as_ref().to_path_buf()),
-      maybe_default_test_wav_path: maybe_default_test_wav_path.map(|p| p.as_ref().to_path_buf()),
-      maybe_docker_options,
-    }
+  pub fn new<P: AsRef<Path>>(rvc_v2_root_code_directory: P, executable_or_command: ExecutableOrCommand, maybe_virtual_env_activation_command: Option<&str>, maybe_default_config_path: Option<P>, maybe_default_test_wav_path: Option<P>, maybe_docker_options: Option<DockerOptions>) -> Self {
+    Self { rvc_v2_root_code_directory: rvc_v2_root_code_directory.as_ref().to_path_buf(), executable_or_command, maybe_virtual_env_activation_command: maybe_virtual_env_activation_command.map(|s| s.to_string()), maybe_default_config_path: maybe_default_config_path.map(|p| p.as_ref().to_path_buf()), maybe_default_test_wav_path: maybe_default_test_wav_path.map(|p| p.as_ref().to_path_buf()), maybe_docker_options }
   }
 
   pub fn from_env() -> AnyhowResult<Self> {
-    let rvc_v2_root_code_directory = easyenv::get_env_pathbuf_required(
-      "RVC_V2_MODEL_CHECK_ROOT_DIRECTORY")?;
+    let rvc_v2_root_code_directory = easyenv::get_env_pathbuf_required("RVC_V2_MODEL_CHECK_ROOT_DIRECTORY")?;
 
-    let maybe_check_command = easyenv::get_env_string_optional(
-      "RVC_V2_MODEL_CHECK_COMMAND");
+    let maybe_check_command = easyenv::get_env_string_optional("RVC_V2_MODEL_CHECK_COMMAND");
 
     // Optional, eg. `./infer.py`. Typically we'll use the command form instead.
-    let maybe_check_executable = easyenv::get_env_pathbuf_optional(
-      "RVC_V2_MODEL_CHECK_EXECUTABLE");
+    let maybe_check_executable = easyenv::get_env_pathbuf_optional("RVC_V2_MODEL_CHECK_EXECUTABLE");
 
     let executable_or_command = match maybe_check_command {
       Some(command) => ExecutableOrCommand::Command(command),
@@ -94,41 +77,18 @@ impl RvcV2ModelCheckCommand {
       },
     };
 
-    let maybe_virtual_env_activation_command = easyenv::get_env_string_optional(
-      "RVC_V2_MODEL_CHECK_MAYBE_VENV_COMMAND");
+    let maybe_virtual_env_activation_command = easyenv::get_env_string_optional("RVC_V2_MODEL_CHECK_MAYBE_VENV_COMMAND");
 
-    let maybe_default_config_path = easyenv::get_env_pathbuf_optional(
-      "RVC_V2_MODEL_CHECK_MAYBE_DEFAULT_CONFIG_PATH");
+    let maybe_default_config_path = easyenv::get_env_pathbuf_optional("RVC_V2_MODEL_CHECK_MAYBE_DEFAULT_CONFIG_PATH");
 
-    let maybe_default_test_wav_path = easyenv::get_env_pathbuf_optional(
-      "RVC_V2_MODEL_CHECK_MAYBE_DEFAULT_TEST_WAV_PATH");
+    let maybe_default_test_wav_path = easyenv::get_env_pathbuf_optional("RVC_V2_MODEL_CHECK_MAYBE_DEFAULT_TEST_WAV_PATH");
 
-    let maybe_docker_options = easyenv::get_env_string_optional(
-      "RVC_V2_MODEL_CHECK_MAYBE_DOCKER_IMAGE")
-        .map(|image_name| {
-          DockerOptions {
-            image_name,
-            maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()),
-            maybe_environment_variables: None,
-            maybe_gpu: Some(DockerGpu::All),
-          }
-        });
+    let maybe_docker_options = easyenv::get_env_string_optional("RVC_V2_MODEL_CHECK_MAYBE_DOCKER_IMAGE").map(|image_name| DockerOptions { image_name, maybe_bind_mount: Some(DockerFilesystemMount::tmp_to_tmp()), maybe_environment_variables: None, maybe_gpu: Some(DockerGpu::All) });
 
-    Ok(Self {
-      rvc_v2_root_code_directory,
-      executable_or_command,
-      maybe_virtual_env_activation_command,
-      maybe_docker_options,
-      maybe_default_config_path,
-      maybe_default_test_wav_path,
-    })
+    Ok(Self { rvc_v2_root_code_directory, executable_or_command, maybe_virtual_env_activation_command, maybe_docker_options, maybe_default_config_path, maybe_default_test_wav_path })
   }
 
-  pub fn execute_check<P: AsRef<Path>, Q: AsRef<Path>>(
-    &self,
-    args: CheckArgs<P, Q>,
-  ) -> AnyhowResult<()> {
-
+  pub fn execute_check<P: AsRef<Path>, Q: AsRef<Path>>(&self, args: CheckArgs<P, Q>) -> AnyhowResult<()> {
     let mut command = String::new();
     command.push_str(&format!("cd {}", path_to_string(&self.rvc_v2_root_code_directory)));
 
@@ -143,11 +103,11 @@ impl RvcV2ModelCheckCommand {
     match self.executable_or_command {
       ExecutableOrCommand::Executable(ref executable) => {
         command.push_str(&path_to_string(executable));
-      }
+      },
       ExecutableOrCommand::Command(ref cmd) => {
         command.push_str(cmd);
         command.push_str(" ");
-      }
+      },
     }
 
     // ===== Begin Python Args =====
@@ -171,7 +131,7 @@ impl RvcV2ModelCheckCommand {
       None => match self.maybe_default_test_wav_path.as_deref() {
         Some(path) => path.to_path_buf(),
         None => return Err(anyhow!("no test wav path supplied")),
-      }
+      },
     };
 
     command.push_str(" --input_audio_filename ");
@@ -185,11 +145,7 @@ impl RvcV2ModelCheckCommand {
 
     info!("Command: {:?}", command);
 
-    let command_parts = [
-      "bash",
-      "-c",
-      &command
-    ];
+    let command_parts = ["bash", "-c", &command];
 
     let config = PopenConfig::default();
 

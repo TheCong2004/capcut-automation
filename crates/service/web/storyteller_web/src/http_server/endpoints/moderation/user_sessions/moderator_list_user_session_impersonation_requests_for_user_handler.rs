@@ -6,9 +6,7 @@ use chrono::{DateTime, Utc};
 use log::warn;
 use utoipa::{IntoParams, ToSchema};
 
-use mysql_queries::queries::user_impersonation_requests::list_user_impersonation_requests_for_user::{
-  list_user_impersonation_requests_for_user, ListUserImpersonationRequestsArgs,
-};
+use mysql_queries::queries::user_impersonation_requests::list_user_impersonation_requests_for_user::{list_user_impersonation_requests_for_user, ListUserImpersonationRequestsArgs};
 use tokens::tokens::users::UserToken;
 
 use crate::http_server::common_responses::common_web_error::CommonWebError;
@@ -72,34 +70,17 @@ pub struct UserImpersonationRequestResponse {
     (status = 500, description = "Server error"),
   ),
 )]
-pub async fn moderator_list_user_session_impersonation_requests_for_user_handler(
-  http_request: HttpRequest,
-  path: Path<ListImpersonationRequestsPathInfo>,
-  query: Query<ListImpersonationRequestsQueryParams>,
-  server_state: web::Data<Arc<ServerState>>,
-) -> Result<Json<ListUserImpersonationRequestsSuccessResponse>, CommonWebError> {
-
+pub async fn moderator_list_user_session_impersonation_requests_for_user_handler(http_request: HttpRequest, path: Path<ListImpersonationRequestsPathInfo>, query: Query<ListImpersonationRequestsQueryParams>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<ListUserImpersonationRequestsSuccessResponse>, CommonWebError> {
   let _user_session = require_moderator(&http_request, &server_state.session_checker, &server_state.mysql_pool).await?;
 
-  let limit = query.limit
-      .unwrap_or(DEFAULT_LIMIT)
-      .min(MAX_LIMIT);
+  let limit = query.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
 
   let maybe_cursor_id = match &query.cursor {
     None => None,
-    Some(cursor_str) => {
-      Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?)
-    }
+    Some(cursor_str) => Some(server_state.opaque_cursors.decode_last_id_cursor(CURSOR_NAME, cursor_str)?),
   };
 
-  let records = list_user_impersonation_requests_for_user(
-    ListUserImpersonationRequestsArgs {
-      user_token: path.user_token.as_str(),
-      maybe_cursor_id,
-      limit,
-      mysql_pool: &server_state.mysql_pool,
-    },
-  ).await.map_err(|err| {
+  let records = list_user_impersonation_requests_for_user(ListUserImpersonationRequestsArgs { user_token: path.user_token.as_str(), maybe_cursor_id, limit, mysql_pool: &server_state.mysql_pool }).await.map_err(|err| {
     warn!("Failed to list impersonation requests: {:?}", err);
     CommonWebError::from_error(err)
   })?;
@@ -107,33 +88,9 @@ pub async fn moderator_list_user_session_impersonation_requests_for_user_handler
   // Only hand out a next-page cursor when this page was full. A short page
   // means the list is exhausted, and emitting a cursor anyway would make
   // clients fetch one guaranteed-empty trailing page.
-  let maybe_cursor = if records.len() == limit as usize {
-    records.last()
-        .map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.id))
-        .transpose()?
-  } else {
-    None
-  };
+  let maybe_cursor = if records.len() == limit as usize { records.last().map(|last| server_state.opaque_cursors.encode_last_id_cursor(CURSOR_NAME, last.id)).transpose()? } else { None };
 
-  let impersonation_requests = records.into_iter().map(|r| {
-    UserImpersonationRequestResponse {
-      impersonator_user_token: r.impersonator_user_token,
-      impersonator_username: r.impersonator_username,
-      impersonator_display_name: r.impersonator_display_name,
-      impersonated_user_token: r.impersonated_user_token,
-      impersonated_username: r.impersonated_username,
-      impersonated_display_name: r.impersonated_display_name,
-      is_redeemed: r.is_redeemed,
-      is_expired: r.is_expired,
-      expires_at: r.expires_at,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-    }
-  }).collect();
+  let impersonation_requests = records.into_iter().map(|r| UserImpersonationRequestResponse { impersonator_user_token: r.impersonator_user_token, impersonator_username: r.impersonator_username, impersonator_display_name: r.impersonator_display_name, impersonated_user_token: r.impersonated_user_token, impersonated_username: r.impersonated_username, impersonated_display_name: r.impersonated_display_name, is_redeemed: r.is_redeemed, is_expired: r.is_expired, expires_at: r.expires_at, created_at: r.created_at, updated_at: r.updated_at }).collect();
 
-  Ok(Json(ListUserImpersonationRequestsSuccessResponse {
-    success: true,
-    impersonation_requests,
-    maybe_cursor,
-  }))
+  Ok(Json(ListUserImpersonationRequestsSuccessResponse { success: true, impersonation_requests, maybe_cursor }))
 }

@@ -29,23 +29,13 @@ use crate::job_types::voice_conversion::rvc_v2::rvc_v2_model_check_command::Chec
 use crate::JobState;
 
 /// Returns the token of the entity.
-pub async fn process_rvc_v2_model<'a, 'b>(
-  job_state: &JobState,
-  job: &AvailableDownloadJob,
-  temp_dir: &TempDir,
-  download_filename: &str,
-  redis_logger: &'a mut RedisJobStatusLogger<'b>,
-) -> AnyhowResult<JobResults> {
-
+pub async fn process_rvc_v2_model<'a, 'b>(job_state: &JobState, job: &AvailableDownloadJob, temp_dir: &TempDir, download_filename: &str, redis_logger: &'a mut RedisJobStatusLogger<'b>) -> AnyhowResult<JobResults> {
   info!("Processing model file...");
   redis_logger.log_status("checking rvc (v2) model")?;
 
   // ==================== DOWNLOAD HUBERT ==================== //
 
-  job_state.pretrained_models.rvc_v2_hubert.download_if_not_on_filesystem(
-    &job_state.private_bucket_client,
-    temp_dir,
-  ).await?;
+  job_state.pretrained_models.rvc_v2_hubert.download_if_not_on_filesystem(&job_state.private_bucket_client, temp_dir).await?;
 
   // ==================== DETERMINE FILE CONTENTS ==================== //
 
@@ -63,17 +53,17 @@ pub async fn process_rvc_v2_model<'a, 'b>(
   match download_contents {
     DownloadedRvcFile::InvalidModel => {
       return Err(anyhow!("download did not contain a valid model payload"));
-    }
+    },
     DownloadedRvcFile::ModelFileOnly { model_file } => {
       info!("RVC download only contains a model (no index file).");
       original_model_file_path = model_file;
       maybe_original_model_index_file_path = None;
-    }
+    },
     DownloadedRvcFile::ModelAndIndexFile { model_file, index_file } => {
       info!("RVC download contains both a model and an index file.");
       original_model_file_path = model_file;
       maybe_original_model_index_file_path = Some(index_file);
-    }
+    },
   }
 
   // ==================== RUN MODEL CHECK ==================== //
@@ -82,13 +72,7 @@ pub async fn process_rvc_v2_model<'a, 'b>(
 
   let output_wav_path = temp_dir.path().join("output.wav");
 
-  let model_check_result = job_state.sidecar_configs.rvc_v2_model_check_command.execute_check(CheckArgs {
-    model_path: &original_model_file_path,
-    maybe_model_index_path: maybe_original_model_index_file_path.as_deref(),
-    hubert_path: &job_state.pretrained_models.rvc_v2_hubert.filesystem_path,
-    maybe_input_path: None,
-    output_path: &output_wav_path,
-  });
+  let model_check_result = job_state.sidecar_configs.rvc_v2_model_check_command.execute_check(CheckArgs { model_path: &original_model_file_path, maybe_model_index_path: maybe_original_model_index_file_path.as_deref(), hubert_path: &job_state.pretrained_models.rvc_v2_hubert.filesystem_path, maybe_input_path: None, output_path: &output_wav_path });
 
   if let Err(e) = model_check_result {
     safe_delete_file(&original_model_file_path);
@@ -160,8 +144,7 @@ pub async fn process_rvc_v2_model<'a, 'b>(
 
     info!("Uploading to NEW model weights (index) bucket...");
 
-    let new_index_bucket_path
-        = WeightFileBucketPath::rvc_index_file_from_object_hash(new_model_bucket_path.get_object_hash());
+    let new_index_bucket_path = WeightFileBucketPath::rvc_index_file_from_object_hash(new_model_bucket_path.get_object_hash());
 
     if let Err(err) = job_state.public_bucket_client.upload_filename(new_index_bucket_path.get_full_object_path_str(), &original_index_file_path).await {
       error!("Problem uploading original model to NEW bucket: {:?}", err);
@@ -203,7 +186,8 @@ pub async fn process_rvc_v2_model<'a, 'b>(
     private_bucket_hash: &private_bucket_hash,
     private_bucket_object_name: "", // TODO: This should go away.
     mysql_pool: &job_state.mysql_pool,
-  }).await?;
+  })
+  .await?;
 
   info!("Saving model weights record...");
 
@@ -225,17 +209,16 @@ pub async fn process_rvc_v2_model<'a, 'b>(
     maybe_public_bucket_prefix: new_model_bucket_path.get_optional_prefix().map(|s| s.to_string()),
     maybe_public_bucket_extension: new_model_bucket_path.get_optional_extension().map(|s| s.to_string()),
     mysql_pool: &job_state.mysql_pool,
-  }).await?;
+  })
+  .await?;
 
-  job_state.badge_granter.maybe_grant_voice_conversion_model_uploads_badge(&job.creator_user_token)
-      .await
-      .map_err(|e| {
-        warn!("error maybe awarding badge: {:?}", e);
-        anyhow!("error maybe awarding badge")
-      })?;
+  job_state.badge_granter.maybe_grant_voice_conversion_model_uploads_badge(&job.creator_user_token).await.map_err(|e| {
+    warn!("error maybe awarding badge: {:?}", e);
+    anyhow!("error maybe awarding badge")
+  })?;
 
   Ok(JobResults {
-    entity_token: Some(voice_conversion_model_token.to_string()), // TODO: Swap model token.
+    entity_token: Some(voice_conversion_model_token.to_string()),   // TODO: Swap model token.
     entity_type: Some(VoiceConversionModelType::RvcV2.to_string()), // NB: This may be different from `GenericDownloadType` in the future!
   })
 }

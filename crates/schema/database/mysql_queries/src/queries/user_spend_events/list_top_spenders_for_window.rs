@@ -36,9 +36,7 @@ where
 /// Top spenders since `window_start`, sorted by net spend descending.
 /// Aggregates `user_spend_events` directly (exact rolling windows, unlike the
 /// daily rollups) — the table is payment-scale, so this stays cheap.
-pub async fn list_top_spenders_for_window<'e, 'c: 'e, E>(
-  args: ListTopSpendersForWindowArgs<'e, 'c, E>,
-) -> Result<Vec<TopSpenderForWindow>, sqlx::Error>
+pub async fn list_top_spenders_for_window<'e, 'c: 'e, E>(args: ListTopSpendersForWindowArgs<'e, 'c, E>) -> Result<Vec<TopSpenderForWindow>, sqlx::Error>
 where
   E: 'e + Executor<'c, Database = MySql>,
 {
@@ -71,8 +69,8 @@ LIMIT ? OFFSET ?
     args.limit,
     args.offset,
   )
-    .fetch_all(args.mysql_executor)
-    .await?;
+  .fetch_all(args.mysql_executor)
+  .await?;
 
   Ok(rows)
 }

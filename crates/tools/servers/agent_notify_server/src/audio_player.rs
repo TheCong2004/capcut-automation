@@ -64,16 +64,7 @@ impl AudioPlayerHandle {
   /// does not change playback.
   pub fn status(&self) -> EngineStatus {
     let s = self.status.lock().unwrap_or_else(|e| e.into_inner());
-    EngineStatus {
-      loop_playing: s.loop_playing,
-      loop_name: s.loop_name.clone(),
-      voices_active: s.voices_active,
-      current_stage: s.current_stage,
-      current_gap_millis: s.current_gap_millis,
-      current_jitter_millis: s.current_jitter_millis,
-      loop_pool_size: s.loop_pool_size,
-      loop_uptime_secs: s.loop_started.map(|t| t.elapsed().as_secs()),
-    }
+    EngineStatus { loop_playing: s.loop_playing, loop_name: s.loop_name.clone(), voices_active: s.voices_active, current_stage: s.current_stage, current_gap_millis: s.current_gap_millis, current_jitter_millis: s.current_jitter_millis, loop_pool_size: s.loop_pool_size, loop_uptime_secs: s.loop_started.map(|t| t.elapsed().as_secs()) }
   }
 }
 
@@ -140,10 +131,7 @@ pub fn spawn_audio_player() -> (AudioPlayerHandle, JoinHandle<()>) {
   let (tx, rx) = mpsc::channel::<AudioCommand>();
   let status = Arc::new(Mutex::new(InternalStatus::default()));
   let status_for_engine = status.clone();
-  let thread = thread::Builder::new()
-    .name("agent-notify-audio".to_string())
-    .spawn(move || run_audio_engine(rx, status_for_engine))
-    .expect("spawn audio engine thread");
+  let thread = thread::Builder::new().name("agent-notify-audio".to_string()).spawn(move || run_audio_engine(rx, status_for_engine)).expect("spawn audio engine thread");
   (AudioPlayerHandle { tx, status }, thread)
 }
 
@@ -161,7 +149,7 @@ fn run_audio_engine(rx: Receiver<AudioCommand>, status: Arc<Mutex<InternalStatus
       log::error!("audio engine: failed to open default output stream: {}", e);
       while rx.recv().is_ok() {}
       return;
-    }
+    },
   };
 
   let oneshot_sink = match Sink::try_new(&stream_handle) {
@@ -170,7 +158,7 @@ fn run_audio_engine(rx: Receiver<AudioCommand>, status: Arc<Mutex<InternalStatus
       log::error!("audio engine: failed to create oneshot sink: {}", e);
       while rx.recv().is_ok() {}
       return;
-    }
+    },
   };
 
   let mut current_loop: Option<LoopController> = None;
@@ -181,7 +169,7 @@ fn run_audio_engine(rx: Receiver<AudioCommand>, status: Arc<Mutex<InternalStatus
         if let Err(e) = enqueue_sound(&oneshot_sink, &path) {
           log::warn!("play_once {}: {}", path.display(), e);
         }
-      }
+      },
       AudioCommand::PlayLoop(spec) => {
         stop_current_loop(&mut current_loop, &status);
         if spec.pool.is_empty() {
@@ -189,17 +177,17 @@ fn run_audio_engine(rx: Receiver<AudioCommand>, status: Arc<Mutex<InternalStatus
           continue;
         }
         current_loop = Some(start_loop_supervisor(&stream_handle, spec, status.clone()));
-      }
+      },
       AudioCommand::StopAll => {
         stop_current_loop(&mut current_loop, &status);
         oneshot_sink.clear();
         oneshot_sink.play();
-      }
+      },
       AudioCommand::Shutdown => {
         stop_current_loop(&mut current_loop, &status);
         oneshot_sink.stop();
         return;
-      }
+      },
     }
   }
 
@@ -207,11 +195,7 @@ fn run_audio_engine(rx: Receiver<AudioCommand>, status: Arc<Mutex<InternalStatus
   oneshot_sink.stop();
 }
 
-fn start_loop_supervisor(
-  stream_handle: &OutputStreamHandle,
-  spec: LoopSpec,
-  status: Arc<Mutex<InternalStatus>>,
-) -> LoopController {
+fn start_loop_supervisor(stream_handle: &OutputStreamHandle, spec: LoopSpec, status: Arc<Mutex<InternalStatus>>) -> LoopController {
   // Initialize the visible status before any iterator starts, so a /state
   // query racing the spawn sees the new loop, not the previous one's tail.
   {
@@ -229,17 +213,11 @@ fn start_loop_supervisor(
   let stop = Arc::new(AtomicBool::new(false));
   let stop_for_thread = stop.clone();
   let stream_handle = stream_handle.clone();
-  let thread = thread::Builder::new()
-    .name("agent-notify-loop-supervisor".to_string())
-    .spawn(move || run_loop_supervisor(stream_handle, spec, stop_for_thread, status))
-    .expect("spawn loop supervisor thread");
+  let thread = thread::Builder::new().name("agent-notify-loop-supervisor".to_string()).spawn(move || run_loop_supervisor(stream_handle, spec, stop_for_thread, status)).expect("spawn loop supervisor thread");
   LoopController { stop, thread: Some(thread) }
 }
 
-fn stop_current_loop(
-  current_loop: &mut Option<LoopController>,
-  status: &Arc<Mutex<InternalStatus>>,
-) {
+fn stop_current_loop(current_loop: &mut Option<LoopController>, status: &Arc<Mutex<InternalStatus>>) {
   if let Some(mut lc) = current_loop.take() {
     lc.stop.store(true, Ordering::SeqCst);
     if let Some(thread) = lc.thread.take() {
@@ -252,12 +230,7 @@ fn stop_current_loop(
   s.reset_loop();
 }
 
-fn run_loop_supervisor(
-  stream_handle: OutputStreamHandle,
-  spec: LoopSpec,
-  stop: Arc<AtomicBool>,
-  status: Arc<Mutex<InternalStatus>>,
-) {
+fn run_loop_supervisor(stream_handle: OutputStreamHandle, spec: LoopSpec, stop: Arc<AtomicBool>, status: Arc<Mutex<InternalStatus>>) {
   let pool_len = spec.pool.len();
   if pool_len == 0 {
     return;
@@ -269,24 +242,13 @@ fn run_loop_supervisor(
   let jitter_millis = Arc::new(AtomicU64::new(jitter_schedule[0]));
 
   let mut iterators: Vec<JoinHandle<()>> = Vec::with_capacity(4);
-  iterators.push(spawn_iterator(
-    &stream_handle,
-    spec.pool[0].clone(),
-    gap_millis.clone(),
-    jitter_millis.clone(),
-    stop.clone(),
-    0,
-  ));
+  iterators.push(spawn_iterator(&stream_handle, spec.pool[0].clone(), gap_millis.clone(), jitter_millis.clone(), stop.clone(), 0));
 
   // Convert absolute escalation times into deltas relative to the previous
   // escalation. `saturating_sub` handles out-of-order config (e.g. wait_2
   // smaller than wait_1) by collapsing the interval to zero.
   let waits = spec.escalate_waits_secs;
-  let intervals = [
-    waits[0],
-    waits[1].saturating_sub(waits[0]),
-    waits[2].saturating_sub(waits[1]),
-  ];
+  let intervals = [waits[0], waits[1].saturating_sub(waits[0]), waits[2].saturating_sub(waits[1])];
 
   let mut rng = rand::rng();
 
@@ -304,22 +266,10 @@ fn run_loop_supervisor(
     let prev_gap = gap_millis.swap(next_gap, Ordering::Relaxed);
     let prev_jitter = jitter_millis.swap(next_jitter, Ordering::Relaxed);
     if prev_gap != next_gap || prev_jitter != next_jitter {
-      log::info!(
-        "escalation stage {}: gap now {}ms +/- {}ms",
-        layer + 1,
-        next_gap,
-        next_jitter
-      );
+      log::info!("escalation stage {}: gap now {}ms +/- {}ms", layer + 1, next_gap, next_jitter);
     }
     let pool_idx = (layer + 1) % pool_len;
-    iterators.push(spawn_iterator(
-      &stream_handle,
-      spec.pool[pool_idx].clone(),
-      gap_millis.clone(),
-      jitter_millis.clone(),
-      stop.clone(),
-      layer + 1,
-    ));
+    iterators.push(spawn_iterator(&stream_handle, spec.pool[pool_idx].clone(), gap_millis.clone(), jitter_millis.clone(), stop.clone(), layer + 1));
     let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
     s.voices_active = iterators.len() as u32;
     s.current_stage = (layer + 1) as u32;
@@ -339,37 +289,19 @@ fn run_loop_supervisor(
   }
 }
 
-fn spawn_iterator(
-  stream_handle: &OutputStreamHandle,
-  path: PathBuf,
-  gap_millis: Arc<AtomicU64>,
-  jitter_millis: Arc<AtomicU64>,
-  stop: Arc<AtomicBool>,
-  layer: usize,
-) -> JoinHandle<()> {
+fn spawn_iterator(stream_handle: &OutputStreamHandle, path: PathBuf, gap_millis: Arc<AtomicU64>, jitter_millis: Arc<AtomicU64>, stop: Arc<AtomicBool>, layer: usize) -> JoinHandle<()> {
   log::info!("loop voice {} starting: {}", layer + 1, path.display());
   let stream_handle = stream_handle.clone();
-  thread::Builder::new()
-    .name(format!("agent-notify-loop-{}", layer + 1))
-    .spawn(move || {
-      run_loop_iterator(stream_handle, path, gap_millis, jitter_millis, stop)
-    })
-    .expect("spawn loop iterator thread")
+  thread::Builder::new().name(format!("agent-notify-loop-{}", layer + 1)).spawn(move || run_loop_iterator(stream_handle, path, gap_millis, jitter_millis, stop)).expect("spawn loop iterator thread")
 }
 
-fn run_loop_iterator(
-  stream_handle: OutputStreamHandle,
-  path: PathBuf,
-  gap_millis: Arc<AtomicU64>,
-  jitter_millis: Arc<AtomicU64>,
-  stop: Arc<AtomicBool>,
-) {
+fn run_loop_iterator(stream_handle: OutputStreamHandle, path: PathBuf, gap_millis: Arc<AtomicU64>, jitter_millis: Arc<AtomicU64>, stop: Arc<AtomicBool>) {
   let sink = match Sink::try_new(&stream_handle) {
     Ok(s) => s,
     Err(e) => {
       log::warn!("loop iterator: failed to create sink: {}", e);
       return;
-    }
+    },
   };
 
   let mut rng = rand::rng();
@@ -395,15 +327,8 @@ fn run_loop_iterator(
     let gap = gap_millis.load(Ordering::Relaxed);
     let jitter = jitter_millis.load(Ordering::Relaxed);
     let sleep_ms = jittered_gap_millis(gap, jitter, &mut rng);
-    log::debug!(
-      "loop iterator sleeping {}ms (gap={}, jitter=±{})",
-      sleep_ms,
-      gap,
-      jitter
-    );
-    if sleep_ms > 0
-      && !sleep_with_stop(Duration::from_millis(sleep_ms), &stop)
-    {
+    log::debug!("loop iterator sleeping {}ms (gap={}, jitter=±{})", sleep_ms, gap, jitter);
+    if sleep_ms > 0 && !sleep_with_stop(Duration::from_millis(sleep_ms), &stop) {
       return;
     }
   }
@@ -477,8 +402,12 @@ mod tests {
       for _ in 0..500 {
         let v = jittered_gap_millis(1000, 200, &mut rng);
         assert!(v >= 800 && v <= 1200, "out of bounds: {}", v);
-        if v < 1000 { seen_below = true; }
-        if v > 1000 { seen_above = true; }
+        if v < 1000 {
+          seen_below = true;
+        }
+        if v > 1000 {
+          seen_above = true;
+        }
       }
       assert!(seen_below && seen_above, "expected jitter on both sides");
     }
@@ -498,9 +427,7 @@ mod tests {
       // With jitter=1000 there are 2001 possible outcomes; a sample of 50
       // is overwhelmingly unlikely to be all-equal under uniform random.
       let mut rng = rand::rng();
-      let samples: std::collections::HashSet<u64> = (0..50)
-        .map(|_| jittered_gap_millis(5_000, 1_000, &mut rng))
-        .collect();
+      let samples: std::collections::HashSet<u64> = (0..50).map(|_| jittered_gap_millis(5_000, 1_000, &mut rng)).collect();
       assert!(samples.len() > 10, "expected >10 distinct values, got {}", samples.len());
     }
   }

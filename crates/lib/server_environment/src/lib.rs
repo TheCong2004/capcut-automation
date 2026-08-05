@@ -13,11 +13,9 @@
 #![forbid(unused_imports)]
 #![forbid(unused_mut)]
 #![forbid(unused_variables)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
-
 
 /// The environmental context the server is operating in.
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -27,7 +25,6 @@ pub enum ServerEnvironment {
 
   /// The production machines behind our web services.
   Production,
-
   // /// NB: Staging does not yet exist, and we sort of treat production as a semi-staging
   // /// for frontend testing.
   // Staging,

@@ -1,4 +1,3 @@
-
 /// Reports common information from the webhook handlers
 pub struct StripeWebhookSummary {
   /// If we recorded our own internal user ID as Stripe metadata, this passes it upstream.

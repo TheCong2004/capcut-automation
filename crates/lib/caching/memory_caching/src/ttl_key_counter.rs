@@ -16,9 +16,7 @@ impl TtlKeyCounter {
   pub fn create_with_duration(time_to_live: Duration) -> Self {
     let cache = LruCache::with_expiry_duration(time_to_live);
     let cache = Arc::new(Mutex::new(cache));
-    Self {
-      cache,
-    }
+    Self { cache }
   }
 
   pub fn increment_count(&self, key: &str) -> AnyhowResult<u64> {
@@ -28,13 +26,13 @@ impl TtlKeyCounter {
         None => {
           let _r = cache.insert(key.to_string(), 1);
           Ok(0)
-        }
+        },
         Some(count) => {
           let return_count = *count;
           *count = count.saturating_add(1);
           Ok(return_count)
-        }
-      }
+        },
+      },
     }
   }
 }

@@ -37,10 +37,10 @@ pub struct UpsertAnalyticsAppSession<'a> {
   pub other_page_prompt_count: u16,
 }
 
-impl <'a> UpsertAnalyticsAppSession<'a> {
+impl<'a> UpsertAnalyticsAppSession<'a> {
   fn query(&self) -> Query<MySql, MySqlArguments> {
     sqlx::query!(
-        r#"
+      r#"
 INSERT INTO analytics_app_sessions
 SET
   session_token = ?,
@@ -149,13 +149,8 @@ ON DUPLICATE KEY UPDATE
     )
   }
 
-  pub async fn upsert_with_connection(
-    &self,
-    mysql_connection: &mut PoolConnection<MySql>
-  ) -> Result<(), MysqlError<UpsertError>> {
-    let _query_result = self.query()
-        .execute(&mut **mysql_connection)
-        .await?;
+  pub async fn upsert_with_connection(&self, mysql_connection: &mut PoolConnection<MySql>) -> Result<(), MysqlError<UpsertError>> {
+    let _query_result = self.query().execute(&mut **mysql_connection).await?;
     Ok(())
   }
 }

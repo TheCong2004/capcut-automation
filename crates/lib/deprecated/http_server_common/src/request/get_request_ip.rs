@@ -20,16 +20,8 @@ pub fn get_request_ip(request: &HttpRequest) -> String {
     None => {
       // If we're running without the upstream Rust proxy, we can grab 'x-forarded-for', which is
       // populated by the DigitalOcean load balancer.
-      let ip_address_and_port = request.connection_info()
-        .remote_addr()
-        .unwrap_or("")
-        .to_string();
-      let ip_address = ip_address_and_port.split(":")
-        .collect::<Vec<&str>>()
-        .get(0)
-        .copied()
-        .unwrap_or("")
-        .to_string();
+      let ip_address_and_port = request.connection_info().remote_addr().unwrap_or("").to_string();
+      let ip_address = ip_address_and_port.split(":").collect::<Vec<&str>>().get(0).copied().unwrap_or("").to_string();
       debug!("Forwarded IP address (1): {}", &ip_address);
       ip_address
     },
@@ -51,16 +43,8 @@ pub fn get_service_request_ip(request: &ServiceRequest) -> String {
     None => {
       // If we're running without the upstream Rust proxy, we can grab 'x-forarded-for', which is
       // populated by the DigitalOcean load balancer.
-      let ip_address_and_port = request.connection_info()
-          .remote_addr()
-          .unwrap_or("")
-          .to_string();
-      let ip_address = ip_address_and_port.split(":")
-          .collect::<Vec<&str>>()
-          .get(0)
-          .copied()
-          .unwrap_or("")
-          .to_string();
+      let ip_address_and_port = request.connection_info().remote_addr().unwrap_or("").to_string();
+      let ip_address = ip_address_and_port.split(":").collect::<Vec<&str>>().get(0).copied().unwrap_or("").to_string();
       debug!("(2) Forwarded IP address: {}", &ip_address);
       ip_address
     },
@@ -69,9 +53,7 @@ pub fn get_service_request_ip(request: &ServiceRequest) -> String {
 
 fn get_ip_from_header(headers: &HeaderMap, header_name: &str) -> Option<String> {
   if let Ok(header_name) = HeaderName::from_str(header_name) {
-    headers.get(&header_name)
-      .and_then(|value| value.to_str().ok())
-      .and_then(|value| first_ip_from_list(value))
+    headers.get(&header_name).and_then(|value| value.to_str().ok()).and_then(|value| first_ip_from_list(value))
   } else {
     None
   }
@@ -80,11 +62,7 @@ fn get_ip_from_header(headers: &HeaderMap, header_name: &str) -> Option<String> 
 // NB: GKE packs in multiple IP addresses into the header:
 // Example of header: x-forwarded-for: Some("136.55.189.34, 34.117.9.171")
 fn first_ip_from_list(ip_list: &str) -> Option<String> {
-  ip_list.split(",")
-      .into_iter()
-      .map(|ip| ip.trim())
-      .find(|ip| !ip.is_empty())
-      .map(|ip| ip.to_string())
+  ip_list.split(",").into_iter().map(|ip| ip.trim()).find(|ip| !ip.is_empty()).map(|ip| ip.to_string())
 }
 
 #[cfg(test)]

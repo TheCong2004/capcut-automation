@@ -8,63 +8,40 @@ use url::Url;
 use utoipa::ToSchema;
 
 // TODO(bt,2024-09-05): Worth reducing the quality at all?
-const QUALITY : u8 = 95;
-
+const QUALITY: u8 = 95;
 
 /// Links to media file locations (bucket, CDN, etc.)
-/// 
+///
 /// This migrates the constructors to the `artcraft_api_defs` crate
 pub struct MediaLinksBuilder {}
 
 impl MediaLinksBuilder {
-
-  pub fn from_media_path_and_env(
-    domain: MediaDomain,
-    server_environment: ServerEnvironment,
-    bucket_path: &MediaFileBucketPath,
-  ) -> MediaLinks {
+  pub fn from_media_path_and_env(domain: MediaDomain, server_environment: ServerEnvironment, bucket_path: &MediaFileBucketPath) -> MediaLinks {
     let rooted_path = bucket_path.get_full_object_path_str();
     Self::from_rooted_path_and_env(domain, server_environment, rooted_path)
   }
 
-  pub fn from_rooted_path_and_env(
-    domain: MediaDomain,
-    server_environment: ServerEnvironment,
-    rooted_path: &str,
-  ) -> MediaLinks {
+  pub fn from_rooted_path_and_env(domain: MediaDomain, server_environment: ServerEnvironment, rooted_path: &str) -> MediaLinks {
     let mut cdn_url = new_cdn_url(domain, server_environment);
     cdn_url.set_path(rooted_path);
-    MediaLinks {
-      cdn_url,
-      maybe_thumbnail_template: thumbnail_template(domain, server_environment, rooted_path),
-      maybe_video_previews: VideoPreviewsBuilder::from_rooted_path(domain, server_environment, rooted_path),
-    }
+    MediaLinks { cdn_url, maybe_thumbnail_template: thumbnail_template(domain, server_environment, rooted_path), maybe_video_previews: VideoPreviewsBuilder::from_rooted_path(domain, server_environment, rooted_path) }
   }
 }
 
 pub struct VideoPreviewsBuilder {}
 
 impl VideoPreviewsBuilder {
-  fn from_rooted_path(
-    domain: MediaDomain,
-    server_environment: ServerEnvironment,
-    rooted_path: &str,
-  ) -> Option<VideoPreviews> {
+  fn from_rooted_path(domain: MediaDomain, server_environment: ServerEnvironment, rooted_path: &str) -> Option<VideoPreviews> {
     if !rooted_path.ends_with(".mp4") {
       return None;
     }
-    Some(VideoPreviews {
-      still: video_preview(domain, server_environment, rooted_path, PreviewType::Jpg),
-      animated: video_preview(domain, server_environment, rooted_path, PreviewType::Gif),
-      still_thumbnail_template: video_preview_thumbnail_template(domain, server_environment, rooted_path, PreviewType::Jpg),
-      animated_thumbnail_template: video_preview_thumbnail_template(domain, server_environment, rooted_path, PreviewType::Gif),
-    })
+    Some(VideoPreviews { still: video_preview(domain, server_environment, rooted_path, PreviewType::Jpg), animated: video_preview(domain, server_environment, rooted_path, PreviewType::Gif), still_thumbnail_template: video_preview_thumbnail_template(domain, server_environment, rooted_path, PreviewType::Jpg), animated_thumbnail_template: video_preview_thumbnail_template(domain, server_environment, rooted_path, PreviewType::Gif) })
   }
 }
 
 enum PreviewType {
   Gif,
-  Jpg
+  Jpg,
 }
 
 /// Returns a jpeg or gif preview of the video.
@@ -80,9 +57,7 @@ fn video_preview(media_domain: MediaDomain, server_environment: ServerEnvironmen
 
 /// Returns a thumbnail template for image
 fn thumbnail_template(media_domain: MediaDomain, server_environment: ServerEnvironment, rooted_path: &str) -> Option<String> {
-  if !rooted_path.ends_with(".jpg")
-      && !rooted_path.ends_with(".png")
-      && !rooted_path.ends_with(".gif") {
+  if !rooted_path.ends_with(".jpg") && !rooted_path.ends_with(".png") && !rooted_path.ends_with(".gif") {
     return None;
   }
 
@@ -91,7 +66,7 @@ fn thumbnail_template(media_domain: MediaDomain, server_environment: ServerEnvir
   // NB(bt,2025-02-01): Development doesn't currently support thumbnails, so serve the full image.
   match server_environment {
     ServerEnvironment::Development => Some(format!("{host}{rooted_path}")), // NB(bt,2025-02-01): No thumbnails in development.
-    ServerEnvironment::Production => Some(format!("{host}/cdn-cgi/image/width={{WIDTH}},quality={QUALITY}{rooted_path}"))
+    ServerEnvironment::Production => Some(format!("{host}/cdn-cgi/image/width={{WIDTH}},quality={QUALITY}{rooted_path}")),
   }
 }
 
@@ -109,7 +84,6 @@ fn video_preview_thumbnail_template(media_domain: MediaDomain, server_environmen
   }
 }
 
-
 #[cfg(test)]
 mod tests {
   use crate::http_server::common_responses::media::media_domain::MediaDomain;
@@ -123,12 +97,12 @@ mod tests {
   mod fakeyou {
     use super::*;
 
-    const DOMAIN : MediaDomain = MediaDomain::FakeYou;
+    const DOMAIN: MediaDomain = MediaDomain::FakeYou;
 
     mod production {
       use super::*;
 
-      const ENV : ServerEnvironment = ServerEnvironment::Production;
+      const ENV: ServerEnvironment = ServerEnvironment::Production;
 
       #[test]
       fn wav_file() {
@@ -200,7 +174,7 @@ mod tests {
     mod development {
       use super::*;
 
-      const ENV : ServerEnvironment = ServerEnvironment::Development;
+      const ENV: ServerEnvironment = ServerEnvironment::Development;
 
       #[test]
       fn wav_file() {
@@ -249,12 +223,12 @@ mod tests {
   mod storyteller {
     use super::*;
 
-    const DOMAIN : MediaDomain = MediaDomain::Storyteller;
+    const DOMAIN: MediaDomain = MediaDomain::Storyteller;
 
     mod production {
       use super::*;
 
-      const ENV : ServerEnvironment = ServerEnvironment::Production;
+      const ENV: ServerEnvironment = ServerEnvironment::Production;
 
       #[test]
       fn wav_file() {
@@ -326,7 +300,7 @@ mod tests {
     mod development {
       use super::*;
 
-      const ENV : ServerEnvironment = ServerEnvironment::Development;
+      const ENV: ServerEnvironment = ServerEnvironment::Development;
 
       #[test]
       fn wav_file() {

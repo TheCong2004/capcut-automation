@@ -2,12 +2,12 @@
 #![forbid(private_bounds)]
 #![forbid(private_interfaces)]
 #![forbid(unused_must_use)]
-
 // Always allow
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 use std::time::Duration;
 
@@ -47,13 +47,7 @@ const ENV_GMICLOUD_API_KEY: &str = "GMICLOUD_API_KEY";
 
 #[actix_web::main]
 async fn main() -> AnyhowResult<()> {
-
-  let container_environment = bootstrap(BootstrapArgs {
-    app_name: "gmicloud-job",
-    default_logging_override: Some(DEFAULT_RUST_LOG),
-    config_search_directories: &[".", "./config", "crates/service/job/gmicloud_job/config"],
-    ignore_legacy_dot_env_file: true,
-  })?;
+  let container_environment = bootstrap(BootstrapArgs { app_name: "gmicloud-job", default_logging_override: Some(DEFAULT_RUST_LOG), config_search_directories: &[".", "./config", "crates/service/job/gmicloud_job/config"], ignore_legacy_dot_env_file: true })?;
 
   info!("Hostname: {}", &container_environment.hostname);
 
@@ -64,17 +58,11 @@ async fn main() -> AnyhowResult<()> {
 
   info!("Connecting to database...");
 
-  let mysql_pool = MySqlPoolOptions::new()
-    .max_connections(2)
-    .connect(&db_connection_string)
-    .await?;
+  let mysql_pool = MySqlPoolOptions::new().max_connections(2).connect(&db_connection_string).await?;
 
   info!("Connected to MySQL.");
 
-  let server_environment = ServerEnvironment::from_str(
-    &easyenv::get_env_string_required("SERVER_ENVIRONMENT")?,
-  )
-    .ok_or(anyhow!("invalid server environment"))?;
+  let server_environment = ServerEnvironment::from_str(&easyenv::get_env_string_required("SERVER_ENVIRONMENT")?).ok_or(anyhow!("invalid server environment"))?;
 
   // Bucket setup
   let access_key = easyenv::get_env_string_required(ENV_ACCESS_KEY)?;
@@ -83,36 +71,19 @@ async fn main() -> AnyhowResult<()> {
   let public_bucket_name = easyenv::get_env_string_required(ENV_PUBLIC_BUCKET_NAME)?;
   let s3_compatible_endpoint_url = easyenv::get_env_string_required(ENV_S3_ENDPOINT)?;
 
-  let bucket_timeout = easyenv::get_env_duration_seconds_or_default(
-    "BUCKET_TIMEOUT_SECONDS",
-    Duration::from_secs(60 * 5),
-  );
+  let bucket_timeout = easyenv::get_env_duration_seconds_or_default("BUCKET_TIMEOUT_SECONDS", Duration::from_secs(60 * 5));
 
-  let public_bucket_client = LegacyBucketClient::create(
-    &access_key,
-    &secret_key,
-    &region_name,
-    &public_bucket_name,
-    &s3_compatible_endpoint_url,
-    None,
-    Some(bucket_timeout),
-  )?;
+  let public_bucket_client = LegacyBucketClient::create(&access_key, &secret_key, &region_name, &public_bucket_name, &s3_compatible_endpoint_url, None, Some(bucket_timeout))?;
 
   // GmiCloud API key
   let gmicloud_api_key_str = easyenv::get_env_string_required(ENV_GMICLOUD_API_KEY)?;
   let gmicloud_api_key = GmiCloudApiKey::new(gmicloud_api_key_str);
 
   // How often to poll after a successful iteration (default: 3 seconds)
-  let poll_interval_success_millis: u64 = easyenv::get_env_num(
-    "GMICLOUD_POLL_INTERVAL_SUCCESS_MILLIS",
-    3_000,
-  )?;
+  let poll_interval_success_millis: u64 = easyenv::get_env_num("GMICLOUD_POLL_INTERVAL_SUCCESS_MILLIS", 3_000)?;
 
   // How often to poll after a failed iteration (default: 15 seconds)
-  let poll_interval_failure_millis: u64 = easyenv::get_env_num(
-    "GMICLOUD_POLL_INTERVAL_FAILURE_MILLIS",
-    15_000,
-  )?;
+  let poll_interval_failure_millis: u64 = easyenv::get_env_num("GMICLOUD_POLL_INTERVAL_FAILURE_MILLIS", 15_000)?;
 
   let application_shutdown = RelaxedAtomicBool::new(false);
   let job_stats = JobStats::new();
@@ -127,29 +98,15 @@ async fn main() -> AnyhowResult<()> {
     rt.block_on(pager_worker.run());
   });
 
-  let create_server_args = CreateServerArgs {
-    container_environment: container_environment.clone(),
-    job_stats: job_stats.clone(),
-  };
+  let create_server_args = CreateServerArgs { container_environment: container_environment.clone(), job_stats: job_stats.clone() };
 
-  let job_dependencies = JobDependencies {
-    mysql_pool,
-    public_bucket_client,
-    gmicloud_api_key,
-    server_environment,
-    pager,
-    job_stats,
-    poll_interval_success_millis,
-    poll_interval_failure_millis,
-    application_shutdown: application_shutdown.clone(),
-  };
+  let job_dependencies = JobDependencies { mysql_pool, public_bucket_client, gmicloud_api_key, server_environment, pager, job_stats, poll_interval_success_millis, poll_interval_failure_millis, application_shutdown: application_shutdown.clone() };
 
   std::thread::spawn(move || {
     let actix_runtime = actix_web::rt::System::new();
     let http_server_handle = launch_http_server(create_server_args);
 
-    actix_runtime.block_on(http_server_handle)
-      .expect("HTTP server should not exit.");
+    actix_runtime.block_on(http_server_handle).expect("HTTP server should not exit.");
 
     warn!("Server thread is shut down.");
     application_shutdown.set(true);

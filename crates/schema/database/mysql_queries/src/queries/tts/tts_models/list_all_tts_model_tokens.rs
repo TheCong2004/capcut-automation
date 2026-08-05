@@ -28,23 +28,18 @@ pub async fn list_all_tts_model_tokens(mysql_connection: &mut PoolConnection<MyS
 
   let tokens = sqlx::query_as!(
     RawTtsModelTokenInfo,
-        r#"
+    r#"
 SELECT
     token as `token: tokens::tokens::tts_models::TtsModelToken`
 FROM tts_models
-        "#)
-        .fetch_all(&mut **mysql_connection)
-        .await?;
+        "#
+  )
+  .fetch_all(&mut **mysql_connection)
+  .await?;
 
-  let tokens = tokens.into_iter()
-      .map(|token| TtsModelTokenInfo {
-        token: token.token,
-      })
-      .collect::<Vec<TtsModelTokenInfo>>();
+  let tokens = tokens.into_iter().map(|token| TtsModelTokenInfo { token: token.token }).collect::<Vec<TtsModelTokenInfo>>();
 
-  Ok(TtsModelTokens {
-    tokens,
-  })
+  Ok(TtsModelTokens { tokens })
 }
 
 struct RawTtsModelTokenInfo {

@@ -19,26 +19,26 @@ pub struct UserBookmarkListPage {
 }
 
 pub struct ListUserBookmarksForUserArgs<'a> {
-    pub username: &'a str,
-    pub maybe_filter_entity_type: Option<UserBookmarkEntityType>,
-    pub maybe_filter_weight_type: Option<WeightsType>,
-    pub maybe_filter_weight_category: Option<WeightsCategory>,
-    pub maybe_filter_media_file_type: Option<MediaFileType>,
-    pub page_size: usize,
-    pub page_index: usize,
-    pub sort_ascending: bool,
-    pub mysql_pool: &'a MySqlPool,
+  pub username: &'a str,
+  pub maybe_filter_entity_type: Option<UserBookmarkEntityType>,
+  pub maybe_filter_weight_type: Option<WeightsType>,
+  pub maybe_filter_weight_category: Option<WeightsCategory>,
+  pub maybe_filter_media_file_type: Option<MediaFileType>,
+  pub page_size: usize,
+  pub page_index: usize,
+  pub sort_ascending: bool,
+  pub mysql_pool: &'a MySqlPool,
 }
 
 fn select_total_count_field() -> String {
-    r#"
+  r#"
     COUNT(f.id) AS total_count
   "#
-        .to_string()
+  .to_string()
 }
 
 fn select_result_fields() -> &'static str {
-    r#"
+  r#"
     f.token,
     f.entity_type,
     f.entity_token,
@@ -87,23 +87,11 @@ fn select_result_fields() -> &'static str {
     "#
 }
 
-fn query_builder<'a>(
-    maybe_filter_entity_type: Option<UserBookmarkEntityType>,
-    maybe_filter_weight_type: Option<WeightsType>,
-    maybe_filter_weight_category: Option<WeightsCategory>,
-    maybe_filter_media_file_type: Option<MediaFileType>,
-    maybe_username: Option<&'a str>,
-    enforce_limits: bool,
-    page_index: usize,
-    page_size: usize,
-    sort_ascending: bool,
-    select_fields: &'a str,
-) -> QueryBuilder<'a, MySql> {
-
-    let mut first_predicate_added = false;
-    // NB: Query cannot be statically checked by sqlx
-    let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
-        format!(r#"
+fn query_builder<'a>(maybe_filter_entity_type: Option<UserBookmarkEntityType>, maybe_filter_weight_type: Option<WeightsType>, maybe_filter_weight_category: Option<WeightsCategory>, maybe_filter_media_file_type: Option<MediaFileType>, maybe_username: Option<&'a str>, enforce_limits: bool, page_index: usize, page_size: usize, sort_ascending: bool, select_fields: &'a str) -> QueryBuilder<'a, MySql> {
+  let mut first_predicate_added = false;
+  // NB: Query cannot be statically checked by sqlx
+  let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
+    r#"
 SELECT
      {select_fields}
 FROM
@@ -134,129 +122,95 @@ LEFT OUTER JOIN voice_conversion_models ON voice_conversion_models.token = f.ent
 LEFT OUTER JOIN zs_voices ON zs_voices.token = f.entity_token
 
     "#
-        ));
+  ));
 
-    if let Some(username) = maybe_username {
-        if !first_predicate_added {
-            query_builder.push(" WHERE ");
-            first_predicate_added = true;
-        } else {
-            query_builder.push(" AND ");
-        }
-        query_builder.push(" u.username = ");
-        query_builder.push_bind(username);
-    }
-
-    if let Some(entity_type) = maybe_filter_entity_type {
-        if !first_predicate_added {
-            query_builder.push(" WHERE ");
-            first_predicate_added = true;
-        } else {
-            query_builder.push(" AND ");
-        }
-        query_builder.push(" f.entity_type = ");
-        query_builder.push_bind(entity_type.to_str());
-    }
-
-    if let Some(weights_type) = maybe_filter_weight_type {
-        if !first_predicate_added {
-            query_builder.push(" WHERE ");
-            first_predicate_added = true;
-        } else {
-            query_builder.push(" AND ");
-        }
-        query_builder.push(" model_weights.weights_type = ");
-        query_builder.push_bind(weights_type.to_str());
-    }
-
-    if let Some(weights_category) = maybe_filter_weight_category {
-        if !first_predicate_added {
-            query_builder.push(" WHERE ");
-            first_predicate_added = true;
-        } else {
-            query_builder.push(" AND ");
-        }
-        query_builder.push(" model_weights.weights_category = ");
-        query_builder.push_bind(weights_category.to_str());
-    }
-
-    if let Some(media_file_type) = maybe_filter_media_file_type {
-        if !first_predicate_added {
-            query_builder.push(" WHERE ");
-            first_predicate_added = true;
-        } else {
-            query_builder.push(" AND ");
-        }
-        query_builder.push(" media_files.media_type = ");
-        query_builder.push_bind(media_file_type.to_str());
-    }
-
-    query_builder.push(" AND f.deleted_at IS NULL ");
-
-    if sort_ascending {
-        query_builder.push(" ORDER BY f.created_at ASC ");
+  if let Some(username) = maybe_username {
+    if !first_predicate_added {
+      query_builder.push(" WHERE ");
+      first_predicate_added = true;
     } else {
-        query_builder.push(" ORDER BY f.created_at DESC ");
+      query_builder.push(" AND ");
     }
+    query_builder.push(" u.username = ");
+    query_builder.push_bind(username);
+  }
 
-    if enforce_limits {
-        let offset = page_index * page_size;
-        query_builder.push(format!(" LIMIT {page_size} OFFSET {offset} "));
+  if let Some(entity_type) = maybe_filter_entity_type {
+    if !first_predicate_added {
+      query_builder.push(" WHERE ");
+      first_predicate_added = true;
+    } else {
+      query_builder.push(" AND ");
     }
+    query_builder.push(" f.entity_type = ");
+    query_builder.push_bind(entity_type.to_str());
+  }
 
-    query_builder
+  if let Some(weights_type) = maybe_filter_weight_type {
+    if !first_predicate_added {
+      query_builder.push(" WHERE ");
+      first_predicate_added = true;
+    } else {
+      query_builder.push(" AND ");
+    }
+    query_builder.push(" model_weights.weights_type = ");
+    query_builder.push_bind(weights_type.to_str());
+  }
+
+  if let Some(weights_category) = maybe_filter_weight_category {
+    if !first_predicate_added {
+      query_builder.push(" WHERE ");
+      first_predicate_added = true;
+    } else {
+      query_builder.push(" AND ");
+    }
+    query_builder.push(" model_weights.weights_category = ");
+    query_builder.push_bind(weights_category.to_str());
+  }
+
+  if let Some(media_file_type) = maybe_filter_media_file_type {
+    if !first_predicate_added {
+      query_builder.push(" WHERE ");
+      first_predicate_added = true;
+    } else {
+      query_builder.push(" AND ");
+    }
+    query_builder.push(" media_files.media_type = ");
+    query_builder.push_bind(media_file_type.to_str());
+  }
+
+  query_builder.push(" AND f.deleted_at IS NULL ");
+
+  if sort_ascending {
+    query_builder.push(" ORDER BY f.created_at ASC ");
+  } else {
+    query_builder.push(" ORDER BY f.created_at DESC ");
+  }
+
+  if enforce_limits {
+    let offset = page_index * page_size;
+    query_builder.push(format!(" LIMIT {page_size} OFFSET {offset} "));
+  }
+
+  query_builder
 }
 
-pub async fn list_user_bookmarks_by_maybe_entity_type(
-    args: ListUserBookmarksForUserArgs<'_>
-) -> AnyhowResult<UserBookmarkListPage> {
+pub async fn list_user_bookmarks_by_maybe_entity_type(args: ListUserBookmarksForUserArgs<'_>) -> AnyhowResult<UserBookmarkListPage> {
+  let count_fields = select_total_count_field();
+  let mut count_query_builder = query_builder(args.maybe_filter_entity_type, args.maybe_filter_weight_type, args.maybe_filter_weight_category, args.maybe_filter_media_file_type, Some(args.username), false, 0, 0, args.sort_ascending, count_fields.as_str());
 
-    let count_fields = select_total_count_field();
-    let mut count_query_builder = query_builder(
-        args.maybe_filter_entity_type,
-        args.maybe_filter_weight_type,
-        args.maybe_filter_weight_category,
-        args.maybe_filter_media_file_type,
-        Some(args.username),
-        false,
-        0,
-        0,
-        args.sort_ascending,
-        count_fields.as_str(),
-    );
+  let row_count_query = count_query_builder.build_query_scalar::<i64>();
+  let row_count_result = row_count_query.fetch_one(args.mysql_pool).await?;
 
-    let row_count_query = count_query_builder.build_query_scalar::<i64>();
-    let row_count_result = row_count_query.fetch_one(args.mysql_pool).await?;
+  /// Now fetch the actual results with all the fields
+  let result_fields = select_result_fields();
+  let mut query = query_builder(args.maybe_filter_entity_type, args.maybe_filter_weight_type, args.maybe_filter_weight_category, args.maybe_filter_media_file_type, Some(args.username), true, args.page_index, args.page_size, args.sort_ascending, result_fields);
 
-    /// Now fetch the actual results with all the fields
-    let result_fields = select_result_fields();
-    let mut query = query_builder(
-        args.maybe_filter_entity_type,
-        args.maybe_filter_weight_type,
-        args.maybe_filter_weight_category,
-        args.maybe_filter_media_file_type,
-        Some(args.username),
-        true,
-        args.page_index,
-        args.page_size,
-        args.sort_ascending,
-        result_fields,
-    );
+  let query = query.build_query_as::<RawUserBookmarkRecord>();
+  let results = query.fetch_all(args.mysql_pool).await?;
 
-    let query = query.build_query_as::<RawUserBookmarkRecord>();
-    let results = query.fetch_all(args.mysql_pool).await?;
+  let number_of_pages = (row_count_result / args.page_size as i64) as usize;
+  let results = results.into_iter().map(|record| record.into_public_type()).collect::<Vec<_>>();
 
-    let number_of_pages = (row_count_result / args.page_size as i64) as usize;
-    let results = results.into_iter()
-        .map(|record| {
-            record.into_public_type()
-        })
-        .collect::<Vec<_>>();
-
-    Ok(UserBookmarkListPage {
-        results,
-        sort_ascending: args.sort_ascending,
-        current_page: args.page_index,
-        total_page_count: number_of_pages,
-    })
+  Ok(UserBookmarkListPage { results, sort_ascending: args.sort_ascending, current_page: args.page_index, total_page_count: number_of_pages })
 }

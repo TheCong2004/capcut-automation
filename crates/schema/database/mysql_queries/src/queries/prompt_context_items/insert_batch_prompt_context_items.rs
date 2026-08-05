@@ -23,10 +23,11 @@ pub struct InsertBatchArgs<'a, 'b> {
 ///
 /// NB: Calling code is responsible for rolling back the transaction if this fails.
 pub async fn insert_batch_prompt_context_items<'a, 'b>(args: InsertBatchArgs<'a, 'b>) -> AnyhowResult<()> {
-
-  let mut query_builder = QueryBuilder::new(r#"
+  let mut query_builder = QueryBuilder::new(
+    r#"
     INSERT INTO prompt_context_items (prompt_token, media_token, context_semantic_type) VALUES
-  "#);
+  "#,
+  );
 
   for (i, item) in args.items.iter().enumerate() {
     query_builder.push("(");
@@ -46,7 +47,7 @@ pub async fn insert_batch_prompt_context_items<'a, 'b>(args: InsertBatchArgs<'a,
 
   let query = query_builder.build();
 
-  let query_result  = query.execute(&mut **args.transaction).await;
+  let query_result = query.execute(&mut **args.transaction).await;
 
   match query_result {
     Ok(_) => Ok(()),

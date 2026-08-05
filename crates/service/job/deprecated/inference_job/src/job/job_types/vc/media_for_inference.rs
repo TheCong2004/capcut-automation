@@ -30,19 +30,15 @@ impl MediaForInference {
   pub fn get_bucket_path(&self) -> PathBuf {
     match self {
       MediaForInference::MediaFile(media_file) => {
-        let media_file_bucket_path = MediaFileBucketPath::from_object_hash(
-          &media_file.public_bucket_directory_hash,
-          media_file.maybe_public_bucket_prefix.as_deref(),
-          media_file.maybe_public_bucket_extension.as_deref());
+        let media_file_bucket_path = MediaFileBucketPath::from_object_hash(&media_file.public_bucket_directory_hash, media_file.maybe_public_bucket_prefix.as_deref(), media_file.maybe_public_bucket_extension.as_deref());
 
         media_file_bucket_path.to_full_object_pathbuf()
-      }
+      },
       MediaForInference::LegacyMediaUpload(media_upload) => {
-        let media_upload_bucket_path =
-            MediaUploadOriginalFilePath::from_object_hash(&media_upload.public_bucket_directory_hash);
+        let media_upload_bucket_path = MediaUploadOriginalFilePath::from_object_hash(&media_upload.public_bucket_directory_hash);
 
         media_upload_bucket_path.to_full_object_pathbuf()
-      }
+      },
     }
   }
 }

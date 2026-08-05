@@ -44,26 +44,18 @@ pub struct KillTtsInferenceJobsResponse {
 // NB: Not using derive_more::Display since Clion doesn't understand it.
 // =============== Handler ===============
 
-pub async fn kill_tts_inference_jobs_handler(
-  http_request: HttpRequest,
-  request: Json<KillTtsInferenceJobsRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<KillTtsInferenceJobsResponse>, CommonWebError>
-{
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session(&http_request, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        warn!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn kill_tts_inference_jobs_handler(http_request: HttpRequest, request: Json<KillTtsInferenceJobsRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<KillTtsInferenceJobsResponse>, CommonWebError> {
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session(&http_request, &server_state.mysql_pool).await.map_err(|e| {
+    warn!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       warn!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   // TODO: We don't have a permission for this, so use this as a proxy permission
@@ -78,16 +70,12 @@ pub async fn kill_tts_inference_jobs_handler(
     KillAction::ZeroPriorityPending => JobStatus::ZeroPriorityPending,
   };
 
-  kill_tts_inference_jobs(job_status, &server_state.mysql_pool)
-      .await
-      .map_err(|e| {
-        error!("Error with query: {:?}", e);
-        CommonWebError::from_anyhow_error(e)
-      })?;
+  kill_tts_inference_jobs(job_status, &server_state.mysql_pool).await.map_err(|e| {
+    error!("Error with query: {:?}", e);
+    CommonWebError::from_anyhow_error(e)
+  })?;
 
-  let response = KillTtsInferenceJobsResponse {
-    success: true,
-  };
+  let response = KillTtsInferenceJobsResponse { success: true };
 
   Ok(Json(response))
 }

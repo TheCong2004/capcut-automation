@@ -19,13 +19,13 @@ pub fn add_storyteller(cors: Cors, is_production: bool) -> Cors {
           netlify_branch_domain_matches(origin, "storyteller-ai.netlify.app")
         })
 
-        // NB(bt,2024-04-07): We shouldn't allow HTTP from non-dev hosts
-        //.allowed_origin("http://api.storyteller.ai")
-        //.allowed_origin("http://staging.storyteller.ai")
-        //.allowed_origin("http://storyteller.ai")
-        // Storyteller.ai (Netlify Staging / Production)
-        //.allowed_origin("https://feature-marketing--storyteller-ai.netlify.app")
-        //.allowed_origin("https://feature-mvp--storyteller-ai.netlify.app")
+    // NB(bt,2024-04-07): We shouldn't allow HTTP from non-dev hosts
+    //.allowed_origin("http://api.storyteller.ai")
+    //.allowed_origin("http://staging.storyteller.ai")
+    //.allowed_origin("http://storyteller.ai")
+    // Storyteller.ai (Netlify Staging / Production)
+    //.allowed_origin("https://feature-marketing--storyteller-ai.netlify.app")
+    //.allowed_origin("https://feature-mvp--storyteller-ai.netlify.app")
   } else {
     cors
         // Storyteller.ai (Development)

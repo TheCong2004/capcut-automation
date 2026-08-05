@@ -30,49 +30,30 @@ pub struct SetUnsubscribeReasonResponse {
 // =============== Error Response ===============
 // =============== Handler ===============
 
-pub async fn set_unsubscribe_reason_handler(
-  http_request: HttpRequest,
-  request: Json<SetUnsubscribeReasonRequest>,
-  server_state: web::Data<Arc<ServerState>>) -> Result<Json<SetUnsubscribeReasonResponse>, CommonWebError>
-{
-  let mut mysql_connection = server_state.mysql_pool.acquire()
-      .await
-      .map_err(|e| {
-        error!("Could not acquire DB pool: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+pub async fn set_unsubscribe_reason_handler(http_request: HttpRequest, request: Json<SetUnsubscribeReasonRequest>, server_state: web::Data<Arc<ServerState>>) -> Result<Json<SetUnsubscribeReasonResponse>, CommonWebError> {
+  let mut mysql_connection = server_state.mysql_pool.acquire().await.map_err(|e| {
+    error!("Could not acquire DB pool: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
-  let maybe_user_session = server_state
-      .session_checker
-      .maybe_get_user_session_from_connection(&http_request, &mut mysql_connection)
-      .await
-      .map_err(|e| {
-        error!("Session checker error: {:?}", e);
-        CommonWebError::from_error(e)
-      })?;
+  let maybe_user_session = server_state.session_checker.maybe_get_user_session_from_connection(&http_request, &mut mysql_connection).await.map_err(|e| {
+    error!("Session checker error: {:?}", e);
+    CommonWebError::from_error(e)
+  })?;
 
   let user_session = match maybe_user_session {
     Some(session) => session,
     None => {
       info!("not logged in");
       return Err(CommonWebError::NotAuthorized);
-    }
+    },
   };
 
   let ip_address = get_request_ip(&http_request);
 
-  UnsubscribeReasonInsertBuilder::new()
-    .set_user_token(user_session.user_token.as_str())
-    .set_ip_address(&ip_address)
-    .set_unsubscribe_reason(&request.reason)
-    .insert(&mut mysql_connection)
-    .await
-    .map_err(CommonWebError::from_anyhow_error)?;
+  UnsubscribeReasonInsertBuilder::new().set_user_token(user_session.user_token.as_str()).set_ip_address(&ip_address).set_unsubscribe_reason(&request.reason).insert(&mut mysql_connection).await.map_err(CommonWebError::from_anyhow_error)?;
 
-
-  let response = SetUnsubscribeReasonResponse {
-    success: true,
-  };
+  let response = SetUnsubscribeReasonResponse { success: true };
 
   Ok(Json(response))
 }
