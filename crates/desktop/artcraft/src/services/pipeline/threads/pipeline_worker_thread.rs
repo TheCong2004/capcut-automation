@@ -3,8 +3,9 @@
 
 use crate::core::state::data_dir::app_data_root::AppDataRoot;
 use crate::core::state::task_database::TaskDatabase;
-use crate::services::pipeline::clients::capcut_mate_client::{assemble_and_process_draft, health_check as capcut_mate_health_check, DraftAssemblyResult};
+use crate::services::pipeline::clients::capcut_mate_client::{add_captions as capcut_add_captions, create_draft as capcut_create_draft, gen_video as capcut_gen_video, health_check as capcut_mate_health_check, poll_gen_video_status as capcut_poll_gen_video_status, save_draft as capcut_save_draft, verify_draft_exists as capcut_verify_draft_exists, DraftAssemblyResult};
 use crate::services::pipeline::clients::omniroute_client::{generate_script, health_check as llm_health_check};
+use crate::services::pipeline::caption_segmenter::{segment_script_to_captions, CaptionSegment};
 use crate::services::pipeline::events::{emit_job_complete, emit_job_failed, emit_stage_complete, JobCompletePayload, JobFailedPayload, StageCompletePayload};
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use enums::tauri::pipeline::pipeline_stage::PipelineStage;
@@ -21,6 +22,40 @@ use sqlite_tasks::queries::pipeline::update_pipeline_job_status::{update_pipelin
 use std::collections::HashSet;
 use tauri::AppHandle;
 use tokens::tokens::sqlite::pipeline_jobs::PipelineJobId;
+use tokio::sync::OnceCell as TokioOnceCell;
+
+/// Structured pipeline run error mapping each failure to the stage it occurred in.
+#[derive(Debug, Clone)]
+struct PipelineRunError {
+  stage: PipelineStage,
+  error_code: String,
+  error_message: String,
+}
+
+impl PipelineRunError {
+  fn new(stage: PipelineStage, error_code: &str, error_message: String) -> Self {
+    Self { stage, error_code: error_code.to_string(), error_message }
+  }
+
+  fn from_anyhow(stage: PipelineStage, err: &anyhow::Error) -> Self {
+    let err_str = format!("{err:?}");
+    let err_code = extract_error_code(&err_str);
+    Self::new(stage, &err_code, err_str)
+  }
+}
+
+/// A lazily-initialized shared HTTP client for CapCut Mate calls.
+pub(crate) static CAPCUT_CLIENT: TokioOnceCell<reqwest::Client> = TokioOnceCell::const_new();
+
+async fn get_capcut_client() -> AnyhowResult<&'static reqwest::Client> {
+  let client = CAPCUT_CLIENT.get_or_init(|| async {
+    reqwest::Client::builder()
+      .timeout(std::time::Duration::from_secs(120))
+      .build()
+      .expect("Failed to build CapCut Mate HTTP client")
+  }).await;
+  Ok(client)
+}
 
 /// Statuses that mean "the worker should still act on this job".
 static PIPELINE_PENDING_STATUSES: Lazy<HashSet<TaskStatus>> = Lazy::new(|| {
@@ -46,7 +81,7 @@ pub async fn pipeline_worker_thread(app_handle: AppHandle, _app_data_root: AppDa
 
 async fn worker_loop(app_handle: &AppHandle, task_database: &TaskDatabase, dispatcher: &CommandDispatcher) -> AnyhowResult<()> {
   loop {
-    let pending = list_pending_pipeline_jobs(ListPendingPipelineJobsArgs { db: task_database.get_connection(), statuses: &PIPELINE_PENDING_STATUSES }).await?;
+     let pending = list_pending_pipeline_jobs(ListPendingPipelineJobsArgs { db: task_database.get_connection(), statuses: &PIPELINE_PENDING_STATUSES }).await?;
 
     if pending.jobs.is_empty() {
       tokio::time::sleep(std::time::Duration::from_millis(IDLE_SLEEP_MS)).await;
@@ -64,16 +99,27 @@ async fn worker_loop(app_handle: &AppHandle, task_database: &TaskDatabase, dispa
         continue;
       }
 
+      // Set stage to PreflightCheck synchronously at claim time so the DB
+      // reflects the real starting stage (fixes "failed at queued").
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: &job_id, current_stage: PipelineStage::PreflightCheck, maybe_stage_outputs: None }).await;
+
       let result = run_job_pipeline(app_handle, task_database, dispatcher, &job).await;
 
       if let Err(err) = result {
-        let err_str = format!("{err:?}");
-        let err_code = extract_error_code(&err_str);
-        error!("[JOB][FAILED] Job {} failed: {}", job_id.as_str(), err_str);
+        // IMPORTANT: do NOT read `job.current_stage` from the stale snapshot
+        // taken BEFORE the pipeline ran. Use the stage captured inside the error.
+        let run_error = extract_pipeline_error(&err);
+        let err_str = run_error.error_message.clone();
+        error!("[JOB][FAILED] Job {} failed at {}: {} (code={})", job_id.as_str(), run_error.stage.to_str(), err_str, run_error.error_code);
 
         fail_pipeline_job(FailPipelineJobArgs { db: task_database.get_connection(), pipeline_job_id: &job_id, failure_message: &err_str }).await?;
 
-        emit_job_failed(app_handle, JobFailedPayload { job_id: job_id.as_str().to_string(), failed_stage: job.current_stage.to_str().to_string(), error_code: err_code, error_message: err_str });
+        emit_job_failed(app_handle, JobFailedPayload {
+          job_id: job_id.as_str().to_string(),
+          failed_stage: run_error.stage.to_str().to_string(),
+          error_code: run_error.error_code,
+          error_message: err_str,
+        });
       }
     }
   }

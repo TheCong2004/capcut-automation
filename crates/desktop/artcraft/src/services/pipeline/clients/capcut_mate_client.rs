@@ -59,67 +59,12 @@ pub async fn health_check() -> Result<(), String> {
   }
 }
 
-pub struct DraftAssemblyResult {
-  pub draft_url: String,
-  pub draft_id: String,
-  pub video_url: Option<String>,
-  pub rendering_supported: bool,
-}
-
 /// Assembly flow: create_draft -> add_captions -> save_draft -> verify_draft -> (gen_video if supported).
-pub async fn assemble_and_process_draft(script: &str, cancel_flag: Option<Arc<AtomicBool>>) -> AnyhowResult<DraftAssemblyResult> {
-  let client = Client::builder().timeout(get_timeout()).build()?;
+/// Individual steps are `pub` so the pipeline worker can drive the state machine stage-by-stage.
 
-  info!("[CAPCUT][CREATE_DRAFT] Initiating draft creation...");
-  let (draft_url, draft_id) = create_draft(&client, DEFAULT_WIDTH, DEFAULT_HEIGHT).await?;
-  if draft_id.is_empty() {
-    return Err(anyhow::anyhow!("DRAFT_CREATE_FAILED: Received empty draft_id"));
-  }
-
-  info!("[CAPCUT][ADD_CAPTION] Segmenting and adding captions to draft_id={}", draft_id);
-  let captions = segment_script_to_captions(script);
-  if !captions.is_empty() {
-    add_captions(&client, &draft_url, &captions).await?;
-  }
-
-  info!("[CAPCUT][SAVE] Saving draft draft_id={}", draft_id);
-  let saved_draft_url = save_draft(&client, &draft_url).await?;
-
-  // Verify draft exists via get_draft API or draft URL validation
-  info!("[CAPCUT][VERIFY_DRAFT] Verifying saved draft structure...");
-  verify_draft_exists(&client, &draft_id).await?;
-
-  // Attempt render
-  info!("[CAPCUT][RENDER_CHECK] Checking render capability...");
-  match gen_video(&client, &saved_draft_url).await {
-    Ok(_) => {
-      info!("[CAPCUT][RENDER] Render job submitted. Polling status...");
-      let video_url = poll_gen_video_status(&client, &saved_draft_url, cancel_flag).await?;
-
-      // Verify video output
-      if video_url.trim().is_empty() {
-        return Err(anyhow::anyhow!("RENDER_FAILED: Returned video URL is empty"));
-      }
-
-      Ok(DraftAssemblyResult { draft_url: saved_draft_url, draft_id, video_url: Some(video_url), rendering_supported: true })
-    },
-    Err(err) => {
-      let err_str = err.to_string();
-      // Only fallback to DraftReady if backend explicitly signals render is unsupported/disabled
-      if err_str.contains("render_unsupported") || err_str.contains("cli_bridge_disabled") || err_str.contains("no_render_engine") {
-        info!("[CAPCUT][DRAFT_READY] Backend rendering is explicitly unsupported ({err_str}). Finishing gracefully at DRAFT_READY");
-        Ok(DraftAssemblyResult { draft_url: saved_draft_url, draft_id, video_url: None, rendering_supported: false })
-      } else {
-        // Any real render failure MUST be propagated as RENDER_FAILED
-        error!("[CAPCUT][RENDER_ERROR] Render submission failed: {err_str}");
-        Err(anyhow::anyhow!("RENDER_FAILED: {err_str}"))
-      }
-    },
-  }
-}
 
 /// Create a new draft and return (draft_url, draft_id).
-async fn create_draft(client: &Client, width: u32, height: u32) -> AnyhowResult<(String, String)> {
+pub async fn create_draft(client: &Client, width: u32, height: u32) -> AnyhowResult<(String, String)> {
   let body = json!({ "width": width, "height": height });
   let response = post(client, "/create_draft", &body).await.map_err(|e| anyhow::anyhow!("DRAFT_CREATE_FAILED: {e}"))?;
 
@@ -132,7 +77,7 @@ async fn create_draft(client: &Client, width: u32, height: u32) -> AnyhowResult<
 }
 
 /// Add structured captions array to draft.
-async fn add_captions(client: &Client, draft_url: &str, captions: &[CaptionSegment]) -> AnyhowResult<()> {
+pub async fn add_captions(client: &Client, draft_url: &str, captions: &[CaptionSegment]) -> AnyhowResult<()> {
   let captions_json = serde_json::to_string(captions)?;
   let body = json!({
     "draft_url": draft_url,
@@ -145,7 +90,7 @@ async fn add_captions(client: &Client, draft_url: &str, captions: &[CaptionSegme
 }
 
 /// Save draft.
-async fn save_draft(client: &Client, draft_url: &str) -> AnyhowResult<String> {
+pub async fn save_draft(client: &Client, draft_url: &str) -> AnyhowResult<String> {
   let body = json!({ "draft_url": draft_url });
   let response = post(client, "/save_draft", &body).await.map_err(|e| anyhow::anyhow!("DRAFT_SAVE_FAILED: {e}"))?;
 
@@ -155,7 +100,7 @@ async fn save_draft(client: &Client, draft_url: &str) -> AnyhowResult<String> {
 }
 
 /// Verify draft existence via get_draft API endpoint.
-async fn verify_draft_exists(client: &Client, draft_id: &str) -> AnyhowResult<()> {
+pub async fn verify_draft_exists(client: &Client, draft_id: &str) -> AnyhowResult<()> {
   let base_url = get_capcut_mate_base_url();
   let url = format!("{}/openapi/capcut-mate/v1/get_draft?draft_id={}", base_url.trim_end_matches('/'), draft_id);
 
@@ -170,14 +115,14 @@ async fn verify_draft_exists(client: &Client, draft_id: &str) -> AnyhowResult<()
 }
 
 /// Kick off video rendering task if supported.
-async fn gen_video(client: &Client, draft_url: &str) -> AnyhowResult<()> {
+pub async fn gen_video(client: &Client, draft_url: &str) -> AnyhowResult<()> {
   let body = json!({ "draft_url": draft_url });
   post(client, "/gen_video", &body).await?;
   Ok(())
 }
 
 /// Poll video rendering status with cancellation check and strict deadline.
-async fn poll_gen_video_status(client: &Client, draft_url: &str, cancel_flag: Option<Arc<AtomicBool>>) -> AnyhowResult<String> {
+pub async fn poll_gen_video_status(client: &Client, draft_url: &str, cancel_flag: Option<Arc<AtomicBool>>) -> AnyhowResult<String> {
   let deadline = std::time::Instant::now() + get_job_timeout();
   let poll_interval = get_poll_interval();
   let body = json!({ "draft_url": draft_url });
