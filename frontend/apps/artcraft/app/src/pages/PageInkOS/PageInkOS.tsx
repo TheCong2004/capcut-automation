@@ -21,31 +21,23 @@ export const PageInkOS: React.FC = () => {
   const [status, setStatus] = useState<InkosState>("starting");
   const [error, setError] = useState<string | null>(null);
 
-  const checkStatus = useCallback(async () => {
-    if (!isTauri) {
-      setStatus("ready");
-      return;
-    }
-    try {
-      const res = await invoke<InkosResponse>("inkos_status_command");
-      if (res.ui_ready) {
-        setStatus("ready");
-      }
-    } catch {}
-  }, []);
-
   const handleStart = useCallback(async () => {
     setError(null);
-    setStatus("starting");
 
     if (!isTauri) {
-      setStatus("ready");
+      setStatus("failed");
+      setError("InkOS auto-start requires ArtCraft desktop mode.");
       return;
     }
+
+    setStatus("starting");
 
     try {
       const res = await invoke<InkosResponse>("inkos_start_command");
-      if (res.ui_ready) {
+      if (res.error) {
+        setStatus("failed");
+        setError(res.error);
+      } else if (res.status === "ready" && res.ui_ready) {
         setStatus("ready");
       } else {
         setStatus("starting");
@@ -59,16 +51,16 @@ export const PageInkOS: React.FC = () => {
               setStatus("ready");
             }
           } catch {}
-          if (tries > 30) {
+          if (tries > 20) {
             clearInterval(poll);
             setStatus("failed");
-            setError("InkOS start timed out (Port 4567 not responding).");
+            setError("InkOS startup timed out waiting for port 4567.");
           }
-        }, 1200);
+        }, 1000);
       }
     } catch (err: any) {
       setStatus("failed");
-      setError(err?.message || "Failed to start InkOS");
+      setError(err?.message || "Failed to start InkOS process");
     }
   }, []);
 
@@ -87,8 +79,8 @@ export const PageInkOS: React.FC = () => {
   if (status === "failed") {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#0f1015] p-6 text-slate-300">
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-red-500/20 bg-[#161822] p-6 max-w-sm text-center">
-          <p className="text-xs text-red-400 font-medium">{error || "InkOS startup failed"}</p>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-red-500/20 bg-[#161822] p-6 max-w-md text-center">
+          <p className="text-xs text-red-400 font-medium leading-relaxed">{error || "InkOS startup failed"}</p>
           <button
             onClick={handleStart}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium transition"

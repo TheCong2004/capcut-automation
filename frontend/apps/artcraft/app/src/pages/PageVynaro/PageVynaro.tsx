@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Film, Play, Square, Loader2 } from "lucide-react";
 
 interface VynaroResponse {
-  status: "running" | "stopped" | "starting";
+  status: "running" | "stopped" | "starting" | "failed";
   pid?: number | null;
   message?: string | null;
   error?: string | null;
@@ -14,7 +14,7 @@ const isTauri =
   ("__TAURI__" in window || "__TAURI_INTERNALS__" in window);
 
 export const PageVynaro: React.FC = () => {
-  const [isRunning, setIsRunning] = useState(false);
+  const [status, setStatus] = useState<"stopped" | "starting" | "running" | "failed">("stopped");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,9 +22,13 @@ export const PageVynaro: React.FC = () => {
     if (!isTauri) return;
     try {
       const res = await invoke<VynaroResponse>("vynaro_status_command");
-      setIsRunning(res.status === "running");
+      if (res.status === "running") {
+        setStatus("running");
+      } else if (res.status === "stopped" && status !== "starting") {
+        setStatus("stopped");
+      }
     } catch {}
-  }, []);
+  }, [status]);
 
   useEffect(() => {
     checkStatus();
@@ -33,34 +37,59 @@ export const PageVynaro: React.FC = () => {
   }, [checkStatus]);
 
   const handleStart = async () => {
-    setLoading(true);
-    setError(null);
     if (!isTauri) {
-      setIsRunning(true);
-      setLoading(false);
+      setError("Vynaro desktop launcher requires ArtCraft desktop mode.");
       return;
     }
+    setLoading(true);
+    setError(null);
+    setStatus("starting");
+
     try {
       const res = await invoke<VynaroResponse>("vynaro_start_command");
-      setIsRunning(res.status === "running");
-      if (res.error) setError(res.error);
+      if (res.error) {
+        setStatus("failed");
+        setError(res.error);
+      } else if (res.status === "running") {
+        setStatus("running");
+      } else {
+        setStatus("starting");
+      }
     } catch (err: any) {
+      setStatus("failed");
       setError(err?.message || "Failed to start Vynaro");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStop = async () => {
-    setLoading(true);
+  const handleOpen = async () => {
     if (!isTauri) {
-      setIsRunning(false);
-      setLoading(false);
+      setError("Vynaro desktop launcher requires ArtCraft desktop mode.");
       return;
     }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await invoke<VynaroResponse>("vynaro_open_command");
+      if (res.error) {
+        setError(res.error);
+      } else if (res.status === "running") {
+        setStatus("running");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to open Vynaro");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!isTauri) return;
+    setLoading(true);
     try {
       await invoke("vynaro_stop_command");
-      setIsRunning(false);
+      setStatus("stopped");
     } catch (err: any) {
       setError(err?.message || "Failed to stop Vynaro");
     } finally {
@@ -68,9 +97,34 @@ export const PageVynaro: React.FC = () => {
     }
   };
 
+  if (!isTauri) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[#0f1015] p-6 text-slate-300">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-800 bg-[#161822] p-6 max-w-sm text-center">
+          <Film className="h-6 w-6 text-pink-400" />
+          <h3 className="text-sm font-bold text-white">Vynaro Studio</h3>
+          <p className="text-xs text-slate-400">
+            Vynaro desktop launcher requires ArtCraft desktop mode.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "starting") {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[#0f1015] p-6 text-slate-300">
+        <div className="flex items-center gap-3 rounded-xl border border-pink-500/20 bg-[#161822] px-5 py-3 shadow-lg">
+          <Loader2 className="h-4 w-4 animate-spin text-pink-400" />
+          <span className="text-xs font-medium text-slate-200">Starting Vynaro...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-full items-center justify-center bg-[#0f1015] p-6 text-slate-300">
-      {!isRunning ? (
+      {status !== "running" ? (
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="flex h-12 w-14 items-center justify-center rounded-2xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
             <Film className="h-6 w-6" />
@@ -81,7 +135,7 @@ export const PageVynaro: React.FC = () => {
               叙影 — AI Video Narration & Workflow Desktop Application
             </p>
           </div>
-          {error && <p className="text-xs text-red-400 max-w-sm">{error}</p>}
+          {error && <p className="text-xs text-red-400 max-w-md font-medium leading-relaxed">{error}</p>}
           <button
             onClick={handleStart}
             disabled={loading}
@@ -99,12 +153,13 @@ export const PageVynaro: React.FC = () => {
           <div>
             <h3 className="text-base font-bold text-white">Vynaro is running</h3>
             <p className="text-xs text-slate-400 mt-1">
-              Vynaro runs in its own desktop window.
+              Vynaro is running in its desktop window.
             </p>
           </div>
+          {error && <p className="text-xs text-red-400 max-w-md font-medium leading-relaxed">{error}</p>}
           <div className="flex items-center gap-3">
             <button
-              onClick={handleStart}
+              onClick={handleOpen}
               disabled={loading}
               className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition shadow-lg shadow-emerald-600/20 disabled:opacity-50"
             >

@@ -112,6 +112,11 @@
           "https://fonts.googleapis.com",
           "ipc://localhost",
           "tauri://localhost"
+        ],
+        "frame-src": [
+          "'self'",
+          "http://127.0.0.1:4567",
+          "http://localhost:4567"
         ]
       }
     }
