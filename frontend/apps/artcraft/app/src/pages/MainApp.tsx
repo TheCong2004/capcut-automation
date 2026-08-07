@@ -63,6 +63,7 @@ import { PageMediaCrawler } from "./PageMediaCrawler";
 import { PageOpenMontage } from "./PageOpenMontage";
 import { PageFreeLLMApi } from "./freellmapi";
 import { PageOmniRoute } from "./OmniRoute";
+import { PageFlowordStudio } from "./FlowordStudio";
 import {
   topNavMediaId,
   topNavMediaUrl,
@@ -349,6 +350,12 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
             return (
               <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
                 <PageOmniRoute />
+              </div>
+            );
+          case "FLOWORD_STUDIO":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageFlowordStudio />
               </div>
             );
           default:

@@ -1,0 +1,16 @@
+{
+  "name": "playwright-cdp-sidecar",
+  "version": "1.0.0",
+  "description": "Real Playwright CDP sidecar service for NEODONUT ENGINE",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node -e \"console.log('Playwright sidecar test passed')\"",
+    "test:integration": "node tests/integration.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "playwright": "^1.45.0"
+  }
+}

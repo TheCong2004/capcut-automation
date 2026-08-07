@@ -47,7 +47,9 @@ export type AppId =
   | "YOUWEE"
   | "MEDIA_CRAWLER"
   | "OPEN_MONTAGE"
-  | "FREE_LLM_API";
+  | "FREE_LLM_API"
+  | "OMNI_ROUTE"
+  | "FLOWORD_STUDIO";
 
 export interface AppDescriptor {
   id: AppId;
@@ -201,6 +203,11 @@ const APP_CARD_PALETTES: Record<string, AppCardPalette> = {
     accent: "from-indigo-500/20 to-indigo-500/0",
     iconBg: "bg-indigo-500/20 border-indigo-400/30",
     iconColor: "text-indigo-300",
+  },
+  "floword-studio": {
+    accent: "from-purple-500/20 to-purple-500/0",
+    iconBg: "bg-purple-500/20 border-purple-400/30",
+    iconColor: "text-purple-300",
   },
   "video-watermark-removal": {
     accent: "from-cyan-500/20 to-cyan-500/0",
@@ -416,16 +423,6 @@ export const ALL_APPS: FullAppItem[] = [
     badge: "NEW",
   },
   {
-    id: "free-llm-api",
-    label: "Free LLM API",
-    description: "Quản lý và điều phối các API Key LLM miễn phí",
-    icon: faKey,
-    category: "edit",
-    action: "FREE_LLM_API",
-    color: "bg-emerald-500/40",
-    badge: "NEW",
-  },
-  {
     id: "omni-route",
     label: "OmniRoute",
     description: "Router 290+ Nhà cung cấp LLM, MCP Server & A2A Protocol",
@@ -433,6 +430,16 @@ export const ALL_APPS: FullAppItem[] = [
     category: "edit",
     action: "OMNI_ROUTE",
     color: "bg-indigo-500/40",
+    badge: "NEW",
+  },
+  {
+    id: "floword-studio",
+    label: "Floword Studio",
+    description: "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng)",
+    icon: faSparkles,
+    category: "edit",
+    action: "FLOWORD_STUDIO",
+    color: "bg-purple-500/40",
     badge: "NEW",
   },
   {
@@ -531,6 +538,7 @@ export const goToApp = (action?: string) => {
       "OPEN_MONTAGE",
       "FREE_LLM_API",
       "OMNI_ROUTE",
+      "FLOWORD_STUDIO",
     ].includes(action)
   ) {
     if (action === "STORYBOARD") {

@@ -1,3 +1,4 @@
+pub mod artifact_store;
 pub mod caption_segmenter;
 pub mod clients;
 pub mod events;

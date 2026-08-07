@@ -33,9 +33,12 @@ use crate::core::commands::providers::provider_set_api_key_command::provider_set
 use crate::core::commands::task_queue::get_task_queue_command::get_task_queue_command;
 use crate::core::commands::task_queue::mark_task_as_dismissed_command::mark_task_as_dismissed_command;
 use crate::core::commands::task_queue::tasks_nuke_all_command::tasks_nuke_all_command;
-use crate::core::commands::pipeline::enqueue_pipeline_job_command::enqueue_pipeline_job_command;
-use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
 use crate::core::commands::pipeline::cancel_pipeline_job_command::cancel_pipeline_job_command;
+use crate::core::commands::pipeline::enqueue_pipeline_job_command::enqueue_pipeline_job_command;
+use crate::core::commands::pipeline::floword_commands::{
+  cancel_floword_workflow, enqueue_floword_workflow, get_floword_workflow, list_floword_workflows, retry_floword_step,
+};
+use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use crate::core::lifecycle::startup::handle_tauri_startup::handle_tauri_startup;
 use crate::core::lifecycle::startup::setup_main_window::setup_main_window;
@@ -265,6 +268,11 @@ pub fn run() {
     enqueue_pipeline_job_command,
     list_pipeline_jobs_command,
     cancel_pipeline_job_command,
+    enqueue_floword_workflow,
+    get_floword_workflow,
+    list_floword_workflows,
+    cancel_floword_workflow,
+    retry_floword_step,
     update_app_preferences_command,
     worldlabs_clear_credentials_command,
     worldlabs_get_credential_info_command,

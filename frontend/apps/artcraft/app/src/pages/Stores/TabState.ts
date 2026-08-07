@@ -25,7 +25,8 @@ export type TabId =
   | "MEDIA_CRAWLER"
   | "OPEN_MONTAGE"
   | "FREE_LLM_API"
-  | "OMNI_ROUTE";
+  | "OMNI_ROUTE"
+  | "FLOWORD_STUDIO";
 
 const DEFAULT_TAB: TabId = "APPS";
 

@@ -103,6 +103,9 @@ crates/programs/aichatbot-sidecar/database.db
 # Runtime data for the AI chatbot
 runtime_data/
 
+# Floword runtime browser profile / CDP cache
+.runtime/
+
 # Old Python virtual environments
 models/Wav2Lip/python/
 models/tacotron2/python/
