@@ -62,7 +62,6 @@ pub async fn health_check() -> Result<(), String> {
 /// Assembly flow: create_draft -> add_captions -> save_draft -> verify_draft -> (gen_video if supported).
 /// Individual steps are `pub` so the pipeline worker can drive the state machine stage-by-stage.
 
-
 /// Create a new draft and return (draft_url, draft_id).
 pub async fn create_draft(client: &Client, width: u32, height: u32) -> AnyhowResult<(String, String)> {
   let body = json!({ "width": width, "height": height });
@@ -112,6 +111,65 @@ pub async fn verify_draft_exists(client: &Client, draft_id: &str) -> AnyhowResul
     },
     Err(e) => Err(anyhow::anyhow!("DRAFT_SAVE_FAILED: get_draft validation error: {e}")),
   }
+}
+
+/// Real draft properties read back from CapCut Mate's `get_draft` response.
+/// Track counts are `None` when the backend does not report them — the worker
+/// must not substitute hard-coded numbers.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DraftManifest {
+  pub draft_id: String,
+  pub visual_track_count: Option<u64>,
+  pub audio_track_count: Option<u64>,
+  pub caption_track_count: Option<u64>,
+  pub timeline_duration_us: Option<u64>,
+  /// Where the counts came from: "capcut_get_draft_tracks" when the backend
+  /// reported a tracks array, "capcut_get_draft_no_tracks" when it did not.
+  pub source: String,
+}
+
+/// Inspect a saved draft via `get_draft`, extracting whatever track/timeline
+/// metadata the backend actually reports. Missing fields stay `None`.
+pub async fn inspect_draft(client: &Client, draft_id: &str) -> AnyhowResult<DraftManifest> {
+  let base_url = get_capcut_mate_base_url();
+  let url = format!("{}/openapi/capcut-mate/v1/get_draft?draft_id={}", base_url.trim_end_matches('/'), draft_id);
+
+  let response = client.get(&url).send().await.map_err(|e| anyhow::anyhow!("DRAFT_SAVE_FAILED: get_draft inspection error: {e}"))?;
+  let status = response.status();
+  let text = response.text().await.unwrap_or_default();
+  if !status.is_success() {
+    return Err(anyhow::anyhow!("DRAFT_SAVE_FAILED: get_draft inspection HTTP {}", status.as_u16()));
+  }
+
+  let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|_| json!({}));
+  // Tracks may live at the top level, under `data`, or under `draft` depending on
+  // the backend version — probe each without inventing values.
+  let root = parsed.get("data").or_else(|| parsed.get("draft")).unwrap_or(&parsed);
+
+  let tracks = root.get("tracks").and_then(|v| v.as_array());
+  let (mut visual, mut audio, mut caption) = (None::<u64>, None::<u64>, None::<u64>);
+  let source;
+  if let Some(tracks) = tracks {
+    let (mut v, mut a, mut c) = (0u64, 0u64, 0u64);
+    for track in tracks {
+      match track.get("type").and_then(|t| t.as_str()).unwrap_or("") {
+        "video" | "image" | "visual" => v += 1,
+        "audio" | "voice" | "music" => a += 1,
+        "text" | "caption" | "subtitle" => c += 1,
+        _ => {},
+      }
+    }
+    visual = Some(v);
+    audio = Some(a);
+    caption = Some(c);
+    source = "capcut_get_draft_tracks".to_string();
+  } else {
+    source = "capcut_get_draft_no_tracks".to_string();
+  }
+
+  let timeline_duration_us = root.get("duration").or_else(|| root.get("timeline_duration_us")).and_then(|v| v.as_u64());
+
+  Ok(DraftManifest { draft_id: draft_id.to_string(), visual_track_count: visual, audio_track_count: audio, caption_track_count: caption, timeline_duration_us, source })
 }
 
 /// Kick off video rendering task if supported.

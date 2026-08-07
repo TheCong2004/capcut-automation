@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive, Server, Check, RefreshCw, Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fetchProjectsFromMate, LocalCapCutDraft } from '../api/flowordClient';
+
+interface LocalCapCutDraft {
+  id: string;
+  name: string;
+  path: string;
+  updatedAt: string;
+  type: 'local' | 'mate';
+}
 
 interface DraftExplorerProps {
   activeDraftUrl: string;
@@ -17,16 +24,10 @@ export const DraftExplorer: React.FC<DraftExplorerProps> = ({
   const [filter, setFilter] = useState<'all' | 'local' | 'mate'>('all');
 
   const loadDrafts = async () => {
+    // Draft listing over Tauri is not wired yet; show only drafts created in this
+    // session rather than seeding fake projects.
     setLoading(true);
-    try {
-      const items = await fetchProjectsFromMate();
-      setDrafts(items);
-      toast.success(`Loaded ${items.length} CapCut Draft projects`);
-    } catch (e: any) {
-      toast.error('Could not connect to CapCut Mate');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(false);
   };
 
   useEffect(() => {

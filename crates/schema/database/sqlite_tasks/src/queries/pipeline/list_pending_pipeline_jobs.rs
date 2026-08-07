@@ -1,11 +1,9 @@
 use crate::connection::TaskDbConnection;
 use crate::error::SqliteTasksError;
-use crate::queries::pipeline::pipeline_job::{PipelineJob, RawPipelineJob};
-use enums::tauri::pipeline::pipeline_stage::PipelineStage;
+use crate::queries::pipeline::pipeline_job::{raw_into_pipeline_job, PipelineJob, RawPipelineJob};
 use enums::tauri::tasks::task_status::TaskStatus;
 use sqlx::{QueryBuilder, Sqlite};
 use std::collections::HashSet;
-use tokens::tokens::sqlite::pipeline_jobs::PipelineJobId;
 
 pub struct ListPendingPipelineJobsArgs<'a> {
   pub db: &'a TaskDbConnection,
@@ -50,8 +48,4 @@ pub async fn list_pending_pipeline_jobs(args: ListPendingPipelineJobsArgs<'_>) -
   }
 
   Ok(PipelineJobList { jobs })
-}
-
-pub(crate) fn raw_into_pipeline_job(raw: RawPipelineJob) -> Result<PipelineJob, SqliteTasksError> {
-  Ok(PipelineJob { id: PipelineJobId::new_from_str(&raw.id), status: TaskStatus::from_str(&raw.status)?, current_stage: PipelineStage::from_str(&raw.current_stage)?, maybe_input_payload: raw.input_payload, maybe_stage_outputs: raw.stage_outputs, maybe_on_failure_message: raw.on_failure_message })
 }

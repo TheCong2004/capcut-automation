@@ -35,9 +35,7 @@ use crate::core::commands::task_queue::mark_task_as_dismissed_command::mark_task
 use crate::core::commands::task_queue::tasks_nuke_all_command::tasks_nuke_all_command;
 use crate::core::commands::pipeline::cancel_pipeline_job_command::cancel_pipeline_job_command;
 use crate::core::commands::pipeline::enqueue_pipeline_job_command::enqueue_pipeline_job_command;
-use crate::core::commands::pipeline::floword_commands::{
-  cancel_floword_workflow, enqueue_floword_workflow, get_floword_workflow, list_floword_workflows, retry_floword_step,
-};
+use crate::core::commands::pipeline::floword_commands::{cancel_floword_workflow, enqueue_floword_workflow, get_floword_readiness, get_floword_workflow, list_floword_workflows, list_omniroute_models, retry_floword_step};
 use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use crate::core::lifecycle::startup::handle_tauri_startup::handle_tauri_startup;
@@ -273,6 +271,10 @@ pub fn run() {
     list_floword_workflows,
     cancel_floword_workflow,
     retry_floword_step,
+    list_omniroute_models,
+    get_floword_readiness,
+    list_omniroute_models,
+    get_floword_readiness,
     update_app_preferences_command,
     worldlabs_clear_credentials_command,
     worldlabs_get_credential_info_command,

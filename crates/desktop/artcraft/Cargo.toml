@@ -69,6 +69,7 @@ reqwest = { workspace = true, features = ["multipart", "stream"], default-featur
 serde.workspace = true
 serde_derive.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tauri-plugin-dialog.workspace = true
 tauri-plugin-log.workspace = true
 tauri-plugin-upload.workspace = true

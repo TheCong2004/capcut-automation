@@ -1,4 +1,3 @@
-import { saveDraftMate, genVideo, callCapCutMateApi, checkCdpConnection } from '../api/flowordClient';
 
 export type ExecutionMode = 'api' | 'cli' | 'cdp' | 'manual';
 
@@ -244,23 +243,26 @@ export const DEFAULT_WORKFLOW_INPUT: WorkflowInput = {
   modelId: 'auto',
 };
 
-// Persistence helper
-const STORAGE_KEY = 'neodonut_workflow_run_active';
+// Persistence: the ONLY workflow-identity key the app keeps is the real backend
+// job id. Full WorkflowRun snapshots are never treated as a source of truth —
+// state comes from get_floword_workflow(job_id).
+export const ACTIVE_JOB_ID_KEY = 'floword_active_job_id';
 
-export function saveActiveWorkflowRun(run: WorkflowRun) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(run));
-  } catch (e) {
-    console.error('Failed to persist workflow run UI state', e);
-  }
-}
+// Legacy keys from earlier iterations that stored fabricated ids or whole runs.
+// They are removed on mount so a stale id can never drive polling again.
+const LEGACY_KEYS = [
+  'activeWorkflowId',
+  'floword_active_workflow',
+  'neodonut_workflow_run_active',
+  'floword_workflow_run',
+];
 
-export function loadActiveWorkflowRun(): WorkflowRun | null {
+export function migrateLegacyLocalStorageKeys(): void {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) return JSON.parse(data);
+    for (const key of LEGACY_KEYS) {
+      localStorage.removeItem(key);
+    }
   } catch (e) {
-    console.error('Failed to load active workflow run UI state', e);
+    console.error('Failed to migrate legacy Floword localStorage keys', e);
   }
-  return null;
 }

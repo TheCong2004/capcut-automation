@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { FlowordHeader } from './components/FlowordHeader';
 import { ExecutionPlanView } from './components/ExecutionPlanView';
@@ -10,39 +10,49 @@ import {
   WorkflowRun,
   StepRun,
   StepConfig,
-  ArtifactRef,
   DEFAULT_WORKFLOW_INPUT,
   INITIAL_STEP_CONFIGS,
-  saveActiveWorkflowRun,
-  loadActiveWorkflowRun,
+  ACTIVE_JOB_ID_KEY,
+  migrateLegacyLocalStorageKeys,
 } from './services/workflowEngine';
 import {
   DetailedReadinessStatus,
-  checkDetailedReadiness,
+  DEFAULT_READINESS,
+  fetchDetailedReadiness,
+  enqueueFlowordWorkflow,
+  getFlowordWorkflow,
+  cancelFlowordWorkflow,
+  retryFlowordStep,
+  FlowordCommandError,
+  GetFlowordWorkflowResponse,
 } from './api/flowordClient';
 
-// Tauri invoke helper
-async function invokeTauriCommand<T>(cmd: string, args: Record<string, any>): Promise<T | null> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
-    try {
-      const { invoke } = (window as any).__TAURI_INTERNALS__;
-      return await invoke(cmd, args);
-    } catch (e: any) {
-      console.warn(`[Tauri] Command ${cmd} failed:`, e);
-      return null;
-    }
-  }
-  return null;
-}
+const POLL_INTERVAL_MS = 2000;
+
+/// Backend stages that are terminal — polling stops when one is observed.
+const TERMINAL_STAGES = new Set([
+  'completed',
+  'draft_ready',
+  'failed',
+  'cancelled',
+]);
+
+/// Backend statuses that are terminal.
+const TERMINAL_STATUSES = new Set([
+  'complete_success',
+  'complete_failure',
+  'cancelled_by_user',
+  'cancelled_by_provider',
+  'cancelled_by_us',
+  'dead',
+]);
 
 export const FlowordApp: React.FC = () => {
   const [viewMode, setViewMode] = useState<'execution_plan' | 'flow_design' | 'browser_cdp'>('execution_plan');
 
-  // Input & Step configurations
   const [workflowInput, setWorkflowInput] = useState<WorkflowInput>(DEFAULT_WORKFLOW_INPUT);
   const [stepConfigs, setStepConfigs] = useState<StepConfig[]>(INITIAL_STEP_CONFIGS);
 
-  // Runtime StepRuns state
   const [stepRuns, setStepRuns] = useState<StepRun[]>(() =>
     INITIAL_STEP_CONFIGS.map((sc) => ({
       ...sc,
@@ -60,66 +70,220 @@ export const FlowordApp: React.FC = () => {
   const [progress, setProgress] = useState<number>(0);
   const [currentStepMessage, setCurrentStepMessage] = useState<string>('Ready to enqueue Rust Workflow Worker');
   const [logs, setLogs] = useState<string[]>([
-    '🟢 [NEODONUT ENGINE v4.2] Rust Backend Task System initialized.',
-    '💡 Enqueue workflow commands are dispatched directly to Rust Worker Thread & SQLite Database.',
+    '🟢 [NEODONUT ENGINE] Rust Backend Task System initialized.',
+    '💡 Enqueue commands dispatch directly to the Rust Worker Thread & SQLite database.',
   ]);
-  const [activeDraftUrl, setActiveDraftUrl] = useState<string>('draft_id=20260806002621F724929a');
+  const [activeDraftUrl, setActiveDraftUrl] = useState<string>('');
   const [detailModalStepId, setDetailModalStepId] = useState<string | null>(null);
-
   const [activeWorkflowRun, setActiveWorkflowRun] = useState<WorkflowRun | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
-  // Service readiness state
-  const [readiness, setReadiness] = useState<DetailedReadinessStatus>({
-    mateAgent: { name: 'Mate Agent', status: 'UNAVAILABLE', endpoint: '', lastChecked: '', latencyMs: 0, message: '' },
-    omniRoute: { name: 'OmniRoute LLM Gateway', status: 'DEGRADED', endpoint: '', lastChecked: '', latencyMs: 0, message: '' },
-    mediaCrawler: { name: 'MediaCrawler', status: 'READY', endpoint: '', lastChecked: '', latencyMs: 0, message: '' },
-    openMontage: { name: 'OpenMontage', status: 'READY', endpoint: '', lastChecked: '', latencyMs: 0, message: '' },
-    playwrightCdp: { name: 'Playwright CDP', status: 'DEGRADED', endpoint: '', lastChecked: '', latencyMs: 0, message: '' },
-    storage: { name: 'LocalStorage & ArtifactStore', status: 'READY', endpoint: '', lastChecked: '', latencyMs: 0, message: '' },
-    capCutRender: { name: 'CapCut Render', status: 'READY', endpoint: '', lastChecked: '', latencyMs: 0, message: '' },
-    isReadyForExecution: true,
-  });
+  const [readiness, setReadiness] = useState<DetailedReadinessStatus>(DEFAULT_READINESS);
 
-  const appendLog = (msg: string) => {
+  // Single polling timer + the job id it is bound to. Guards against duplicate
+  // timers and stale polling of an old job after a new enqueue.
+  const pollingTimerRef = useRef<number | null>(null);
+  const pollingJobIdRef = useRef<string | null>(null);
+  // A one-shot latch so WORKFLOW_NOT_FOUND surfaces a single toast, not one per tick.
+  const notFoundNotifiedRef = useRef<boolean>(false);
+
+  const appendLog = useCallback((msg: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev.slice(-150), `[${timestamp}] ${msg}`]);
-  };
+  }, []);
 
-  // Sync readiness periodically
+  // ---- Readiness polling (backend-driven, no hard-coded READY) --------------
   useEffect(() => {
+    let cancelled = false;
     const updateReadiness = async () => {
-      const res = await checkDetailedReadiness();
-      setReadiness(res);
+      const res = await fetchDetailedReadiness();
+      if (!cancelled) setReadiness(res);
     };
     updateReadiness();
-    const interval = setInterval(updateReadiness, 5000);
-    return () => clearInterval(interval);
+    const interval = window.setInterval(updateReadiness, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
   }, []);
 
-  // Restore persisted WorkflowRun on mount if exists
-  useEffect(() => {
-    const restored = loadActiveWorkflowRun();
-    if (restored) {
-      setActiveWorkflowRun(restored);
-      setWorkflowInput(restored.input);
+  // ---- Polling lifecycle ----------------------------------------------------
+  const stopWorkflowPolling = useCallback(() => {
+    if (pollingTimerRef.current !== null) {
+      window.clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
     }
+    pollingJobIdRef.current = null;
   }, []);
 
-  const handleSelectFunction = (stepId: string, fnName: string) => {
-    setStepConfigs((prev) =>
-      prev.map((s) => (s.id === stepId ? { ...s, selectedFunction: fnName } : s))
-    );
+  const applyStatusToUi = useCallback((res: GetFlowordWorkflowResponse) => {
+    const stage = res.current_stage || '';
+    const status = res.status || '';
+
+    let stageIdx = 0;
+    if (stage.includes('script')) stageIdx = 1;
+    else if (stage.includes('draft_creating') || stage.includes('draft_created')) stageIdx = 3;
+    else if (stage.includes('caption')) stageIdx = 4;
+    else if (stage.includes('draft_saving') || stage.includes('draft_ready')) stageIdx = 5;
+    else if (stage.includes('render') || stage.includes('completed')) stageIdx = 5;
+
+    setActiveStepIndex(stageIdx);
+    setCurrentStepMessage(`[Rust Backend] stage=${stage} status=${status}`);
     setStepRuns((prev) =>
-      prev.map((s) => (s.id === stepId ? { ...s, selectedFunction: fnName } : s))
+      prev.map((s, idx) =>
+        idx === stageIdx
+          ? { ...s, status: status === 'complete_success' ? 'succeeded' : 'running' }
+          : idx < stageIdx
+          ? { ...s, status: 'succeeded', progress: 100 }
+          : s
+      )
     );
-    appendLog(`⚙️ [CONFIG] Assigned function "${fnName}" to Step ${stepId}`);
+  }, []);
+
+  const handleWorkflowNotFound = useCallback(
+    (jobId: string) => {
+      stopWorkflowPolling();
+      // Drop the stale id so the app boots idle next time.
+      localStorage.removeItem(ACTIVE_JOB_ID_KEY);
+      setActiveJobId(null);
+      setRunning(false);
+      setActiveStepIndex(-1);
+      setActiveWorkflowRun(null);
+      if (!notFoundNotifiedRef.current) {
+        notFoundNotifiedRef.current = true;
+        appendLog(`⚠️ [WORKFLOW_NOT_FOUND] Job ${jobId} not found in backend. Cleared active job.`);
+        toast.error('Không tìm thấy workflow job trong backend. Đã xóa job cũ.');
+      }
+    },
+    [appendLog, stopWorkflowPolling]
+  );
+
+  const pollOnce = useCallback(
+    async (jobId: string) => {
+      // Guard: never poll an id that is no longer the active polling target.
+      if (pollingJobIdRef.current !== jobId) return;
+
+      let res: GetFlowordWorkflowResponse;
+      try {
+        res = await getFlowordWorkflow(jobId);
+      } catch (err) {
+        if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
+          handleWorkflowNotFound(jobId);
+          return;
+        }
+        // Transient/unexpected error: log once per tick but keep polling.
+        appendLog(`❌ [POLL_ERROR] ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
+      applyStatusToUi(res);
+
+      const isTerminal = TERMINAL_STATUSES.has(res.status) || TERMINAL_STAGES.has(res.current_stage);
+      if (isTerminal) {
+        stopWorkflowPolling();
+        setRunning(false);
+        setActiveStepIndex(-1);
+        setProgress(100);
+
+        const isSuccess = res.status === 'complete_success';
+        setActiveWorkflowRun((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: isSuccess ? (res.current_stage === 'draft_ready' ? 'draft_ready' : 'completed') : 'failed',
+                progress: 100,
+                completedAt: new Date().toISOString(),
+                errorMessage: res.failure_message ?? undefined,
+              }
+            : prev
+        );
+
+        if (isSuccess) {
+          appendLog(`🎉 [WORKER COMPLETE] Job ${jobId} finished (stage=${res.current_stage}).`);
+          toast.success('Pipeline hoàn tất ở backend!');
+        } else if (res.status.startsWith('cancelled')) {
+          appendLog(`🛑 [CANCELLED] Job ${jobId} cancelled.`);
+        } else {
+          appendLog(`❌ [WORKER FAILED] Job ${jobId}: ${res.failure_message ?? res.status}`);
+          toast.error(`Job thất bại: ${res.failure_message ?? res.status}`);
+        }
+      }
+    },
+    [appendLog, applyStatusToUi, handleWorkflowNotFound, stopWorkflowPolling]
+  );
+
+  const startWorkflowPolling = useCallback(
+    (jobId: string) => {
+      if (!jobId) return;
+      // Tear down any prior timer so we never run two, and never poll an old id.
+      stopWorkflowPolling();
+      notFoundNotifiedRef.current = false;
+      pollingJobIdRef.current = jobId;
+      // Fire immediately, then on interval.
+      void pollOnce(jobId);
+      pollingTimerRef.current = window.setInterval(() => {
+        void pollOnce(jobId);
+      }, POLL_INTERVAL_MS);
+    },
+    [pollOnce, stopWorkflowPolling]
+  );
+
+  // Stop polling on unmount.
+  useEffect(() => {
+    return () => stopWorkflowPolling();
+  }, [stopWorkflowPolling]);
+
+  // ---- Restore active job from LocalStorage on mount ------------------------
+  useEffect(() => {
+    migrateLegacyLocalStorageKeys();
+    const jobId = localStorage.getItem(ACTIVE_JOB_ID_KEY);
+    if (!jobId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getFlowordWorkflow(jobId);
+        if (cancelled) return;
+        setActiveJobId(jobId);
+        applyStatusToUi(res);
+        const isTerminal = TERMINAL_STATUSES.has(res.status) || TERMINAL_STAGES.has(res.current_stage);
+        if (!isTerminal) {
+          setRunning(true);
+          startWorkflowPolling(jobId);
+          appendLog(`♻️ [RESTORE] Resumed polling active job ${jobId}.`);
+        } else {
+          appendLog(`♻️ [RESTORE] Active job ${jobId} already terminal (${res.status}).`);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
+          localStorage.removeItem(ACTIVE_JOB_ID_KEY);
+          setActiveJobId(null);
+          appendLog(`♻️ [RESTORE] Stale job ${jobId} not found — cleared. Idle.`);
+        } else {
+          appendLog(`♻️ [RESTORE_ERROR] ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Config persistence (unchanged behavior) ------------------------------
+  const handleSelectFunction = (stepId: string, fnName: string) => {
+    setStepConfigs((prev) => prev.map((s) => (s.id === stepId ? { ...s, selectedFunction: fnName } : s)));
+    setStepRuns((prev) => prev.map((s) => (s.id === stepId ? { ...s, selectedFunction: fnName } : s)));
+    appendLog(`⚙️ [CONFIG] Assigned function "${fnName}" to ${stepId}`);
     toast.success(`Gán chức năng "${fnName}" thành công!`);
   };
 
   const handleSaveConfig = () => {
     localStorage.setItem('neodonut_project_input', JSON.stringify(workflowInput));
     localStorage.setItem('neodonut_step_configs', JSON.stringify(stepConfigs));
-    appendLog('💾 [CONFIG] Saved Workflow input and step configuration to LocalStorage');
+    appendLog('💾 [CONFIG] Saved workflow input and step configuration.');
     toast.success('Đã lưu cấu hình Workflow!');
   };
 
@@ -133,19 +297,19 @@ export const FlowordApp: React.FC = () => {
         setStepConfigs(parsed);
         setStepRuns((prev) =>
           prev.map((sr) => {
-            const match = parsed.find((p: any) => p.id === sr.id);
+            const match = parsed.find((p: StepConfig) => p.id === sr.id);
             return match ? { ...sr, ...match } : sr;
           })
         );
       }
-      appendLog('📂 [CONFIG] Loaded saved Workflow configuration from LocalStorage');
+      appendLog('📂 [CONFIG] Loaded saved workflow configuration.');
       toast.success('Đã tải cấu hình Workflow đã lưu!');
-    } catch (e) {
+    } catch {
       toast.error('Could not load saved workflow configuration');
     }
   };
 
-  // Enqueue workflow run to Rust backend via Tauri command
+  // ---- Execute ---------------------------------------------------------------
   const handleExecuteWorkflow = async () => {
     if (running) return;
 
@@ -154,16 +318,16 @@ export const FlowordApp: React.FC = () => {
       return;
     }
 
-    setRunning(true);
+    // Clear any prior run's polling before enqueuing a fresh job.
+    stopWorkflowPolling();
     setProgress(5);
     setActiveStepIndex(0);
-    setCurrentStepMessage('Enqueuing workflow task into Rust Task Database...');
+    setCurrentStepMessage('Enqueuing workflow into Rust Task Database...');
+    appendLog(`🚀 [TAURI INVOKE] enqueue_floword_workflow...`);
 
-    appendLog(`🚀 [TAURI INVOKE] Enqueuing workflow command: enqueue_floword_workflow...`);
-
-    // Call Rust Tauri command enqueue_floword_workflow
-    const res: any = await invokeTauriCommand('enqueue_floword_workflow', {
-      request: {
+    let jobId: string;
+    try {
+      const res = await enqueueFlowordWorkflow({
         workflow_name: workflowInput.workflowName,
         prompt: workflowInput.prompt,
         topic: workflowInput.topic,
@@ -172,14 +336,29 @@ export const FlowordApp: React.FC = () => {
         target_duration_seconds: workflowInput.targetDurationSeconds,
         output_mode: workflowInput.outputMode,
         model_id: workflowInput.modelId,
-      },
-    });
+      });
+      jobId = res.job_id;
+    } catch (err) {
+      // Enqueue failed: show the REAL error, do NOT invent an id, do NOT poll,
+      // do NOT persist, do NOT claim success.
+      const code = err instanceof FlowordCommandError ? err.errorCode : undefined;
+      const msg = err instanceof Error ? err.message : String(err);
+      setProgress(0);
+      setActiveStepIndex(-1);
+      setCurrentStepMessage('Enqueue failed.');
+      appendLog(`❌ [ENQUEUE_FAILED] ${code ? `[${code}] ` : ''}${msg}`);
+      toast.error(`Enqueue thất bại${code ? ` (${code})` : ''}: ${msg}`);
+      return;
+    }
 
-    const workflowId = res?.workflow_id || `wf_${Date.now()}`;
-    appendLog(`✓ [RUST BACKEND] Workflow enqueued into SQLite database. Workflow ID: ${workflowId}`);
+    // Success: persist ONLY the real job id and start polling it.
+    localStorage.setItem(ACTIVE_JOB_ID_KEY, jobId);
+    setActiveJobId(jobId);
+    setRunning(true);
+    appendLog(`✓ [RUST BACKEND] Enqueued. job_id=${jobId}`);
 
     const initialRun: WorkflowRun = {
-      id: workflowId,
+      id: jobId,
       workflowName: workflowInput.workflowName || 'CapCut Campaign Run',
       input: workflowInput,
       status: 'running',
@@ -190,93 +369,60 @@ export const FlowordApp: React.FC = () => {
       steps: stepRuns.map((s) => ({ ...s, status: 'queued', progress: 0, logs: [], artifacts: [] })),
       artifacts: [],
     };
-
     setActiveWorkflowRun(initialRun);
-    saveActiveWorkflowRun(initialRun);
 
-    // Poll real backend status from Rust SQLite database via get_floword_workflow
-    const pollInterval = setInterval(async () => {
-      const statusRes: any = await invokeTauriCommand('get_floword_workflow', {
-        request: { workflow_id: workflowId },
-      });
-
-      if (statusRes) {
-        const stageStr = statusRes.current_stage || '';
-        const statusStr = statusRes.status || '';
-
-        // Map backend stage to index
-        let stageIdx = 0;
-        if (stageStr.includes('Script')) stageIdx = 1;
-        else if (stageStr.includes('Draft') || stageStr.includes('Youwee') || stageStr.includes('ArtCraft')) stageIdx = 2;
-        else if (stageStr.includes('Caption') || stageStr.includes('Montage')) stageIdx = 4;
-        else if (stageStr.includes('Rendering') || stageStr.includes('Completed')) stageIdx = 5;
-
-        setActiveStepIndex(stageIdx);
-        setCurrentStepMessage(`[Rust Backend Stage] ${stageStr} (Status: ${statusStr})`);
-
-        setStepRuns((prev) =>
-          prev.map((s, idx) =>
-            idx === stageIdx
-              ? { ...s, status: statusStr === 'complete_success' ? 'succeeded' : 'running' }
-              : idx < stageIdx
-              ? { ...s, status: 'succeeded', progress: 100 }
-              : s
-          )
-        );
-
-        if (statusStr === 'complete_success' || statusStr === 'failed' || statusStr === 'cancelled_by_user') {
-          clearInterval(pollInterval);
-          setRunning(false);
-          setActiveStepIndex(-1);
-          setProgress(100);
-
-          const isSuccess = statusStr === 'complete_success';
-          const completedRun: WorkflowRun = {
-            ...initialRun,
-            status: isSuccess ? 'completed' : 'failed',
-            progress: 100,
-            completedAt: new Date().toISOString(),
-            resultType: 'draft',
-            finalDraftId: activeDraftUrl,
-            finalDraftPath: activeDraftUrl,
-            finalDraftUrl: activeDraftUrl,
-          };
-
-          setActiveWorkflowRun(completedRun);
-          saveActiveWorkflowRun(completedRun);
-
-          if (isSuccess) {
-            appendLog(`🎉 [RUST WORKER COMPLETE] Job ${workflowId} completed in Rust backend!`);
-            toast.success('NEODONUT ENGINE Rust Backend Pipeline Complete!');
-          } else {
-            appendLog(`❌ [RUST WORKER FAILED] Job ${workflowId} status: ${statusStr}`);
-            toast.error(`Backend job ended with status: ${statusStr}`);
-          }
-        }
-      }
-    }, 2000);
+    startWorkflowPolling(jobId);
   };
 
   const handleCancelWorkflow = async () => {
-    if (activeWorkflowRun?.id) {
-      await invokeTauriCommand('cancel_floword_workflow', {
-        request: { workflow_id: activeWorkflowRun.id },
-      });
+    const jobId = activeJobId ?? activeWorkflowRun?.id;
+    if (!jobId) {
+      // Nothing running — just reset local UI.
+      stopWorkflowPolling();
+      setRunning(false);
+      setActiveStepIndex(-1);
+      return;
     }
+    stopWorkflowPolling();
     setRunning(false);
     setActiveStepIndex(-1);
-    appendLog('🛑 [CANCELLED] Sent cancel_floword_workflow command to Rust backend.');
-    toast.info('Đã hủy quy trình thực thi ở backend!');
+    try {
+      await cancelFlowordWorkflow(jobId);
+      appendLog(`🛑 [CANCELLED] Sent cancel_floword_workflow for ${jobId}.`);
+      toast('Đã gửi lệnh hủy tới backend.', { icon: '🛑' });
+    } catch (err) {
+      if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
+        localStorage.removeItem(ACTIVE_JOB_ID_KEY);
+        setActiveJobId(null);
+        appendLog(`⚠️ [CANCEL] Job ${jobId} not found (already gone).`);
+        return;
+      }
+      appendLog(`❌ [CANCEL_ERROR] ${err instanceof Error ? err.message : String(err)}`);
+      toast.error('Lệnh hủy thất bại.');
+    }
   };
 
   const handleRetryStep = async (stepId: string) => {
-    if (activeWorkflowRun?.id) {
-      await invokeTauriCommand('retry_floword_step', {
-        request: { workflow_id: activeWorkflowRun.id, step_id: stepId },
-      });
+    const jobId = activeJobId ?? activeWorkflowRun?.id;
+    if (!jobId) {
+      toast.error('Không có job đang chạy để retry.');
+      return;
     }
-    toast.info(`Đã gửi lệnh retry_floword_step cho ${stepId}`);
-    handleExecuteWorkflow();
+    try {
+      const res = await retryFlowordStep(jobId, stepId);
+      appendLog(`🔁 [RETRY] Step ${stepId} → resumed at ${res.resumed_stage} (retry #${res.step_retry_count}). Same job ${jobId}.`);
+      toast.success(`Retry ${stepId}: tiếp tục cùng job.`);
+      // Resume polling the SAME job — never enqueue a new workflow.
+      setRunning(true);
+      startWorkflowPolling(jobId);
+    } catch (err) {
+      if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
+        handleWorkflowNotFound(jobId);
+        return;
+      }
+      appendLog(`❌ [RETRY_ERROR] ${err instanceof Error ? err.message : String(err)}`);
+      toast.error('Retry thất bại.');
+    }
   };
 
   const modalStep = stepRuns.find((s) => s.id === detailModalStepId);
@@ -285,21 +431,19 @@ export const FlowordApp: React.FC = () => {
     <div className="flex flex-col h-full w-full bg-[#0d1017] text-slate-100 select-none overflow-hidden font-sans">
       <Toaster position="top-right" toastOptions={{ style: { background: '#1a1f2c', color: '#ffc880' } }} />
 
-      {/* Top Main Navigation Header */}
       <FlowordHeader
         status={{
-          mateOnline: readiness.mateAgent.status === 'READY',
+          mateOnline: readiness.capcut.status === 'READY',
           omniOnline: readiness.omniRoute.status === 'READY',
-          rustPipelineOnline: true,
+          rustPipelineOnline: readiness.storage.status === 'READY',
         }}
         activeDraftUrl={activeDraftUrl}
         running={running}
-        onRunWorkflow={handleExecuteWorkflow}
+        onRunWorkflow={running ? handleCancelWorkflow : handleExecuteWorkflow}
         onSaveWorkflow={handleSaveConfig}
         onAddStep={() => setViewMode('flow_design')}
       />
 
-      {/* Screen Mode Navigation Tabs Bar */}
       <nav className="bg-[#141722] border-b border-white/5 px-6 py-2 flex items-center justify-between shrink-0 font-mono text-xs">
         <div className="flex items-center gap-2">
           <button
@@ -335,7 +479,6 @@ export const FlowordApp: React.FC = () => {
         </div>
       </nav>
 
-      {/* Main Content Area */}
       <main className="flex-1 p-4 overflow-y-auto">
         {viewMode === 'execution_plan' && (
           <ExecutionPlanView
@@ -382,13 +525,8 @@ export const FlowordApp: React.FC = () => {
         {viewMode === 'browser_cdp' && <BrowserCdpView />}
       </main>
 
-      {/* Step Detail Modal */}
       {detailModalStepId && modalStep && (
-        <StepDetailModal
-          step={modalStep}
-          onClose={() => setDetailModalStepId(null)}
-          onRetryStep={handleRetryStep}
-        />
+        <StepDetailModal step={modalStep} onClose={() => setDetailModalStepId(null)} onRetryStep={handleRetryStep} />
       )}
     </div>
   );

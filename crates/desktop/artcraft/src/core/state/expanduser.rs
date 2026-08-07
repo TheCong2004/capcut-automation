@@ -39,30 +39,33 @@ pub fn home_dir() -> io::Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-  use crate::core::state::expanduser::expanduser;
-  use std::env;
-  use std::path::PathBuf;
+  use crate::core::state::expanduser::{expanduser, home_dir};
+  use std::path::{PathBuf, MAIN_SEPARATOR};
+
+  // Expected values are derived from the production `home_dir()` (USERPROFILE on
+  // Windows, HOME on Unix) rather than a hard-coded Unix path, and the `~<sep>`
+  // input is built with the platform `MAIN_SEPARATOR` (production only expands the
+  // native separator), so the expansion logic is exercised identically on every
+  // platform without mutating env vars.
 
   #[test]
-  #[serial_test::serial]
   fn test_success() {
-    let old_home = env::var("HOME").expect("no home dir set");
-    let new_home = "/home/foo";
-    env::set_var("HOME", new_home);
-    let path = expanduser("~/path/to/directory");
-    env::set_var("HOME", old_home);
-    assert_eq!(path.expect("io error"), PathBuf::from("/home/foo/path/to/directory"));
+    let home = home_dir().expect("no home dir set");
+    let input = format!("~{sep}path{sep}to{sep}directory", sep = MAIN_SEPARATOR);
+    let expanded = expanduser(&input).expect("io error");
+    assert_eq!(expanded, home.join(format!("path{sep}to{sep}directory", sep = MAIN_SEPARATOR)));
   }
 
   #[test]
-  #[serial_test::serial]
   fn test_only_tilde() {
-    let old_home = env::var("HOME").expect("no home dir set");
-    let new_home = "/home/foo";
-    env::set_var("HOME", new_home);
-    let pathstr = "~";
-    let path = expanduser(pathstr);
-    env::set_var("HOME", old_home);
-    assert_eq!(path.expect("io error"), PathBuf::from("/home/foo"));
+    let home = home_dir().expect("no home dir set");
+    let expanded = expanduser("~").expect("io error");
+    assert_eq!(expanded, home);
+  }
+
+  #[test]
+  fn test_no_expansion_leaves_path_unchanged() {
+    let expanded = expanduser("relative/path").expect("io error");
+    assert_eq!(expanded, PathBuf::from("relative/path"));
   }
 }

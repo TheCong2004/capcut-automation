@@ -293,6 +293,8 @@
     "react-markdown": "^10.1.0",
     "react-reconciler": "^0.33.0",
     "recharts": "^3.8.1",
+    "regexp-tree": "^0.1.27",
+    "remark-gfm": "^4.0.1",
     "safe-regex": "^2.1.1",
     "selfsigned": "^5.5.0",
     "smol-toml": "1.7.0",
@@ -368,7 +370,7 @@
     "type-coverage": "^2.29.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.4",
-    "vitest": "^4.1.7",
+    "vitest": "^4.1.10",
     "wait-on": "^9.0.10",
     "wtfnode": "^0.10.1"
   },

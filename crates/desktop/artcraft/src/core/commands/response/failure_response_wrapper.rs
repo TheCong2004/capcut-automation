@@ -6,6 +6,7 @@ use serde::Serialize;
 pub enum CommandErrorStatus {
   BadRequest,      // 400
   Unauthorized,    // 401
+  NotFound,        // 404
   TooManyRequests, // 429
   ServerError,     // 500
 }
