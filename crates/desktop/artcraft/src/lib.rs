@@ -37,6 +37,10 @@ use crate::core::commands::pipeline::cancel_pipeline_job_command::cancel_pipelin
 use crate::core::commands::pipeline::enqueue_pipeline_job_command::enqueue_pipeline_job_command;
 use crate::core::commands::pipeline::floword_commands::{cancel_floword_workflow, enqueue_floword_workflow, get_floword_readiness, get_floword_workflow, list_floword_workflows, list_omniroute_models, retry_floword_step};
 use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
+use crate::core::commands::vynaro_command::{
+  vynaro_open_command, vynaro_start_command, vynaro_status_command, vynaro_stop_command,
+  VynaroProcessManager,
+};
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use crate::core::lifecycle::startup::handle_tauri_startup::handle_tauri_startup;
 use crate::core::lifecycle::startup::setup_main_window::setup_main_window;
@@ -212,7 +216,8 @@ pub fn run() {
     .manage(worldlabs_bearer_bridge)
     .manage(provider_credential_cache)
     .manage(command_dispatcher)
-    .manage(worldlabs_creds_manager);
+    .manage(worldlabs_creds_manager)
+    .manage(VynaroProcessManager::default());
 
   // TODO: Break this out into another module, because RustRover/IntelliJ lags with these macros.
   //  My first attempt at naively doing this didn't work because the macros can't find their codegen'd targets.
@@ -263,6 +268,10 @@ pub fn run() {
     storyteller_open_subscription_purchase_command,
     storyteller_purge_credentials_command,
     tasks_nuke_all_command,
+    vynaro_status_command,
+    vynaro_start_command,
+    vynaro_open_command,
+    vynaro_stop_command,
     enqueue_pipeline_job_command,
     list_pipeline_jobs_command,
     cancel_pipeline_job_command,

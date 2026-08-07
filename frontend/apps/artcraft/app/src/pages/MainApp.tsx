@@ -64,6 +64,8 @@ import { PageOpenMontage } from "./PageOpenMontage";
 import { PageFreeLLMApi } from "./freellmapi";
 import { PageOmniRoute } from "./OmniRoute";
 import { PageFlowordStudio } from "./FlowordStudio";
+import { PageInkOS } from "./PageInkOS";
+import { PageVynaro } from "./PageVynaro";
 import {
   topNavMediaId,
   topNavMediaUrl,
@@ -356,6 +358,18 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
             return (
               <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
                 <PageFlowordStudio />
+              </div>
+            );
+          case "INKOS":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageInkOS />
+              </div>
+            );
+          case "VYNARO":
+            return (
+              <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                <PageVynaro />
               </div>
             );
           default:

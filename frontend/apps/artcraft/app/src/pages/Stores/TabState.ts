@@ -26,7 +26,9 @@ export type TabId =
   | "OPEN_MONTAGE"
   | "FREE_LLM_API"
   | "OMNI_ROUTE"
-  | "FLOWORD_STUDIO";
+  | "FLOWORD_STUDIO"
+  | "INKOS"
+  | "VYNARO";
 
 const DEFAULT_TAB: TabId = "APPS";
 

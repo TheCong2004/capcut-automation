@@ -49,7 +49,9 @@ export type AppId =
   | "OPEN_MONTAGE"
   | "FREE_LLM_API"
   | "OMNI_ROUTE"
-  | "FLOWORD_STUDIO";
+  | "FLOWORD_STUDIO"
+  | "INKOS"
+  | "VYNARO";
 
 export interface AppDescriptor {
   id: AppId;
@@ -443,6 +445,26 @@ export const ALL_APPS: FullAppItem[] = [
     badge: "NEW",
   },
   {
+    id: "inkos",
+    label: "Story Studio",
+    description: "InkOS Story Creation AI Agent Workbench",
+    icon: faSparkles,
+    category: "edit",
+    action: "INKOS",
+    color: "bg-purple-600/40",
+    badge: "NEW",
+  },
+  {
+    id: "vynaro",
+    label: "Vynaro",
+    description: "叙影 — AI Video Narration & Workflow Desktop App",
+    icon: faFilm,
+    category: "edit",
+    action: "VYNARO",
+    color: "bg-pink-600/40",
+    badge: "NEW",
+  },
+  {
     id: "2d-canvas",
     label: "Image Editor",
     description: "Easy edits. Great for graphic design.",
@@ -539,6 +561,8 @@ export const goToApp = (action?: string) => {
       "FREE_LLM_API",
       "OMNI_ROUTE",
       "FLOWORD_STUDIO",
+      "INKOS",
+      "VYNARO",
     ].includes(action)
   ) {
     if (action === "STORYBOARD") {

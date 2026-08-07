@@ -386,6 +386,10 @@ export const TopBar = ({ pageName }: Props) => {
         return "Moodboard";
       case "VIDEO_EDITOR":
         return "Video Editor";
+      case "INKOS":
+        return "Story Studio";
+      case "VYNARO":
+        return "Vynaro";
       default:
         return "Artcraft";
     }
