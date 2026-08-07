@@ -41,6 +41,9 @@ use crate::core::commands::vynaro_command::{
   vynaro_open_command, vynaro_start_command, vynaro_status_command, vynaro_stop_command,
   VynaroProcessManager,
 };
+use crate::core::commands::inkos_command::{
+  inkos_start_command, inkos_status_command, inkos_stop_command, InkosProcessManager,
+};
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use crate::core::lifecycle::startup::handle_tauri_startup::handle_tauri_startup;
 use crate::core::lifecycle::startup::setup_main_window::setup_main_window;
@@ -217,7 +220,8 @@ pub fn run() {
     .manage(provider_credential_cache)
     .manage(command_dispatcher)
     .manage(worldlabs_creds_manager)
-    .manage(VynaroProcessManager::default());
+    .manage(VynaroProcessManager::default())
+    .manage(InkosProcessManager::default());
 
   // TODO: Break this out into another module, because RustRover/IntelliJ lags with these macros.
   //  My first attempt at naively doing this didn't work because the macros can't find their codegen'd targets.
@@ -272,6 +276,9 @@ pub fn run() {
     vynaro_start_command,
     vynaro_open_command,
     vynaro_stop_command,
+    inkos_status_command,
+    inkos_start_command,
+    inkos_stop_command,
     enqueue_pipeline_job_command,
     list_pipeline_jobs_command,
     cancel_pipeline_job_command,

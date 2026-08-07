@@ -90,6 +90,56 @@ if (Test-Port 20128) {
   Write-Host "WARNING: OmniRoute not found at $OmniRouteRoot" -ForegroundColor Yellow
 }
 
+# --- 2.6. InkOS Story Studio (:4569 API & :4567 UI) ---
+$InkOSRoot = Join-Path $ArtcraftRoot "inkos"
+$InkOSStudioRoot = Join-Path $InkOSRoot "packages\studio"
+if (Test-Path $InkOSStudioRoot) {
+  if (Test-Port 4569) {
+    Write-Host "InkOS API Server already running on :4569" -ForegroundColor Green
+  } else {
+    Write-Host "Starting InkOS API Server on :4569 ..." -ForegroundColor Cyan
+    $inkosApiLogDir = Join-Path $env:TEMP "artcraft-inkos-api"
+    New-Item -ItemType Directory -Path $inkosApiLogDir -Force | Out-Null
+    $inkosApiStdout = Join-Path $inkosApiLogDir "api.stdout.log"
+    $inkosApiStderr = Join-Path $inkosApiLogDir "api.stderr.log"
+    Remove-Item -LiteralPath $inkosApiStdout -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $inkosApiStderr -Force -ErrorAction SilentlyContinue
+
+    $inkosApiProcess = Start-Process `
+      -WorkingDirectory $InkOSRoot `
+      -FilePath "powershell.exe" `
+      -ArgumentList "-Command", "`$env:INKOS_STUDIO_PORT='4569'; `$env:INKOS_PROJECT_ROOT='$InkOSRoot'; pnpm --filter @actalk/inkos-studio exec tsx watch src/api/index.ts" `
+      -RedirectStandardOutput $inkosApiStdout `
+      -RedirectStandardError $inkosApiStderr `
+      -WindowStyle Hidden `
+      -PassThru
+    Write-Host "InkOS API Server started on :4569 (PID $($inkosApiProcess.Id))" -ForegroundColor Green
+  }
+
+  if (Test-Port 4567) {
+    Write-Host "InkOS Client UI already running on :4567" -ForegroundColor Green
+  } else {
+    Write-Host "Starting InkOS Client UI on :4567 ..." -ForegroundColor Cyan
+    $inkosUiLogDir = Join-Path $env:TEMP "artcraft-inkos-ui"
+    New-Item -ItemType Directory -Path $inkosUiLogDir -Force | Out-Null
+    $inkosUiStdout = Join-Path $inkosUiLogDir "ui.stdout.log"
+    $inkosUiStderr = Join-Path $inkosUiLogDir "ui.stderr.log"
+    Remove-Item -LiteralPath $inkosUiStdout -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $inkosUiStderr -Force -ErrorAction SilentlyContinue
+
+    $inkosUiProcess = Start-Process `
+      -WorkingDirectory $InkOSRoot `
+      -FilePath "cmd.exe" `
+      -ArgumentList "/c","pnpm","--filter","@actalk/inkos-studio","dev:client" `
+      -RedirectStandardOutput $inkosUiStdout `
+      -RedirectStandardError $inkosUiStderr `
+      -WindowStyle Hidden `
+      -PassThru
+    Write-Host "InkOS Client UI started on :4567 (PID $($inkosUiProcess.Id))" -ForegroundColor Green
+  }
+}
+
+
 # --- 3. Embedded Youwee dependencies ---
 $YouweeManifest = Join-Path $YouweeRoot "Cargo.toml"
 $YouweeBinDir = Join-Path $YouweeRoot "bin"

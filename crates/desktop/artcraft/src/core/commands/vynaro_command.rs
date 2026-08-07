@@ -26,22 +26,53 @@ pub struct VynaroStatusResponse {
 }
 
 fn resolve_vynaro_dir() -> PathBuf {
+  // 1. Configured VYNARO_ROOT env var
   if let Ok(env_path) = env::var("VYNARO_ROOT") {
     let p = PathBuf::from(&env_path);
     if p.exists() {
-      return p;
+      return p.canonicalize().unwrap_or(p);
     }
   }
 
-  if let Ok(cwd) = env::current_dir() {
-    let p = cwd.join("vynaro");
+  // 2. Configured ARTCRAFT_ROOT env var
+  if let Ok(env_path) = env::var("ARTCRAFT_ROOT") {
+    let p = PathBuf::from(&env_path).join("vynaro");
     if p.exists() {
-      return p;
+      return p.canonicalize().unwrap_or(p);
     }
-    let parent_p = cwd.join("artcraft").join("vynaro");
-    if parent_p.exists() {
-      return parent_p;
+  }
+
+  // 3. Upward search from process current_dir()
+  if let Ok(mut dir) = env::current_dir() {
+    for _ in 0..6 {
+      let candidate = dir.join("vynaro");
+      if candidate.join("package.json").exists() || candidate.join("src-tauri").exists() {
+        return candidate.canonicalize().unwrap_or(candidate);
+      }
+      if !dir.pop() {
+        break;
+      }
     }
+  }
+
+  // 4. Upward search from executable directory
+  if let Ok(exe_path) = env::current_exe() {
+    let mut dir = exe_path;
+    for _ in 0..6 {
+      let candidate = dir.join("vynaro");
+      if candidate.join("package.json").exists() || candidate.join("src-tauri").exists() {
+        return candidate.canonicalize().unwrap_or(candidate);
+      }
+      if !dir.pop() {
+        break;
+      }
+    }
+  }
+
+  // 5. Dev fallback path check
+  let hardcoded_dev = PathBuf::from(r"D:\capcutpolot\artcraft\vynaro");
+  if hardcoded_dev.exists() {
+    return hardcoded_dev.canonicalize().unwrap_or(hardcoded_dev);
   }
 
   PathBuf::from("./vynaro")
@@ -105,13 +136,13 @@ pub fn vynaro_start_command(
   }
 
   let vynaro_dir = resolve_vynaro_dir();
-  if !vynaro_dir.exists() {
+  if !vynaro_dir.exists() || !vynaro_dir.join("package.json").exists() {
     return VynaroStatusResponse {
       status: "stopped".to_string(),
       pid: None,
       message: None,
       error: Some(format!(
-        "Vynaro directory not found at: {}",
+        "Vynaro directory or package.json not found at: {}",
         vynaro_dir.display()
       )),
     };
@@ -123,7 +154,7 @@ pub fn vynaro_start_command(
   let prod_binary_win_alt = vynaro_dir.join("target").join("release").join("vynaro.exe");
   let prod_binary_unix = vynaro_dir.join("src-tauri").join("target").join("release").join("vynaro");
 
-  let mut child_res = if prod_binary_win.exists() {
+  let child_res = if prod_binary_win.exists() {
     Command::new(&prod_binary_win)
       .current_dir(&vynaro_dir)
       .spawn()
@@ -136,7 +167,7 @@ pub fn vynaro_start_command(
       .current_dir(&vynaro_dir)
       .spawn()
   } else if vynaro_dir.join("package.json").exists() {
-    // Development mode fallback: spawn pnpm tauri:dev
+    // Development mode fallback: spawn pnpm tauri:dev inside resolved vynaro_dir
     #[cfg(target_os = "windows")]
     {
       Command::new("cmd")
@@ -171,7 +202,7 @@ pub fn vynaro_start_command(
       VynaroStatusResponse {
         status: "running".to_string(),
         pid: Some(pid),
-        message: Some("Vynaro launched successfully".to_string()),
+        message: Some(format!("Vynaro launched successfully from {}", vynaro_dir.display())),
         error: None,
       }
     }
