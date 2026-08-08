@@ -18,9 +18,16 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from backend.routers.ai_router import router as ai_router
+from backend.routers.system_router import router as system_router
+from backend.services.service_registry import set_service_runtime_status
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 app = FastAPI(title="ArtCraft Unified Backend", version="1.0.0")
+
+app.include_router(ai_router)
+app.include_router(system_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,11 +69,13 @@ try:
 
     app.include_router(capcut_main.app.router)
     SERVICES_STATUS["capcut_mate"] = {"status": "ready", "message": None}
+    set_service_runtime_status("capcut", "ready")
     print("[UnifiedBE] Successfully mounted CapCutMate backend.")
 except Exception as err:
     print(f"[CRITICAL][UnifiedBE] Mandatory backend CapCutMate failed to load: {err}", file=sys.stderr)
     traceback.print_exc()
     SERVICES_STATUS["capcut_mate"] = {"status": "unavailable", "message": str(err)}
+    set_service_runtime_status("capcut", "error", "CapCut backend failed to load")
     sys.exit(1)
 
 # 2. Mount OpenMontage (OPTIONAL)
@@ -97,10 +106,12 @@ try:
         asyncio.create_task(_watch_projects())
 
     SERVICES_STATUS["open_montage"] = {"status": "ready", "message": None}
+    set_service_runtime_status("openmontage", "ready")
     print("[UnifiedBE] Successfully mounted OpenMontage backend.")
 except Exception as err:
     print(f"[UnifiedBE] Optional backend OpenMontage failed to load: {err}")
     SERVICES_STATUS["open_montage"] = {"status": "unavailable", "message": str(err)}
+    set_service_runtime_status("openmontage", "offline", "OpenMontage backend failed to load")
 
 # 3. MediaCrawler Routers & Config Endpoints (OPTIONAL)
 try:
@@ -121,10 +132,12 @@ try:
 
     app.mount("/mediacrawler", mediacrawler_app)
     SERVICES_STATUS["media_crawler"] = {"status": "ready", "message": None}
+    set_service_runtime_status("mediacrawler", "ready")
     print("[UnifiedBE] Successfully mounted MediaCrawler backend.")
 except Exception as err:
     print(f"[UnifiedBE] Optional backend MediaCrawler failed to load: {err}")
     SERVICES_STATUS["media_crawler"] = {"status": "unavailable", "message": str(err)}
+    set_service_runtime_status("mediacrawler", "offline", "MediaCrawler backend failed to load")
 
 
 # 4. Proxy FreeLLMAPI Node server (port 3001) through unified port 30000
@@ -268,5 +281,5 @@ async def unified_readiness():
 
 if __name__ == "__main__":
     port = int(os.environ.get("UNIFIED_SERVER_PORT", os.environ.get("BE_PORT", "30000")))
-    app_host = os.environ.get("APP_HOST", "0.0.0.0")
+    app_host = os.environ.get("APP_HOST", "127.0.0.1")
     uvicorn.run(app, host=app_host, port=port)

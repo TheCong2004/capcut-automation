@@ -76,14 +76,23 @@ if (Test-Port 20128) {
   Remove-Item -LiteralPath $omniStdout -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $omniStderr -Force -ErrorAction SilentlyContinue
 
-  $omniProcess = Start-Process `
-    -WorkingDirectory $OmniRouteRoot `
-    -FilePath "cmd.exe" `
-    -ArgumentList "/c","npm","run","dev" `
-    -RedirectStandardOutput $omniStdout `
-    -RedirectStandardError $omniStderr `
-    -WindowStyle Hidden `
-    -PassThru
+  # OmniRoute is nested inside the ArtCraft pnpm workspace. On Windows,
+  # Turbopack confines resolution to OmniRoute while Next is linked from the
+  # parent virtual store, so use the project's supported webpack escape hatch.
+  $previousOmniTurbopack = [Environment]::GetEnvironmentVariable("OMNIROUTE_USE_TURBOPACK", "Process")
+  [Environment]::SetEnvironmentVariable("OMNIROUTE_USE_TURBOPACK", "0", "Process")
+  try {
+    $omniProcess = Start-Process `
+      -WorkingDirectory $OmniRouteRoot `
+      -FilePath "cmd.exe" `
+      -ArgumentList "/c","npm","run","dev" `
+      -RedirectStandardOutput $omniStdout `
+      -RedirectStandardError $omniStderr `
+      -WindowStyle Hidden `
+      -PassThru
+  } finally {
+    [Environment]::SetEnvironmentVariable("OMNIROUTE_USE_TURBOPACK", $previousOmniTurbopack, "Process")
+  }
 
   Write-Host "OmniRoute AI Router started on :20128 (PID $($omniProcess.Id))" -ForegroundColor Green
 } else {
