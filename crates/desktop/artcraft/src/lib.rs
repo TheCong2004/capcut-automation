@@ -161,6 +161,16 @@ pub fn run() {
   println!("Initializing backend runtime...");
 
   let builder = tauri::Builder::default()
+    .plugin(
+      tauri_plugin_log::Builder::default()
+        .level(log::LevelFilter::Info)
+        .targets(vec![
+          Target::new(TargetKind::Stdout),
+          Target::new(TargetKind::LogDir { file_name: Some(app_data_root.log_file_name_str().to_string()) }),
+        ])
+        .build(),
+    );
+  let builder = vynaro::init_vynaro(builder)
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_http::init())

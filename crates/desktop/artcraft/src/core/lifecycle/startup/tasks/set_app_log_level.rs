@@ -43,8 +43,7 @@ pub fn set_app_log_level(app: &AppHandle, root: &AppDataRoot) -> AnyhowResult<()
   }
 
   println!("Setting app log level to: {:?}", log_level);
-
-  app.plugin(tauri_plugin_log::Builder::default().level(log_level).targets(vec![Target::new(TargetKind::Stdout), Target::new(TargetKind::LogDir { file_name: Some(root.log_file_name_str().to_string()) })]).build())?;
+  let _ = (app, root);
 
   Ok(())
 }

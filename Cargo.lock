@@ -650,7 +650,7 @@ dependencies = [
  "chrono",
  "cookie_store 0.0.1",
  "directories",
- "dirs",
+ "dirs 6.0.0",
  "discord-rich-presence",
  "enums",
  "errors",
@@ -697,6 +697,7 @@ dependencies = [
  "url",
  "url_utils",
  "uuid_utils",
+ "vynaro",
  "web_base64",
  "workspace-build-acceleration",
  "worldlabs_consumer_client",
@@ -3363,7 +3364,16 @@ version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16f5094c54661b38d03bd7e50df373292118db60b585c08a411c6d840017fe7d"
 dependencies = [
- "dirs-sys",
+ "dirs-sys 0.5.0",
+]
+
+[[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys 0.4.1",
 ]
 
 [[package]]
@@ -3372,7 +3382,19 @@ version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
 dependencies = [
- "dirs-sys",
+ "dirs-sys 0.5.0",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users 0.4.6",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -3383,7 +3405,7 @@ checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
 dependencies = [
  "libc",
  "option-ext",
- "redox_users",
+ "redox_users 0.5.0",
  "windows-sys 0.61.2",
 ]
 
@@ -7042,6 +7064,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7646,6 +7677,15 @@ dependencies = [
  "serde",
  "tauri-winrt-notification",
  "zbus",
+]
+
+[[package]]
+name = "nu-ansi-term"
+version = "0.50.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9775,6 +9815,17 @@ dependencies = [
 
 [[package]]
 name = "redox_users"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
+dependencies = [
+ "getrandom 0.2.14",
+ "libredox",
+ "thiserror 1.0.63",
+]
+
+[[package]]
+name = "redox_users"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd6f9d3d47bdd2ad6945c5015a226ec6155d0bcdfd8f7cd29f86b71f8de99d2b"
@@ -11252,6 +11303,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sharded-slab"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
+dependencies = [
+ "lazy_static",
+]
+
+[[package]]
 name = "shared_child"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12606,7 +12666,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "cookie 0.18.1",
- "dirs",
+ "dirs 6.0.0",
  "dunce",
  "embed_plist",
  "getrandom 0.3.1",
@@ -12658,7 +12718,7 @@ checksum = "bc9ce40b16101cb6ea63d3e221567affd1c3a9205f95d7bc574941a10636b632"
 dependencies = [
  "anyhow",
  "cargo_toml",
- "dirs",
+ "dirs 6.0.0",
  "glob",
  "heck 0.5.0",
  "json-patch",
@@ -12946,7 +13006,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "806d9dac662c2e4594ff03c647a552f2c9bd544e7d0f683ec58f872f952ce4af"
 dependencies = [
  "base64 0.22.1",
- "dirs",
+ "dirs 6.0.0",
  "flate2",
  "futures-util",
  "http 1.3.1",
@@ -13236,6 +13296,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread_local"
+version = "1.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "thumbnail_generator"
 version = "0.1.0"
 dependencies = [
@@ -13444,6 +13513,22 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
+dependencies = [
+ "futures-util",
+ "log",
+ "rustls 0.23.36",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls 0.26.0",
+ "tungstenite 0.24.0",
+ "webpki-roots 0.26.2",
+]
+
+[[package]]
+name = "tokio-tungstenite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
@@ -13451,7 +13536,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite",
+ "tungstenite 0.28.0",
 ]
 
 [[package]]
@@ -13733,6 +13818,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e672c95779cf947c5311f83787af4fa8fffd12fb27e4993211a84bdfd9610f9c"
 dependencies = [
  "once_cell",
+ "valuable",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
+dependencies = [
+ "log",
+ "once_cell",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.3.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
+dependencies = [
+ "matchers",
+ "nu-ansi-term",
+ "once_cell",
+ "regex-automata",
+ "sharded-slab",
+ "smallvec",
+ "thread_local",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
 ]
 
 [[package]]
@@ -13742,7 +13857,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65ba1e5f6b9ef9fd87e21b9c6f351554dbd717960089168fcfdef854686961dc"
 dependencies = [
  "crossbeam-channel",
- "dirs",
+ "dirs 6.0.0",
  "libappindicator",
  "muda",
  "objc2 0.6.4",
@@ -13851,6 +13966,26 @@ dependencies = [
  "unicode-segmentation",
  "user_input_common",
  "workspace-build-acceleration",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18e5b8366ee7a95b16d32197d0b2604b43a0be89dc5fac9f8e96ccafbaedda8a"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http 1.3.1",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "rustls 0.23.36",
+ "rustls-pki-types",
+ "sha1 0.10.6",
+ "thiserror 1.0.63",
+ "utf-8",
 ]
 
 [[package]]
@@ -14266,6 +14401,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "valuable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
+
+[[package]]
 name = "value-bag"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14378,6 +14519,202 @@ checksum = "d3b17ae1f6c8a2b28506cd96d412eebf83b4a0ff2cbefeeb952f2f9dfa44ba18"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "vynaro"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-opener",
+ "tauri-plugin-shell",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vynaro-compose",
+ "vynaro-core",
+ "vynaro-detect",
+ "vynaro-domain",
+ "vynaro-export",
+ "vynaro-intake",
+ "vynaro-plugin",
+ "vynaro-script",
+ "vynaro-storage",
+ "vynaro-subtitle",
+ "vynaro-update",
+ "vynaro-voice",
+]
+
+[[package]]
+name = "vynaro-compose"
+version = "1.0.1"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "parking_lot 0.12.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vynaro-core",
+ "vynaro-detect",
+ "vynaro-domain",
+ "vynaro-script",
+ "vynaro-voice",
+]
+
+[[package]]
+name = "vynaro-core"
+version = "1.0.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dirs 5.0.1",
+ "semver 1.0.23",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "vynaro-domain",
+]
+
+[[package]]
+name = "vynaro-detect"
+version = "1.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vynaro-core",
+]
+
+[[package]]
+name = "vynaro-domain"
+version = "1.0.1"
+dependencies = [
+ "chrono",
+ "semver 1.0.23",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "vynaro-export"
+version = "1.0.1"
+dependencies = [
+ "serde",
+ "thiserror 2.0.18",
+ "vynaro-domain",
+]
+
+[[package]]
+name = "vynaro-intake"
+version = "1.0.1"
+dependencies = [
+ "serde",
+ "thiserror 2.0.18",
+ "vynaro-domain",
+]
+
+[[package]]
+name = "vynaro-plugin"
+version = "1.0.1"
+
+[[package]]
+name = "vynaro-script"
+version = "1.0.1"
+dependencies = [
+ "async-trait",
+ "futures 0.3.32",
+ "reqwest 0.12.23",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vynaro-core",
+]
+
+[[package]]
+name = "vynaro-storage"
+version = "1.0.1"
+dependencies = [
+ "dirs 5.0.1",
+ "mime_guess",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vynaro-core",
+ "vynaro-detect",
+ "vynaro-domain",
+ "walkdir",
+]
+
+[[package]]
+name = "vynaro-subtitle"
+version = "1.0.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vynaro-core",
+ "vynaro-domain",
+]
+
+[[package]]
+name = "vynaro-update"
+version = "1.0.1"
+dependencies = [
+ "anyhow",
+ "futures 0.3.32",
+ "hex",
+ "reqwest 0.12.23",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "tauri",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vynaro-core",
+ "vynaro-domain",
+]
+
+[[package]]
+name = "vynaro-voice"
+version = "1.0.1"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures 0.3.32",
+ "reqwest 0.12.23",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.24.0",
+ "tracing",
+ "vynaro-core",
 ]
 
 [[package]]
@@ -15674,7 +16011,7 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tokio",
  "tokio-boring2",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
@@ -15716,7 +16053,7 @@ dependencies = [
  "block2 0.6.1",
  "cookie 0.18.1",
  "crossbeam-channel",
- "dirs",
+ "dirs 6.0.0",
  "dom_query 0.27.0",
  "dpi",
  "dunce",

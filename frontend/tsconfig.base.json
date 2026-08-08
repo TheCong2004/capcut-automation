@@ -30,6 +30,13 @@
         // "apps/editor2d/app/src/*",
         "apps/artcraft/app/src/*"
       ],
+      "@vynaro/*": ["../vynaro/src/*"],
+      "@components/*": ["../vynaro/src/components/*"],
+      "@hooks/*": ["../vynaro/src/hooks/*"],
+      "@stores/*": ["../vynaro/src/stores/*"],
+      "@ipc/*": ["../vynaro/src/ipc/*"],
+      "@lib/*": ["../vynaro/src/lib/*"],
+      "@styles/*": ["../vynaro/src/styles/*"],
       "@frontend/build-env": ["libs/build-env/src/index.ts"],
       "@frontend/login": ["libs/login/src/index.ts"],
       "@storyteller/api": ["libs/api/src/index.ts"],

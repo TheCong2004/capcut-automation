@@ -40,6 +40,7 @@ const sparkWasmDataUrlFix = (): Plugin => ({
 const projectRoot = __dirname;
 const appRoot = path.resolve(projectRoot, "app");
 const workspaceRoot = path.resolve(projectRoot, "..", "..");
+const repoRoot = path.resolve(workspaceRoot, "..");
 
 // vite-tsconfig-paths only rewrites imports for files under Vite's `root`
 // (apps/artcraft/app). Files under libs/ live outside root, so their
@@ -136,7 +137,7 @@ export default defineConfig({
       ignored: ["**/pages/freellmapi/server/**"],
     },
     fs: {
-      allow: [workspaceRoot],
+      allow: [workspaceRoot, repoRoot],
     },
   },
   resolve: {
@@ -151,6 +152,19 @@ export default defineConfig({
         projectRoot,
         "app/src/pages/freellmapi/client/src",
       ),
+      "@vynaro": path.resolve(repoRoot, "vynaro/src"),
+      "@vynaro-components": path.resolve(repoRoot, "vynaro/src/components"),
+      "@vynaro-hooks": path.resolve(repoRoot, "vynaro/src/hooks"),
+      "@vynaro-stores": path.resolve(repoRoot, "vynaro/src/stores"),
+      "@vynaro-ipc": path.resolve(repoRoot, "vynaro/src/ipc"),
+      "@vynaro-lib": path.resolve(repoRoot, "vynaro/src/lib"),
+      "@vynaro-styles": path.resolve(repoRoot, "vynaro/src/styles"),
+      "@components": path.resolve(repoRoot, "vynaro/src/components"),
+      "@hooks": path.resolve(repoRoot, "vynaro/src/hooks"),
+      "@stores": path.resolve(repoRoot, "vynaro/src/stores"),
+      "@ipc": path.resolve(repoRoot, "vynaro/src/ipc"),
+      "@lib": path.resolve(repoRoot, "vynaro/src/lib"),
+      "@styles": path.resolve(repoRoot, "vynaro/src/styles"),
     },
     dedupe: [
       "react",

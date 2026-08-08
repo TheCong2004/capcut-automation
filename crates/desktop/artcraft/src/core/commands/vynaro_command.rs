@@ -1,4 +1,5 @@
 use std::env;
+use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -9,12 +10,14 @@ use tauri::State;
 
 pub struct VynaroProcessManager {
   pub child: Mutex<Option<Child>>,
+  pub is_starting: Mutex<bool>,
 }
 
 impl Default for VynaroProcessManager {
   fn default() -> Self {
     Self {
       child: Mutex::new(None),
+      is_starting: Mutex::new(false),
     }
   }
 }
@@ -23,22 +26,34 @@ impl Default for VynaroProcessManager {
 pub struct VynaroStatusResponse {
   pub status: String, // "running" | "stopped" | "starting" | "failed"
   pub pid: Option<u32>,
+  pub owned: bool,
   pub message: Option<String>,
   pub error: Option<String>,
+}
+
+fn clean_win_path(p: PathBuf) -> PathBuf {
+  #[cfg(target_os = "windows")]
+  {
+    let s = p.to_string_lossy();
+    if s.starts_with(r"\\?\") {
+      return PathBuf::from(&s[4..]);
+    }
+  }
+  p
 }
 
 fn resolve_vynaro_dir() -> PathBuf {
   if let Ok(env_path) = env::var("VYNARO_ROOT") {
     let p = PathBuf::from(&env_path);
     if p.exists() {
-      return p.canonicalize().unwrap_or(p);
+      return clean_win_path(p.canonicalize().unwrap_or(p));
     }
   }
 
   if let Ok(env_path) = env::var("ARTCRAFT_ROOT") {
     let p = PathBuf::from(&env_path).join("vynaro");
     if p.exists() {
-      return p.canonicalize().unwrap_or(p);
+      return clean_win_path(p.canonicalize().unwrap_or(p));
     }
   }
 
@@ -46,7 +61,7 @@ fn resolve_vynaro_dir() -> PathBuf {
     for _ in 0..6 {
       let candidate = dir.join("vynaro");
       if candidate.join("package.json").exists() || candidate.join("src-tauri").exists() {
-        return candidate.canonicalize().unwrap_or(candidate);
+        return clean_win_path(candidate.canonicalize().unwrap_or(candidate));
       }
       if !dir.pop() {
         break;
@@ -59,7 +74,7 @@ fn resolve_vynaro_dir() -> PathBuf {
     for _ in 0..6 {
       let candidate = dir.join("vynaro");
       if candidate.join("package.json").exists() || candidate.join("src-tauri").exists() {
-        return candidate.canonicalize().unwrap_or(candidate);
+        return clean_win_path(candidate.canonicalize().unwrap_or(candidate));
       }
       if !dir.pop() {
         break;
@@ -69,10 +84,10 @@ fn resolve_vynaro_dir() -> PathBuf {
 
   let hardcoded_dev = PathBuf::from(r"D:\capcutpolot\artcraft\vynaro");
   if hardcoded_dev.exists() {
-    return hardcoded_dev.canonicalize().unwrap_or(hardcoded_dev);
+    return clean_win_path(hardcoded_dev.canonicalize().unwrap_or(hardcoded_dev));
   }
 
-  PathBuf::from("./vynaro")
+  clean_win_path(PathBuf::from("./vynaro"))
 }
 
 fn is_vynaro_process_running() -> bool {
@@ -87,6 +102,19 @@ fn is_vynaro_process_running() -> bool {
     }
   }
   false
+}
+
+fn bring_vynaro_to_front() {
+  #[cfg(target_os = "windows")]
+  {
+    let _ = Command::new("powershell")
+      .args([
+        "-NoProfile",
+        "-Command",
+        "(New-Object -ComObject WScript.Shell).AppActivate('vynaro')",
+      ])
+      .output();
+  }
 }
 
 fn check_and_clean_child(manager: &VynaroProcessManager) -> (bool, Option<u32>) {
@@ -108,24 +136,49 @@ fn check_and_clean_child(manager: &VynaroProcessManager) -> (bool, Option<u32>) 
   }
 }
 
+fn clean_cargo_env(cmd: &mut Command) -> &mut Command {
+  cmd.env_remove("CARGO")
+    .env_remove("CARGO_MANIFEST_DIR")
+    .env_remove("CARGO_PKG_NAME")
+    .env_remove("CARGO_PKG_VERSION")
+    .env_remove("CARGO_TARGET_DIR")
+    .env_remove("CARGO_MAKEFLAGS")
+    .env_remove("CARGO_NUM_JOBS")
+    .env_remove("CARGO_WORKSPACE_DIR")
+    .env_remove("TAURI_ENV_ARCH")
+    .env_remove("TAURI_ENV_PLATFORM")
+    .env_remove("TAURI_ENV_TARGET_TRIPLE")
+}
+
 #[tauri::command]
 pub fn vynaro_status_command(
   manager: State<'_, VynaroProcessManager>,
 ) -> VynaroStatusResponse {
   let (is_alive, pid) = check_and_clean_child(&manager);
   let is_exe_running = is_vynaro_process_running();
+  let is_starting = *manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
 
-  if is_exe_running || is_alive {
+  if is_starting && !is_exe_running {
+    VynaroStatusResponse {
+      status: "starting".to_string(),
+      pid,
+      owned: is_alive,
+      message: Some("Opening Vynaro...".to_string()),
+      error: None,
+    }
+  } else if is_exe_running || is_alive {
     VynaroStatusResponse {
       status: "running".to_string(),
       pid,
-      message: Some("Vynaro is running in its desktop window".to_string()),
+      owned: is_alive,
+      message: Some("Vynaro is open in its desktop window".to_string()),
       error: None,
     }
   } else {
     VynaroStatusResponse {
       status: "stopped".to_string(),
       pid: None,
+      owned: false,
       message: Some("Vynaro is stopped".to_string()),
       error: None,
     }
@@ -136,23 +189,49 @@ pub fn vynaro_status_command(
 pub fn vynaro_start_command(
   manager: State<'_, VynaroProcessManager>,
 ) -> VynaroStatusResponse {
-  if is_vynaro_process_running() {
+  {
+    let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+    if *starting_lock {
+      return VynaroStatusResponse {
+        status: "starting".to_string(),
+        pid: None,
+        owned: false,
+        message: Some("Vynaro is already starting...".to_string()),
+        error: None,
+      };
+    }
+    *starting_lock = true;
+  }
+
+  let (is_alive, pid) = check_and_clean_child(&manager);
+  if is_vynaro_process_running() || is_alive {
+    {
+      let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+      *starting_lock = false;
+    }
+    bring_vynaro_to_front();
     return VynaroStatusResponse {
       status: "running".to_string(),
-      pid: None,
-      message: Some("Vynaro is already running in its desktop window".to_string()),
+      pid,
+      owned: is_alive,
+      message: Some("Vynaro is already open in its desktop window".to_string()),
       error: None,
     };
   }
 
   let vynaro_dir = resolve_vynaro_dir();
   if !vynaro_dir.exists() || !vynaro_dir.join("package.json").exists() {
+    {
+      let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+      *starting_lock = false;
+    }
     return VynaroStatusResponse {
       status: "failed".to_string(),
       pid: None,
+      owned: false,
       message: None,
       error: Some(format!(
-        "Vynaro directory or package.json not found at: {}",
+        "VYNARO_ROOT_NOT_FOUND: Vynaro directory or package.json not found at: {}",
         vynaro_dir.display()
       )),
     };
@@ -160,12 +239,17 @@ pub fn vynaro_start_command(
 
   let tauri_conf = vynaro_dir.join("src-tauri").join("tauri.conf.json");
   if !tauri_conf.exists() {
+    {
+      let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+      *starting_lock = false;
+    }
     return VynaroStatusResponse {
       status: "failed".to_string(),
       pid: None,
+      owned: false,
       message: None,
       error: Some(format!(
-        "Vynaro src-tauri/tauri.conf.json missing at: {}",
+        "VYNARO_CONFIG_NOT_FOUND: Vynaro src-tauri/tauri.conf.json missing at: {}",
         vynaro_dir.display()
       )),
     };
@@ -176,27 +260,33 @@ pub fn vynaro_start_command(
   let prod_binary_unix = vynaro_dir.join("src-tauri").join("target").join("release").join("vynaro");
 
   let (is_prod, child_res) = if prod_binary_win.exists() {
+    let mut cmd = Command::new(&prod_binary_win);
+    clean_cargo_env(&mut cmd);
     (
       true,
-      Command::new(&prod_binary_win)
+      cmd
         .current_dir(&vynaro_dir)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn(),
     )
   } else if prod_binary_win_alt.exists() {
+    let mut cmd = Command::new(&prod_binary_win_alt);
+    clean_cargo_env(&mut cmd);
     (
       true,
-      Command::new(&prod_binary_win_alt)
+      cmd
         .current_dir(&vynaro_dir)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn(),
     )
   } else if prod_binary_unix.exists() {
+    let mut cmd = Command::new(&prod_binary_unix);
+    clean_cargo_env(&mut cmd);
     (
       true,
-      Command::new(&prod_binary_unix)
+      cmd
         .current_dir(&vynaro_dir)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -205,25 +295,29 @@ pub fn vynaro_start_command(
   } else {
     #[cfg(target_os = "windows")]
     {
+      let mut cmd = Command::new("cmd");
+      clean_cargo_env(&mut cmd);
       (
         false,
-        Command::new("cmd")
+        cmd
           .args(["/C", "pnpm", "tauri:dev"])
           .current_dir(&vynaro_dir)
           .stdout(Stdio::inherit())
-          .stderr(Stdio::inherit())
+          .stderr(Stdio::piped())
           .spawn(),
       )
     }
     #[cfg(not(target_os = "windows"))]
     {
+      let mut cmd = Command::new("pnpm");
+      clean_cargo_env(&mut cmd);
       (
         false,
-        Command::new("pnpm")
+        cmd
           .args(["tauri:dev"])
           .current_dir(&vynaro_dir)
           .stdout(Stdio::inherit())
-          .stderr(Stdio::inherit())
+          .stderr(Stdio::piped())
           .spawn(),
       )
     }
@@ -232,9 +326,14 @@ pub fn vynaro_start_command(
   let mut child = match child_res {
     Ok(c) => c,
     Err(err) => {
+      {
+        let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+        *starting_lock = false;
+      }
       return VynaroStatusResponse {
         status: "failed".to_string(),
         pid: None,
+        owned: false,
         message: None,
         error: Some(format!("Failed to start Vynaro process: {}", err)),
       };
@@ -245,36 +344,68 @@ pub fn vynaro_start_command(
     let pid = child.id();
     let mut lock = manager.child.lock().unwrap_or_else(|e| e.into_inner());
     *lock = Some(child);
+    {
+      let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+      *starting_lock = false;
+    }
+    bring_vynaro_to_front();
     return VynaroStatusResponse {
       status: "running".to_string(),
       pid: Some(pid),
+      owned: true,
       message: Some(format!("Vynaro executable launched from {}", vynaro_dir.display())),
       error: None,
     };
   }
 
-  // Dev mode: poll for actual vynaro.exe process startup while verifying launcher process stays alive
+  // Dev mode: poll for actual vynaro.exe process startup up to 90s
   let start_time = Instant::now();
-  let timeout = Duration::from_secs(60);
+  let timeout = Duration::from_secs(90);
 
   while start_time.elapsed() < timeout {
     match child.try_wait() {
       Ok(Some(exit_status)) => {
+        {
+          let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+          *starting_lock = false;
+        }
+        let mut stderr_text = String::new();
+        if let Some(mut err_stream) = child.stderr.take() {
+          let _ = err_stream.read_to_string(&mut stderr_text);
+        }
+        let stderr_trimmed = stderr_text.trim();
+        let diag = if stderr_trimmed.is_empty() {
+          format!(
+            "Vynaro dev launcher process exited prematurely with code {} (cwd: {})",
+            exit_status,
+            vynaro_dir.display()
+          )
+        } else {
+          format!(
+            "Vynaro dev launcher process exited prematurely with code {} (cwd: {}):\n{}",
+            exit_status,
+            vynaro_dir.display(),
+            stderr_trimmed
+          )
+        };
         return VynaroStatusResponse {
           status: "failed".to_string(),
           pid: None,
+          owned: false,
           message: None,
-          error: Some(format!(
-            "Vynaro dev launcher process exited prematurely with code {}",
-            exit_status
-          )),
+          error: Some(diag),
         };
       }
       Ok(None) => {}
       Err(err) => {
+        {
+          let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+          *starting_lock = false;
+        }
         return VynaroStatusResponse {
           status: "failed".to_string(),
           pid: None,
+          owned: false,
           message: None,
           error: Some(format!("Vynaro launcher process error: {}", err)),
         };
@@ -284,9 +415,15 @@ pub fn vynaro_start_command(
     if is_vynaro_process_running() {
       let mut lock = manager.child.lock().unwrap_or_else(|e| e.into_inner());
       *lock = Some(child);
+      {
+        let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+        *starting_lock = false;
+      }
+      bring_vynaro_to_front();
       return VynaroStatusResponse {
         status: "running".to_string(),
         pid: None,
+        owned: true,
         message: Some("Vynaro desktop application started successfully".to_string()),
         error: None,
       };
@@ -297,12 +434,17 @@ pub fn vynaro_start_command(
 
   let mut lock = manager.child.lock().unwrap_or_else(|e| e.into_inner());
   *lock = Some(child);
+  {
+    let mut starting_lock = manager.is_starting.lock().unwrap_or_else(|e| e.into_inner());
+    *starting_lock = false;
+  }
 
   VynaroStatusResponse {
     status: "failed".to_string(),
     pid: None,
+    owned: true,
     message: None,
-    error: Some("VYNARO_START_TIMEOUT: Timed out waiting for vynaro.exe after 60s".to_string()),
+    error: Some("VYNARO_START_TIMEOUT: Timed out waiting for vynaro.exe after 90s".to_string()),
   }
 }
 
@@ -312,10 +454,12 @@ pub fn vynaro_open_command(
 ) -> VynaroStatusResponse {
   let (is_alive, pid) = check_and_clean_child(&manager);
   if is_vynaro_process_running() || is_alive {
+    bring_vynaro_to_front();
     VynaroStatusResponse {
       status: "running".to_string(),
       pid,
-      message: Some("Vynaro is already running in its desktop window".to_string()),
+      owned: is_alive,
+      message: Some("Vynaro is open in its desktop window".to_string()),
       error: None,
     }
   } else {
@@ -342,14 +486,12 @@ pub fn vynaro_stop_command(
         .args(["/PID", &pid.to_string(), "/T", "/F"])
         .output();
     }
-    let _ = Command::new("taskkill")
-      .args(["/IM", "vynaro.exe", "/F", "/T"])
-      .output();
   }
 
   VynaroStatusResponse {
     status: "stopped".to_string(),
     pid: None,
+    owned: false,
     message: Some("Vynaro process tree stopped".to_string()),
     error: None,
   }

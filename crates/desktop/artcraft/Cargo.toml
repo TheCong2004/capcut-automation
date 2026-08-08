@@ -89,6 +89,8 @@ url.workspace = true
 tauri-plugin-http = { path = "../../vendor/tauri-plugin-http" }
 tauri-plugin-opener = "2"
 
+vynaro = { package = "vynaro", path = "../../../vynaro/src-tauri" }
+
 # # Transparent title bar on MacOS
 # # NB: See the notes here:
 # # https://v2.tauri.app/learn/window-customization/

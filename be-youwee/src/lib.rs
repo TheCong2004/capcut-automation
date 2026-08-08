@@ -304,9 +304,6 @@ pub fn run() {
         show_main_window(&app.handle());
       }
 
-      if cfg!(debug_assertions) {
-        app.handle().plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())?;
-      }
       Ok(())
     })
     .on_window_event(|window, event| {
