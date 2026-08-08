@@ -57,7 +57,7 @@ export const BrowserCdpView: React.FC = () => {
   const handleDisconnect = async () => {
     await cdpSessionManager.disconnect();
     await refreshCdp();
-    toast.info('Disconnected from CDP session');
+    toast('Disconnected from CDP session', { icon: 'ℹ️' });
   };
 
   const handleTakeScreenshot = async () => {

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { WorkflowInput } from '../services/workflowEngine';
-import { fetchOmniRouteModels, OmniRouteModel } from '../api/flowordClient';
-import { FileText, Sparkles, FolderOpen, Save, RefreshCw, Cpu } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { FolderOpen, RefreshCw, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+import { fetchOmniRouteModels, OmniRouteModel } from '../api/flowordClient';
+import { WorkflowInput } from '../services/workflowEngine';
 
 interface ProjectBriefPanelProps {
   input: WorkflowInput;
@@ -10,6 +11,9 @@ interface ProjectBriefPanelProps {
   onSaveConfig: () => void;
   onLoadConfig: () => void;
 }
+
+const fieldLabel = 'mb-1.5 block text-xs font-medium text-zinc-300';
+const control = 'floword-control w-full px-3 py-2 text-sm placeholder:text-zinc-600';
 
 export const ProjectBriefPanel: React.FC<ProjectBriefPanelProps> = ({
   input,
@@ -20,247 +24,131 @@ export const ProjectBriefPanel: React.FC<ProjectBriefPanelProps> = ({
   const [models, setModels] = useState<OmniRouteModel[]>([]);
 
   useEffect(() => {
-    fetchOmniRouteModels().then((res) => setModels(res));
+    void fetchOmniRouteModels().then(setModels);
   }, []);
 
-  const handleFieldChange = (field: keyof WorkflowInput, value: any) => {
+  const change = <K extends keyof WorkflowInput>(field: K, value: WorkflowInput[K]) => {
     onChangeInput({ ...input, [field]: value });
   };
 
-  const handleSourceUrlsChange = (rawText: string) => {
-    const urls = rawText.split('\n').map((u) => u.trim()).filter(Boolean);
-    onChangeInput({ ...input, sourceUrls: urls });
-  };
-
-  const handleApplyPreset = () => {
-    onChangeInput({
-      ...input,
-      prompt: 'Tạo video 30 giây giới thiệu CapCut Automation, mở đầu bằng hook mạnh, gồm 5 cảnh, giọng kể chuyên nghiệp và kết thúc bằng CTA dùng thử.',
-      topic: 'CapCut Automation Suite',
-      targetDurationSeconds: 30,
-      targetPlatform: 'tiktok',
-      aspectRatio: '9:16',
-      tone: 'professional',
-      modelId: models[0]?.id || 'auto',
-    });
-    toast.success('Đã áp dụng prompt mẫu thử nghiệm CapCut Automation!');
-  };
-
   return (
-    <div
-      style={{ backgroundColor: '#1a1e28', border: '1px solid rgba(255, 255, 255, 0.08)' }}
-      className="rounded-2xl p-4 shadow-md select-none text-slate-100 font-sans"
-    >
-      {/* Panel Header */}
-      <div style={{ borderColor: 'rgba(255, 255, 255, 0.08)' }} className="flex items-center justify-between pb-3 mb-3 border-b">
-        <div className="flex items-center gap-2">
-          <FileText className="w-5 h-5 text-amber-400" />
-          <div>
-            <h2 className="font-bold text-base text-white">Project Brief — Cấu hình Đầu vào Workflow</h2>
-            <p className="text-[11px] text-slate-300">Cổng LLM duy nhất: OmniRoute LLM Gateway (Routes to grok2api & chatgpt2api)</p>
-          </div>
+    <section className="floword-card p-5 md:p-6">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.08] pb-4">
+        <div>
+          <h2 className="text-base font-semibold text-white">Project Brief</h2>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">Source and production settings for the next workflow run.</p>
         </div>
-
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <button
-            onClick={handleApplyPreset}
-            className="flex items-center gap-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg transition-colors font-bold"
-          >
-            <Sparkles className="w-3.5 h-3.5" /> Prompt Mẫu Test
+        <div className="flex gap-2">
+          <button type="button" onClick={onLoadConfig} className="floword-button floword-button-secondary text-zinc-300">
+            <RefreshCw className="h-3.5 w-3.5" /> Load
           </button>
-          <button
-            onClick={onSaveConfig}
-            className="flex items-center gap-1 bg-[#232836] hover:bg-[#2d3448] text-slate-200 px-2.5 py-1 rounded-lg transition-colors"
-          >
-            <Save className="w-3.5 h-3.5 text-emerald-400" /> Save Config
-          </button>
-          <button
-            onClick={onLoadConfig}
-            className="flex items-center gap-1 bg-[#232836] hover:bg-[#2d3448] text-slate-200 px-2.5 py-1 rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-blue-400" /> Load Config
+          <button type="button" onClick={onSaveConfig} className="floword-button floword-button-secondary text-zinc-300">
+            <Save className="h-3.5 w-3.5" /> Save
           </button>
         </div>
       </div>
 
-      {/* Main Form Fields */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-        {/* Left Column: Workflow Name, Model Selector & Prompt (7 cols) */}
-        <div className="md:col-span-7 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-mono font-bold text-amber-300 mb-1">
-                Workflow Name (Tên Dự án):
-              </label>
-              <input
-                type="text"
-                value={input.workflowName}
-                onChange={(e) => handleFieldChange('workflowName', e.target.value)}
-                placeholder="VD: CapCut Automation Launch Campaign"
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-3 py-2 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono font-bold text-amber-300 mb-1 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-blue-400" /> OmniRoute Model:
-              </label>
-              <select
-                value={input.modelId || 'auto'}
-                onChange={(e) => handleFieldChange('modelId', e.target.value)}
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
-              >
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id} ({m.provider || 'OmniRoute'})
-                  </option>
-                ))}
-              </select>
-            </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
+          <div>
+            <label className={fieldLabel} htmlFor="floword-project-name">Project</label>
+            <input id="floword-project-name" className={control} value={input.workflowName} onChange={(event) => change('workflowName', event.target.value)} />
           </div>
 
           <div>
-            <label className="block text-xs font-mono font-bold text-amber-300 mb-1">
-              Main Prompt (Kịch bản & Chỉ dẫn chính): <span className="text-rose-400">*</span>
-            </label>
+            <label className={fieldLabel} htmlFor="floword-source">Source</label>
             <textarea
-              rows={4}
-              value={input.prompt}
-              onChange={(e) => handleFieldChange('prompt', e.target.value)}
-              placeholder="Nhập prompt chi tiết cho OmniRoute sinh kịch bản..."
-              style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-              className="w-full px-3 py-2 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 leading-relaxed"
+              id="floword-source"
+              rows={3}
+              className={`${control} resize-y font-mono text-xs leading-5`}
+              value={input.sourceUrls.join('\n')}
+              onChange={(event) => change('sourceUrls', event.target.value.split('\n').map((url) => url.trim()).filter(Boolean))}
+              placeholder="One source URL per line"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-mono font-bold text-slate-300 mb-1">
-              Source URLs (Nguồn nội dung TikTok / XHS / YouTube - mỗi URL 1 dòng):
-            </label>
+            <label className={fieldLabel} htmlFor="floword-prompt">Prompt</label>
             <textarea
-              rows={2}
-              value={input.sourceUrls.join('\n')}
-              onChange={(e) => handleSourceUrlsChange(e.target.value)}
-              placeholder="https://tiktok.com/@trend_video..."
-              style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-              className="w-full px-3 py-1.5 rounded-xl text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+              id="floword-prompt"
+              rows={7}
+              required
+              className={`${control} resize-y leading-6`}
+              value={input.prompt}
+              onChange={(event) => change('prompt', event.target.value)}
+              placeholder="Describe the video, audience, structure, and call to action…"
             />
           </div>
         </div>
 
-        {/* Right Column: Parameters & Selectors (5 cols) */}
-        <div className="md:col-span-5 space-y-3 font-mono text-xs">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">Nền tảng Target:</label>
-              <select
-                value={input.targetPlatform}
-                onChange={(e) => handleFieldChange('targetPlatform', e.target.value)}
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-white focus:outline-none focus:border-amber-400"
-              >
-                <option value="tiktok">TikTok (9:16)</option>
-                <option value="reels">Instagram Reels</option>
-                <option value="youtube_shorts">YouTube Shorts</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">Thời lượng (Giây):</label>
-              <input
-                type="number"
-                value={input.targetDurationSeconds}
-                onChange={(e) => handleFieldChange('targetDurationSeconds', Number(e.target.value))}
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-white focus:outline-none focus:border-amber-400"
-              />
-            </div>
+        <div className="grid content-start gap-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={fieldLabel} htmlFor="floword-model">AI Model</label>
+            <select id="floword-model" className={control} value={input.modelId || 'auto'} onChange={(event) => change('modelId', event.target.value)}>
+              <option value="auto">Auto route</option>
+              {models.map((model) => <option key={model.id} value={model.id}>{model.id}</option>)}
+            </select>
+            {models.length === 0 && <p className="mt-1.5 text-[11px] text-zinc-600">OmniRoute model catalog is currently unavailable.</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">Tỷ lệ khung hình:</label>
-              <select
-                value={input.aspectRatio}
-                onChange={(e) => handleFieldChange('aspectRatio', e.target.value)}
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-white focus:outline-none focus:border-amber-400"
-              >
-                <option value="9:16">9:16 Vertical</option>
-                <option value="16:9">16:9 Landscape</option>
-                <option value="1:1">1:1 Square</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">Giọng điệu (Tone):</label>
-              <select
-                value={input.tone}
-                onChange={(e) => handleFieldChange('tone', e.target.value)}
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-white focus:outline-none focus:border-amber-400"
-              >
-                <option value="professional">Professional</option>
-                <option value="storytelling">Storytelling</option>
-                <option value="educational">Educational</option>
-                <option value="review">Review</option>
-                <option value="viral">Viral Trend</option>
-              </select>
-            </div>
+          <div>
+            <label className={fieldLabel} htmlFor="floword-voice">Voice</label>
+            <select id="floword-voice" className={control} value={input.tone} onChange={(event) => change('tone', event.target.value as WorkflowInput['tone'])}>
+              <option value="professional">Professional</option>
+              <option value="storytelling">Storytelling</option>
+              <option value="educational">Educational</option>
+              <option value="review">Review</option>
+              <option value="viral">Viral</option>
+            </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">Script Mode:</label>
-              <select
-                value={input.scriptMode}
-                onChange={(e) => handleFieldChange('scriptMode', e.target.value)}
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-white focus:outline-none focus:border-amber-400"
-              >
-                <option value="original">Original Script</option>
-                <option value="source_based">Source-Based</option>
-                <option value="commentary">Commentary</option>
-                <option value="remix">Remix</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">Output Target:</label>
-              <select
-                value={input.outputMode}
-                onChange={(e) => handleFieldChange('outputMode', e.target.value)}
-                style={{ backgroundColor: '#12151e', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-white focus:outline-none focus:border-amber-400"
-              >
-                <option value="draft_only">Draft Only (DraftReady)</option>
-                <option value="render_video">Render Video (Completed)</option>
-              </select>
-            </div>
+          <div>
+            <label className={fieldLabel} htmlFor="floword-language">Language</label>
+            <input id="floword-language" className={control} value={input.language} onChange={(event) => change('language', event.target.value)} />
           </div>
 
-          {/* Local File Pickers */}
-          <div className="pt-1">
+          <div>
+            <label className={fieldLabel} htmlFor="floword-duration">Duration</label>
+            <div className="relative"><input id="floword-duration" type="number" min={1} className={`${control} pr-14`} value={input.targetDurationSeconds} onChange={(event) => change('targetDurationSeconds', Number(event.target.value))} /><span className="pointer-events-none absolute right-3 top-2.5 text-xs text-zinc-500">sec</span></div>
+          </div>
+
+          <div>
+            <label className={fieldLabel} htmlFor="floword-platform">Platform</label>
+            <select id="floword-platform" className={control} value={input.targetPlatform} onChange={(event) => change('targetPlatform', event.target.value as WorkflowInput['targetPlatform'])}>
+              <option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="youtube_shorts">YouTube Shorts</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={fieldLabel} htmlFor="floword-aspect">Format</label>
+            <select id="floword-aspect" className={control} value={input.aspectRatio} onChange={(event) => change('aspectRatio', event.target.value as WorkflowInput['aspectRatio'])}>
+              <option value="9:16">9:16 Vertical</option><option value="16:9">16:9 Landscape</option><option value="1:1">1:1 Square</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={fieldLabel} htmlFor="floword-output">Output</label>
+            <select id="floword-output" className={control} value={input.outputMode} onChange={(event) => change('outputMode', event.target.value as WorkflowInput['outputMode'])}>
+              <option value="draft_only">CapCut draft</option><option value="render_video">Rendered video</option>
+            </select>
+          </div>
+
+          <div className="sm:col-span-2">
             <button
+              type="button"
               onClick={() => {
                 const path = 'C:\\Assets\\local_sample_audio.mp3';
-                onChangeInput({ ...input, musicPath: path });
-                toast.success('Đã chọn tệp âm thanh local!');
+                change('musicPath', path);
+                toast.success('Local audio selected');
               }}
-              style={{ backgroundColor: '#232836' }}
-              className="w-full px-3 py-1.5 rounded-xl text-slate-200 hover:bg-[#2d3448] flex items-center justify-between text-xs transition-colors"
+              className="floword-button floword-button-secondary w-full justify-between text-zinc-300"
             >
-              <span className="flex items-center gap-1.5 truncate">
-                <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-                {input.musicPath ? `Nhạc: ${input.musicPath}` : 'Chọn tệp Nhạc nền Local...'}
-              </span>
-              <span className="text-amber-300 text-[10px]">Browse</span>
+              <span className="flex min-w-0 items-center gap-2"><FolderOpen className="h-4 w-4 shrink-0" /><span className="truncate">{input.musicPath || 'Choose local audio'}</span></span>
+              <span className="text-xs text-zinc-500">Browse</span>
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 };

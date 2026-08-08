@@ -1,9 +1,9 @@
 // Floword Studio backend client.
 //
 // Contract: React → Tauri command → Rust → SQLite / OmniRoute / CapCut Mate.
-// The frontend NEVER calls OmniRoute (:20128) directly and NEVER fabricates
-// models, scripts, readiness, or job ids. Every call unwraps the standard
-// command envelope exactly once and throws a typed error on failure.
+// Workflow commands use Tauri/Rust; capability discovery uses one configurable
+// HTTP gateway. The frontend never calls service-specific ports and never
+// fabricates models, readiness, or job ids.
 
 // ---------------------------------------------------------------------------
 // Command envelope + typed error
@@ -265,3 +265,104 @@ export async function fetchDetailedReadiness(): Promise<DetailedReadinessStatus>
     isReadyForExecution: res.is_ready_for_execution,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Shared backend gateway (the only HTTP base URL Floword knows)
+// ---------------------------------------------------------------------------
+
+const BACKEND_BASE_URL = (
+  import.meta.env.VITE_BACKEND_BASE_URL?.trim() || 'http://127.0.0.1:30000'
+).replace(/\/+$/, '');
+
+interface GatewayErrorBody {
+  error?: {
+    code?: string;
+    message?: string;
+    service?: string;
+  };
+}
+
+async function gatewayRequest<T>(path: string): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+  let response: Response;
+  try {
+    response = await fetch(`${BACKEND_BASE_URL}${path}`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new FlowordCommandError('GATEWAY_TIMEOUT', 'Backend gateway request timed out');
+    }
+    throw new FlowordCommandError('GATEWAY_UNAVAILABLE', 'Backend gateway is unavailable');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    let body: GatewayErrorBody = {};
+    try {
+      body = (await response.json()) as GatewayErrorBody;
+    } catch {
+      // The HTTP status remains the fallback error detail.
+    }
+    throw new FlowordCommandError(
+      body.error?.code,
+      body.error?.message ?? `Backend gateway request failed (${response.status})`,
+    );
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export type GatewayServiceStatus = 'ready' | 'degraded' | 'offline' | 'not_configured' | 'error';
+
+export interface GatewayService {
+  id: string;
+  name: string;
+  category: string;
+  status: GatewayServiceStatus;
+  enabled: boolean;
+  health: Record<string, unknown>;
+  capabilities: string[];
+  uiMode?: 'separate';
+}
+
+export interface SystemHealthResponse {
+  status: 'ready' | 'degraded';
+  gateway: 'ready';
+  services: { total: number; ready: number; unhealthy: number };
+}
+
+export interface ServicesResponse {
+  services: GatewayService[];
+}
+
+export interface AiHealthResponse {
+  status: GatewayServiceStatus;
+  status_code?: number;
+  error?: { code: string; message: string; service: string };
+}
+
+export interface OmniModel {
+  id: string;
+  object?: string;
+  owned_by?: string;
+}
+
+export interface ModelsResponse {
+  data: OmniModel[];
+}
+
+export const getSystemHealth = (): Promise<SystemHealthResponse> =>
+  gatewayRequest<SystemHealthResponse>('/api/system/health');
+
+export const getServices = (): Promise<ServicesResponse> =>
+  gatewayRequest<ServicesResponse>('/api/services');
+
+export const getAiModels = (): Promise<ModelsResponse> =>
+  gatewayRequest<ModelsResponse>('/api/ai/models');
+
+export const getAiHealth = (): Promise<AiHealthResponse> =>
+  gatewayRequest<AiHealthResponse>('/api/ai/health');

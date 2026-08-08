@@ -2,57 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --bg-main: #121414;
-    --bg-surface: #1b1c1c;
-    --bg-container: #1f2020;
-    --bg-variant: #343535;
-    --primary-orange: #ffc880;
-    --primary-container: #f5a623;
-    --border-color: #524534;
-  }
-
-  body {
-    background-color: var(--bg-main);
-    color: #e3e2e2;
-    font-family: 'Geist', system-ui, sans-serif;
-  }
+.floword-shell {
+  --flow-bg: #0b0e14;
+  --flow-bg-alt: #111520;
+  --flow-surface: #161b22;
+  --flow-surface-2: #1c2230;
+  --flow-sidebar: #10141e;
+  --flow-border: rgba(255, 255, 255, 0.08);
+  --flow-text: #e6e6ef;
+  --flow-muted: #a1a1aa;
+  --flow-primary: #e54d5e;
+  --flow-primary-hover: #c93d4e;
+  --flow-accent: #6366f1;
+  --flow-success: #22c55e;
+  --flow-warning: #f59e0b;
+  --flow-error: #ef4444;
+  --flow-radius-card: 14px;
+  --flow-radius-control: 9px;
+  background: var(--flow-bg);
+  color: var(--flow-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.hex-bg {
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='103.92304845413264' viewBox='0 0 60 103.92304845413264' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 103.92304845413264L0 86.60254037844386L0 51.96152422706632L30 34.64101615137754L60 51.96152422706632L60 86.60254037844386Z' fill='none' stroke='%232a2a2a' stroke-width='1'/%3E%3Cpath d='M30 51.96152422706632L0 34.64101615137754L0 0L30 -17.32050807568877L60 0L60 34.64101615137754Z' fill='none' stroke='%232a2a2a' stroke-width='1'/%3E%3C/svg%3E");
+.floword-shell::before {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
 }
 
-@keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(255, 200, 128, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(255, 200, 128, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 200, 128, 0); }
+.floword-shell > * {
+  position: relative;
 }
 
-.active-node {
-  animation: pulse-glow 2s infinite;
-  border-color: #ffc880 !important;
+.floword-card {
+  background: var(--flow-surface);
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
 }
 
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.floword-control {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius-control);
+  color: var(--flow-text);
+  min-height: 38px;
 }
-::-webkit-scrollbar-track {
-  background: rgba(18, 20, 20, 0.8);
+
+.floword-control:focus {
+  border-color: rgba(99, 102, 241, 0.65);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+  outline: none;
 }
-::-webkit-scrollbar-thumb {
-  background: #343535;
-  border-radius: 9999px;
+
+.floword-button {
+  align-items: center;
+  border-radius: var(--flow-radius-control);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: 0.5rem;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.5rem 0.875rem;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #524534;
+
+.floword-button-primary {
+  background: linear-gradient(135deg, var(--flow-primary), #a855f7);
+  color: white;
 }
+
+.floword-button-primary:hover { filter: brightness(1.06); }
+.floword-button-secondary { background: rgba(255, 255, 255, 0.06); border: 1px solid var(--flow-border); }
+.floword-button-secondary:hover { background: rgba(255, 255, 255, 0.1); }
+
+.floword-shell :focus-visible {
+  outline: 2px solid var(--flow-accent);
+  outline-offset: 2px;
+}
+
+.floword-shell ::-webkit-scrollbar { height: 7px; width: 7px; }
+.floword-shell ::-webkit-scrollbar-track { background: transparent; }
+.floword-shell ::-webkit-scrollbar-thumb { background: #303746; border-radius: 999px; }
 
 .log-terminal {
-  font-family: 'JetBrains Mono', monospace;
-  background-color: #0d0e0f;
-  border: 1px solid #343535;
+  background: #080b11;
+  border: 1px solid var(--flow-border);
+  font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floword-shell *,
+  .floword-shell *::before,
+  .floword-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

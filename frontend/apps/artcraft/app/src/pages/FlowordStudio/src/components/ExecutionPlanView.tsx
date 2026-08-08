@@ -1,19 +1,14 @@
 import React, { useState } from 'react';
-import {
-  WorkflowInput,
-  WorkflowRun,
-  StepRun,
-  ArtifactRef,
-  StepConfig,
-} from '../services/workflowEngine';
-import { DetailedReadinessStatus } from '../api/flowordClient';
-import { ProjectBriefPanel } from './ProjectBriefPanel';
-import { FlowordPipelineVisualizer, NeoStep } from './FlowordPipelineVisualizer';
-import { StepSubInterfacePanel } from './StepSubInterfacePanel';
-import { LiveExecutionLog } from './LiveExecutionLog';
-import { DraftExplorer } from './DraftExplorer';
-import { Play, Square, Save, RefreshCw, FolderOpen, Video, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, FolderOpen, Play, Square } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+import { DetailedReadinessStatus } from '../api/flowordClient';
+import { StepConfig, StepRun, WorkflowInput, WorkflowRun } from '../services/workflowEngine';
+import { DraftExplorer } from './DraftExplorer';
+import { NeoStep } from './FlowordPipelineVisualizer';
+import { LiveExecutionLog } from './LiveExecutionLog';
+import { ProjectBriefPanel } from './ProjectBriefPanel';
+import { StepSubInterfacePanel } from './StepSubInterfacePanel';
 
 interface ExecutionPlanViewProps {
   input: WorkflowInput;
@@ -43,7 +38,6 @@ interface ExecutionPlanViewProps {
 export const ExecutionPlanView: React.FC<ExecutionPlanViewProps> = ({
   input,
   onChangeInput,
-  steps,
   stepRuns,
   activeStepIndex,
   selectedStepId,
@@ -65,202 +59,109 @@ export const ExecutionPlanView: React.FC<ExecutionPlanViewProps> = ({
   onOpenDetailModal,
 }) => {
   const [activeTab, setActiveTab] = useState<'subinterface' | 'drafts'>('subinterface');
-
-  const selectedStepRun = stepRuns.find((s) => s.id === selectedStepId) || stepRuns[0];
-
-  // Convert stepRuns to NeoStep format for visualizer
-  const visualSteps: NeoStep[] = stepRuns.map((sr) => ({
-    id: sr.id,
-    stepNumber: sr.stepNumber,
-    title: sr.title,
-    subtitle: sr.subtitle,
-    description: sr.description,
-    imageUrl: sr.imageUrl,
-    status: sr.status === 'running' ? 'running' : sr.status === 'succeeded' ? 'completed' : 'pending',
-    actionKey: sr.actionKey,
-    functions: sr.functions,
-    selectedFunction: sr.selectedFunction,
-  }));
-
+  const selectedStepRun = stepRuns.find((step) => step.id === selectedStepId) || stepRuns[0];
+  const selectedStep: NeoStep = {
+    ...selectedStepRun,
+    status: selectedStepRun.status === 'running'
+      ? 'running'
+      : selectedStepRun.status === 'succeeded'
+      ? 'completed'
+      : selectedStepRun.status === 'failed'
+      ? 'failed'
+      : selectedStepRun.status === 'skipped'
+      ? 'skipped'
+      : 'pending',
+  };
   const isFormValid = input.prompt.trim().length > 0 || input.sourceUrls.length > 0;
 
   return (
-    <div className="flex flex-col gap-4 select-none font-sans pb-6">
-      {/* 1. Service Readiness Health Strip */}
-      <section style={{ backgroundColor: '#141722', border: '1px solid rgba(255, 255, 255, 0.08)' }} className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-white uppercase text-xs">Service Readiness:</span>
-          <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${readiness.isReadyForExecution ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
-            {readiness.isReadyForExecution ? '✓ READY FOR EXECUTION' : '⚠ SYSTEM DEGRADED'}
-          </span>
-        </div>
+    <div className="flex flex-col gap-5 pb-6">
+      <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,0.8fr)]">
+        <ProjectBriefPanel input={input} onChangeInput={onChangeInput} onSaveConfig={onSaveConfig} onLoadConfig={onLoadConfig} />
 
-        <div className="flex flex-wrap items-center gap-3">
-          {Object.entries(readiness).map(([key, val]) => {
-            if (typeof val !== 'object' || !val) return null;
-            const isOk = val.status === 'READY';
-            return (
-              <div key={key} title={`${val.name}: ${val.message} (${val.endpoint})`} className="flex items-center gap-1.5 bg-[#1b1f2b] px-2.5 py-1 rounded-lg">
-                <span className={`w-2 h-2 rounded-full ${isOk ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                <span className="text-slate-300 font-semibold">{val.name}:</span>
-                <span className={isOk ? 'text-emerald-300 font-bold' : 'text-amber-300'}>{val.status}</span>
+        <aside className="floword-card overflow-hidden xl:sticky xl:top-0">
+          <div className="border-b border-white/[0.08] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-white">Pipeline Progress</h2>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{currentStepMessage}</p>
               </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 2. Project Brief Input Panel */}
-      <section>
-        <ProjectBriefPanel
-          input={input}
-          onChangeInput={onChangeInput}
-          onSaveConfig={onSaveConfig}
-          onLoadConfig={onLoadConfig}
-        />
-      </section>
-
-      {/* 3. Action Execution Control Bar */}
-      <section style={{ backgroundColor: '#141722', border: '1px solid rgba(255, 255, 255, 0.08)' }} className="p-3.5 rounded-2xl flex items-center justify-between gap-4 font-mono text-xs">
-        <div>
-          <h3 className="font-bold text-sm text-white">Execution Control Center</h3>
-          <p className="text-slate-300 text-[11px]">Kích hoạt quy trình 6 bước tự động hóa end-to-end</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {running ? (
-            <button
-              onClick={onCancelWorkflow}
-              className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl flex items-center gap-2 transition-colors shadow-md"
-            >
-              <Square className="w-4 h-4 fill-white" /> Cancel Workflow Execution
-            </button>
-          ) : (
-            <button
-              onClick={onExecuteWorkflow}
-              disabled={!isFormValid}
-              style={{
-                backgroundColor: isFormValid ? '#fbbf24' : '#334155',
-                color: isFormValid ? '#0f172a' : '#94a3b8',
-              }}
-              className="px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 shadow-lg disabled:cursor-not-allowed"
-            >
-              <Play className="w-4 h-4 fill-slate-950" /> Execute Workflow Plan
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* 4. 6 Module Node Pipeline Visualizer Cards */}
-      <section>
-        <FlowordPipelineVisualizer
-          steps={visualSteps}
-          activeStepIndex={activeStepIndex}
-          selectedStepId={selectedStepId}
-          running={running}
-          onSelectStep={(id) => {
-            onSelectStep(id);
-            onOpenDetailModal(id);
-          }}
-        />
-      </section>
-
-      {/* 5. Final Output Results Banner (If workflow completed) */}
-      {activeWorkflowRun && (activeWorkflowRun.status === 'succeeded' || activeWorkflowRun.resultType) && (
-        <section style={{ backgroundColor: '#18241e', border: '1.5px solid #34d399' }} className="p-4 rounded-2xl shadow-xl font-mono text-xs text-slate-100 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-              <h3 className="font-bold text-sm text-emerald-300">
-                🎉 WORKFLOW EXECUTED SUCCESSFUL — Output Semantics: [{activeWorkflowRun.resultType === 'video' ? 'Completed (Video Rendered)' : 'DraftReady (CapCut Draft Created)'}]
-              </h3>
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${readiness.isReadyForExecution ? 'bg-green-500/10 text-green-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                {readiness.isReadyForExecution ? 'ready' : 'degraded'}
+              </span>
             </div>
-            <span className="bg-emerald-500/20 text-emerald-300 font-bold px-3 py-1 rounded-full">
-              Status: {activeWorkflowRun.status.toUpperCase()}
-            </span>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+              <div className="h-full rounded-full bg-[#6366f1]" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="mt-2 text-right text-xs font-medium text-zinc-500">{progress}%</div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs">
-            <div className="bg-[#0f1712] p-3 rounded-xl">
-              <span className="text-slate-400">Target Draft URL / ID:</span>
-              <div className="font-bold text-amber-300 truncate mt-0.5">{activeWorkflowRun.finalDraftUrl || activeDraftUrl}</div>
-            </div>
-            <div className="bg-[#0f1712] p-3 rounded-xl">
-              <span className="text-slate-400">Rendered Video File Path:</span>
-              <div className="font-bold text-emerald-300 truncate mt-0.5">{activeWorkflowRun.finalVideoPath || 'Ready in CapCut Timeline Export'}</div>
-            </div>
+          <div className="divide-y divide-white/[0.06]">
+            {stepRuns.map((step, index) => {
+              const active = index === activeStepIndex;
+              const complete = step.status === 'succeeded';
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectStep(step.id);
+                    onOpenDetailModal(step.id);
+                  }}
+                  className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.03]"
+                >
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${complete ? 'bg-green-500/10 text-green-400' : active ? 'bg-blue-500/10 text-blue-400' : 'bg-white/[0.05] text-zinc-500'}`}>
+                    {complete ? '✓' : step.stepNumber}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-zinc-200">{step.title}</span>
+                    <span className="mt-0.5 block truncate text-xs text-zinc-600">{step.status}</span>
+                  </span>
+                  {active && <span className="h-2 w-2 rounded-full bg-blue-500" />}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-2 pt-2">
-            <button
-              onClick={() => toast.success(`Opened CapCut Draft: ${activeDraftUrl}`)}
-              className="px-3.5 py-1.5 bg-emerald-400 text-slate-950 font-bold rounded-xl flex items-center gap-1.5"
-            >
-              <FolderOpen className="w-4 h-4" /> Open Draft in CapCut
-            </button>
-
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(activeDraftUrl);
-                toast.success('Đã sao chép Draft ID!');
-              }}
-              className="px-3 py-1.5 bg-[#203228] text-emerald-300 font-bold rounded-xl hover:bg-[#2a4235]"
-            >
-              Copy Draft ID
-            </button>
+          <div className="border-t border-white/[0.08] p-4">
+            {running ? (
+              <button type="button" onClick={onCancelWorkflow} className="floword-button w-full bg-red-500 text-white hover:bg-red-600">
+                <Square className="h-4 w-4 fill-white" /> Cancel Run
+              </button>
+            ) : (
+              <button type="button" onClick={onExecuteWorkflow} disabled={!isFormValid} className="floword-button floword-button-primary w-full disabled:cursor-not-allowed disabled:opacity-40">
+                <Play className="h-4 w-4 fill-white" /> Run Workflow
+              </button>
+            )}
           </div>
+        </aside>
+      </section>
+
+      {activeWorkflowRun && (activeWorkflowRun.status === 'completed' || activeWorkflowRun.status === 'draft_ready' || activeWorkflowRun.resultType) && (
+        <section className="floword-card border-green-500/20 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-400" /><h3 className="text-sm font-semibold text-white">Workflow output is ready</h3></div>
+            <span className="rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-semibold text-green-400">{activeWorkflowRun.status}</span>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="rounded-[9px] bg-white/[0.03] p-3"><div className="text-xs text-zinc-500">Draft</div><div className="mt-1 truncate font-mono text-xs text-zinc-300">{activeWorkflowRun.finalDraftUrl || activeDraftUrl || 'Not reported'}</div></div>
+            <div className="rounded-[9px] bg-white/[0.03] p-3"><div className="text-xs text-zinc-500">Video</div><div className="mt-1 truncate font-mono text-xs text-zinc-300">{activeWorkflowRun.finalVideoPath || 'Not rendered'}</div></div>
+          </div>
+          {activeDraftUrl && <button type="button" onClick={() => toast.success(`Opened CapCut Draft: ${activeDraftUrl}`)} className="floword-button floword-button-secondary mt-4 text-zinc-200"><FolderOpen className="h-4 w-4" /> Open Draft</button>}
         </section>
       )}
 
-      {/* 6. Bottom Split: Left = Sub-Interface & Draft Explorer, Right = Output Terminal Logs */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[360px]">
-        {/* Left (6 cols) */}
-        <div className="lg:col-span-6 flex flex-col gap-2.5">
-          <div className="flex items-center gap-2 bg-[#161a26] p-1.5 rounded-xl shrink-0 font-mono text-xs">
-            <button
-              onClick={() => setActiveTab('subinterface')}
-              className={`flex-1 py-2 rounded-lg font-bold transition-all ${
-                activeTab === 'subinterface' ? 'bg-amber-400 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Sub-Interface: Step #{selectedStepRun.stepNumber} ({selectedStepRun.title})
-            </button>
-            <button
-              onClick={() => setActiveTab('drafts')}
-              className={`flex-1 py-2 rounded-lg font-bold transition-all ${
-                activeTab === 'drafts' ? 'bg-amber-400 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              CapCut Desktop Drafts
-            </button>
+      <section className="grid min-h-[420px] gap-5 lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="inline-flex self-start rounded-[9px] border border-white/[0.08] bg-[#161b22] p-1 text-xs">
+            <button type="button" onClick={() => setActiveTab('subinterface')} className={`rounded-[7px] px-3 py-2 font-medium ${activeTab === 'subinterface' ? 'bg-white/[0.08] text-white' : 'text-zinc-500'}`}>Selected step</button>
+            <button type="button" onClick={() => setActiveTab('drafts')} className={`rounded-[7px] px-3 py-2 font-medium ${activeTab === 'drafts' ? 'bg-white/[0.08] text-white' : 'text-zinc-500'}`}>Drafts</button>
           </div>
-
-          <div className="flex-1">
-            {activeTab === 'subinterface' ? (
-              <StepSubInterfacePanel
-                step={selectedStepRun}
-                onSelectFunction={onSelectFunction}
-                activeDraftUrl={activeDraftUrl}
-              />
-            ) : (
-              <DraftExplorer
-                activeDraftUrl={activeDraftUrl}
-                onSelectDraft={onSelectDraft}
-              />
-            )}
+          <div className="min-h-0 flex-1">
+            {activeTab === 'subinterface' ? <StepSubInterfacePanel step={selectedStep} onSelectFunction={onSelectFunction} activeDraftUrl={activeDraftUrl} /> : <DraftExplorer activeDraftUrl={activeDraftUrl} onSelectDraft={onSelectDraft} />}
           </div>
         </div>
-
-        {/* Right (6 cols) */}
-        <div className="lg:col-span-6">
-          <LiveExecutionLog
-            logs={logs}
-            running={running}
-            progress={progress}
-            currentStepMessage={currentStepMessage}
-            onClearLogs={onClearLogs}
-          />
-        </div>
+        <LiveExecutionLog logs={logs} running={running} progress={progress} currentStepMessage={currentStepMessage} onClearLogs={onClearLogs} />
       </section>
     </div>
   );

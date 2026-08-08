@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { FlowordHeader } from './components/FlowordHeader';
+import { FlowordSidebar, FlowordView } from './components/FlowordSidebar';
 import { ExecutionPlanView } from './components/ExecutionPlanView';
 import { FlowDesignView } from './components/FlowDesignView';
 import { BrowserCdpView } from './components/BrowserCdpView';
+import { ServicesView } from './components/ServicesView';
 import { StepDetailModal } from './components/StepDetailModal';
+import { LiveExecutionLog } from './components/LiveExecutionLog';
 import {
   WorkflowInput,
   WorkflowRun,
@@ -47,8 +50,14 @@ const TERMINAL_STATUSES = new Set([
   'dead',
 ]);
 
-export const FlowordApp: React.FC = () => {
-  const [viewMode, setViewMode] = useState<'execution_plan' | 'flow_design' | 'browser_cdp'>('execution_plan');
+interface FlowordAppProps {
+  onOpenCapCutAutomation?: () => void;
+}
+
+export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }) => {
+  const [viewMode, setViewMode] = useState<FlowordView>('studio');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [workflowInput, setWorkflowInput] = useState<WorkflowInput>(DEFAULT_WORKFLOW_INPUT);
   const [stepConfigs, setStepConfigs] = useState<StepConfig[]>(INITIAL_STEP_CONFIGS);
@@ -427,60 +436,87 @@ export const FlowordApp: React.FC = () => {
 
   const modalStep = stepRuns.find((s) => s.id === detailModalStepId);
 
-  return (
-    <div className="flex flex-col h-full w-full bg-[#0d1017] text-slate-100 select-none overflow-hidden font-sans">
-      <Toaster position="top-right" toastOptions={{ style: { background: '#1a1f2c', color: '#ffc880' } }} />
+  const viewCopy: Record<FlowordView, { title: string; description: string }> = {
+    overview: { title: 'Overview', description: 'Pipeline readiness and current production state.' },
+    studio: { title: 'Studio', description: 'Configure a project brief and run the production pipeline.' },
+    workflow: { title: 'Workflow', description: 'Inspect and configure the workflow stages.' },
+    services: { title: 'Services', description: 'Live service health reported by the backend gateway.' },
+    jobs: { title: 'Jobs', description: 'Current backend workflow job and execution state.' },
+    artifacts: { title: 'Artifacts', description: 'Outputs produced by the active workflow.' },
+    logs: { title: 'Logs', description: 'Live events from the current Floword session.' },
+    settings_providers: { title: 'Providers', description: 'Provider availability used by this workspace.' },
+    settings_models: { title: 'Models', description: 'Current model selection for new workflow runs.' },
+    settings_voice: { title: 'Voice', description: 'Voice and language values from the project brief.' },
+    settings_automation: { title: 'Automation', description: 'Browser automation controls and runtime view.' },
+  };
 
-      <FlowordHeader
-        status={{
-          mateOnline: readiness.capcut.status === 'READY',
-          omniOnline: readiness.omniRoute.status === 'READY',
-          rustPipelineOnline: readiness.storage.status === 'READY',
-        }}
-        activeDraftUrl={activeDraftUrl}
-        running={running}
-        onRunWorkflow={running ? handleCancelWorkflow : handleExecuteWorkflow}
-        onSaveWorkflow={handleSaveConfig}
-        onAddStep={() => setViewMode('flow_design')}
+  const renderReadinessCard = (label: string, value: { status: string; message: string }) => (
+    <div className="floword-card p-5" key={label}>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-white">{label}</h3>
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+          value.status === 'READY'
+            ? 'bg-green-500/10 text-green-400'
+            : value.status === 'DEGRADED'
+            ? 'bg-amber-500/10 text-amber-400'
+            : 'bg-zinc-500/10 text-zinc-400'
+        }`}>{value.status.toLowerCase()}</span>
+      </div>
+      <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-400">{value.message || 'No status detail reported.'}</p>
+    </div>
+  );
+
+  return (
+    <div className="floword-shell relative flex h-full w-full overflow-hidden">
+      <Toaster position="top-right" toastOptions={{ style: { background: '#161b22', color: '#e6e6ef', border: '1px solid rgba(255,255,255,.08)' } }} />
+      <FlowordSidebar
+        activeView={viewMode}
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileNavOpen}
+        onChange={setViewMode}
+        onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
+        onCloseMobile={() => setMobileNavOpen(false)}
+        onOpenMobile={() => setMobileNavOpen(true)}
       />
 
-      <nav className="bg-[#141722] border-b border-white/5 px-6 py-2 flex items-center justify-between shrink-0 font-mono text-xs">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode('execution_plan')}
-            className={`px-4 py-1.5 rounded-xl font-bold transition-all ${
-              viewMode === 'execution_plan' ? 'bg-amber-400 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            1. Execution Console
-          </button>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <FlowordHeader
+          status={{
+            mateOnline: readiness.mateAgent.status === 'READY',
+            omniOnline: readiness.omniRoute.status === 'READY',
+            rustPipelineOnline: readiness.storage.status === 'READY',
+          }}
+          activeDraftUrl={activeDraftUrl}
+          running={running}
+          onRunWorkflow={running ? handleCancelWorkflow : handleExecuteWorkflow}
+          onSaveWorkflow={handleSaveConfig}
+          onAddStep={() => setViewMode('workflow')}
+        />
 
-          <button
-            onClick={() => setViewMode('flow_design')}
-            className={`px-4 py-1.5 rounded-xl font-bold transition-all ${
-              viewMode === 'flow_design' ? 'bg-amber-400 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            2. Flow Design (DAG)
-          </button>
+        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-7 lg:px-9">
+          <div className="mx-auto w-full max-w-[1480px]">
+            <header className="mb-6">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">{viewCopy[viewMode].title}</h1>
+              <p className="mt-1 text-sm text-zinc-400">{viewCopy[viewMode].description}</p>
+            </header>
 
-          <button
-            onClick={() => setViewMode('browser_cdp')}
-            className={`px-4 py-1.5 rounded-xl font-bold transition-all ${
-              viewMode === 'browser_cdp' ? 'bg-amber-400 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            3. Browser CDP Manager
-          </button>
-        </div>
+        {viewMode === 'overview' && (
+          <div className="space-y-6">
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {renderReadinessCard('OmniRoute', readiness.omniRoute)}
+              {renderReadinessCard('Media Engine', readiness.openMontage)}
+              {renderReadinessCard('Playwright', readiness.playwrightCdp)}
+              {renderReadinessCard('CapCut Automation', readiness.mateAgent)}
+            </section>
+            <section className="floword-card grid gap-6 p-6 md:grid-cols-3">
+              <div><div className="text-xs font-medium uppercase tracking-wider text-zinc-500">Execution</div><div className="mt-2 text-lg font-semibold text-white">{running ? 'Running' : 'Idle'}</div></div>
+              <div><div className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active job</div><div className="mt-2 truncate font-mono text-sm text-zinc-200">{activeJobId || 'No active job'}</div></div>
+              <div><div className="text-xs font-medium uppercase tracking-wider text-zinc-500">Progress</div><div className="mt-2 text-lg font-semibold text-white">{progress}%</div></div>
+            </section>
+          </div>
+        )}
 
-        <div className="text-slate-400 font-semibold hidden md:block">
-          Active View: <span className="text-amber-300 uppercase font-bold">{viewMode.replace('_', ' ')}</span>
-        </div>
-      </nav>
-
-      <main className="flex-1 p-4 overflow-y-auto">
-        {viewMode === 'execution_plan' && (
+        {viewMode === 'studio' && (
           <ExecutionPlanView
             input={workflowInput}
             onChangeInput={setWorkflowInput}
@@ -507,7 +543,7 @@ export const FlowordApp: React.FC = () => {
           />
         )}
 
-        {viewMode === 'flow_design' && (
+        {viewMode === 'workflow' && (
           <FlowDesignView
             steps={stepConfigs}
             onChangeSteps={(newSteps) => {
@@ -522,8 +558,55 @@ export const FlowordApp: React.FC = () => {
           />
         )}
 
-        {viewMode === 'browser_cdp' && <BrowserCdpView />}
-      </main>
+        {viewMode === 'services' && (
+          <ServicesView onOpenCapCutAutomation={onOpenCapCutAutomation} />
+        )}
+
+        {viewMode === 'jobs' && (
+          <section className="floword-card overflow-hidden">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-white/[0.08] px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              <span>Job</span><span>Status</span>
+            </div>
+            {activeJobId ? (
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4">
+                <div className="min-w-0"><div className="truncate font-mono text-sm text-white">{activeJobId}</div><div className="mt-1 text-xs text-zinc-500">{currentStepMessage}</div></div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${running ? 'bg-blue-500/10 text-blue-400' : 'bg-zinc-500/10 text-zinc-400'}`}>{running ? 'running' : activeWorkflowRun?.status || 'idle'}</span>
+              </div>
+            ) : <div className="p-8 text-center text-sm text-zinc-500">No backend workflow job is active.</div>}
+          </section>
+        )}
+
+        {viewMode === 'artifacts' && (
+          <section className="floword-card overflow-hidden">
+            {(activeWorkflowRun?.artifacts.length ?? 0) > 0 ? activeWorkflowRun!.artifacts.map((artifact) => (
+              <div key={artifact.id} className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4 last:border-0">
+                <div className="min-w-0"><div className="truncate text-sm font-medium text-white">{artifact.name}</div><div className="mt-1 truncate font-mono text-xs text-zinc-500">{artifact.path || artifact.url}</div></div>
+                <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-400">{artifact.type}</span>
+              </div>
+            )) : <div className="p-8 text-center text-sm text-zinc-500">No artifacts have been reported for the active workflow.</div>}
+          </section>
+        )}
+
+        {viewMode === 'logs' && (
+          <div className="min-h-[560px]"><LiveExecutionLog logs={logs} running={running} progress={progress} currentStepMessage={currentStepMessage} onClearLogs={() => setLogs([])} /></div>
+        )}
+
+        {viewMode === 'settings_providers' && (
+          <div className="grid gap-4 md:grid-cols-2">{renderReadinessCard('OmniRoute LLM Gateway', readiness.omniRoute)}{renderReadinessCard('Voice / Media Engine', readiness.openMontage)}</div>
+        )}
+
+        {viewMode === 'settings_models' && (
+          <section className="floword-card max-w-2xl p-6"><div className="text-sm font-medium text-white">Selected AI model</div><div className="mt-3 rounded-[9px] border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 font-mono text-sm text-zinc-300">{workflowInput.modelId || 'auto'}</div><p className="mt-3 text-xs leading-5 text-zinc-500">Change the model from the Studio project brief. The list is loaded from OmniRoute.</p></section>
+        )}
+
+        {viewMode === 'settings_voice' && (
+          <section className="floword-card grid max-w-2xl gap-5 p-6 sm:grid-cols-2"><div><div className="text-xs font-medium uppercase tracking-wider text-zinc-500">Language</div><div className="mt-2 text-sm text-white">{workflowInput.language}</div></div><div><div className="text-xs font-medium uppercase tracking-wider text-zinc-500">Tone</div><div className="mt-2 text-sm capitalize text-white">{workflowInput.tone}</div></div><div className="sm:col-span-2"><div className="text-xs font-medium uppercase tracking-wider text-zinc-500">Audio source</div><div className="mt-2 truncate font-mono text-sm text-zinc-300">{workflowInput.musicPath || 'Not configured'}</div></div></section>
+        )}
+
+        {viewMode === 'settings_automation' && <BrowserCdpView />}
+          </div>
+        </main>
+      </div>
 
       {detailModalStepId && modalStep && (
         <StepDetailModal step={modalStep} onClose={() => setDetailModalStepId(null)} onRetryStep={handleRetryStep} />
